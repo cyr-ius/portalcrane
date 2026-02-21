@@ -364,6 +364,12 @@ async def delete_job(
     if job_id not in _jobs:
         raise HTTPException(status_code=404, detail="Job not found")
 
+    # Validate that the job_id is a well-formed UUID to prevent path traversal
+    try:
+        uuid.UUID(job_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid job_id")
+
     # Remove tarball if exists
     tarball_path = os.path.join(settings.staging_dir, f"{job_id}.tar")
     if os.path.exists(tarball_path):
