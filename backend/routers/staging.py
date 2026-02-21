@@ -1,21 +1,22 @@
 """
 Portalcrane - Staging Router
-Pipeline: Pull from Docker Hub → ClamAV Scan → Push to Registry
+Pipeline: Pull from Docker Hub → ClamAV Scan → Trivy CVE Scan (optional) → Push to Registry
 """
 
 import asyncio
+import json
 import os
-import subprocess
 import uuid
 from enum import Enum
+
 pass  # typing import cleaned
 
 import httpx
+from config import Settings, get_settings
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel
 
-from config import Settings, get_settings
-from routers.auth import get_current_user, UserInfo
+from routers.auth import UserInfo, get_current_user
 
 router = APIRouter()
 
@@ -30,7 +31,9 @@ class JobStatus(str, Enum):
     PENDING = "pending"
     PULLING = "pulling"
     SCANNING = "scanning"
+    VULN_SCANNING = "vuln_scanning"
     SCAN_CLEAN = "scan_clean"
+    SCAN_VULNERABLE = "scan_vulnerable"
     SCAN_INFECTED = "scan_infected"
     PUSHING = "pushing"
     DONE = "done"
@@ -46,6 +49,7 @@ class StagingJob(BaseModel):
     progress: int = 0
     message: str = ""
     scan_result: str | None = None
+    vuln_result: dict | None = None
     target_image: str | None = None
     target_tag: str | None = None
     error: str | None = None
@@ -142,6 +146,23 @@ async def run_pull_pipeline(job_id: str, image: str, tag: str, settings: Setting
             # Remove infected tarball
             os.remove(tarball_path)
         else:
+            if settings.vuln_scan_enabled:
+                _jobs[job_id]["status"] = JobStatus.VULN_SCANNING
+                _jobs[job_id]["progress"] = 85
+                _jobs[job_id]["message"] = "ClamAV clean. Running vulnerability scan..."
+                vuln_summary = await _vuln_scan_image(image, tag, settings)
+                _jobs[job_id]["vuln_result"] = vuln_summary
+
+                if vuln_summary["blocked"]:
+                    _jobs[job_id]["status"] = JobStatus.SCAN_VULNERABLE
+                    _jobs[job_id]["message"] = (
+                        "⚠️ Vulnerability policy failed "
+                        f"(severities: {', '.join(vuln_summary['severities'])})."
+                    )
+                    _jobs[job_id]["progress"] = 100
+                    os.remove(tarball_path)
+                    return
+
             _jobs[job_id]["status"] = JobStatus.SCAN_CLEAN
             _jobs[job_id]["message"] = "✅ Scan passed. Ready to push to registry."
             _jobs[job_id]["progress"] = 100
@@ -188,6 +209,53 @@ async def _clamav_scan(path: str, settings: Settings) -> str:
             return "OK (ClamAV not available - scan skipped)"
     except Exception as e:
         return f"OK (scan skipped: {str(e)})"
+
+
+async def _vuln_scan_image(image: str, tag: str, settings: Settings) -> dict:
+    """Run Trivy vulnerability scan on a Docker image."""
+    cmd = [
+        "trivy", "image",
+        "--quiet",
+        "--format", "json",
+        "--timeout", settings.vuln_scan_timeout,
+        "--severity", ",".join(settings.vuln_severities),
+    ]
+    if settings.vuln_ignore_unfixed:
+        cmd.append("--ignore-unfixed")
+    cmd.append(f"{image}:{tag}")
+
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+    except FileNotFoundError as exc:
+        raise Exception("Trivy binary not found. Install trivy or disable VULN_SCAN_ENABLED.") from exc
+    stdout, stderr = await proc.communicate()
+
+    if proc.returncode != 0:
+        raise Exception(f"Trivy scan failed: {stderr.decode() or stdout.decode()}")
+
+    try:
+        payload = json.loads(stdout.decode() or "{}")
+    except Exception as exc:
+        raise Exception(f"Unable to parse Trivy output: {exc}")
+
+    counts = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0, "UNKNOWN": 0}
+    for result in payload.get("Results", []) or []:
+        for vuln in result.get("Vulnerabilities", []) or []:
+            sev = (vuln.get("Severity") or "UNKNOWN").upper()
+            counts[sev] = counts.get(sev, 0) + 1
+
+    blocked = any(counts.get(sev, 0) > 0 for sev in settings.vuln_severities)
+    summary = {
+        "enabled": True,
+        "blocked": blocked,
+        "severities": settings.vuln_severities,
+        "counts": counts,
+    }
+    return summary
 
 
 async def run_push_pipeline(job_id: str, target_image: str, target_tag: str, settings: Settings):
@@ -306,6 +374,7 @@ async def pull_image(
         "progress": 0,
         "message": "Job queued...",
         "scan_result": None,
+        "vuln_result": None,
         "target_image": None,
         "target_tag": None,
         "error": None,

@@ -6,13 +6,14 @@ All endpoints for browsing and managing Docker Registry images and tags
 import asyncio
 import shutil
 from datetime import datetime, timezone
+
 pass  # typing import cleaned
+from config import Settings, get_settings
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel
-
-from config import Settings, get_settings
-from routers.auth import get_current_user, UserInfo
 from services.registry_service import RegistryService
+
+from routers.auth import UserInfo, get_current_user
 
 router = APIRouter()
 

@@ -3,7 +3,6 @@ Portalcrane - Application Configuration
 All settings loaded from environment variables
 """
 
-import os
 import secrets
 from functools import lru_cache
 
@@ -71,6 +70,12 @@ class Settings(BaseSettings):
     clamav_host: str = "localhost"
     clamav_port: int = 3310
 
+    # Vulnerability scanning configuration (complementary to ClamAV malware scan)
+    vuln_scan_enabled: bool = False
+    vuln_scan_severities: str = "CRITICAL,HIGH"
+    vuln_ignore_unfixed: bool = False
+    vuln_scan_timeout: str = "5m"
+
     # Staging configuration
     staging_dir: str = "/tmp/staging"
 
@@ -109,6 +114,11 @@ class Settings(BaseSettings):
             env["NO_PROXY"] = self.no_proxy
             env["no_proxy"] = self.no_proxy
         return env
+
+    @property
+    def vuln_severities(self) -> list[str]:
+        """Normalized vulnerability severities list."""
+        return [s.strip().upper() for s in self.vuln_scan_severities.split(",") if s.strip()]
 
 
 @lru_cache()
