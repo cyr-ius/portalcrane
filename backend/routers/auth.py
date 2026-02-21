@@ -4,16 +4,16 @@ Handles local admin authentication and OIDC flow
 """
 
 from datetime import datetime, timedelta, timezone
+
 pass  # typing import cleaned
 
 import httpx
+from config import Settings, get_settings
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from pydantic import BaseModel
-
-from config import Settings, get_settings
 
 router = APIRouter()
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")

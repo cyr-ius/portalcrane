@@ -6,17 +6,17 @@ Pipeline: Pull from Docker Hub → ClamAV Scan → Trivy CVE Scan (optional) →
 import asyncio
 import json
 import os
-import subprocess
 import uuid
 from enum import Enum
+
 pass  # typing import cleaned
 
 import httpx
+from config import Settings, get_settings
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel
 
-from config import Settings, get_settings
-from routers.auth import get_current_user, UserInfo
+from routers.auth import UserInfo, get_current_user
 
 router = APIRouter()
 

@@ -3,7 +3,6 @@ Portalcrane - Application Configuration
 All settings loaded from environment variables
 """
 
-import os
 import secrets
 from functools import lru_cache
 

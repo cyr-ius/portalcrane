@@ -4,13 +4,13 @@ Registry statistics and overview data
 """
 
 import shutil
-import os
-from fastapi import APIRouter, Depends
-from pydantic import BaseModel
 
 from config import Settings, get_settings
-from routers.auth import get_current_user, UserInfo
+from fastapi import APIRouter, Depends
+from pydantic import BaseModel
 from services.registry_service import RegistryService
+
+from routers.auth import UserInfo, get_current_user
 
 router = APIRouter()
 
