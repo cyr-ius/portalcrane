@@ -18,29 +18,29 @@ with a staging pipeline including antivirus scanning.
 
 ## Environment Variables
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `REGISTRY_URL` | Docker Registry URL | `http://localhost:5000` |
-| `REGISTRY_USERNAME` | Registry basic auth username | - |
-| `REGISTRY_PASSWORD` | Registry basic auth password | - |
-| `ADMIN_USERNAME` | Portalcrane admin username | `admin` |
-| `ADMIN_PASSWORD` | Portalcrane admin password | `changeme` |
-| `SECRET_KEY` | JWT secret key | random |
-| `OIDC_ENABLED` | Enable OIDC authentication | `false` |
-| `OIDC_ISSUER` | OIDC issuer URL | - |
-| `OIDC_CLIENT_ID` | OIDC client ID | - |
-| `OIDC_CLIENT_SECRET` | OIDC client secret | - |
-| `OIDC_REDIRECT_URI` | OIDC redirect URI | - |
-| `DOCKERHUB_USERNAME` | Docker Hub username (optional) | - |
-| `DOCKERHUB_PASSWORD` | Docker Hub password (optional) | - |
-| `CLAMAV_HOST` | ClamAV host | `localhost` |
-| `CLAMAV_PORT` | ClamAV port | `3310` |
-| `STAGING_DIR` | Staging directory for pulled images | `/tmp/staging` |
-| `ADVANCED_MODE` | Enable advanced mode by default | `false` |
-| `VULN_SCAN_ENABLED` | Enable complementary Trivy CVE scan in staging | `false` |
-| `VULN_SCAN_SEVERITIES` | Blocking severities (comma-separated) | `CRITICAL,HIGH` |
-| `VULN_IGNORE_UNFIXED` | Ignore unfixed CVEs in policy | `false` |
-| `VULN_SCAN_TIMEOUT` | Trivy scan timeout | `5m` |
+| Variable               | Description                                    | Default                 |
+| ---------------------- | ---------------------------------------------- | ----------------------- |
+| `REGISTRY_URL`         | Docker Registry URL                            | `http://localhost:5000` |
+| `REGISTRY_USERNAME`    | Registry basic auth username                   | -                       |
+| `REGISTRY_PASSWORD`    | Registry basic auth password                   | -                       |
+| `ADMIN_USERNAME`       | Portalcrane admin username                     | `admin`                 |
+| `ADMIN_PASSWORD`       | Portalcrane admin password                     | `changeme`              |
+| `SECRET_KEY`           | JWT secret key                                 | random                  |
+| `OIDC_ENABLED`         | Enable OIDC authentication                     | `false`                 |
+| `OIDC_ISSUER`          | OIDC issuer URL                                | -                       |
+| `OIDC_CLIENT_ID`       | OIDC client ID                                 | -                       |
+| `OIDC_CLIENT_SECRET`   | OIDC client secret                             | -                       |
+| `OIDC_REDIRECT_URI`    | OIDC redirect URI                              | -                       |
+| `DOCKERHUB_USERNAME`   | Docker Hub username (optional)                 | -                       |
+| `DOCKERHUB_PASSWORD`   | Docker Hub password (optional)                 | -                       |
+| `CLAMAV_HOST`          | ClamAV host                                    | `localhost`             |
+| `CLAMAV_PORT`          | ClamAV port                                    | `3310`                  |
+| `STAGING_DIR`          | Staging directory for pulled images            | `/tmp/staging`          |
+| `ADVANCED_MODE`        | Enable advanced mode by default                | `false`                 |
+| `VULN_SCAN_ENABLED`    | Enable complementary Trivy CVE scan in staging | `false`                 |
+| `VULN_SCAN_SEVERITIES` | Blocking severities (comma-separated)          | `CRITICAL,HIGH`         |
+| `VULN_IGNORE_UNFIXED`  | Ignore unfixed CVEs in policy                  | `false`                 |
+| `VULN_SCAN_TIMEOUT`    | Trivy scan timeout                             | `5m`                    |
 
 ## Quick Start
 

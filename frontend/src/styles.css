@@ -8,19 +8,24 @@
 
 :root,
 [data-pc-theme="light"] {
-  --pc-accent: #2E7FCF;
-  --pc-accent-2: #E8A020;
-  --pc-accent-3: #1B4D7E;
+  --pc-accent: #2e7fcf;
+  --pc-accent-2: #e8a020;
+  --pc-accent-3: #1b4d7e;
   --pc-accent-soft: rgba(46, 127, 207, 0.1);
 
-  --pc-bg-gradient: linear-gradient(135deg, #EEF4FB 0%, #F0F8FF 50%, #FFF8EE 100%);
-  --pc-sidebar-bg: #F8FBFF;
-  --pc-main-bg: #F2F5F9;
-  --pc-card-bg: #FFFFFF;
-  --pc-header-bg: linear-gradient(135deg, #EEF4FB 0%, #F0F8FF 100%);
+  --pc-bg-gradient: linear-gradient(
+    135deg,
+    #eef4fb 0%,
+    #f0f8ff 50%,
+    #fff8ee 100%
+  );
+  --pc-sidebar-bg: #f8fbff;
+  --pc-main-bg: #f2f5f9;
+  --pc-card-bg: #ffffff;
+  --pc-header-bg: linear-gradient(135deg, #eef4fb 0%, #f0f8ff 100%);
 
-  --pc-text: #1A2733;
-  --pc-text-muted: #6B7A8D;
+  --pc-text: #1a2733;
+  --pc-text-muted: #6b7a8d;
   --pc-border: rgba(46, 127, 207, 0.12);
   --pc-shadow: rgba(46, 127, 207, 0.1);
 
@@ -29,19 +34,24 @@
 }
 
 [data-pc-theme="dark"] {
-  --pc-accent: #5BA3E8;
-  --pc-accent-2: #F0B030;
-  --pc-accent-3: #7EC0FF;
+  --pc-accent: #5ba3e8;
+  --pc-accent-2: #f0b030;
+  --pc-accent-3: #7ec0ff;
   --pc-accent-soft: rgba(91, 163, 232, 0.15);
 
-  --pc-bg-gradient: linear-gradient(135deg, #0D1B2A 0%, #0F2233 50%, #1A1608 100%);
-  --pc-sidebar-bg: #0D1B2A;
-  --pc-main-bg: #101C28;
+  --pc-bg-gradient: linear-gradient(
+    135deg,
+    #0d1b2a 0%,
+    #0f2233 50%,
+    #1a1608 100%
+  );
+  --pc-sidebar-bg: #0d1b2a;
+  --pc-main-bg: #101c28;
   --pc-card-bg: #152130;
-  --pc-header-bg: linear-gradient(135deg, #0D1B2A 0%, #0F2233 100%);
+  --pc-header-bg: linear-gradient(135deg, #0d1b2a 0%, #0f2233 100%);
 
-  --pc-text: #D8E8F5;
-  --pc-text-muted: #7A8FA0;
+  --pc-text: #d8e8f5;
+  --pc-text-muted: #7a8fa0;
   --pc-border: rgba(91, 163, 232, 0.15);
   --pc-shadow: rgba(0, 0, 0, 0.3);
 
@@ -56,12 +66,18 @@
 }
 
 body {
-  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  font-family:
+    "Segoe UI",
+    system-ui,
+    -apple-system,
+    sans-serif;
   background: var(--pc-main-bg);
   color: var(--pc-text);
   margin: 0;
   padding: 0;
-  transition: background 0.25s, color 0.25s;
+  transition:
+    background 0.25s,
+    color 0.25s;
 }
 
 /* ─── Bootstrap overrides ────────────────────────────────────────────────── */
@@ -89,7 +105,9 @@ body {
   background-color: var(--pc-card-bg);
   border-color: var(--pc-border);
   color: var(--pc-text);
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
 }
 
 .form-control:focus,
@@ -128,8 +146,12 @@ body {
 }
 
 /* Badges - subtle variants */
-.bg-primary-subtle { background-color: var(--pc-accent-soft) !important; }
-.text-primary { color: var(--pc-accent) !important; }
+.bg-primary-subtle {
+  background-color: var(--pc-accent-soft) !important;
+}
+.text-primary {
+  color: var(--pc-accent) !important;
+}
 
 /* List group */
 .list-group-item {
@@ -147,19 +169,39 @@ body {
 
 /* ─── Utility ────────────────────────────────────────────────────────────── */
 
-.text-muted { color: var(--pc-text-muted) !important; }
-.border-0 { border: none !important; }
-.bg-body-secondary { background-color: var(--pc-main-bg) !important; }
+.text-muted {
+  color: var(--pc-text-muted) !important;
+}
+.border-0 {
+  border: none !important;
+}
+.bg-body-secondary {
+  background-color: var(--pc-main-bg) !important;
+}
 
 /* Scrollbar styling */
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--pc-border); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--pc-accent-soft); }
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--pc-border);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--pc-accent-soft);
+}
 
 /* Accent color on links */
-a { color: var(--pc-accent); }
-a:hover { color: var(--pc-accent-3); }
+a {
+  color: var(--pc-accent);
+}
+a:hover {
+  color: var(--pc-accent-3);
+}
 
 /* Card header subtle background */
 .card-header {
@@ -178,6 +220,12 @@ router-outlet + * {
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }

@@ -1,11 +1,15 @@
-import { Component, signal, inject, OnInit, computed } from '@angular/core';
-import { CommonModule } from '@angular/common';
-import { RouterLink } from '@angular/router';
-import { FormsModule } from '@angular/forms';
-import { RegistryService, PaginatedImages, ImageInfo } from '../../../core/services/registry.service';
+import { Component, signal, inject, OnInit, computed } from "@angular/core";
+import { CommonModule } from "@angular/common";
+import { RouterLink } from "@angular/router";
+import { FormsModule } from "@angular/forms";
+import {
+  RegistryService,
+  PaginatedImages,
+  ImageInfo,
+} from "../../../core/services/registry.service";
 
 @Component({
-  selector: 'app-images-list',
+  selector: "app-images-list",
   imports: [CommonModule, RouterLink, FormsModule],
   template: `
     <div class="p-4">
@@ -13,7 +17,9 @@ import { RegistryService, PaginatedImages, ImageInfo } from '../../../core/servi
       <div class="d-flex align-items-center justify-content-between mb-4">
         <div>
           <h2 class="fw-bold mb-1">Images</h2>
-          <p class="text-muted small mb-0">Browse and manage your registry images</p>
+          <p class="text-muted small mb-0">
+            Browse and manage your registry images
+          </p>
         </div>
       </div>
 
@@ -23,7 +29,9 @@ import { RegistryService, PaginatedImages, ImageInfo } from '../../../core/servi
           <div class="row g-2 align-items-center">
             <div class="col">
               <div class="input-group">
-                <span class="input-group-text"><i class="bi bi-search"></i></span>
+                <span class="input-group-text"
+                  ><i class="bi bi-search"></i
+                ></span>
                 <input
                   type="text"
                   class="form-control"
@@ -32,14 +40,21 @@ import { RegistryService, PaginatedImages, ImageInfo } from '../../../core/servi
                   (ngModelChange)="onSearch()"
                 />
                 @if (searchQuery) {
-                  <button class="btn btn-outline-secondary" (click)="clearSearch()">
+                  <button
+                    class="btn btn-outline-secondary"
+                    (click)="clearSearch()"
+                  >
                     <i class="bi bi-x-lg"></i>
                   </button>
                 }
               </div>
             </div>
             <div class="col-auto">
-              <select class="form-select form-select-sm" [(ngModel)]="pageSize" (ngModelChange)="onPageSizeChange()">
+              <select
+                class="form-select form-select-sm"
+                [(ngModel)]="pageSize"
+                (ngModelChange)="onPageSizeChange()"
+              >
                 <option [value]="10">10 per page</option>
                 <option [value]="20">20 per page</option>
                 <option [value]="50">50 per page</option>
@@ -47,7 +62,10 @@ import { RegistryService, PaginatedImages, ImageInfo } from '../../../core/servi
               </select>
             </div>
             <div class="col-auto">
-              <button class="btn btn-sm btn-outline-secondary" (click)="loadImages()">
+              <button
+                class="btn btn-sm btn-outline-secondary"
+                (click)="loadImages()"
+              >
                 <i class="bi bi-arrow-clockwise"></i>
               </button>
             </div>
@@ -71,10 +89,16 @@ import { RegistryService, PaginatedImages, ImageInfo } from '../../../core/servi
             <table class="table table-hover mb-0">
               <thead>
                 <tr>
-                  <th class="border-0 text-muted fw-semibold small">REPOSITORY</th>
+                  <th class="border-0 text-muted fw-semibold small">
+                    REPOSITORY
+                  </th>
                   <th class="border-0 text-muted fw-semibold small">TAGS</th>
-                  <th class="border-0 text-muted fw-semibold small">TAG LIST</th>
-                  <th class="border-0 text-muted fw-semibold small text-end">ACTIONS</th>
+                  <th class="border-0 text-muted fw-semibold small">
+                    TAG LIST
+                  </th>
+                  <th class="border-0 text-muted fw-semibold small text-end">
+                    ACTIONS
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -82,28 +106,43 @@ import { RegistryService, PaginatedImages, ImageInfo } from '../../../core/servi
                   <tr>
                     <td class="align-middle">
                       <div class="d-flex align-items-center gap-2">
-                        <div class="image-icon"><i class="bi bi-box-seam"></i></div>
-                        <a [routerLink]="['/images', image.name]" class="fw-semibold text-decoration-none link-body-emphasis">
+                        <div class="image-icon">
+                          <i class="bi bi-box-seam"></i>
+                        </div>
+                        <a
+                          [routerLink]="['/images', image.name]"
+                          class="fw-semibold text-decoration-none link-body-emphasis"
+                        >
                           {{ image.name }}
                         </a>
                       </div>
                     </td>
                     <td class="align-middle">
-                      <span class="badge bg-primary-subtle text-primary">{{ image.tag_count }}</span>
+                      <span class="badge bg-primary-subtle text-primary">{{
+                        image.tag_count
+                      }}</span>
                     </td>
                     <td class="align-middle">
                       <div class="d-flex flex-wrap gap-1">
                         @for (tag of image.tags.slice(0, 4); track tag) {
-                          <span class="badge bg-secondary-subtle text-secondary font-monospace">{{ tag }}</span>
+                          <span
+                            class="badge bg-secondary-subtle text-secondary font-monospace"
+                            >{{ tag }}</span
+                          >
                         }
                         @if (image.tags.length > 4) {
-                          <span class="badge bg-secondary-subtle text-muted">+{{ image.tags.length - 4 }} more</span>
+                          <span class="badge bg-secondary-subtle text-muted"
+                            >+{{ image.tags.length - 4 }} more</span
+                          >
                         }
                       </div>
                     </td>
                     <td class="align-middle text-end">
                       <div class="d-flex gap-1 justify-content-end">
-                        <a [routerLink]="['/images', image.name]" class="btn btn-sm btn-outline-primary">
+                        <a
+                          [routerLink]="['/images', image.name]"
+                          class="btn btn-sm btn-outline-primary"
+                        >
                           <i class="bi bi-eye"></i>
                         </a>
                         <button
@@ -122,24 +161,38 @@ import { RegistryService, PaginatedImages, ImageInfo } from '../../../core/servi
           </div>
 
           <!-- Pagination -->
-          <div class="card-footer border-0 d-flex align-items-center justify-content-between py-2">
+          <div
+            class="card-footer border-0 d-flex align-items-center justify-content-between py-2"
+          >
             <span class="text-muted small">
-              Showing {{ pageStart() }}–{{ pageEnd() }} of {{ data()?.total }} images
+              Showing {{ pageStart() }}–{{ pageEnd() }} of
+              {{ data()?.total }} images
             </span>
             <nav>
               <ul class="pagination pagination-sm mb-0">
                 <li class="page-item" [class.disabled]="currentPage() === 1">
-                  <button class="page-link" (click)="goToPage(currentPage() - 1)">
+                  <button
+                    class="page-link"
+                    (click)="goToPage(currentPage() - 1)"
+                  >
                     <i class="bi bi-chevron-left"></i>
                   </button>
                 </li>
                 @for (p of pages(); track p) {
                   <li class="page-item" [class.active]="p === currentPage()">
-                    <button class="page-link" (click)="goToPage(p)">{{ p }}</button>
+                    <button class="page-link" (click)="goToPage(p)">
+                      {{ p }}
+                    </button>
                   </li>
                 }
-                <li class="page-item" [class.disabled]="currentPage() === data()?.total_pages">
-                  <button class="page-link" (click)="goToPage(currentPage() + 1)">
+                <li
+                  class="page-item"
+                  [class.disabled]="currentPage() === data()?.total_pages"
+                >
+                  <button
+                    class="page-link"
+                    (click)="goToPage(currentPage() + 1)"
+                  >
                     <i class="bi bi-chevron-right"></i>
                   </button>
                 </li>
@@ -161,16 +214,33 @@ import { RegistryService, PaginatedImages, ImageInfo } from '../../../core/servi
                 <i class="bi bi-exclamation-triangle-fill me-2"></i>
                 Delete Image
               </h5>
-              <button class="btn-close" (click)="deleteTarget.set(null)"></button>
+              <button
+                class="btn-close"
+                (click)="deleteTarget.set(null)"
+              ></button>
             </div>
             <div class="modal-body">
-              <p>Are you sure you want to delete <strong>{{ deleteTarget()?.name }}</strong> and all its tags?</p>
+              <p>
+                Are you sure you want to delete
+                <strong>{{ deleteTarget()?.name }}</strong> and all its tags?
+              </p>
               <p class="text-muted small">This action cannot be undone.</p>
             </div>
             <div class="modal-footer border-0">
-              <button class="btn btn-outline-secondary" (click)="deleteTarget.set(null)">Cancel</button>
-              <button class="btn btn-danger" (click)="deleteImage()" [disabled]="deleting()">
-                @if (deleting()) { <span class="spinner-border spinner-border-sm me-1"></span> }
+              <button
+                class="btn btn-outline-secondary"
+                (click)="deleteTarget.set(null)"
+              >
+                Cancel
+              </button>
+              <button
+                class="btn btn-danger"
+                (click)="deleteImage()"
+                [disabled]="deleting()"
+              >
+                @if (deleting()) {
+                  <span class="spinner-border spinner-border-sm me-1"></span>
+                }
                 Delete
               </button>
             </div>
@@ -179,26 +249,34 @@ import { RegistryService, PaginatedImages, ImageInfo } from '../../../core/servi
       </div>
     }
   `,
-  styles: [`
-    .card { background: var(--pc-card-bg); border-radius: 12px; }
-    .image-icon {
-      width: 32px;
-      height: 32px;
-      border-radius: 8px;
-      background: var(--pc-accent-soft);
-      color: var(--pc-accent);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 0.875rem;
-      flex-shrink: 0;
-    }
-    .table > :not(caption) > * > * {
-      background: transparent;
-      padding: 0.875rem 1rem;
-    }
-    thead th { font-size: 0.7rem; letter-spacing: 0.05em; }
-  `],
+  styles: [
+    `
+      .card {
+        background: var(--pc-card-bg);
+        border-radius: 12px;
+      }
+      .image-icon {
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        background: var(--pc-accent-soft);
+        color: var(--pc-accent);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.875rem;
+        flex-shrink: 0;
+      }
+      .table > :not(caption) > * > * {
+        background: transparent;
+        padding: 0.875rem 1rem;
+      }
+      thead th {
+        font-size: 0.7rem;
+        letter-spacing: 0.05em;
+      }
+    `,
+  ],
 })
 export class ImagesListComponent implements OnInit {
   private registry = inject(RegistryService);
@@ -207,7 +285,7 @@ export class ImagesListComponent implements OnInit {
   loading = signal(false);
   currentPage = signal(1);
   pageSize = 20;
-  searchQuery = '';
+  searchQuery = "";
   deleteTarget = signal<ImageInfo | null>(null);
   deleting = signal(false);
   private searchTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -231,7 +309,11 @@ export class ImagesListComponent implements OnInit {
     const current = d.page;
     const delta = 2;
     const pages: number[] = [];
-    for (let i = Math.max(1, current - delta); i <= Math.min(total, current + delta); i++) {
+    for (
+      let i = Math.max(1, current - delta);
+      i <= Math.min(total, current + delta);
+      i++
+    ) {
       pages.push(i);
     }
     return pages;
@@ -243,13 +325,15 @@ export class ImagesListComponent implements OnInit {
 
   loadImages() {
     this.loading.set(true);
-    this.registry.getImages(this.currentPage(), this.pageSize, this.searchQuery).subscribe({
-      next: (data) => {
-        this.data.set(data);
-        this.loading.set(false);
-      },
-      error: () => this.loading.set(false),
-    });
+    this.registry
+      .getImages(this.currentPage(), this.pageSize, this.searchQuery)
+      .subscribe({
+        next: (data) => {
+          this.data.set(data);
+          this.loading.set(false);
+        },
+        error: () => this.loading.set(false),
+      });
   }
 
   onSearch() {
@@ -261,7 +345,7 @@ export class ImagesListComponent implements OnInit {
   }
 
   clearSearch() {
-    this.searchQuery = '';
+    this.searchQuery = "";
     this.currentPage.set(1);
     this.loadImages();
   }

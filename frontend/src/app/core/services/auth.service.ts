@@ -1,7 +1,7 @@
-import { Injectable, signal, computed } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
-import { Router } from '@angular/router';
-import { tap, catchError, of } from 'rxjs';
+import { Injectable, signal, computed } from "@angular/core";
+import { HttpClient } from "@angular/common/http";
+import { Router } from "@angular/router";
+import { tap, catchError, of } from "rxjs";
 
 export interface LoginResponse {
   access_token: string;
@@ -22,35 +22,38 @@ export interface OidcConfig {
   authorization_endpoint: string;
 }
 
-@Injectable({ providedIn: 'root' })
+@Injectable({ providedIn: "root" })
 export class AuthService {
-  private readonly TOKEN_KEY = 'pc_token';
-  private readonly USER_KEY = 'pc_user';
+  private readonly TOKEN_KEY = "pc_token";
+  private readonly USER_KEY = "pc_user";
 
   // Signals
   private _token = signal<string | null>(localStorage.getItem(this.TOKEN_KEY));
   private _user = signal<UserInfo | null>(
-    JSON.parse(localStorage.getItem(this.USER_KEY) || 'null')
+    JSON.parse(localStorage.getItem(this.USER_KEY) || "null"),
   );
 
   readonly isAuthenticated = computed(() => !!this._token());
   readonly currentUser = this._user.asReadonly();
 
-  constructor(private http: HttpClient, private router: Router) {}
+  constructor(
+    private http: HttpClient,
+    private router: Router,
+  ) {}
 
   login(username: string, password: string) {
     return this.http
-      .post<LoginResponse>('/api/auth/login', { username, password })
+      .post<LoginResponse>("/api/auth/login", { username, password })
       .pipe(
         tap((response) => {
           this.setToken(response.access_token);
           this.loadUserInfo();
-        })
+        }),
       );
   }
 
   loadUserInfo() {
-    this.http.get<UserInfo>('/api/auth/me').subscribe({
+    this.http.get<UserInfo>("/api/auth/me").subscribe({
       next: (user) => {
         this._user.set(user);
         localStorage.setItem(this.USER_KEY, JSON.stringify(user));
@@ -59,7 +62,7 @@ export class AuthService {
   }
 
   getOidcConfig() {
-    return this.http.get<OidcConfig>('/api/auth/oidc-config');
+    return this.http.get<OidcConfig>("/api/auth/oidc-config");
   }
 
   handleOidcCallback(code: string) {
@@ -69,7 +72,7 @@ export class AuthService {
         tap((response) => {
           this.setToken(response.access_token);
           this.loadUserInfo();
-        })
+        }),
       );
   }
 
@@ -78,7 +81,7 @@ export class AuthService {
     this._user.set(null);
     localStorage.removeItem(this.TOKEN_KEY);
     localStorage.removeItem(this.USER_KEY);
-    this.router.navigate(['/auth']);
+    this.router.navigate(["/auth"]);
   }
 
   getToken(): string | null {

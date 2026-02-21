@@ -1,15 +1,17 @@
-import { Component, signal, inject } from '@angular/core';
-import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { Router } from '@angular/router';
-import { CommonModule } from '@angular/common';
-import { AuthService, OidcConfig } from '../../../core/services/auth.service';
-import { ThemeService } from '../../../core/services/theme.service';
+import { Component, signal, inject } from "@angular/core";
+import { FormBuilder, ReactiveFormsModule, Validators } from "@angular/forms";
+import { Router } from "@angular/router";
+import { CommonModule } from "@angular/common";
+import { AuthService, OidcConfig } from "../../../core/services/auth.service";
+import { ThemeService } from "../../../core/services/theme.service";
 
 @Component({
-  selector: 'app-login',
+  selector: "app-login",
   imports: [CommonModule, ReactiveFormsModule],
   template: `
-    <div class="login-page d-flex align-items-center justify-content-center min-vh-100">
+    <div
+      class="login-page d-flex align-items-center justify-content-center min-vh-100"
+    >
       <!-- Theme toggle -->
       <div class="theme-switcher position-fixed top-0 end-0 m-3">
         <div class="btn-group" role="group">
@@ -47,30 +49,178 @@ import { ThemeService } from '../../../core/services/theme.service';
         <!-- Logo & Branding -->
         <div class="card-header text-center py-4 border-0 logo-header">
           <div class="logo-container mb-3">
-            <svg width="72" height="72" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-              <circle cx="100" cy="100" r="96" fill="#0D1B2A" stroke="#2E7FCF" stroke-width="2"/>
-              <ellipse cx="100" cy="172" rx="72" ry="10" fill="#1B4D7E" opacity="0.5"/>
-              <path d="M28 165 Q64 155 100 165 Q136 175 172 165" stroke="#2E7FCF" stroke-width="2.5" fill="none" stroke-linecap="round"/>
-              <rect x="30" y="155" width="140" height="12" rx="3" fill="#1B4D7E"/>
-              <rect x="62" y="60" width="12" height="97" rx="2" fill="#2E7FCF"/>
-              <rect x="62" y="60" width="96" height="10" rx="2" fill="#2E7FCF"/>
-              <rect x="30" y="60" width="34" height="8" rx="2" fill="#1B4D7E"/>
-              <rect x="22" y="55" width="16" height="18" rx="3" fill="#1B4D7E"/>
-              <line x1="158" y1="65" x2="68" y2="40" stroke="#E8A020" stroke-width="1.5" opacity="0.8"/>
-              <line x1="140" y1="65" x2="68" y2="40" stroke="#E8A020" stroke-width="1.2" opacity="0.6"/>
-              <rect x="56" y="35" width="24" height="28" rx="3" fill="#1B4D7E"/>
-              <circle cx="68" cy="49" r="7" fill="#0D1B2A" stroke="#E8A020" stroke-width="2"/>
-              <circle cx="68" cy="49" r="3" fill="#E8A020" opacity="0.8"/>
-              <line x1="150" y1="70" x2="150" y2="128" stroke="#E8A020" stroke-width="2" stroke-dasharray="4,3"/>
-              <rect x="128" y="128" width="44" height="26" rx="3" fill="#E8A020"/>
-              <line x1="143" y1="128" x2="143" y2="154" stroke="#C07010" stroke-width="1.5"/>
-              <line x1="157" y1="128" x2="157" y2="154" stroke="#C07010" stroke-width="1.5"/>
-              <rect x="128" y="128" width="44" height="5" rx="2" fill="#F0B030"/>
-              <circle cx="50" cy="157" r="5" fill="#2E7FCF" stroke="#0D1B2A" stroke-width="1.5"/>
-              <circle cx="86" cy="157" r="5" fill="#2E7FCF" stroke="#0D1B2A" stroke-width="1.5"/>
-              <rect x="56" y="100" width="24" height="20" rx="3" fill="#1B4D7E"/>
-              <rect x="59" y="103" width="18" height="11" rx="2" fill="#B0D4F1" opacity="0.85"/>
-              <circle cx="168" cy="30" r="2.5" fill="#E8A020"/>
+            <svg
+              width="72"
+              height="72"
+              viewBox="0 0 200 200"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <circle
+                cx="100"
+                cy="100"
+                r="96"
+                fill="#0D1B2A"
+                stroke="#2E7FCF"
+                stroke-width="2"
+              />
+              <ellipse
+                cx="100"
+                cy="172"
+                rx="72"
+                ry="10"
+                fill="#1B4D7E"
+                opacity="0.5"
+              />
+              <path
+                d="M28 165 Q64 155 100 165 Q136 175 172 165"
+                stroke="#2E7FCF"
+                stroke-width="2.5"
+                fill="none"
+                stroke-linecap="round"
+              />
+              <rect
+                x="30"
+                y="155"
+                width="140"
+                height="12"
+                rx="3"
+                fill="#1B4D7E"
+              />
+              <rect
+                x="62"
+                y="60"
+                width="12"
+                height="97"
+                rx="2"
+                fill="#2E7FCF"
+              />
+              <rect
+                x="62"
+                y="60"
+                width="96"
+                height="10"
+                rx="2"
+                fill="#2E7FCF"
+              />
+              <rect x="30" y="60" width="34" height="8" rx="2" fill="#1B4D7E" />
+              <rect
+                x="22"
+                y="55"
+                width="16"
+                height="18"
+                rx="3"
+                fill="#1B4D7E"
+              />
+              <line
+                x1="158"
+                y1="65"
+                x2="68"
+                y2="40"
+                stroke="#E8A020"
+                stroke-width="1.5"
+                opacity="0.8"
+              />
+              <line
+                x1="140"
+                y1="65"
+                x2="68"
+                y2="40"
+                stroke="#E8A020"
+                stroke-width="1.2"
+                opacity="0.6"
+              />
+              <rect
+                x="56"
+                y="35"
+                width="24"
+                height="28"
+                rx="3"
+                fill="#1B4D7E"
+              />
+              <circle
+                cx="68"
+                cy="49"
+                r="7"
+                fill="#0D1B2A"
+                stroke="#E8A020"
+                stroke-width="2"
+              />
+              <circle cx="68" cy="49" r="3" fill="#E8A020" opacity="0.8" />
+              <line
+                x1="150"
+                y1="70"
+                x2="150"
+                y2="128"
+                stroke="#E8A020"
+                stroke-width="2"
+                stroke-dasharray="4,3"
+              />
+              <rect
+                x="128"
+                y="128"
+                width="44"
+                height="26"
+                rx="3"
+                fill="#E8A020"
+              />
+              <line
+                x1="143"
+                y1="128"
+                x2="143"
+                y2="154"
+                stroke="#C07010"
+                stroke-width="1.5"
+              />
+              <line
+                x1="157"
+                y1="128"
+                x2="157"
+                y2="154"
+                stroke="#C07010"
+                stroke-width="1.5"
+              />
+              <rect
+                x="128"
+                y="128"
+                width="44"
+                height="5"
+                rx="2"
+                fill="#F0B030"
+              />
+              <circle
+                cx="50"
+                cy="157"
+                r="5"
+                fill="#2E7FCF"
+                stroke="#0D1B2A"
+                stroke-width="1.5"
+              />
+              <circle
+                cx="86"
+                cy="157"
+                r="5"
+                fill="#2E7FCF"
+                stroke="#0D1B2A"
+                stroke-width="1.5"
+              />
+              <rect
+                x="56"
+                y="100"
+                width="24"
+                height="20"
+                rx="3"
+                fill="#1B4D7E"
+              />
+              <rect
+                x="59"
+                y="103"
+                width="18"
+                height="11"
+                rx="2"
+                fill="#B0D4F1"
+                opacity="0.85"
+              />
+              <circle cx="168" cy="30" r="2.5" fill="#E8A020" />
             </svg>
           </div>
           <h1 class="fw-bold mb-0 brand-title">Portalcrane</h1>
@@ -86,7 +236,7 @@ import { ThemeService } from '../../../core/services/theme.service';
                 (click)="loginWithOidc()"
               >
                 <i class="bi bi-person-badge-fill"></i>
-                Sign in with {{ oidcConfig()?.issuer | slice:8:40 }}...
+                Sign in with {{ oidcConfig()?.issuer | slice: 8 : 40 }}...
               </button>
             </div>
             <div class="divider d-flex align-items-center my-3">
@@ -101,7 +251,9 @@ import { ThemeService } from '../../../core/services/theme.service';
             <div class="mb-3">
               <label class="form-label fw-semibold small">Username</label>
               <div class="input-group">
-                <span class="input-group-text"><i class="bi bi-person-fill"></i></span>
+                <span class="input-group-text"
+                  ><i class="bi bi-person-fill"></i
+                ></span>
                 <input
                   type="text"
                   class="form-control"
@@ -115,7 +267,9 @@ import { ThemeService } from '../../../core/services/theme.service';
             <div class="mb-3">
               <label class="form-label fw-semibold small">Password</label>
               <div class="input-group">
-                <span class="input-group-text"><i class="bi bi-lock-fill"></i></span>
+                <span class="input-group-text"
+                  ><i class="bi bi-lock-fill"></i
+                ></span>
                 <input
                   [type]="showPassword() ? 'text' : 'password'"
                   class="form-control"
@@ -128,13 +282,18 @@ import { ThemeService } from '../../../core/services/theme.service';
                   class="btn btn-outline-secondary"
                   (click)="showPassword.set(!showPassword())"
                 >
-                  <i [class]="showPassword() ? 'bi bi-eye-slash' : 'bi bi-eye'"></i>
+                  <i
+                    [class]="showPassword() ? 'bi bi-eye-slash' : 'bi bi-eye'"
+                  ></i>
                 </button>
               </div>
             </div>
 
             @if (error()) {
-              <div class="alert alert-danger d-flex align-items-center gap-2 py-2" role="alert">
+              <div
+                class="alert alert-danger d-flex align-items-center gap-2 py-2"
+                role="alert"
+              >
                 <i class="bi bi-exclamation-triangle-fill"></i>
                 <small>{{ error() }}</small>
               </div>
@@ -162,32 +321,34 @@ import { ThemeService } from '../../../core/services/theme.service';
       </div>
     </div>
   `,
-  styles: [`
-    .login-page {
-      background: var(--pc-bg-gradient);
-      min-height: 100vh;
-    }
-    .login-card {
-      width: 100%;
-      max-width: 420px;
-      border-radius: 16px;
-      overflow: hidden;
-    }
-    .logo-header {
-      background: var(--pc-header-bg);
-    }
-    .brand-title {
-      font-size: 1.8rem;
-      color: var(--pc-accent);
-      letter-spacing: -0.5px;
-    }
-    .divider-line {
-      flex: 1;
-      height: 1px;
-      background: currentColor;
-      opacity: 0.2;
-    }
-  `],
+  styles: [
+    `
+      .login-page {
+        background: var(--pc-bg-gradient);
+        min-height: 100vh;
+      }
+      .login-card {
+        width: 100%;
+        max-width: 420px;
+        border-radius: 16px;
+        overflow: hidden;
+      }
+      .logo-header {
+        background: var(--pc-header-bg);
+      }
+      .brand-title {
+        font-size: 1.8rem;
+        color: var(--pc-accent);
+        letter-spacing: -0.5px;
+      }
+      .divider-line {
+        flex: 1;
+        height: 1px;
+        background: currentColor;
+        opacity: 0.2;
+      }
+    `,
+  ],
 })
 export class LoginComponent {
   private auth = inject(AuthService);
@@ -196,12 +357,12 @@ export class LoginComponent {
   themeService = inject(ThemeService);
 
   loginForm = this.fb.group({
-    username: ['', Validators.required],
-    password: ['', Validators.required],
+    username: ["", Validators.required],
+    password: ["", Validators.required],
   });
 
   loading = signal(false);
-  error = signal('');
+  error = signal("");
   showPassword = signal(false);
   oidcConfig = signal<OidcConfig | null>(null);
 
@@ -214,13 +375,13 @@ export class LoginComponent {
   onSubmit() {
     if (this.loginForm.invalid) return;
     this.loading.set(true);
-    this.error.set('');
+    this.error.set("");
 
     const { username, password } = this.loginForm.value;
     this.auth.login(username!, password!).subscribe({
-      next: () => this.router.navigate(['/']),
+      next: () => this.router.navigate(["/"]),
       error: (err) => {
-        this.error.set(err.error?.detail || 'Authentication failed');
+        this.error.set(err.error?.detail || "Authentication failed");
         this.loading.set(false);
       },
     });
@@ -231,10 +392,10 @@ export class LoginComponent {
     if (!config?.authorization_endpoint) return;
 
     const params = new URLSearchParams({
-      response_type: 'code',
+      response_type: "code",
       client_id: config.client_id,
       redirect_uri: config.redirect_uri,
-      scope: 'openid profile email',
+      scope: "openid profile email",
     });
 
     window.location.href = `${config.authorization_endpoint}?${params}`;

@@ -1,57 +1,73 @@
-import { Routes } from '@angular/router';
-import { authGuard } from './core/guards/auth.guard';
+import { Routes } from "@angular/router";
+import { authGuard } from "./core/guards/auth.guard";
 
 export const routes: Routes = [
   {
-    path: 'auth',
+    path: "auth",
     loadComponent: () =>
-      import('./features/auth/login/login.component').then((m) => m.LoginComponent),
+      import("./features/auth/login/login.component").then(
+        (m) => m.LoginComponent,
+      ),
   },
   {
-    path: 'auth/callback',
+    path: "auth/callback",
     loadComponent: () =>
-      import('./features/auth/oidc-callback/oidc-callback.component').then((m) => m.OidcCallbackComponent),
+      import("./features/auth/oidc-callback/oidc-callback.component").then(
+        (m) => m.OidcCallbackComponent,
+      ),
   },
   {
-    path: '',
+    path: "",
     canActivate: [authGuard],
     loadComponent: () =>
-      import('./shared/components/layout/layout.component').then((m) => m.LayoutComponent),
+      import("./shared/components/layout/layout.component").then(
+        (m) => m.LayoutComponent,
+      ),
     children: [
       {
-        path: '',
-        redirectTo: 'dashboard',
-        pathMatch: 'full',
+        path: "",
+        redirectTo: "dashboard",
+        pathMatch: "full",
       },
       {
-        path: 'dashboard',
+        path: "dashboard",
         loadComponent: () =>
-          import('./features/dashboard/dashboard.component').then((m) => m.DashboardComponent),
+          import("./features/dashboard/dashboard.component").then(
+            (m) => m.DashboardComponent,
+          ),
       },
       {
-        path: 'images',
+        path: "images",
         loadComponent: () =>
-          import('./features/images/images-list/images-list.component').then((m) => m.ImagesListComponent),
+          import("./features/images/images-list/images-list.component").then(
+            (m) => m.ImagesListComponent,
+          ),
       },
       {
-        path: 'images/:repository',
+        path: "images/:repository",
         loadComponent: () =>
-          import('./features/images/image-detail/image-detail.component').then((m) => m.ImageDetailComponent),
+          import("./features/images/image-detail/image-detail.component").then(
+            (m) => m.ImageDetailComponent,
+          ),
       },
       {
-        path: 'staging',
+        path: "staging",
         loadComponent: () =>
-          import('./features/staging/staging.component').then((m) => m.StagingComponent),
+          import("./features/staging/staging.component").then(
+            (m) => m.StagingComponent,
+          ),
       },
       {
-        path: 'settings',
+        path: "settings",
         loadComponent: () =>
-          import('./features/settings/settings.component').then((m) => m.SettingsComponent),
+          import("./features/settings/settings.component").then(
+            (m) => m.SettingsComponent,
+          ),
       },
     ],
   },
   {
-    path: '**',
-    redirectTo: '',
+    path: "**",
+    redirectTo: "",
   },
 ];

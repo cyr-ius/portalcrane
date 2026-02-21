@@ -1,6 +1,6 @@
-import { Injectable } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
-import { Observable } from 'rxjs';
+import { Injectable } from "@angular/core";
+import { HttpClient } from "@angular/common/http";
+import { Observable } from "rxjs";
 
 export interface DashboardStats {
   total_images: number;
@@ -21,11 +21,11 @@ export interface DashboardStats {
   advanced_mode: boolean;
 }
 
-@Injectable({ providedIn: 'root' })
+@Injectable({ providedIn: "root" })
 export class DashboardService {
   constructor(private http: HttpClient) {}
 
   getStats(): Observable<DashboardStats> {
-    return this.http.get<DashboardStats>('/api/dashboard/stats');
+    return this.http.get<DashboardStats>("/api/dashboard/stats");
   }
 }
