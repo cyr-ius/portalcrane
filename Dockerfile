@@ -35,8 +35,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && curl -fsSL https://get.docker.com -o get-docker.sh \
     && sh get-docker.sh \
     && rm get-docker.sh \
-    && wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | gpg --dearmor | tee /usr/share/keyrings/trivy.gpg > /dev/null \
-    && echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | tee -a /etc/apt/sources.list.d/trivy.list \
+    && wget https://github.com/aquasecurity/trivy/releases/download/v0.69.1/trivy_0.69.1_Linux-64bit.deb \
+    && dpkg -i trivy_0.69.1_Linux-64bit.deb \
     && apt-get update \
     && apt-get install -y --no-install-recommends trivy \
     && rm -rf /var/lib/apt/lists/*
