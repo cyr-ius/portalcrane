@@ -12,7 +12,7 @@ on:
 
 env:
   # Docker Hub image name
-  DOCKERHUB_IMAGE: cyr-ius/portalcrane
+  DOCKERHUB_IMAGE: cyr-ius44/portalcrane
   # GitHub Container Registry image name
   GHCR_IMAGE: ghcr.io/cyr-ius/portalcrane
 
