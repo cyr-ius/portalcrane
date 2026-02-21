@@ -7,19 +7,19 @@ import asyncio
 import shutil
 from datetime import datetime, timezone
 
-pass  # typing import cleaned
-from config import Settings, get_settings
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel
-from services.registry_service import RegistryService
 
 from routers.auth import UserInfo, get_current_user
+
+from ..config import Settings, get_settings
+from ..services.registry_service import RegistryService
 
 router = APIRouter()
 
 # In-memory GC job state
 _gc_state: dict = {
-    "status": "idle",          # idle | running | done | failed
+    "status": "idle",  # idle | running | done | failed
     "started_at": None,
     "finished_at": None,
     "output": "",
@@ -33,6 +33,7 @@ _gc_state: dict = {
 
 class TagInfo(BaseModel):
     """Tag information model."""
+
     name: str
     digest: str = ""
     size: int = 0
@@ -43,6 +44,7 @@ class TagInfo(BaseModel):
 
 class ImageInfo(BaseModel):
     """Image/repository information model."""
+
     name: str
     tags: list[str] = []
     tag_count: int = 0
@@ -51,6 +53,7 @@ class ImageInfo(BaseModel):
 
 class ImageDetail(BaseModel):
     """Detailed image information for advanced mode."""
+
     name: str
     tag: str
     digest: str
@@ -68,6 +71,7 @@ class ImageDetail(BaseModel):
 
 class PaginatedImages(BaseModel):
     """Paginated list of images."""
+
     items: list[ImageInfo]
     total: int
     page: int
@@ -77,12 +81,14 @@ class PaginatedImages(BaseModel):
 
 class AddTagRequest(BaseModel):
     """Request to add a new tag to an existing image."""
+
     source_tag: str
     new_tag: str
 
 
 class RenameImageRequest(BaseModel):
     """Request to retag an image to a new repository/tag."""
+
     new_repository: str
     new_tag: str
 
@@ -123,12 +129,14 @@ async def list_images(
     items = []
     for repo in page_repos:
         tags = await registry.list_tags(repo)
-        items.append(ImageInfo(
-            name=repo,
-            tags=tags,
-            tag_count=len(tags),
-            total_size=0,  # Computed on demand to avoid slowness
-        ))
+        items.append(
+            ImageInfo(
+                name=repo,
+                tags=tags,
+                tag_count=len(tags),
+                total_size=0,  # Computed on demand to avoid slowness
+            )
+        )
 
     return PaginatedImages(
         items=items,
@@ -168,7 +176,6 @@ async def get_tag_detail(
         config = await registry.get_image_config(repository, config_digest)
 
     container_config = config.get("config", config.get("container_config", {}))
-    root_fs = config.get("rootfs", {})
 
     # Extract architecture and OS from platform or config
     architecture = config.get("architecture", "")
@@ -218,7 +225,9 @@ async def delete_image(
     """Delete all tags (and the image) from a repository."""
     tags = await registry.list_tags(repository)
     if not tags:
-        raise HTTPException(status_code=404, detail="Repository not found or has no tags")
+        raise HTTPException(
+            status_code=404, detail="Repository not found or has no tags"
+        )
 
     errors = []
     for tag in tags:
@@ -243,21 +252,26 @@ async def add_tag(
     # Get the source manifest
     manifest = await registry.get_manifest(repository, request.source_tag)
     if not manifest:
-        raise HTTPException(status_code=404, detail=f"Source tag '{request.source_tag}' not found")
+        raise HTTPException(
+            status_code=404, detail=f"Source tag '{request.source_tag}' not found"
+        )
 
     content_type = manifest.get(
-        "mediaType",
-        "application/vnd.docker.distribution.manifest.v2+json"
+        "mediaType", "application/vnd.docker.distribution.manifest.v2+json"
     )
 
     # Remove internal fields before re-pushing
     clean_manifest = {k: v for k, v in manifest.items() if not k.startswith("_")}
 
-    success = await registry.put_manifest(repository, request.new_tag, clean_manifest, content_type)
+    success = await registry.put_manifest(
+        repository, request.new_tag, clean_manifest, content_type
+    )
     if not success:
         raise HTTPException(status_code=500, detail="Failed to create new tag")
 
-    return {"message": f"Tag '{request.new_tag}' created from '{request.source_tag}' in '{repository}'"}
+    return {
+        "message": f"Tag '{request.new_tag}' created from '{request.source_tag}' in '{repository}'"
+    }
 
 
 @router.get("/ping")
@@ -275,6 +289,7 @@ async def ping_registry(
 
 class GCStatus(BaseModel):
     """Garbage collection job status."""
+
     status: str
     started_at: str | None
     finished_at: str | None
@@ -330,10 +345,13 @@ async def _run_gc(settings: Settings):
             ("--filter", "ancestor=registry:3"),
         ]:
             find_proc = await asyncio.create_subprocess_exec(
-                "docker", "ps",
+                "docker",
+                "ps",
                 *docker_filter,
-                "--filter", "status=running",
-                "--format", "{{.Names}}",
+                "--filter",
+                "status=running",
+                "--format",
+                "{{.Names}}",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
@@ -345,8 +363,11 @@ async def _run_gc(settings: Settings):
         if container_name:
             output_lines.append(f"Found registry container: {container_name}")
             gc_proc = await asyncio.create_subprocess_exec(
-                "docker", "exec", container_name,
-                "registry", "garbage-collect",
+                "docker",
+                "exec",
+                container_name,
+                "registry",
+                "garbage-collect",
                 "--delete-untagged=true",
                 "/etc/distribution/config.yml",
                 stdout=asyncio.subprocess.PIPE,
@@ -358,7 +379,9 @@ async def _run_gc(settings: Settings):
                 output_lines.append(gc_err.decode())
 
             if gc_proc.returncode != 0:
-                raise Exception(f"garbage-collect exited with code {gc_proc.returncode}")
+                raise Exception(
+                    f"garbage-collect exited with code {gc_proc.returncode}"
+                )
 
         else:
             # ── Strategy 2: run a temporary registry container for GC ─────────
@@ -366,10 +389,12 @@ async def _run_gc(settings: Settings):
             output_lines.append("No running registry container found.")
             output_lines.append("Attempting GC via temporary container...")
 
-            registry_url = settings.registry_url.rstrip("/")
             gc_proc = await asyncio.create_subprocess_exec(
-                "docker", "run", "--rm",
-                "-v", f"{registry_dir}:/var/lib/registry",
+                "docker",
+                "run",
+                "--rm",
+                "-v",
+                f"{registry_dir}:/var/lib/registry",
                 "registry:3",
                 "garbage-collect",
                 "--delete-untagged=true",
@@ -420,7 +445,9 @@ async def start_garbage_collect(
     Only one GC job can run at a time.
     """
     if _gc_state["status"] == "running":
-        raise HTTPException(status_code=409, detail="A garbage-collect is already running")
+        raise HTTPException(
+            status_code=409, detail="A garbage-collect is already running"
+        )
 
     background_tasks.add_task(_run_gc, settings)
 
@@ -494,10 +521,13 @@ async def purge_empty_repositories(
         ("--filter", "ancestor=registry:3"),
     ]:
         find_proc = await asyncio.create_subprocess_exec(
-            "docker", "ps",
+            "docker",
+            "ps",
             *docker_filter,
-            "--filter", "status=running",
-            "--format", "{{.Names}}",
+            "--filter",
+            "status=running",
+            "--format",
+            "{{.Names}}",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -509,7 +539,7 @@ async def purge_empty_repositories(
     if not container_name:
         raise HTTPException(
             status_code=503,
-            detail="Registry container not found. Cannot purge directories without docker exec access."
+            detail="Registry container not found. Cannot purge directories without docker exec access.",
         )
 
     purged = []
@@ -518,8 +548,12 @@ async def purge_empty_repositories(
     for repo in empty:
         repo_path = f"/var/lib/registry/docker/registry/v2/repositories/{repo}"
         rm_proc = await asyncio.create_subprocess_exec(
-            "docker", "exec", container_name,
-            "rm", "-rf", repo_path,
+            "docker",
+            "exec",
+            container_name,
+            "rm",
+            "-rf",
+            repo_path,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -534,4 +568,3 @@ async def purge_empty_repositories(
         "purged": purged,
         "errors": errors,
     }
-

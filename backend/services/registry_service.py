@@ -4,7 +4,7 @@ Async service layer for Docker Registry API (OCI Distribution Spec)
 """
 
 import httpx
-from config import Settings
+from ..config import Settings
 
 
 class RegistryService:
@@ -19,7 +19,9 @@ class RegistryService:
 
     def _client(self) -> httpx.AsyncClient:
         """Create authenticated async HTTP client."""
-        headers = {"Accept": "application/vnd.docker.distribution.manifest.v2+json, application/json"}
+        headers = {
+            "Accept": "application/vnd.docker.distribution.manifest.v2+json, application/json"
+        }
         return httpx.AsyncClient(
             auth=self.auth,
             headers=headers,
@@ -37,7 +39,9 @@ class RegistryService:
         except Exception:
             return False
 
-    async def list_repositories(self, n: int = 1000, last: str = "", include_empty: bool = False) -> list[str]:
+    async def list_repositories(
+        self, n: int = 1000, last: str = "", include_empty: bool = False
+    ) -> list[str]:
         """List all repositories in the registry.
 
         By default, repositories with no tags are excluded — they are ghost entries
@@ -139,7 +143,9 @@ class RegistryService:
             # Use first manifest
             manifests = manifest.get("manifests", [])
             if manifests:
-                sub_manifest = await self.get_manifest(repository, manifests[0]["digest"])
+                sub_manifest = await self.get_manifest(
+                    repository, manifests[0]["digest"]
+                )
                 layers = sub_manifest.get("layers", [])
                 total_size = sum(layer.get("size", 0) for layer in layers)
         else:
@@ -164,9 +170,12 @@ class RegistryService:
             return False
         return await self.delete_manifest(repository, digest)
 
-    async def put_manifest(self, repository: str, reference: str, manifest: dict, content_type: str) -> bool:
+    async def put_manifest(
+        self, repository: str, reference: str, manifest: dict, content_type: str
+    ) -> bool:
         """Push a manifest to create/update a tag."""
         import json
+
         async with self._client() as client:
             headers = {"Content-Type": content_type}
             response = await client.put(

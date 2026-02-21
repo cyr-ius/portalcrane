@@ -9,14 +9,12 @@ import os
 import uuid
 from enum import Enum
 
-pass  # typing import cleaned
-
 import httpx
-from config import Settings, get_settings
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel
 
-from routers.auth import UserInfo, get_current_user
+from ..config import Settings, get_settings
+from .auth import UserInfo, get_current_user
 
 router = APIRouter()
 
@@ -42,6 +40,7 @@ class JobStatus(str, Enum):
 
 class StagingJob(BaseModel):
     """Staging pipeline job model."""
+
     job_id: str
     status: JobStatus
     image: str
@@ -57,19 +56,22 @@ class StagingJob(BaseModel):
 
 class PullRequest(BaseModel):
     """Request to pull an image from Docker Hub."""
+
     image: str
     tag: str = "latest"
 
 
 class PushRequest(BaseModel):
     """Request to push a staged image to the registry."""
+
     job_id: str
     target_image: str | None = None  # Optional rename
-    target_tag: str | None = None    # Optional retag
+    target_tag: str | None = None  # Optional retag
 
 
 class DockerHubSearchResult(BaseModel):
     """Docker Hub search result model."""
+
     name: str
     description: str
     star_count: int
@@ -99,9 +101,12 @@ async def run_pull_pipeline(job_id: str, image: str, tag: str, settings: Setting
         if settings.dockerhub_username and settings.dockerhub_password:
             # Login first
             login_proc = await asyncio.create_subprocess_exec(
-                "docker", "login",
-                "-u", settings.dockerhub_username,
-                "-p", settings.dockerhub_password,
+                "docker",
+                "login",
+                "-u",
+                settings.dockerhub_username,
+                "-p",
+                settings.dockerhub_password,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 env=pull_env,
@@ -110,7 +115,9 @@ async def run_pull_pipeline(job_id: str, image: str, tag: str, settings: Setting
 
         # Pull the image
         pull_proc = await asyncio.create_subprocess_exec(
-            "docker", "pull", pull_image,
+            "docker",
+            "pull",
+            pull_image,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             env=pull_env,
@@ -125,7 +132,11 @@ async def run_pull_pipeline(job_id: str, image: str, tag: str, settings: Setting
 
         # Export image to tarball for ClamAV scanning
         save_proc = await asyncio.create_subprocess_exec(
-            "docker", "save", "-o", tarball_path, pull_image,
+            "docker",
+            "save",
+            "-o",
+            tarball_path,
+            pull_image,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -179,6 +190,7 @@ async def _clamav_scan(path: str, settings: Settings) -> str:
     try:
         # Try clamd network scan first
         import socket
+
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(3)
         sock.connect((settings.clamav_host, settings.clamav_port))
@@ -187,8 +199,10 @@ async def _clamav_scan(path: str, settings: Settings) -> str:
         # Use clamdscan pointing to the daemon
         proc = await asyncio.create_subprocess_exec(
             "clamdscan",
-            "--host", settings.clamav_host,
-            "--port", str(settings.clamav_port),
+            "--host",
+            settings.clamav_host,
+            "--port",
+            str(settings.clamav_port),
             path,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
@@ -199,7 +213,9 @@ async def _clamav_scan(path: str, settings: Settings) -> str:
         # Fallback to local clamscan
         try:
             proc = await asyncio.create_subprocess_exec(
-                "clamscan", "--no-summary", path,
+                "clamscan",
+                "--no-summary",
+                path,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
@@ -214,11 +230,15 @@ async def _clamav_scan(path: str, settings: Settings) -> str:
 async def _vuln_scan_image(image: str, tag: str, settings: Settings) -> dict:
     """Run Trivy vulnerability scan on a Docker image."""
     cmd = [
-        "trivy", "image",
+        "trivy",
+        "image",
         "--quiet",
-        "--format", "json",
-        "--timeout", settings.vuln_scan_timeout,
-        "--severity", ",".join(settings.vuln_severities),
+        "--format",
+        "json",
+        "--timeout",
+        settings.vuln_scan_timeout,
+        "--severity",
+        ",".join(settings.vuln_severities),
     ]
     if settings.vuln_ignore_unfixed:
         cmd.append("--ignore-unfixed")
@@ -231,7 +251,9 @@ async def _vuln_scan_image(image: str, tag: str, settings: Settings) -> dict:
             stderr=asyncio.subprocess.PIPE,
         )
     except FileNotFoundError as exc:
-        raise Exception("Trivy binary not found. Install trivy or disable VULN_SCAN_ENABLED.") from exc
+        raise Exception(
+            "Trivy binary not found. Install trivy or disable VULN_SCAN_ENABLED."
+        ) from exc
     stdout, stderr = await proc.communicate()
 
     if proc.returncode != 0:
@@ -258,7 +280,9 @@ async def _vuln_scan_image(image: str, tag: str, settings: Settings) -> dict:
     return summary
 
 
-async def run_push_pipeline(job_id: str, target_image: str, target_tag: str, settings: Settings):
+async def run_push_pipeline(
+    job_id: str, target_image: str, target_tag: str, settings: Settings
+):
     """Background task: tag and push image to private registry.
 
     REGISTRY_URL is used by the backend to talk to the registry API (inside Docker network).
@@ -280,8 +304,7 @@ async def run_push_pipeline(job_id: str, target_image: str, target_tag: str, set
         push_host = settings.registry_push_host.strip("/")
     else:
         push_host = (
-            settings.registry_url
-            .replace("https://", "")
+            settings.registry_url.replace("https://", "")
             .replace("http://", "")
             .strip("/")
         )
@@ -293,8 +316,11 @@ async def run_push_pipeline(job_id: str, target_image: str, target_tag: str, set
         if settings.registry_username and settings.registry_password:
             _jobs[job_id]["message"] = f"Authenticating against {push_host}..."
             login_proc = await asyncio.create_subprocess_exec(
-                "docker", "login", push_host,
-                "--username", settings.registry_username,
+                "docker",
+                "login",
+                push_host,
+                "--username",
+                settings.registry_username,
                 "--password-stdin",
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
@@ -309,7 +335,10 @@ async def run_push_pipeline(job_id: str, target_image: str, target_tag: str, set
         # Tag the image
         _jobs[job_id]["message"] = f"Tagging as {full_target}..."
         tag_proc = await asyncio.create_subprocess_exec(
-            "docker", "tag", source, full_target,
+            "docker",
+            "tag",
+            source,
+            full_target,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -322,7 +351,9 @@ async def run_push_pipeline(job_id: str, target_image: str, target_tag: str, set
 
         # Push to registry
         push_proc = await asyncio.create_subprocess_exec(
-            "docker", "push", full_target,
+            "docker",
+            "push",
+            full_target,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -331,10 +362,20 @@ async def run_push_pipeline(job_id: str, target_image: str, target_tag: str, set
             raise Exception(f"Push failed: {stderr.decode() or stdout.decode()}")
 
         # Cleanup local images
-        await asyncio.create_subprocess_exec("docker", "rmi", full_target,
-            stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL)
-        await asyncio.create_subprocess_exec("docker", "rmi", source,
-            stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL)
+        await asyncio.create_subprocess_exec(
+            "docker",
+            "rmi",
+            full_target,
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        await asyncio.create_subprocess_exec(
+            "docker",
+            "rmi",
+            source,
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
 
         # Remove tarball
         tarball_path = os.path.join(settings.staging_dir, f"{job_id}.tar")
@@ -380,7 +421,9 @@ async def pull_image(
         "error": None,
     }
 
-    background_tasks.add_task(run_pull_pipeline, job_id, request.image, request.tag, settings)
+    background_tasks.add_task(
+        run_pull_pipeline, job_id, request.image, request.tag, settings
+    )
     return StagingJob(**_jobs[job_id])
 
 
@@ -414,12 +457,16 @@ async def push_image(
 
     job = _jobs[request.job_id]
     if job["status"] != JobStatus.SCAN_CLEAN:
-        raise HTTPException(status_code=400, detail="Image must be scanned and clean before pushing")
+        raise HTTPException(
+            status_code=400, detail="Image must be scanned and clean before pushing"
+        )
 
     target_image = request.target_image or job["image"]
     target_tag = request.target_tag or job["tag"]
 
-    background_tasks.add_task(run_push_pipeline, request.job_id, target_image, target_tag, settings)
+    background_tasks.add_task(
+        run_push_pipeline, request.job_id, target_image, target_tag, settings
+    )
     return {"message": "Push pipeline started", "job_id": request.job_id}
 
 
@@ -456,7 +503,9 @@ async def search_dockerhub(
     _: UserInfo = Depends(get_current_user),
 ):
     """Search Docker Hub for images."""
-    async with httpx.AsyncClient(timeout=15.0, proxy=settings.httpx_proxy.get("https://") or None) as client:
+    async with httpx.AsyncClient(
+        timeout=15.0, proxy=settings.httpx_proxy.get("https://") or None
+    ) as client:
         try:
             response = await client.get(
                 "https://hub.docker.com/v2/search/repositories/",
@@ -466,17 +515,21 @@ async def search_dockerhub(
             data = response.json()
             results = []
             for item in data.get("results", []):
-                results.append({
-                    "name": item.get("repo_name", ""),
-                    "description": item.get("short_description", ""),
-                    "star_count": item.get("star_count", 0),
-                    "pull_count": item.get("pull_count", 0),
-                    "is_official": item.get("is_official", False),
-                    "is_automated": item.get("is_automated", False),
-                })
+                results.append(
+                    {
+                        "name": item.get("repo_name", ""),
+                        "description": item.get("short_description", ""),
+                        "star_count": item.get("star_count", 0),
+                        "pull_count": item.get("pull_count", 0),
+                        "is_official": item.get("is_official", False),
+                        "is_automated": item.get("is_automated", False),
+                    }
+                )
             return {"results": results, "count": data.get("count", 0)}
         except Exception as e:
-            raise HTTPException(status_code=502, detail=f"Docker Hub search failed: {str(e)}")
+            raise HTTPException(
+                status_code=502, detail=f"Docker Hub search failed: {str(e)}"
+            )
 
 
 @router.get("/search/dockerhub/tags")
@@ -488,7 +541,9 @@ async def get_dockerhub_tags(
     """Get available tags for a Docker Hub image."""
     # Handle official images (library)
     repo = image if "/" in image else f"library/{image}"
-    async with httpx.AsyncClient(timeout=15.0, proxy=settings.httpx_proxy.get("https://") or None) as client:
+    async with httpx.AsyncClient(
+        timeout=15.0, proxy=settings.httpx_proxy.get("https://") or None
+    ) as client:
         try:
             response = await client.get(
                 f"https://hub.docker.com/v2/repositories/{repo}/tags",
@@ -499,4 +554,6 @@ async def get_dockerhub_tags(
             tags = [item["name"] for item in data.get("results", [])]
             return {"image": image, "tags": tags}
         except Exception as e:
-            raise HTTPException(status_code=502, detail=f"Failed to fetch tags: {str(e)}")
+            raise HTTPException(
+                status_code=502, detail=f"Failed to fetch tags: {str(e)}"
+            )

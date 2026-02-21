@@ -5,18 +5,19 @@ Registry statistics and overview data
 
 import shutil
 
-from config import Settings, get_settings
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from services.registry_service import RegistryService
 
-from routers.auth import UserInfo, get_current_user
+from ..config import Settings, get_settings
+from ..services.registry_service import RegistryService
+from .auth import UserInfo, get_current_user
 
 router = APIRouter()
 
 
 class DashboardStats(BaseModel):
     """Dashboard statistics model."""
+
     total_images: int
     total_tags: int
     total_size_bytes: int

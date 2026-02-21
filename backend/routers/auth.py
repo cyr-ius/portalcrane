@@ -5,15 +5,14 @@ Handles local admin authentication and OIDC flow
 
 from datetime import datetime, timedelta, timezone
 
-pass  # typing import cleaned
-
 import httpx
-from config import Settings, get_settings
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from pydantic import BaseModel
+
+from ..config import Settings, get_settings
 
 router = APIRouter()
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -25,6 +24,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/token")
 
 class Token(BaseModel):
     """JWT token response model."""
+
     access_token: str
     token_type: str
     expires_in: int
@@ -32,17 +32,20 @@ class Token(BaseModel):
 
 class TokenData(BaseModel):
     """Decoded token data model."""
+
     username: str | None = None
 
 
 class UserInfo(BaseModel):
     """Authenticated user information."""
+
     username: str
     is_admin: bool = True
 
 
 class OIDCConfig(BaseModel):
     """OIDC provider configuration response."""
+
     enabled: bool
     client_id: str
     issuer: str
@@ -52,6 +55,7 @@ class OIDCConfig(BaseModel):
 
 class LoginRequest(BaseModel):
     """Local login request model."""
+
     username: str
     password: str
 
@@ -62,7 +66,9 @@ class LoginRequest(BaseModel):
 def create_access_token(data: dict, settings: Settings) -> str:
     """Create a signed JWT access token."""
     to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + timedelta(minutes=settings.access_token_expire_minutes)
+    expire = datetime.now(timezone.utc) + timedelta(
+        minutes=settings.access_token_expire_minutes
+    )
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, settings.secret_key, algorithm=settings.algorithm)
 
@@ -78,7 +84,9 @@ async def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
-        payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
+        payload = jwt.decode(
+            token, settings.secret_key, algorithms=[settings.algorithm]
+        )
         username: str = payload.get("sub")
         if username is None:
             raise credentials_exception
@@ -213,12 +221,19 @@ async def oidc_callback(
             tokens = token_response.json()
 
             if "error" in tokens:
-                raise HTTPException(status_code=401, detail=tokens.get("error_description", "OIDC error"))
+                raise HTTPException(
+                    status_code=401,
+                    detail=tokens.get("error_description", "OIDC error"),
+                )
 
             # Decode ID token to get username
             id_token = tokens.get("id_token", "")
             payload = jwt.get_unverified_claims(id_token)
-            username = payload.get("preferred_username") or payload.get("email") or payload.get("sub")
+            username = (
+                payload.get("preferred_username")
+                or payload.get("email")
+                or payload.get("sub")
+            )
 
     except HTTPException:
         raise

@@ -9,7 +9,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from routers import auth, dashboard, registry, staging
+from .routers import auth, dashboard, registry, staging
 
 
 @asynccontextmanager
@@ -46,7 +46,11 @@ app.include_router(dashboard.router, prefix="/api/dashboard", tags=["Dashboard"]
 
 # Serve Angular frontend static files (production)
 if os.path.exists("/app/frontend/dist"):
-    app.mount("/", StaticFiles(directory="/app/frontend/dist/portalcrane/browser", html=True), name="frontend")
+    app.mount(
+        "/",
+        StaticFiles(directory="/app/frontend/dist/portalcrane/browser", html=True),
+        name="frontend",
+    )
 
 
 @app.get("/api/health")

@@ -118,7 +118,9 @@ class Settings(BaseSettings):
     @property
     def vuln_severities(self) -> list[str]:
         """Normalized vulnerability severities list."""
-        return [s.strip().upper() for s in self.vuln_scan_severities.split(",") if s.strip()]
+        return [
+            s.strip().upper() for s in self.vuln_scan_severities.split(",") if s.strip()
+        ]
 
 
 @lru_cache()
