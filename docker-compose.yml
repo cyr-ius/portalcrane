@@ -5,7 +5,6 @@ version: "3.9"
 # Usage: docker compose up -d
 
 services:
-
   # ── Portalcrane Application ──────────────────────────────────────────────
   portalcrane:
     build:
@@ -87,7 +86,15 @@ services:
       - registry_data:/var/lib/registry
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:5000/v2/"]
+      test:
+        [
+          "CMD",
+          "wget",
+          "--quiet",
+          "--tries=1",
+          "--spider",
+          "http://localhost:5000/v2/",
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -106,7 +113,7 @@ services:
       interval: 60s
       timeout: 30s
       retries: 3
-      start_period: 120s  # ClamAV needs time to download virus definitions
+      start_period: 120s # ClamAV needs time to download virus definitions
 
 volumes:
   registry_data:
