@@ -42,6 +42,11 @@ services:
       # Other
       - STAGING_DIR=/tmp/staging
       - ADVANCED_MODE=${ADVANCED_MODE:-false}
+      # Vulnerability scan policy (optional, requires trivy in the app image)
+      - VULN_SCAN_ENABLED=${VULN_SCAN_ENABLED:-false}
+      - VULN_SCAN_SEVERITIES=${VULN_SCAN_SEVERITIES:-CRITICAL,HIGH}
+      - VULN_IGNORE_UNFIXED=${VULN_IGNORE_UNFIXED:-false}
+      - VULN_SCAN_TIMEOUT=${VULN_SCAN_TIMEOUT:-5m}
       # HTTP Proxy (optional — uncomment if Docker Hub is not directly accessible)
       # Only applies to Portalcrane's own outbound calls (Hub API, docker pull/push).
       # The Docker daemon itself is NOT affected — external pulls remain unchanged.
