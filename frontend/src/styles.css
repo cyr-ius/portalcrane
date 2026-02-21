@@ -1,0 +1,183 @@
+/* Portalcrane - Global Styles */
+/* Import Bootstrap and Bootstrap Icons */
+@import "bootstrap/dist/css/bootstrap.min.css";
+@import "bootstrap-icons/font/bootstrap-icons.css";
+
+/* ─── Portalcrane Color Palette ─────────────────────────────────────────── */
+/* Primary: Ocean Blue #2E7FCF  | Accent: Gold #E8A020 | Deep: Navy #1B4D7E */
+
+:root,
+[data-pc-theme="light"] {
+  --pc-accent: #2E7FCF;
+  --pc-accent-2: #E8A020;
+  --pc-accent-3: #1B4D7E;
+  --pc-accent-soft: rgba(46, 127, 207, 0.1);
+
+  --pc-bg-gradient: linear-gradient(135deg, #EEF4FB 0%, #F0F8FF 50%, #FFF8EE 100%);
+  --pc-sidebar-bg: #F8FBFF;
+  --pc-main-bg: #F2F5F9;
+  --pc-card-bg: #FFFFFF;
+  --pc-header-bg: linear-gradient(135deg, #EEF4FB 0%, #F0F8FF 100%);
+
+  --pc-text: #1A2733;
+  --pc-text-muted: #6B7A8D;
+  --pc-border: rgba(46, 127, 207, 0.12);
+  --pc-shadow: rgba(46, 127, 207, 0.1);
+
+  --pc-nav-hover: rgba(46, 127, 207, 0.07);
+  --pc-nav-active-bg: rgba(46, 127, 207, 0.12);
+}
+
+[data-pc-theme="dark"] {
+  --pc-accent: #5BA3E8;
+  --pc-accent-2: #F0B030;
+  --pc-accent-3: #7EC0FF;
+  --pc-accent-soft: rgba(91, 163, 232, 0.15);
+
+  --pc-bg-gradient: linear-gradient(135deg, #0D1B2A 0%, #0F2233 50%, #1A1608 100%);
+  --pc-sidebar-bg: #0D1B2A;
+  --pc-main-bg: #101C28;
+  --pc-card-bg: #152130;
+  --pc-header-bg: linear-gradient(135deg, #0D1B2A 0%, #0F2233 100%);
+
+  --pc-text: #D8E8F5;
+  --pc-text-muted: #7A8FA0;
+  --pc-border: rgba(91, 163, 232, 0.15);
+  --pc-shadow: rgba(0, 0, 0, 0.3);
+
+  --pc-nav-hover: rgba(91, 163, 232, 0.08);
+  --pc-nav-active-bg: rgba(91, 163, 232, 0.15);
+}
+
+/* ─── Base Resets ────────────────────────────────────────────────────────── */
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: var(--pc-main-bg);
+  color: var(--pc-text);
+  margin: 0;
+  padding: 0;
+  transition: background 0.25s, color 0.25s;
+}
+
+/* ─── Bootstrap overrides ────────────────────────────────────────────────── */
+
+/* Cards */
+.card {
+  background-color: var(--pc-card-bg);
+  border-color: var(--pc-border);
+}
+
+/* Tables */
+.table {
+  color: var(--pc-text);
+  --bs-table-bg: transparent;
+}
+
+.table-hover > tbody > tr:hover > * {
+  background-color: var(--pc-nav-hover);
+}
+
+/* Form controls */
+.form-control,
+.form-select,
+.input-group-text {
+  background-color: var(--pc-card-bg);
+  border-color: var(--pc-border);
+  color: var(--pc-text);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.form-control:focus,
+.form-select:focus {
+  background-color: var(--pc-card-bg);
+  border-color: var(--pc-accent);
+  color: var(--pc-text);
+  box-shadow: 0 0 0 3px var(--pc-accent-soft);
+}
+
+.form-control::placeholder {
+  color: var(--pc-text-muted);
+  opacity: 0.6;
+}
+
+/* Buttons - Primary uses our accent */
+.btn-primary {
+  background-color: var(--pc-accent);
+  border-color: var(--pc-accent);
+}
+
+.btn-primary:hover,
+.btn-primary:focus {
+  background-color: var(--pc-accent-3);
+  border-color: var(--pc-accent-3);
+}
+
+.btn-outline-primary {
+  color: var(--pc-accent);
+  border-color: var(--pc-accent);
+}
+
+.btn-outline-primary:hover {
+  background-color: var(--pc-accent);
+  border-color: var(--pc-accent);
+}
+
+/* Badges - subtle variants */
+.bg-primary-subtle { background-color: var(--pc-accent-soft) !important; }
+.text-primary { color: var(--pc-accent) !important; }
+
+/* List group */
+.list-group-item {
+  background-color: transparent;
+  border-color: var(--pc-border);
+  color: var(--pc-text);
+}
+
+/* Modals */
+.modal-content {
+  background-color: var(--pc-card-bg);
+  border-color: var(--pc-border);
+  color: var(--pc-text);
+}
+
+/* ─── Utility ────────────────────────────────────────────────────────────── */
+
+.text-muted { color: var(--pc-text-muted) !important; }
+.border-0 { border: none !important; }
+.bg-body-secondary { background-color: var(--pc-main-bg) !important; }
+
+/* Scrollbar styling */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--pc-border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--pc-accent-soft); }
+
+/* Accent color on links */
+a { color: var(--pc-accent); }
+a:hover { color: var(--pc-accent-3); }
+
+/* Card header subtle background */
+.card-header {
+  background-color: transparent;
+  border-bottom-color: var(--pc-border);
+}
+
+.card-footer {
+  background-color: transparent;
+  border-top-color: var(--pc-border);
+}
+
+/* Page transitions */
+router-outlet + * {
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}

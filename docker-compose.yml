@@ -1,0 +1,109 @@
+version: "3.9"
+
+# ─── Portalcrane Development Stack ─────────────────────────────────────────
+# Includes: Portalcrane app, Docker Registry, ClamAV
+# Usage: docker compose up -d
+
+services:
+
+  # ── Portalcrane Application ──────────────────────────────────────────────
+  portalcrane:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: portalcrane
+    ports:
+      - "8080:8080"
+    environment:
+      # Registry connection
+      - REGISTRY_URL=http://registry:5000
+      # REGISTRY_PUSH_HOST: the Docker daemon runs on the HOST, not inside the compose network.
+      # The registry port 5000 is published on the host, so localhost:5000 always works.
+      - REGISTRY_PUSH_HOST=localhost:5000
+      - REGISTRY_USERNAME=${REGISTRY_USERNAME:-}
+      - REGISTRY_PASSWORD=${REGISTRY_PASSWORD:-}
+      # Admin credentials
+      - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-changeme}
+      # JWT
+      - SECRET_KEY=${SECRET_KEY:-change-this-secret-key-in-production}
+      # OIDC (optional)
+      - OIDC_ENABLED=${OIDC_ENABLED:-false}
+      - OIDC_ISSUER=${OIDC_ISSUER:-}
+      - OIDC_CLIENT_ID=${OIDC_CLIENT_ID:-}
+      - OIDC_CLIENT_SECRET=${OIDC_CLIENT_SECRET:-}
+      - OIDC_REDIRECT_URI=${OIDC_REDIRECT_URI:-http://localhost:8080/auth/callback}
+      # Docker Hub (optional)
+      - DOCKERHUB_USERNAME=${DOCKERHUB_USERNAME:-}
+      - DOCKERHUB_PASSWORD=${DOCKERHUB_PASSWORD:-}
+      # ClamAV
+      - CLAMAV_HOST=clamav
+      - CLAMAV_PORT=3310
+      # Other
+      - STAGING_DIR=/tmp/staging
+      - ADVANCED_MODE=${ADVANCED_MODE:-false}
+      # HTTP Proxy (optional — uncomment if Docker Hub is not directly accessible)
+      # Only applies to Portalcrane's own outbound calls (Hub API, docker pull/push).
+      # The Docker daemon itself is NOT affected — external pulls remain unchanged.
+      # - HTTP_PROXY=http://proxy.corp:3128
+      # - HTTPS_PROXY=http://proxy.corp:3128
+      # - NO_PROXY=localhost,127.0.0.1,registry
+      # - DOCKER_PULL_PROXY=http://proxy.corp:3128
+    volumes:
+      # Mount Docker socket for image pull/push in staging
+      - /var/run/docker.sock:/var/run/docker.sock
+      - staging_data:/tmp/staging
+    depends_on:
+      registry:
+        condition: service_healthy
+      clamav:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ── Docker Registry (CNCF Distribution v3) ───────────────────────────────
+  registry:
+    image: registry:3
+    container_name: portalcrane-registry
+    ports:
+      - "5000:5000"
+    environment:
+      - REGISTRY_STORAGE_DELETE_ENABLED=true
+      - REGISTRY_HTTP_SECRET=${REGISTRY_HTTP_SECRET:-registry-secret}
+      # v3: disable OpenTelemetry tracing if no OTLP collector is available
+      - OTEL_TRACES_EXPORTER=none
+      - OTEL_METRICS_EXPORTER=none
+      - OTEL_LOGS_EXPORTER=none
+    volumes:
+      - registry_data:/var/lib/registry
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:5000/v2/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── ClamAV Antivirus ─────────────────────────────────────────────────────
+  clamav:
+    image: clamav/clamav:stable
+    container_name: portalcrane-clamav
+    environment:
+      - CLAMAV_NO_FRESHCLAMD=false
+    volumes:
+      - clamav_data:/var/lib/clamav
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "clamdcheck.sh"]
+      interval: 60s
+      timeout: 30s
+      retries: 3
+      start_period: 120s  # ClamAV needs time to download virus definitions
+
+volumes:
+  registry_data:
+  clamav_data:
+  staging_data:

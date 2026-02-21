@@ -1,0 +1,354 @@
+import { Component, signal, inject, OnInit, input } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
+import { RegistryService, ImageDetail } from '../../../core/services/registry.service';
+
+@Component({
+  selector: 'app-image-detail',
+  imports: [CommonModule, FormsModule, RouterLink],
+  template: `
+    <div class="p-4">
+      <!-- Header -->
+      <div class="d-flex align-items-center gap-3 mb-4">
+        <a routerLink="/images" class="btn btn-sm btn-outline-secondary">
+          <i class="bi bi-arrow-left"></i>
+        </a>
+        <div>
+          <h2 class="fw-bold mb-0">{{ repository() }}</h2>
+          <p class="text-muted small mb-0">{{ tags().length }} tags available</p>
+        </div>
+      </div>
+
+      <div class="row g-3">
+        <!-- Tags panel -->
+        <div class="col-lg-5">
+          <div class="card border-0 h-100">
+            <div class="card-header border-0 d-flex align-items-center justify-content-between">
+              <h6 class="fw-semibold mb-0">Tags</h6>
+              <button class="btn btn-sm btn-primary" (click)="showAddTag.set(true)">
+                <i class="bi bi-plus-lg me-1"></i>Add Tag
+              </button>
+            </div>
+
+            <!-- Add tag form -->
+            @if (showAddTag()) {
+              <div class="card-body border-bottom py-2">
+                <div class="d-flex gap-2 mb-2">
+                  <select class="form-select form-select-sm" [(ngModel)]="addTagSource">
+                    @for (tag of tags(); track tag) {
+                      <option [value]="tag">{{ tag }}</option>
+                    }
+                  </select>
+                </div>
+                <div class="input-group input-group-sm">
+                  <span class="input-group-text"><i class="bi bi-tag"></i></span>
+                  <input type="text" class="form-control" placeholder="New tag name" [(ngModel)]="newTagName" />
+                  <button class="btn btn-success" (click)="addTag()" [disabled]="!newTagName || addingTag()">
+                    @if (addingTag()) { <span class="spinner-border spinner-border-sm"></span> }
+                    @else { <i class="bi bi-check-lg"></i> }
+                  </button>
+                  <button class="btn btn-outline-secondary" (click)="showAddTag.set(false)">
+                    <i class="bi bi-x-lg"></i>
+                  </button>
+                </div>
+                <div class="form-text">Copy tag "{{ addTagSource }}" as "{{ newTagName || '...' }}"</div>
+              </div>
+            }
+
+            <div class="card-body p-0">
+              @if (tagsLoading()) {
+                <div class="text-center py-4"><div class="spinner-border spinner-border-sm text-primary"></div></div>
+              } @else {
+                <ul class="list-group list-group-flush">
+                  @for (tag of tags(); track tag) {
+                    <li
+                      class="list-group-item d-flex align-items-center justify-content-between"
+                      [class.active-tag]="selectedTag() === tag"
+                      (click)="selectTag(tag)"
+                      style="cursor:pointer"
+                    >
+                      <div class="d-flex align-items-center gap-2">
+                        <i class="bi bi-tag-fill text-primary" style="font-size:0.75rem"></i>
+                        <code class="small">{{ tag }}</code>
+                      </div>
+                      <button
+                        class="btn btn-sm btn-outline-danger border-0"
+                        (click)="$event.stopPropagation(); confirmDeleteTag(tag)"
+                        title="Delete tag"
+                      >
+                        <i class="bi bi-trash"></i>
+                      </button>
+                    </li>
+                  }
+                  @if (tags().length === 0) {
+                    <li class="list-group-item text-center text-muted py-4">
+                      <i class="bi bi-tags d-block mb-2"></i>
+                      No tags found
+                    </li>
+                  }
+                </ul>
+              }
+            </div>
+          </div>
+        </div>
+
+        <!-- Tag detail panel (advanced mode) -->
+        <div class="col-lg-7">
+          @if (selectedTag()) {
+            <div class="card border-0">
+              <div class="card-header border-0 d-flex align-items-center justify-content-between">
+                <h6 class="fw-semibold mb-0">
+                  <i class="bi bi-info-circle me-2"></i>
+                  Tag Details: <code>{{ selectedTag() }}</code>
+                </h6>
+                @if (detailLoading()) {
+                  <div class="spinner-border spinner-border-sm text-primary"></div>
+                }
+              </div>
+
+              @if (tagDetail()) {
+                <div class="card-body">
+                  <!-- Basic info -->
+                  <div class="row g-2 mb-3">
+                    <div class="col-6">
+                      <div class="detail-pill">
+                        <span class="text-muted small d-block">Architecture</span>
+                        <span class="fw-semibold">{{ tagDetail()?.architecture || 'N/A' }}</span>
+                      </div>
+                    </div>
+                    <div class="col-6">
+                      <div class="detail-pill">
+                        <span class="text-muted small d-block">OS</span>
+                        <span class="fw-semibold">{{ tagDetail()?.os || 'N/A' }}</span>
+                      </div>
+                    </div>
+                    <div class="col-6">
+                      <div class="detail-pill">
+                        <span class="text-muted small d-block">Size</span>
+                        <span class="fw-semibold">{{ formatBytes(tagDetail()?.size ?? 0) }}</span>
+                      </div>
+                    </div>
+                    <div class="col-6">
+                      <div class="detail-pill">
+                        <span class="text-muted small d-block">Layers</span>
+                        <span class="fw-semibold">{{ tagDetail()?.layers?.length }}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Digest -->
+                  <div class="mb-3">
+                    <label class="text-muted small d-block mb-1">Digest</label>
+                    <code class="small text-break d-block p-2 bg-body-secondary rounded">
+                      {{ tagDetail()?.digest }}
+                    </code>
+                  </div>
+
+                  <!-- Created -->
+                  @if (tagDetail()?.created) {
+                    <div class="mb-3">
+                      <label class="text-muted small d-block mb-1">Created</label>
+                      <span class="small">{{ tagDetail()?.created | date:'medium' }}</span>
+                    </div>
+                  }
+
+                  <!-- Labels -->
+                  @if (tagDetail()?.labels && objectKeys(tagDetail()?.labels ?? {}).length > 0) {
+                    <div class="mb-3">
+                      <label class="text-muted small d-block mb-1">Labels</label>
+                      <div class="d-flex flex-wrap gap-1">
+                        @for (key of objectKeys(tagDetail()?.labels ?? {}); track key) {
+                          <span class="badge bg-info-subtle text-info small">
+                            {{ key }}={{ tagDetail()?.labels?.[key] }}
+                          </span>
+                        }
+                      </div>
+                    </div>
+                  }
+
+                  <!-- Env vars (advanced) -->
+                  @if (tagDetail()?.env?.length ?? 0 > 0) {
+                    <div class="mb-3">
+                      <label class="text-muted small d-block mb-1">Environment Variables</label>
+                      <div class="env-list p-2 rounded bg-body-secondary">
+                        @for (env of tagDetail()?.env; track env) {
+                          <div class="small font-monospace text-break">{{ env }}</div>
+                        }
+                      </div>
+                    </div>
+                  }
+
+                  <!-- Layers (advanced) -->
+                  @if (showAdvanced() && (tagDetail()?.layers?.length ?? 0) > 0) {
+                    <div>
+                      <label class="text-muted small d-block mb-1">Layers</label>
+                      <div class="layers-list">
+                        @for (layer of tagDetail()?.layers; track layer.digest) {
+                          <div class="layer-item d-flex align-items-center gap-2 p-2 rounded mb-1">
+                            <i class="bi bi-stack text-muted" style="font-size:0.75rem"></i>
+                            <code class="small text-truncate flex-grow-1">{{ layer.digest }}</code>
+                            <span class="badge bg-secondary-subtle text-secondary">{{ formatBytes(layer.size) }}</span>
+                          </div>
+                        }
+                      </div>
+                    </div>
+                  }
+
+                  <div class="mt-3">
+                    <button class="btn btn-sm btn-outline-secondary" (click)="showAdvanced.set(!showAdvanced())">
+                      <i [class]="showAdvanced() ? 'bi bi-chevron-up' : 'bi bi-chevron-down'" class="me-1"></i>
+                      {{ showAdvanced() ? 'Less info' : 'More info' }}
+                    </button>
+                  </div>
+                </div>
+              }
+            </div>
+          } @else {
+            <div class="card border-0 d-flex align-items-center justify-content-center" style="min-height:200px">
+              <div class="text-center text-muted">
+                <i class="bi bi-cursor-fill d-block mb-2 display-6"></i>
+                Select a tag to view details
+              </div>
+            </div>
+          }
+        </div>
+      </div>
+    </div>
+
+    <!-- Delete tag modal -->
+    @if (deleteTagTarget()) {
+      <div class="modal-backdrop fade show"></div>
+      <div class="modal show d-block" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered modal-sm">
+          <div class="modal-content border-0 shadow">
+            <div class="modal-header border-0">
+              <h6 class="modal-title text-danger">Delete Tag</h6>
+              <button class="btn-close" (click)="deleteTagTarget.set(null)"></button>
+            </div>
+            <div class="modal-body">
+              Delete tag <code>{{ deleteTagTarget() }}</code>?
+            </div>
+            <div class="modal-footer border-0">
+              <button class="btn btn-sm btn-outline-secondary" (click)="deleteTagTarget.set(null)">Cancel</button>
+              <button class="btn btn-sm btn-danger" (click)="deleteTag()" [disabled]="deletingTag()">
+                @if (deletingTag()) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    }
+  `,
+  styles: [`
+    .card { background: var(--pc-card-bg); border-radius: 12px; }
+    .list-group-item {
+      background: transparent;
+      transition: background 0.1s;
+    }
+    .list-group-item:hover { background: var(--pc-nav-hover); }
+    .active-tag { background: var(--pc-nav-active-bg) !important; }
+    .detail-pill {
+      background: var(--pc-card-bg);
+      border: 1px solid var(--pc-border);
+      border-radius: 8px;
+      padding: 0.5rem 0.75rem;
+    }
+    .env-list { max-height: 120px; overflow-y: auto; font-size: 0.75rem; }
+    .layer-item { background: var(--pc-card-bg); border: 1px solid var(--pc-border); }
+  `],
+})
+export class ImageDetailComponent implements OnInit {
+  repository = input.required<string>();
+
+  private registry = inject(RegistryService);
+
+  tags = signal<string[]>([]);
+  tagsLoading = signal(false);
+  selectedTag = signal<string | null>(null);
+  tagDetail = signal<ImageDetail | null>(null);
+  detailLoading = signal(false);
+  showAddTag = signal(false);
+  showAdvanced = signal(false);
+  addTagSource = '';
+  newTagName = '';
+  addingTag = signal(false);
+  deleteTagTarget = signal<string | null>(null);
+  deletingTag = signal(false);
+
+  objectKeys = Object.keys;
+
+  ngOnInit() {
+    this.loadTags();
+  }
+
+  loadTags() {
+    this.tagsLoading.set(true);
+    this.registry.getImageTags(this.repository()).subscribe({
+      next: (data) => {
+        this.tags.set(data.tags);
+        this.tagsLoading.set(false);
+        if (data.tags.length > 0) {
+          this.addTagSource = data.tags[0];
+        }
+      },
+      error: () => this.tagsLoading.set(false),
+    });
+  }
+
+  selectTag(tag: string) {
+    this.selectedTag.set(tag);
+    this.tagDetail.set(null);
+    this.detailLoading.set(true);
+    this.registry.getTagDetail(this.repository(), tag).subscribe({
+      next: (detail) => {
+        this.tagDetail.set(detail);
+        this.detailLoading.set(false);
+      },
+      error: () => this.detailLoading.set(false),
+    });
+  }
+
+  addTag() {
+    if (!this.newTagName || !this.addTagSource) return;
+    this.addingTag.set(true);
+    this.registry.addTag(this.repository(), this.addTagSource, this.newTagName).subscribe({
+      next: () => {
+        this.newTagName = '';
+        this.showAddTag.set(false);
+        this.addingTag.set(false);
+        this.loadTags();
+      },
+      error: () => this.addingTag.set(false),
+    });
+  }
+
+  confirmDeleteTag(tag: string) {
+    this.deleteTagTarget.set(tag);
+  }
+
+  deleteTag() {
+    const tag = this.deleteTagTarget();
+    if (!tag) return;
+    this.deletingTag.set(true);
+    this.registry.deleteTag(this.repository(), tag).subscribe({
+      next: () => {
+        if (this.selectedTag() === tag) this.selectedTag.set(null);
+        this.deleteTagTarget.set(null);
+        this.deletingTag.set(false);
+        this.loadTags();
+      },
+      error: () => this.deletingTag.set(false),
+    });
+  }
+
+  formatBytes(bytes: number): string {
+    if (!bytes) return '0 B';
+    const units = ['B', 'KB', 'MB', 'GB'];
+    let size = bytes;
+    let i = 0;
+    while (size >= 1024 && i < units.length - 1) { size /= 1024; i++; }
+    return `${size.toFixed(1)} ${units[i]}`;
+  }
+}
