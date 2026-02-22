@@ -1,6 +1,7 @@
 import { CommonModule } from "@angular/common";
 import { Component, inject, OnDestroy, OnInit, signal } from "@angular/core";
 import { RouterLink } from "@angular/router";
+import { AppConfigService } from "../../core/services/app-config.service";
 import {
   DashboardService,
   DashboardStats,
@@ -9,7 +10,6 @@ import {
   GCStatus,
   RegistryService,
 } from "../../core/services/registry.service";
-import { AppConfigService } from "../../core/services/app-config.service";
 import { StagingService } from "../../core/services/staging.service";
 
 @Component({
@@ -58,6 +58,14 @@ export class DashboardComponent implements OnInit, OnDestroy {
   private gcPollInterval: ReturnType<typeof setInterval> | null = null;
 
   ngOnInit() {
+    this.refresh();
+  }
+
+  ngOnDestroy() {
+    this.stopGCPoll();
+  }
+
+  refresh() {
     this.loadStats();
     this.registryService.getGCStatus().subscribe({
       next: (s) => this.gcStatus.set(s),
@@ -65,10 +73,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.checkGhostRepos();
     this.checkDanglingImages();
     this.checkOrphanTarballs();
-  }
-
-  ngOnDestroy() {
-    this.stopGCPoll();
   }
 
   loadStats() {
