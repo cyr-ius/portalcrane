@@ -18,7 +18,6 @@ export class LayoutComponent {
 
   toggleSidebar() {
     this.sidebarCollapsed.set(!this.sidebarCollapsed());
-    // Ferme le picker quand on déplie le menu
     if (!this.sidebarCollapsed()) {
       this.themePickerOpen.set(false);
     }

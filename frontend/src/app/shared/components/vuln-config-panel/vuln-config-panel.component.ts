@@ -27,7 +27,6 @@ export class VulnConfigPanelComponent implements OnInit {
   );
 
   ngOnInit() {
-    // Sync le draft avec la config chargée
     this.draft.set({ ...this.vulnConfig.config() });
   }
 

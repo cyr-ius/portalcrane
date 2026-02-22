@@ -139,9 +139,9 @@
       </ul>
     </div>
 
-    <!-- Footer : Settings + séparateur + User -->
+    <!-- Footer : Settings + separator + User -->
     <div class="sidebar-footer d-flex flex-column">
-      <!-- Settings — toujours visible, juste au-dessus du séparateur -->
+      <!-- Settings -->
       <div class="px-2 pb-2">
         <a
           routerLink="/settings"
@@ -156,12 +156,11 @@
         </a>
       </div>
 
-      <!-- Séparateur -->
+      <!-- separator -->
       <div class="border-top mx-3"></div>
 
-      <!-- Zone utilisateur -->
+      <!-- User zone -->
       <div class="p-3">
-        <!-- Menu replié : avatar cliquable qui ouvre le picker de thème -->
         @if (sidebarCollapsed()) {
           <div class="position-relative">
             <button
@@ -170,7 +169,6 @@
               [title]="'Theme: ' + themeService.theme()"
             >
               <i class="bi bi-person-fill"></i>
-              <!-- Indicateur thème actif -->
               <span class="theme-dot">
                 @if (themeService.theme() === "light") {
                   <i class="bi bi-sun-fill"></i>
@@ -182,7 +180,6 @@
               </span>
             </button>
 
-            <!-- Dropdown thème (flottant à droite) -->
             @if (themePickerOpen()) {
               <div class="theme-dropdown-collapsed">
                 <button
@@ -214,7 +211,6 @@
           </div>
         }
 
-        <!-- Menu déplié : sélecteur thème inline + info utilisateur -->
         @if (!sidebarCollapsed()) {
           <!-- Theme switcher inline -->
           <div class="d-flex gap-1 mb-2">
