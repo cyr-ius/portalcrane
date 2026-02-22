@@ -22,6 +22,9 @@ LABEL org.opencontainers.image.source="https://github.com/cyr-ius/portalcrane"
 LABEL org.opencontainers.image.url="https://github.com/cyr-ius/portalcrane"
 LABEL org.opencontainers.image.licenses="MIT"
 
+# Trivy version — update this ARG to upgrade
+ARG TRIVY_VERSION=0.69.1
+
 # Install system dependencies (Docker CLI for staging pipeline + ClamAV client)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
@@ -31,8 +34,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && curl -fsSL https://get.docker.com -o get-docker.sh \
     && sh get-docker.sh \
     && rm get-docker.sh \
-    && curl -fsSL https://github.com/aquasecurity/trivy/releases/download/v0.69.1/trivy_0.69.1_Linux-64bit.deb -o /tmp/trivy_0.69.1_Linux-64bit.deb\
-    && dpkg -i /tmp/trivy_0.69.1_Linux-64bit.deb \
+    # Install Trivy from the official .deb (single install, no APT conflict)
+    && ARCH="$(dpkg --print-architecture)" \
+    && case "$ARCH" in \
+         amd64) TRIVY_ARCH="Linux-64bit" ;; \
+         arm64) TRIVY_ARCH="Linux-ARM64" ;; \
+         *) echo "Unsupported architecture: $ARCH" && exit 1 ;; \
+       esac \
+    && curl -fsSL -o /tmp/trivy.deb \
+         "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_${TRIVY_ARCH}.deb" \
+    && dpkg -i /tmp/trivy.deb \
+    && rm /tmp/trivy.deb \
+    && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
