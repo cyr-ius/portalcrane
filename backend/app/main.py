@@ -23,6 +23,7 @@ from .routers import (
 _FRONTEND_DIR = "/app/frontend/dist/portalcrane/browser"
 _INDEX_HTML = os.path.join(_FRONTEND_DIR, "index.html")
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager - startup and shutdown events."""
