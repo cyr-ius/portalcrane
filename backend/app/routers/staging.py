@@ -100,6 +100,22 @@ class ClamAVStatus(BaseModel):
     message: str
 
 
+class DanglingImagesResult(BaseModel):
+    """Result of dangling images inspection on the host Docker daemon."""
+
+    images: list[dict]
+    count: int
+
+
+class OrphanTarballsResult(BaseModel):
+    """Result of orphan .tar files inspection in the staging directory."""
+
+    files: list[str]
+    count: int
+    total_size_bytes: int
+    total_size_human: str
+
+
 # ─── Override helpers ────────────────────────────────────────────────────────
 
 
@@ -117,6 +133,15 @@ def _effective_severities(settings: Settings, override: str | None) -> list[str]
     """Return the effective severity list for a given job."""
     raw = override if override is not None else settings.vuln_scan_severities
     return [s.strip().upper() for s in raw.split(",") if s.strip()]
+
+
+def _human_size(size_bytes: int) -> str:
+    """Convert bytes to a human-readable string."""
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if size_bytes < 1024:
+            return f"{size_bytes:.1f} {unit}"
+        size_bytes /= 1024
+    return f"{size_bytes:.1f} PB"
 
 
 # ─── Background Tasks ─────────────────────────────────────────────────────────
@@ -280,12 +305,10 @@ async def _clamav_scan(path: str, settings: Settings) -> str:
                         break
                     # Each chunk prefixed by its size as 4-byte big-endian int
                     writer.write(struct.pack("!I", len(chunk)) + chunk)
-                    # writer.write(len(chunk).to_bytes(4, "big") + chunk)
                     await writer.drain()
 
             # End of stream: 4-byte zero
             writer.write(struct.pack("!I", 0))
-            # writer.write((0).to_bytes(4, "big"))
             await writer.drain()
 
             # Read response
@@ -437,7 +460,7 @@ async def run_push_pipeline(
 
         _jobs[job_id]["progress"] = 80
 
-        # Cleanup local tagged image
+        # Cleanup local tagged image (registry-prefixed copy)
         await asyncio.create_subprocess_exec(
             "docker",
             "rmi",
@@ -446,7 +469,7 @@ async def run_push_pipeline(
             stderr=asyncio.subprocess.DEVNULL,
         )
 
-        # Cleanup source image
+        # Cleanup source image (the original pulled image)
         await asyncio.create_subprocess_exec(
             "docker",
             "rmi",
@@ -455,7 +478,7 @@ async def run_push_pipeline(
             stderr=asyncio.subprocess.DEVNULL,
         )
 
-        # Remove tarball
+        # Remove tarball from staging directory if it exists
         tarball_path = os.path.join(settings.staging_dir, f"{job_id}.tar")
         if os.path.exists(tarball_path):
             os.remove(tarball_path)
@@ -639,57 +662,220 @@ async def search_dockerhub(
     _: UserInfo = Depends(get_current_user),
 ):
     """Search Docker Hub for images."""
-    async with httpx.AsyncClient(
-        timeout=15.0, proxy=settings.httpx_proxy.get("https://") or None
-    ) as client:
-        try:
-            response = await client.get(
-                "https://hub.docker.com/v2/search/repositories/",
-                params={"query": q, "page": page, "page_size": 20},
-            )
-            response.raise_for_status()
-            data = response.json()
-            results = []
-            for item in data.get("results", []):
-                results.append(
-                    {
-                        "name": item.get("repo_name", ""),
-                        "description": item.get("short_description", ""),
-                        "star_count": item.get("star_count", 0),
-                        "pull_count": item.get("pull_count", 0),
-                        "is_official": item.get("is_official", False),
-                        "is_automated": item.get("is_automated", False),
-                    }
-                )
-            return {"results": results, "count": data.get("count", 0)}
-        except Exception as e:
-            raise HTTPException(
-                status_code=502, detail=f"Docker Hub search failed: {str(e)}"
-            )
+    url = f"https://hub.docker.com/v2/search/repositories/?query={q}&page={page}&page_size=10"
+    proxies = settings.httpx_proxy or {}
+    async with httpx.AsyncClient(proxies=proxies, timeout=10) as client:
+        resp = await client.get(url)
+        resp.raise_for_status()
+        data = resp.json()
+
+    results = [
+        {
+            "name": r.get("repo_name", ""),
+            "description": r.get("short_description", ""),
+            "star_count": r.get("star_count", 0),
+            "pull_count": r.get("pull_count", 0),
+            "is_official": r.get("is_official", False),
+            "is_automated": r.get("is_automated", False),
+        }
+        for r in data.get("results", [])
+    ]
+    return {"results": results, "count": data.get("count", 0)}
 
 
-@router.get("/search/dockerhub/tags")
+@router.get("/dockerhub/tags/{image:path}")
 async def get_dockerhub_tags(
     image: str,
     settings: Settings = Depends(get_settings),
     _: UserInfo = Depends(get_current_user),
 ):
     """Get available tags for a Docker Hub image."""
-    # Handle official images (library)
-    repo = image if "/" in image else f"library/{image}"
-    async with httpx.AsyncClient(
-        timeout=15.0, proxy=settings.httpx_proxy.get("https://") or None
-    ) as client:
-        try:
-            response = await client.get(
-                f"https://hub.docker.com/v2/repositories/{repo}/tags",
-                params={"page_size": 50, "ordering": "last_updated"},
-            )
-            response.raise_for_status()
-            data = response.json()
-            tags = [item["name"] for item in data.get("results", [])]
-            return {"image": image, "tags": tags}
-        except Exception as e:
-            raise HTTPException(
-                status_code=502, detail=f"Failed to fetch tags: {str(e)}"
-            )
+    url = f"https://hub.docker.com/v2/repositories/{image}/tags/?page_size=20&ordering=last_updated"
+    proxies = settings.httpx_proxy or {}
+    try:
+        async with httpx.AsyncClient(proxies=proxies, timeout=10) as client:
+            resp = await client.get(url)
+            resp.raise_for_status()
+            data = resp.json()
+        tags = [t["name"] for t in data.get("results", [])]
+    except Exception:
+        tags = ["latest"]
+    return {"tags": tags}
+
+
+@router.get("/vuln-config")
+async def get_vuln_config(
+    settings: Settings = Depends(get_settings),
+    _: UserInfo = Depends(get_current_user),
+):
+    """Return server-side vulnerability scan defaults (from environment variables)."""
+    return {
+        "enabled": settings.vuln_scan_enabled,
+        "severities": [
+            s.strip() for s in settings.vuln_scan_severities.split(",") if s.strip()
+        ],
+        "ignore_unfixed": settings.vuln_ignore_unfixed,
+        "timeout": settings.vuln_scan_timeout,
+    }
+
+
+# ─── Quick Actions: Dangling Images ───────────────────────────────────────────
+
+
+@router.get("/dangling-images", response_model=DanglingImagesResult)
+async def list_dangling_images(
+    _: UserInfo = Depends(get_current_user),
+):
+    """
+    List dangling Docker images on the host (images with no tag, i.e. <none>:<none>).
+    These accumulate over time and waste disk space on the staging host.
+    """
+    proc = await asyncio.create_subprocess_exec(
+        "docker",
+        "images",
+        "--filter",
+        "dangling=true",
+        "--format",
+        '{"id":"{{.ID}}","repository":"{{.Repository}}","tag":"{{.Tag}}","size":"{{.Size}}","created":"{{.CreatedSince}}"}',
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stdout, stderr = await proc.communicate()
+    if proc.returncode != 0:
+        raise HTTPException(
+            status_code=500,
+            detail=f"docker images failed: {stderr.decode().strip()}",
+        )
+
+    images = []
+    for line in stdout.decode().strip().splitlines():
+        line = line.strip()
+        if line:
+            try:
+                images.append(json.loads(line))
+            except json.JSONDecodeError:
+                pass
+
+    return DanglingImagesResult(images=images, count=len(images))
+
+
+@router.post("/dangling-images/purge")
+async def purge_dangling_images(
+    _: UserInfo = Depends(get_current_user),
+):
+    """
+    Remove all dangling Docker images from the host.
+    Equivalent to: docker image prune -f
+    """
+    proc = await asyncio.create_subprocess_exec(
+        "docker",
+        "image",
+        "prune",
+        "-f",
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stdout, stderr = await proc.communicate()
+    if proc.returncode != 0:
+        raise HTTPException(
+            status_code=500,
+            detail=f"docker image prune failed: {stderr.decode().strip()}",
+        )
+    output = stdout.decode().strip()
+    return {"message": "Dangling images purged", "output": output}
+
+
+# ─── Quick Actions: Orphan Tarballs ───────────────────────────────────────────
+
+
+@router.get("/orphan-tarballs", response_model=OrphanTarballsResult)
+async def list_orphan_tarballs(
+    settings: Settings = Depends(get_settings),
+    _: UserInfo = Depends(get_current_user),
+):
+    """
+    List .tar files in the staging directory that have no corresponding active job.
+    These are leftover files from interrupted or failed pipeline runs.
+    """
+    staging_dir = settings.staging_dir
+    active_job_ids = set(_jobs.keys())
+
+    orphans: list[str] = []
+    total_size = 0
+
+    if os.path.isdir(staging_dir):
+        for fname in os.listdir(staging_dir):
+            if not fname.endswith(".tar"):
+                continue
+            # Extract job_id from filename (format: <uuid>.tar)
+            job_id_candidate = fname[:-4]
+            try:
+                uuid.UUID(job_id_candidate)
+            except ValueError:
+                # Not a UUID-named file — treat as orphan
+                fpath = os.path.join(staging_dir, fname)
+                orphans.append(fname)
+                total_size += os.path.getsize(fpath)
+                continue
+
+            # It's a UUID-named tar: orphan if no active job references it
+            if job_id_candidate not in active_job_ids:
+                fpath = os.path.join(staging_dir, fname)
+                orphans.append(fname)
+                total_size += os.path.getsize(fpath)
+
+    return OrphanTarballsResult(
+        files=orphans,
+        count=len(orphans),
+        total_size_bytes=total_size,
+        total_size_human=_human_size(total_size),
+    )
+
+
+@router.post("/orphan-tarballs/purge")
+async def purge_orphan_tarballs(
+    settings: Settings = Depends(get_settings),
+    _: UserInfo = Depends(get_current_user),
+):
+    """
+    Delete all orphan .tar files from the staging directory.
+    Only files with no corresponding active job are removed.
+    """
+    staging_dir = settings.staging_dir
+    active_job_ids = set(_jobs.keys())
+
+    deleted: list[str] = []
+    errors: list[dict] = []
+    freed_bytes = 0
+
+    if os.path.isdir(staging_dir):
+        for fname in os.listdir(staging_dir):
+            if not fname.endswith(".tar"):
+                continue
+            job_id_candidate = fname[:-4]
+
+            # Determine if this file is an orphan
+            is_orphan = False
+            try:
+                uuid.UUID(job_id_candidate)
+                is_orphan = job_id_candidate not in active_job_ids
+            except ValueError:
+                is_orphan = True
+
+            if is_orphan:
+                fpath = os.path.join(staging_dir, fname)
+                try:
+                    size = os.path.getsize(fpath)
+                    os.remove(fpath)
+                    deleted.append(fname)
+                    freed_bytes += size
+                except OSError as e:
+                    errors.append({"file": fname, "error": str(e)})
+
+    return {
+        "message": f"Purged {len(deleted)} orphan tarball(s)",
+        "deleted": deleted,
+        "freed_bytes": freed_bytes,
+        "freed_human": _human_size(freed_bytes),
+        "errors": errors,
+    }

@@ -58,6 +58,35 @@ export interface PullOptions {
   vuln_severities_override?: string | null;
 }
 
+export interface DanglingImage {
+  id: string;
+  repository: string;
+  tag: string;
+  size: string;
+  created: string;
+}
+
+export interface DanglingImagesResult {
+  images: DanglingImage[];
+  count: number;
+}
+
+export interface OrphanTarballsResult {
+  files: string[];
+  count: number;
+  total_size_bytes: number;
+  total_size_human: string;
+}
+
+/** Active job statuses — used to sort running jobs to the top */
+const ACTIVE_STATUSES: JobStatus[] = [
+  "pending",
+  "pulling",
+  "scanning",
+  "vuln_scanning",
+  "pushing",
+];
+
 @Injectable({ providedIn: "root" })
 export class StagingService {
   private readonly BASE = "/api/staging";
@@ -109,8 +138,54 @@ export class StagingService {
     image: string,
   ): Observable<{ image: string; tags: string[] }> {
     return this.http.get<{ image: string; tags: string[] }>(
-      `${this.BASE}/search/dockerhub/tags`,
-      { params: { image } },
+      `${this.BASE}/dockerhub/tags/${image}`,
     );
+  }
+
+  // ── Quick Actions: Dangling Images ────────────────────────────────────────
+
+  getDanglingImages(): Observable<DanglingImagesResult> {
+    return this.http.get<DanglingImagesResult>(`${this.BASE}/dangling-images`);
+  }
+
+  purgeDanglingImages(): Observable<{ message: string; output: string }> {
+    return this.http.post<{ message: string; output: string }>(
+      `${this.BASE}/dangling-images/purge`,
+      {},
+    );
+  }
+
+  // ── Quick Actions: Orphan Tarballs ────────────────────────────────────────
+
+  getOrphanTarballs(): Observable<OrphanTarballsResult> {
+    return this.http.get<OrphanTarballsResult>(`${this.BASE}/orphan-tarballs`);
+  }
+
+  purgeOrphanTarballs(): Observable<{
+    message: string;
+    deleted: string[];
+    freed_bytes: number;
+    freed_human: string;
+    errors: { file: string; error: string }[];
+  }> {
+    return this.http.post<{
+      message: string;
+      deleted: string[];
+      freed_bytes: number;
+      freed_human: string;
+      errors: { file: string; error: string }[];
+    }>(`${this.BASE}/orphan-tarballs/purge`, {});
+  }
+
+  /**
+   * Sort jobs so that active ones (pending/pulling/scanning/pushing) always
+   * appear at the top of the list, then by most recent (reverse insertion order).
+   */
+  static sortJobs(jobs: StagingJob[]): StagingJob[] {
+    return [...jobs].sort((a, b) => {
+      const aActive = ACTIVE_STATUSES.includes(a.status) ? 0 : 1;
+      const bActive = ACTIVE_STATUSES.includes(b.status) ? 0 : 1;
+      return aActive - bActive;
+    });
   }
 }
