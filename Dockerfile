@@ -15,10 +15,6 @@ RUN npm run build:prod
 # ─── Stage 2: Final container ─────────────────────────────────────────────
 FROM python:3.12-slim
 
-ARG BUILD_DATE
-ARG VERSION
-ENV APP_VERSION=${VERSION}
-
 LABEL maintainer="cyr-ius <https://github.com/cyr-ius>"
 LABEL org.opencontainers.image.title="Portalcrane"
 LABEL org.opencontainers.image.description="Docker Registry Manager - Single Container"
@@ -71,6 +67,10 @@ RUN mkdir -p /tmp/staging
 
 # Expose port
 EXPOSE 8080
+
+# Pass application version from build ARG to runtime ENV for about endpoint
+ARG VERSION
+ENV APP_VERSION=${VERSION}
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
