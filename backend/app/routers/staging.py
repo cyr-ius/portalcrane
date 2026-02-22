@@ -663,8 +663,8 @@ async def search_dockerhub(
 ):
     """Search Docker Hub for images."""
     url = f"https://hub.docker.com/v2/search/repositories/?query={q}&page={page}&page_size=10"
-    proxies = settings.httpx_proxy or {}
-    async with httpx.AsyncClient(proxies=proxies, timeout=10) as client:
+    proxy = settings.httpx_proxy
+    async with httpx.AsyncClient(proxy=proxy, timeout=10) as client:
         resp = await client.get(url)
         resp.raise_for_status()
         data = resp.json()
@@ -691,9 +691,9 @@ async def get_dockerhub_tags(
 ):
     """Get available tags for a Docker Hub image."""
     url = f"https://hub.docker.com/v2/repositories/{image}/tags/?page_size=20&ordering=last_updated"
-    proxies = settings.httpx_proxy or {}
+    proxy = settings.httpx_proxy
     try:
-        async with httpx.AsyncClient(proxies=proxies, timeout=10) as client:
+        async with httpx.AsyncClient(proxy=proxy, timeout=10) as client:
             resp = await client.get(url)
             resp.raise_for_status()
             data = resp.json()

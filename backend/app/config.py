@@ -89,16 +89,17 @@ class Settings(BaseSettings):
         case_sensitive = False
 
     @property
-    def httpx_proxy(self) -> dict:
-        """Build httpx-compatible proxy dict from settings."""
-        proxies = {}
-        if self.https_proxy:
-            proxies["https://"] = self.https_proxy
-        elif self.http_proxy:
-            proxies["https://"] = self.http_proxy
-        if self.http_proxy:
-            proxies["http://"] = self.http_proxy
-        return proxies
+    def httpx_proxy(self) -> str | None:
+        """
+        Return a single proxy URL string for httpx >= 0.28.
+
+        httpx 0.28 removed the legacy `proxies` dict argument in favour of
+        a single `proxy` string (or `mounts` for fine-grained control).
+        We prefer HTTPS_PROXY for outbound HTTPS calls (Docker Hub, OIDC),
+        falling back to HTTP_PROXY when only the latter is set.
+        Returns None when no proxy is configured.
+        """
+        return self.https_proxy or self.http_proxy or None
 
     @property
     def docker_env_proxy(self) -> dict:
