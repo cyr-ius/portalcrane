@@ -88,9 +88,9 @@ class Settings(BaseSettings):
     dockerhub_api_url: str = "https://hub.docker.com/v2"
 
     # Application version exposed via GET /api/about for GitHub update checks.
-    # Override with the VERSION environment variable at container startup.
+    # Override with the APP_VERSION environment variable at container startup.
     # The Dockerfile / CI pipeline should set this to the git tag (e.g. "1.2.3").
-    version: str = "1.0.0"
+    app_version: str = "1.0.0"
 
     class Config:
         env_file = ".env"

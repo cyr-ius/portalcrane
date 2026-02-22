@@ -46,7 +46,7 @@ async def get_about(settings: Settings = Depends(get_settings)) -> dict:
     Return application metadata and check GitHub for a newer release.
 
     Response fields:
-    - current_version   : version running in this container (from VERSION env var)
+    - current_version   : version running in this container (from APP_VERSION env var)
     - latest_version    : latest published GitHub release tag (None on error)
     - update_available  : True when latest_version > current_version (string compare)
     - author            : project author GitHub handle
@@ -54,7 +54,7 @@ async def get_about(settings: Settings = Depends(get_settings)) -> dict:
     - github_url        : link to the GitHub repository
     - github_error      : error message when the GitHub check fails (None otherwise)
     """
-    current_version = settings.version  # e.g. "1.2.0" from VERSION env var
+    current_version = settings.app_version  # e.g. "1.2.0" from APP_VERSION env var
 
     latest_version: str | None = None
     github_error: str | None = None
