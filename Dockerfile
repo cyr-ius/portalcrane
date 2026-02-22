@@ -31,9 +31,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     clamdscan \
     lsb-release \
-    && curl -fsSL https://get.docker.com -o get-docker.sh \
-    && sh get-docker.sh \
-    && rm get-docker.sh \
+    && curl -LsSf https://get.docker.com | sh \
     # Install Trivy from the official .deb (single install, no APT conflict)
     && ARCH="$(dpkg --print-architecture)" \
     && case "$ARCH" in \
@@ -48,13 +46,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
+RUN pip3 install --no-cache-dir uv
+
+ENV UV_SYSTEM_PYTHON=true \
+    UV_NO_CACHE=true
+
 WORKDIR /app
 
 # Copy Python backend
 COPY backend/ ./
 
 # Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+RUN uv pip install --no-cache-dir -r requirements.txt
 
 # Copy built frontend
 COPY --from=frontend-builder /build/frontend/dist/portalcrane/browser ./frontend/dist/portalcrane/browser
