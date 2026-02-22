@@ -31,12 +31,23 @@ export const TRIVY_SEVERITIES = [
 ] as const;
 export type TrivySeverity = (typeof TRIVY_SEVERITIES)[number];
 
+export const TRIVY_TIMEOUT_OPTIONS = [
+  "1m",
+  "3m",
+  "5m",
+  "10m",
+  "15m",
+  "30m",
+] as const;
+export type TrivyTimeoutOption = (typeof TRIVY_TIMEOUT_OPTIONS)[number];
+
 const KEYS = {
   ADVANCED_MODE: "pc_advanced_mode",
   CLAMAV_ENABLED: "pc_clamav_enabled",
   VULN_ENABLED: "pc_vuln_enabled",
   VULN_SEVERITIES: "pc_vuln_severities",
   VULN_IGNORE_UNFIXED: "pc_vuln_ignore_unfixed",
+  VULN_TIMEOUT: "pc_vuln_timeout",
 };
 
 function readBool(key: string, fallback: boolean): boolean {
@@ -88,6 +99,10 @@ export class AppConfigService {
   );
   readonly vulnIgnoreUnfixed = this._vulnIgnoreUnfixed.asReadonly();
 
+  /** Timeout for Trivy scans (e.g. "5m"). */
+  private _vulnTimeout = signal<string>(readStr(KEYS.VULN_TIMEOUT, "5m"));
+  readonly vulnTimeout = this._vulnTimeout.asReadonly();
+
   /** Comma-separated severities string ready for the API. */
   readonly vulnSeveritiesString = computed(() =>
     this._vulnSeverities().join(","),
@@ -119,6 +134,8 @@ export class AppConfigService {
         }
         if (localStorage.getItem(KEYS.VULN_IGNORE_UNFIXED) === null)
           this._vulnIgnoreUnfixed.set(cfg.vuln_ignore_unfixed);
+        if (localStorage.getItem(KEYS.VULN_TIMEOUT) === null)
+          this._vulnTimeout.set(cfg.vuln_scan_timeout);
       }),
     );
   }
@@ -157,6 +174,11 @@ export class AppConfigService {
   setVulnIgnoreUnfixed(value: boolean) {
     this._vulnIgnoreUnfixed.set(value);
     localStorage.setItem(KEYS.VULN_IGNORE_UNFIXED, String(value));
+  }
+
+  setVulnTimeout(value: string) {
+    this._vulnTimeout.set(value);
+    localStorage.setItem(KEYS.VULN_TIMEOUT, String(value));
   }
 
   // ── ClamAV live probe ─────────────────────────────────────────────────────

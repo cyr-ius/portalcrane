@@ -5,7 +5,7 @@
     <h6 class="fw-semibold mb-0">
       <i class="bi bi-shield-exclamation me-2"></i>Vulnerability Scanner (Trivy)
     </h6>
-    @if (vulnConfig.hasLocalOverrides()) {
+    @if (configService.vulnEnabled()) {
       <span
         class="badge bg-warning-subtle text-warning d-flex align-items-center gap-1"
       >
@@ -21,8 +21,13 @@
       </span>
     }
   </div>
-
   <div class="card-body">
+    <p class="text-muted small mb-3">
+      Scans every pulled image for known vulnerabilities (CVEs) before allowing
+      a push to the registry. Requires ClamAV to be enabled as it runs after the
+      antivirus step.
+    </p>
+
     <!-- Enable / Disable toggle -->
     <div class="d-flex align-items-center justify-content-between mb-3">
       <div>
@@ -37,13 +42,13 @@
           type="checkbox"
           role="switch"
           id="vulnEnabled"
-          [checked]="draft().enabled"
-          (change)="setEnabled($any($event.target).checked)"
+          [checked]="configService.vulnEnabled()"
+          (change)="configService.setVulnEnabled($any($event.target).checked)"
         />
       </div>
     </div>
 
-    @if (draft().enabled) {
+    @if (configService.vulnEnabled()) {
       <!-- Severities blocking policy -->
       <div class="mb-3">
         <label class="form-label small fw-semibold">
@@ -55,14 +60,14 @@
             <button
               class="btn btn-sm sev-btn"
               [class]="getSevBtnClass(sev)"
-              (click)="toggleSeverity(sev)"
+              (click)="configService.toggleVulnSeverity(sev)"
               [title]="'Toggle ' + sev"
             >
               {{ sev }}
             </button>
           }
         </div>
-        @if (draft().severities.length === 0) {
+        @if (configService.vulnSeverities().length === 0) {
           <div class="text-danger small mt-1">
             <i class="bi bi-exclamation-triangle me-1"></i>
             Select at least one severity
@@ -84,8 +89,10 @@
             type="checkbox"
             role="switch"
             id="vulnIgnoreUnfixed"
-            [checked]="draft().ignore_unfixed"
-            (change)="setIgnoreUnfixed($any($event.target).checked)"
+            [checked]="configService.vulnIgnoreUnfixed()"
+            (change)="
+              configService.setVulnIgnoreUnfixed($any($event.target).checked)
+            "
           />
         </div>
       </div>
@@ -97,9 +104,9 @@
           @for (t of timeoutOptions; track t) {
             <button
               class="btn btn-sm"
-              [class.btn-primary]="draft().timeout === t"
-              [class.btn-outline-secondary]="draft().timeout !== t"
-              (click)="setTimeout(t)"
+              [class.btn-primary]="configService.vulnTimeout() === t"
+              [class.btn-outline-secondary]="configService.vulnTimeout() !== t"
+              (click)="configService.setVulnTimeout(t)"
             >
               {{ t }}
             </button>
@@ -109,48 +116,13 @@
     }
 
     <!-- Server defaults comparison -->
-    @if (vulnConfig.serverDefaults()) {
-      <div class="env-defaults p-2 rounded mb-3" style="font-size: 0.72rem">
-        <div class="text-muted mb-1 fw-semibold">
-          <i class="bi bi-server me-1"></i>Server defaults (env vars)
-        </div>
-        <div class="font-monospace text-muted">
-          enabled={{ vulnConfig.serverDefaults()!.enabled }}&nbsp; severities={{
-            vulnConfig.serverDefaults()!.severities.join(",")
-          }}&nbsp; ignore_unfixed={{
-            vulnConfig.serverDefaults()!.ignore_unfixed
-          }}&nbsp; timeout={{ vulnConfig.serverDefaults()!.timeout }}
-        </div>
-      </div>
-    }
-
-    <!-- Actions -->
-    <div class="d-flex gap-2">
-      <button
-        class="btn btn-sm btn-primary flex-fill"
-        (click)="save()"
-        [disabled]="!canSave()"
-      >
-        <i class="bi bi-floppy me-1"></i>Apply
-      </button>
-      @if (vulnConfig.hasLocalOverrides()) {
-        <button
-          class="btn btn-sm btn-outline-secondary"
-          (click)="reset()"
-          title="Restore server defaults"
-        >
-          <i class="bi bi-arrow-counterclockwise me-1"></i>Reset to env
-        </button>
-      }
-    </div>
-
-    @if (saved()) {
-      <div class="alert alert-success py-2 mt-2 mb-0 small" role="alert">
-        <i class="bi bi-check-circle me-1"></i>
-        Configuration saved locally.
-        @if (vulnConfig.hasLocalOverrides()) {
-          Server env vars are overridden for this browser session.
-        }
+    @if (configService.serverConfig(); as cfg) {
+      <div class="text-muted mt-2" style="font-size: 0.75rem">
+        <i class="bi bi-server me-1"></i>Server default:
+        {{ cfg.vuln_scan_enabled ? "enabled" : "disabled" }} — Severities:
+        {{ cfg.vuln_scan_severities }} — Ignore unfixed:
+        {{ cfg.vuln_ignore_unfixed ? "yes" : "no" }} — Timeout:
+        {{ cfg.vuln_scan_timeout }}
       </div>
     }
   </div>
