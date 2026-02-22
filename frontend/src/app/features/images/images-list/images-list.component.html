@@ -13,13 +13,14 @@
   <div class="card border-0 mb-3">
     <div class="card-body py-2">
       <div class="row g-2 align-items-center">
+        <!-- Text search (handled by backend) -->
         <div class="col">
           <div class="input-group">
             <span class="input-group-text"><i class="bi bi-search"></i></span>
             <input
               type="text"
               class="form-control"
-              placeholder="Search images..."
+              placeholder="Search images…"
               [(ngModel)]="searchQuery"
               (ngModelChange)="onSearch()"
             />
@@ -30,6 +31,39 @@
             }
           </div>
         </div>
+
+        <!-- Tag count filter chips (client-side) -->
+        <div class="col-auto d-flex gap-1">
+          <button
+            class="btn btn-sm"
+            [class.btn-primary]="tagFilter() === 'all'"
+            [class.btn-outline-secondary]="tagFilter() !== 'all'"
+            (click)="setTagFilter('all')"
+            title="Show all images"
+          >
+            All
+          </button>
+          <button
+            class="btn btn-sm"
+            [class.btn-warning]="tagFilter() === 'single'"
+            [class.btn-outline-secondary]="tagFilter() !== 'single'"
+            (click)="setTagFilter('single')"
+            title="Images with a single tag (candidates for cleanup)"
+          >
+            <i class="bi bi-tag me-1"></i>Single tag
+          </button>
+          <button
+            class="btn btn-sm"
+            [class.btn-primary]="tagFilter() === 'multi'"
+            [class.btn-outline-secondary]="tagFilter() !== 'multi'"
+            (click)="setTagFilter('multi')"
+            title="Images with 2 or more tags"
+          >
+            <i class="bi bi-tags me-1"></i>Multi-tag
+          </button>
+        </div>
+
+        <!-- Page size selector -->
         <div class="col-auto">
           <select
             class="form-select form-select-sm"
@@ -42,15 +76,36 @@
             <option [value]="100">100 per page</option>
           </select>
         </div>
+
+        <!-- Refresh -->
         <div class="col-auto">
           <button
             class="btn btn-sm btn-outline-secondary"
             (click)="loadImages()"
+            title="Refresh"
           >
             <i class="bi bi-arrow-clockwise"></i>
           </button>
         </div>
       </div>
+
+      <!-- Active filter summary — only shown when a filter is active -->
+      @if (tagFilter() !== "all") {
+        <div class="mt-2 d-flex align-items-center gap-2">
+          <span class="text-muted small">
+            <i class="bi bi-funnel me-1"></i>
+            Showing
+            <strong>{{ filteredItems().length }}</strong>
+            of {{ data()?.items?.length ?? 0 }} images on this page
+          </span>
+          <button
+            class="btn btn-link btn-sm p-0 text-muted"
+            (click)="setTagFilter('all')"
+          >
+            Clear filter
+          </button>
+        </div>
+      }
     </div>
   </div>
 
@@ -60,18 +115,44 @@
       <div class="d-flex justify-content-center py-5">
         <div class="spinner-border text-primary"></div>
       </div>
-    } @else if (data()?.items?.length === 0) {
+    } @else if (filteredItems().length === 0) {
       <div class="text-center py-5 text-muted">
         <i class="bi bi-inbox display-4 d-block mb-3"></i>
-        No images found in the registry
+        @if (tagFilter() !== "all") {
+          No images match the current filter
+        } @else {
+          No images found in the registry
+        }
       </div>
     } @else {
       <div class="table-responsive">
         <table class="table table-hover mb-0">
           <thead>
             <tr>
-              <th class="border-0 text-muted fw-semibold small">REPOSITORY</th>
-              <th class="border-0 text-muted fw-semibold small">TAGS</th>
+              <!-- Sortable: repository name -->
+              <th class="border-0 text-muted fw-semibold small">
+                <button
+                  class="btn btn-link btn-sm p-0 text-muted fw-semibold text-decoration-none d-flex align-items-center gap-1"
+                  (click)="toggleSort('name')"
+                  title="Sort by repository name"
+                >
+                  REPOSITORY
+                  <i [class]="'bi ' + sortIcon('name')"></i>
+                </button>
+              </th>
+
+              <!-- Sortable: tag count -->
+              <th class="border-0 text-muted fw-semibold small">
+                <button
+                  class="btn btn-link btn-sm p-0 text-muted fw-semibold text-decoration-none d-flex align-items-center gap-1"
+                  (click)="toggleSort('tag_count')"
+                  title="Sort by number of tags"
+                >
+                  TAGS
+                  <i [class]="'bi ' + sortIconNumeric('tag_count')"></i>
+                </button>
+              </th>
+
               <th class="border-0 text-muted fw-semibold small">TAG LIST</th>
               <th class="border-0 text-muted fw-semibold small text-end">
                 ACTIONS
@@ -79,8 +160,9 @@
             </tr>
           </thead>
           <tbody>
-            @for (image of data()?.items; track image.name) {
+            @for (image of filteredItems(); track image.name) {
               <tr>
+                <!-- Repository name -->
                 <td class="align-middle">
                   <div class="d-flex align-items-center gap-2">
                     <div class="image-icon">
@@ -94,31 +176,54 @@
                     </a>
                   </div>
                 </td>
+
+                <!-- Tag count badge — amber when single tag to draw attention -->
                 <td class="align-middle">
-                  <span class="badge bg-primary-subtle text-primary">{{
-                    image.tag_count
-                  }}</span>
+                  <span
+                    [class]="
+                      image.tag_count === 1
+                        ? 'badge bg-warning-subtle text-warning'
+                        : 'badge bg-primary-subtle text-primary'
+                    "
+                    [title]="
+                      image.tag_count === 1
+                        ? 'Single-tag image — consider cleanup'
+                        : ''
+                    "
+                  >
+                    {{ image.tag_count }}
+                  </span>
                 </td>
+
+                <!-- Tag list — latest tag visually highlighted -->
                 <td class="align-middle">
                   <div class="d-flex flex-wrap gap-1">
                     @for (tag of image.tags.slice(0, 4); track tag) {
                       <span
-                        class="badge bg-secondary-subtle text-secondary font-monospace"
-                        >{{ tag }}</span
+                        [class]="
+                          tag === 'latest'
+                            ? 'badge bg-success-subtle text-success font-monospace'
+                            : 'badge bg-secondary-subtle text-secondary font-monospace'
+                        "
                       >
+                        {{ tag === "latest" ? "★ " + tag : tag }}
+                      </span>
                     }
                     @if (image.tags.length > 4) {
-                      <span class="badge bg-secondary-subtle text-muted"
-                        >+{{ image.tags.length - 4 }} more</span
-                      >
+                      <span class="badge bg-secondary-subtle text-muted">
+                        +{{ image.tags.length - 4 }} more
+                      </span>
                     }
                   </div>
                 </td>
+
+                <!-- Actions -->
                 <td class="align-middle text-end">
                   <div class="d-flex gap-1 justify-content-end">
                     <a
                       [routerLink]="['/images', image.name]"
                       class="btn btn-sm btn-outline-primary"
+                      title="View details"
                     >
                       <i class="bi bi-eye"></i>
                     </a>
@@ -154,9 +259,7 @@
             </li>
             @for (p of pages(); track p) {
               <li class="page-item" [class.active]="p === currentPage()">
-                <button class="page-link" (click)="goToPage(p)">
-                  {{ p }}
-                </button>
+                <button class="page-link" (click)="goToPage(p)">{{ p }}</button>
               </li>
             }
             <li
