@@ -113,10 +113,10 @@ export class StagingComponent implements OnInit, OnDestroy {
 
   loadJobs() {
     this.staging.listJobs().subscribe({
-      next: (jobs) => this.jobs.set(jobs),
+      next: (jobs) => this.jobs.set(StagingService.sortJobs(jobs)),
     });
   }
-
+  
   // ── Docker Hub ─────────────────────────────────────────────────────────────
 
   searchDockerHub() {
