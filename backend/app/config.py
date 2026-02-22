@@ -84,6 +84,9 @@ class Settings(BaseSettings):
     # Advanced mode
     advanced_mode: bool = False
 
+    # Docker Hub API v2 endpoint (for search/tags).
+    dockerhub_api_url: str = "https://hub.docker.com/v2"
+
     class Config:
         env_file = ".env"
         case_sensitive = False
