@@ -15,12 +15,17 @@ RUN npm run build:prod
 # ─── Stage 2: Final container ─────────────────────────────────────────────
 FROM python:3.12-slim
 
+ARG BUILD_DATE
+ARG VERSION
+ENV VERSION=${VERSION}
+
 LABEL maintainer="cyr-ius <https://github.com/cyr-ius>"
 LABEL org.opencontainers.image.title="Portalcrane"
 LABEL org.opencontainers.image.description="Docker Registry Manager - Single Container"
 LABEL org.opencontainers.image.source="https://github.com/cyr-ius/portalcrane"
 LABEL org.opencontainers.image.url="https://github.com/cyr-ius/portalcrane"
 LABEL org.opencontainers.image.licenses="MIT"
+LABEL build_version="version:- ${VERSION} Build-date:- ${BUILD_DATE}"
 
 # Trivy version — update this ARG to upgrade
 ARG TRIVY_VERSION=0.69.1

@@ -73,7 +73,7 @@ class Settings(BaseSettings):
     clamav_port: int = 3310
 
     # Vulnerability scanning configuration (complementary to ClamAV malware scan)
-    vuln_scan_enabled: bool = False
+    vuln_scan_enabled: bool = True
     vuln_scan_severities: str = "CRITICAL,HIGH"
     vuln_ignore_unfixed: bool = False
     vuln_scan_timeout: str = "5m"
@@ -86,6 +86,11 @@ class Settings(BaseSettings):
 
     # Docker Hub API v2 endpoint (for search/tags).
     dockerhub_api_url: str = "https://hub.docker.com/v2"
+
+    # Application version exposed via GET /api/about for GitHub update checks.
+    # Override with the VERSION environment variable at container startup.
+    # The Dockerfile / CI pipeline should set this to the git tag (e.g. "1.2.3").
+    version: str = "1.0.0"
 
     class Config:
         env_file = ".env"
