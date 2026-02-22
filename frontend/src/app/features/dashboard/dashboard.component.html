@@ -101,6 +101,178 @@
       </div>
     </div>
 
+    <!-- Health metrics row — data already loaded by ngOnInit, no extra requests -->
+    <div class="row g-3 mb-4">
+      <!-- ── Ghost Repositories health card ── -->
+      <div class="col-sm-6 col-lg-4">
+        <div
+          class="stat-card card border-0 h-100"
+          style="border-left: 3px solid transparent !important"
+          [style.border-left-color]="
+            ghostCount() > 0 ? 'var(--bs-warning)' : 'var(--bs-success)'
+          "
+        >
+          <div class="card-body">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+              <span class="text-muted small">Ghost Repositories</span>
+              <!-- Icon color reflects health: grey while loading, green if clean, amber if issues -->
+              <div
+                [class]="
+                  !ghostsChecked()
+                    ? 'stat-icon bg-secondary-subtle text-secondary'
+                    : ghostCount() > 0
+                      ? 'stat-icon bg-warning-subtle text-warning'
+                      : 'stat-icon bg-success-subtle text-success'
+                "
+              >
+                <i class="bi bi-shadows"></i>
+              </div>
+            </div>
+
+            <!-- Spinner while the check is in flight, then the count -->
+            @if (!ghostsChecked()) {
+              <div class="stat-value text-muted">
+                <span class="spinner-border spinner-border-sm"></span>
+              </div>
+            } @else {
+              <div
+                [class]="
+                  ghostCount() > 0
+                    ? 'stat-value text-warning'
+                    : 'stat-value text-success'
+                "
+              >
+                {{ ghostCount() }}
+              </div>
+            }
+
+            <div class="text-muted small">
+              @if (!ghostsChecked()) {
+                Checking…
+              } @else if (ghostCount() > 0) {
+                Repos without tags — purge needed
+              } @else {
+                All repositories healthy
+              }
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Dangling (Unused Host) Images health card ── -->
+      <div class="col-sm-6 col-lg-4">
+        <div
+          class="stat-card card border-0 h-100"
+          style="border-left: 3px solid transparent !important"
+          [style.border-left-color]="
+            danglingCount() > 0 ? 'var(--bs-danger)' : 'var(--bs-success)'
+          "
+        >
+          <div class="card-body">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+              <span class="text-muted small">Unused Host Images</span>
+              <div
+                [class]="
+                  !danglingChecked()
+                    ? 'stat-icon bg-secondary-subtle text-secondary'
+                    : danglingCount() > 0
+                      ? 'stat-icon bg-danger-subtle text-danger'
+                      : 'stat-icon bg-success-subtle text-success'
+                "
+              >
+                <i class="bi bi-image"></i>
+              </div>
+            </div>
+
+            @if (!danglingChecked()) {
+              <div class="stat-value text-muted">
+                <span class="spinner-border spinner-border-sm"></span>
+              </div>
+            } @else {
+              <div
+                [class]="
+                  danglingCount() > 0
+                    ? 'stat-value text-danger'
+                    : 'stat-value text-success'
+                "
+              >
+                {{ danglingCount() }}
+              </div>
+            }
+
+            <div class="text-muted small">
+              @if (!danglingChecked()) {
+                Checking…
+              } @else if (danglingCount() > 0) {
+                Dangling &lt;none&gt; images on host
+              } @else {
+                No dangling images on host
+              }
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Orphan Tarballs health card ── -->
+      <div class="col-sm-6 col-lg-4">
+        <div
+          class="stat-card card border-0 h-100"
+          style="border-left: 3px solid transparent !important"
+          [style.border-left-color]="
+            orphanTarballsCount() > 0
+              ? 'var(--bs-warning)'
+              : 'var(--bs-success)'
+          "
+        >
+          <div class="card-body">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+              <span class="text-muted small">Orphan Tarballs</span>
+              <div
+                [class]="
+                  !orphanTarballsChecked()
+                    ? 'stat-icon bg-secondary-subtle text-secondary'
+                    : orphanTarballsCount() > 0
+                      ? 'stat-icon bg-warning-subtle text-warning'
+                      : 'stat-icon bg-success-subtle text-success'
+                "
+              >
+                <i class="bi bi-file-earmark-zip"></i>
+              </div>
+            </div>
+
+            @if (!orphanTarballsChecked()) {
+              <div class="stat-value text-muted">
+                <span class="spinner-border spinner-border-sm"></span>
+              </div>
+            } @else {
+              <div
+                [class]="
+                  orphanTarballsCount() > 0
+                    ? 'stat-value text-warning'
+                    : 'stat-value text-success'
+                "
+              >
+                {{ orphanTarballsCount() }}
+              </div>
+            }
+
+            <div class="text-muted small">
+              @if (!orphanTarballsChecked()) {
+                Checking…
+              } @else if (orphanTarballsCount() > 0) {
+                Leftover .tar files —
+                @if (orphanTarballsSize()) {
+                  {{ orphanTarballsSize() }} wasted
+                }
+              } @else {
+                Staging directory clean
+              }
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Registry info & Quick Actions -->
     <div class="row g-3">
       <div class="col-lg-6">
@@ -139,27 +311,6 @@
                   <td class="text-muted small">Disk Free</td>
                   <td class="small">
                     {{ formatBytes(s.disk_free_bytes) }}
-                  </td>
-                </tr>
-                <tr>
-                  <td class="text-muted small">Advanced Mode</td>
-                  <td>
-                    <!--
-                      Use configService.advancedMode() (user local preference)
-                      instead of s.advanced_mode (server default) so that
-                      overrides applied in Settings are reflected here.
-                    -->
-                    <span
-                      [class]="
-                        configService.advancedMode()
-                          ? 'badge bg-primary-subtle text-primary'
-                          : 'badge bg-secondary-subtle text-secondary'
-                      "
-                    >
-                      {{
-                        configService.advancedMode() ? "Enabled" : "Disabled"
-                      }}
-                    </span>
                   </td>
                 </tr>
               </tbody>
