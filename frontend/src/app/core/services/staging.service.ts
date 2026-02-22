@@ -1,16 +1,32 @@
 import { Injectable } from "@angular/core";
 import { HttpClient } from "@angular/common/http";
 import { Observable } from "rxjs";
+import { VulnConfig } from "./vuln-config.service";
 
 export type JobStatus =
   | "pending"
   | "pulling"
   | "scanning"
+  | "vuln_scanning"
   | "scan_clean"
   | "scan_infected"
+  | "scan_vulnerable"
   | "pushing"
   | "done"
   | "failed";
+
+export interface VulnResult {
+  enabled: boolean;
+  blocked: boolean;
+  severities: string[];
+  counts: {
+    CRITICAL: number;
+    HIGH: number;
+    MEDIUM: number;
+    LOW: number;
+    UNKNOWN: number;
+  };
+}
 
 export interface StagingJob {
   job_id: string;
@@ -20,6 +36,7 @@ export interface StagingJob {
   progress: number;
   message: string;
   scan_result: string | null;
+  vuln_result: VulnResult | null;
   target_image: string | null;
   target_tag: string | null;
   error: string | null;
@@ -40,8 +57,23 @@ export class StagingService {
 
   constructor(private http: HttpClient) {}
 
-  pullImage(image: string, tag: string): Observable<StagingJob> {
-    return this.http.post<StagingJob>(`${this.BASE}/pull`, { image, tag });
+  pullImage(
+    image: string,
+    tag: string,
+    vulnConfig?: VulnConfig | null,
+  ): Observable<StagingJob> {
+    return this.http.post<StagingJob>(`${this.BASE}/pull`, {
+      image,
+      tag,
+      ...(vulnConfig !== undefined && vulnConfig !== null
+        ? {
+            vuln_scan_enabled: vulnConfig.enabled,
+            vuln_scan_severities: vulnConfig.severities,
+            vuln_ignore_unfixed: vulnConfig.ignore_unfixed,
+            vuln_scan_timeout: vulnConfig.timeout,
+          }
+        : {}),
+    });
   }
 
   getJob(jobId: string): Observable<StagingJob> {

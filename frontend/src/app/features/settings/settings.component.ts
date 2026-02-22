@@ -1,11 +1,13 @@
-import { Component, inject } from "@angular/core";
+import { Component, inject, OnInit } from "@angular/core";
 import { CommonModule } from "@angular/common";
 import { ThemeService } from "../../core/services/theme.service";
 import { AuthService } from "../../core/services/auth.service";
+import { VulnConfigService } from "../../core/services/vuln-config.service";
+import { VulnConfigPanelComponent } from "../../shared/components/vuln-config-panel/vuln-config-panel.component";
 
 @Component({
   selector: "app-settings",
-  imports: [CommonModule],
+  imports: [CommonModule, VulnConfigPanelComponent],
   template: `
     <div class="p-4">
       <h2 class="fw-bold mb-1">Settings</h2>
@@ -54,31 +56,8 @@ import { AuthService } from "../../core/services/auth.service";
         </div>
       </div>
 
-      <!-- User info -->
-      <div class="card border-0 mb-3">
-        <div class="card-header border-0">
-          <h6 class="fw-semibold mb-0">
-            <i class="bi bi-person me-2"></i>Account
-          </h6>
-        </div>
-        <div class="card-body">
-          <div class="d-flex align-items-center justify-content-between">
-            <div>
-              <div class="fw-semibold">
-                {{ authService.currentUser()?.username }}
-              </div>
-              <div class="text-muted small">Administrator</div>
-            </div>
-            <button
-              class="btn btn-outline-danger btn-sm"
-              (click)="authService.logout()"
-            >
-              <i class="bi bi-box-arrow-right me-1"></i>
-              Logout
-            </button>
-          </div>
-        </div>
-      </div>
+      <!-- Vulnerability Scanner -->
+      <app-vuln-config-panel />
 
       <!-- About -->
       <div class="card border-0">
@@ -93,15 +72,17 @@ import { AuthService } from "../../core/services/auth.service";
               width="48"
               height="48"
               viewBox="0 0 200 200"
+              fill="none"
               xmlns="http://www.w3.org/2000/svg"
             >
-              <circle
-                cx="100"
-                cy="100"
-                r="96"
-                fill="#0D1B2A"
-                stroke="#2E7FCF"
-                stroke-width="2"
+              <rect width="200" height="200" rx="24" fill="#0D1B2A" />
+              <rect
+                x="20"
+                y="130"
+                width="160"
+                height="20"
+                rx="4"
+                fill="#1B4D7E"
               />
               <rect
                 x="30"
@@ -136,57 +117,6 @@ import { AuthService } from "../../core/services/auth.service";
                 rx="3"
                 fill="#1B4D7E"
               />
-              <line
-                x1="158"
-                y1="65"
-                x2="68"
-                y2="40"
-                stroke="#E8A020"
-                stroke-width="1.5"
-                opacity="0.8"
-              />
-              <rect
-                x="56"
-                y="35"
-                width="24"
-                height="28"
-                rx="3"
-                fill="#1B4D7E"
-              />
-              <circle
-                cx="68"
-                cy="49"
-                r="7"
-                fill="#0D1B2A"
-                stroke="#E8A020"
-                stroke-width="2"
-              />
-              <circle cx="68" cy="49" r="3" fill="#E8A020" opacity="0.8" />
-              <line
-                x1="150"
-                y1="70"
-                x2="150"
-                y2="128"
-                stroke="#E8A020"
-                stroke-width="2"
-                stroke-dasharray="4,3"
-              />
-              <rect
-                x="128"
-                y="128"
-                width="44"
-                height="26"
-                rx="3"
-                fill="#E8A020"
-              />
-              <rect
-                x="128"
-                y="128"
-                width="44"
-                height="5"
-                rx="2"
-                fill="#F0B030"
-              />
               <circle
                 cx="50"
                 cy="157"
@@ -203,31 +133,6 @@ import { AuthService } from "../../core/services/auth.service";
                 stroke="#0D1B2A"
                 stroke-width="1.5"
               />
-              <rect
-                x="56"
-                y="100"
-                width="24"
-                height="20"
-                rx="3"
-                fill="#1B4D7E"
-              />
-              <rect
-                x="59"
-                y="103"
-                width="18"
-                height="11"
-                rx="2"
-                fill="#B0D4F1"
-                opacity="0.85"
-              />
-              <path
-                d="M28 165 Q64 155 100 165 Q136 175 172 165"
-                stroke="#2E7FCF"
-                stroke-width="2.5"
-                fill="none"
-                stroke-linecap="round"
-              />
-              <circle cx="168" cy="30" r="2.5" fill="#E8A020" />
             </svg>
             <div>
               <div class="fw-bold fs-5">Portalcrane</div>
@@ -240,7 +145,7 @@ import { AuthService } from "../../core/services/auth.service";
           </p>
           <p class="text-muted small mb-0">
             Features: Browse images, manage tags, staging pipeline with ClamAV
-            scanning, OIDC support.
+            scanning, Trivy CVE scan, OIDC support.
           </p>
         </div>
       </div>
@@ -255,7 +160,12 @@ import { AuthService } from "../../core/services/auth.service";
     `,
   ],
 })
-export class SettingsComponent {
+export class SettingsComponent implements OnInit {
   themeService = inject(ThemeService);
   authService = inject(AuthService);
+  private vulnConfigService = inject(VulnConfigService);
+
+  ngOnInit() {
+    this.vulnConfigService.loadConfig().subscribe();
+  }
 }

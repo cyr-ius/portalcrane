@@ -1,17 +1,22 @@
 """
 Portalcrane - Staging Router
 Pipeline: Pull from Docker Hub → ClamAV Scan → Trivy CVE Scan (optional) → Push to Registry
+
+Vuln scan configuration precedence:
+  1. Per-request override (sent by the frontend from localStorage)
+  2. Server environment variables (VULN_SCAN_*)
 """
 
 import asyncio
 import json
 import os
+import re
 import uuid
 from enum import Enum
 
 import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from ..config import Settings, get_settings
 from .auth import UserInfo, get_current_user
@@ -23,6 +28,8 @@ _jobs: dict[str, dict] = {}
 
 
 # ─── Models ──────────────────────────────────────────────────────────────────
+
+VALID_SEVERITIES = {"CRITICAL", "HIGH", "MEDIUM", "LOW", "UNKNOWN"}
 
 
 class JobStatus(str, Enum):
@@ -55,18 +62,39 @@ class StagingJob(BaseModel):
 
 
 class PullRequest(BaseModel):
-    """Request to pull an image from Docker Hub."""
+    """
+    Request to pull an image from Docker Hub.
+
+    Vuln scan fields are optional — if omitted, server env vars are used.
+    If provided (sent from the frontend localStorage), they override env vars
+    for this specific pipeline run only.
+    """
 
     image: str
     tag: str = "latest"
+
+    # Per-request vuln config overrides (all optional)
+    vuln_scan_enabled: bool | None = Field(default=None)
+    vuln_scan_severities: list[str] | None = Field(default=None)
+    vuln_ignore_unfixed: bool | None = Field(default=None)
+    vuln_scan_timeout: str | None = Field(default=None)
+
+
+class VulnConfigResponse(BaseModel):
+    """Vuln scan configuration as exposed from server env vars (read-only)."""
+
+    enabled: bool
+    severities: list[str]
+    ignore_unfixed: bool
+    timeout: str
 
 
 class PushRequest(BaseModel):
     """Request to push a staged image to the registry."""
 
     job_id: str
-    target_image: str | None = None  # Optional rename
-    target_tag: str | None = None  # Optional retag
+    target_image: str | None = None
+    target_tag: str | None = None
 
 
 class DockerHubSearchResult(BaseModel):
@@ -80,11 +108,75 @@ class DockerHubSearchResult(BaseModel):
     is_automated: bool
 
 
+# ─── Helpers ─────────────────────────────────────────────────────────────────
+
+
+def _parse_timeout_seconds(timeout_str: str) -> int:
+    """Convert Trivy timeout string (e.g. '5m', '30s', '2h') to seconds."""
+    match = re.fullmatch(r"(\d+)(s|m|h)", timeout_str.strip().lower())
+    if not match:
+        return 300
+    value, unit = int(match.group(1)), match.group(2)
+    return value * {"s": 1, "m": 60, "h": 3600}[unit]
+
+
+def _resolve_vuln_config(request: PullRequest, settings: Settings) -> dict:
+    """
+    Build the effective vuln config for a pipeline run.
+
+    Priority: per-request override > server env vars.
+    Sanitizes severities to only accept known values.
+    """
+    enabled = (
+        request.vuln_scan_enabled
+        if request.vuln_scan_enabled is not None
+        else settings.vuln_scan_enabled
+    )
+
+    # Sanitize and deduplicate severities from request
+    if request.vuln_scan_severities is not None:
+        severities = [
+            s.strip().upper()
+            for s in request.vuln_scan_severities
+            if s.strip().upper() in VALID_SEVERITIES
+        ]
+        # Fall back to server defaults if list is empty after sanitization
+        if not severities:
+            severities = settings.vuln_severities
+    else:
+        severities = settings.vuln_severities
+
+    ignore_unfixed = (
+        request.vuln_ignore_unfixed
+        if request.vuln_ignore_unfixed is not None
+        else settings.vuln_ignore_unfixed
+    )
+
+    timeout = (
+        request.vuln_scan_timeout
+        if request.vuln_scan_timeout is not None
+        else settings.vuln_scan_timeout
+    )
+
+    return {
+        "enabled": enabled,
+        "severities": severities,
+        "ignore_unfixed": ignore_unfixed,
+        "timeout": timeout,
+    }
+
+
 # ─── Background Tasks ─────────────────────────────────────────────────────────
 
 
-async def run_pull_pipeline(job_id: str, image: str, tag: str, settings: Settings):
-    """Background task: pull image, scan with ClamAV."""
+async def run_pull_pipeline(
+    job_id: str,
+    image: str,
+    tag: str,
+    settings: Settings,
+    vuln_cfg: dict,
+):
+    """Background task: pull image, ClamAV scan, optional Trivy scan."""
     staging_dir = settings.staging_dir
     tarball_path = os.path.join(staging_dir, f"{job_id}.tar")
 
@@ -92,14 +184,12 @@ async def run_pull_pipeline(job_id: str, image: str, tag: str, settings: Setting
     _jobs[job_id]["message"] = f"Pulling {image}:{tag} from Docker Hub..."
     _jobs[job_id]["progress"] = 10
 
-    # Proxy env vars for Docker daemon subprocess
     pull_env = {**os.environ, **settings.docker_env_proxy}
 
     try:
-        # Build docker pull command
         pull_image = f"{image}:{tag}"
+
         if settings.dockerhub_username and settings.dockerhub_password:
-            # Login first
             login_proc = await asyncio.create_subprocess_exec(
                 "docker",
                 "login",
@@ -113,7 +203,6 @@ async def run_pull_pipeline(job_id: str, image: str, tag: str, settings: Setting
             )
             await login_proc.communicate()
 
-        # Pull the image
         pull_proc = await asyncio.create_subprocess_exec(
             "docker",
             "pull",
@@ -122,15 +211,13 @@ async def run_pull_pipeline(job_id: str, image: str, tag: str, settings: Setting
             stderr=asyncio.subprocess.PIPE,
             env=pull_env,
         )
-        stdout, stderr = await pull_proc.communicate()
-
+        _, stderr = await pull_proc.communicate()
         if pull_proc.returncode != 0:
             raise Exception(f"Docker pull failed: {stderr.decode()}")
 
         _jobs[job_id]["progress"] = 50
         _jobs[job_id]["message"] = "Image pulled. Exporting for antivirus scan..."
 
-        # Export image to tarball for ClamAV scanning
         save_proc = await asyncio.create_subprocess_exec(
             "docker",
             "save",
@@ -140,13 +227,27 @@ async def run_pull_pipeline(job_id: str, image: str, tag: str, settings: Setting
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        await save_proc.communicate()
+        _, save_stderr = await save_proc.communicate()
+
+        if save_proc.returncode != 0:
+            raise Exception(
+                f"docker save failed (rc={save_proc.returncode}): {save_stderr.decode().strip()}"
+            )
+
+        if not os.path.exists(tarball_path):
+            raise Exception(
+                f"docker save succeeded but tarball not found at {tarball_path}"
+            )
+
+        tarball_size = os.path.getsize(tarball_path)
+        if tarball_size == 0:
+            os.remove(tarball_path)
+            raise Exception(f"docker save produced an empty tarball at {tarball_path}")
 
         _jobs[job_id]["progress"] = 70
         _jobs[job_id]["status"] = JobStatus.SCANNING
         _jobs[job_id]["message"] = "Scanning with ClamAV..."
 
-        # ClamAV scan via clamdtop or clamscan
         scan_result = await _clamav_scan(tarball_path, settings)
         _jobs[job_id]["scan_result"] = scan_result
 
@@ -154,20 +255,23 @@ async def run_pull_pipeline(job_id: str, image: str, tag: str, settings: Setting
             _jobs[job_id]["status"] = JobStatus.SCAN_INFECTED
             _jobs[job_id]["message"] = f"⚠️ Scan FAILED: {scan_result}"
             _jobs[job_id]["progress"] = 100
-            # Remove infected tarball
             os.remove(tarball_path)
         else:
-            if settings.vuln_scan_enabled:
+            if vuln_cfg["enabled"]:
                 _jobs[job_id]["status"] = JobStatus.VULN_SCANNING
                 _jobs[job_id]["progress"] = 85
-                _jobs[job_id]["message"] = "ClamAV clean. Running vulnerability scan..."
-                vuln_summary = await _vuln_scan_image(image, tag, settings)
+                _jobs[job_id]["message"] = (
+                    f"ClamAV clean. Running Trivy scan "
+                    f"(severities: {', '.join(vuln_cfg['severities'])})..."
+                )
+
+                vuln_summary = await _vuln_scan_tarball(tarball_path, vuln_cfg)
                 _jobs[job_id]["vuln_result"] = vuln_summary
 
                 if vuln_summary["blocked"]:
                     _jobs[job_id]["status"] = JobStatus.SCAN_VULNERABLE
                     _jobs[job_id]["message"] = (
-                        "⚠️ Vulnerability policy failed "
+                        f"⚠️ Vulnerability policy failed "
                         f"(severities: {', '.join(vuln_summary['severities'])})."
                     )
                     _jobs[job_id]["progress"] = 100
@@ -186,49 +290,74 @@ async def run_pull_pipeline(job_id: str, image: str, tag: str, settings: Setting
 
 
 async def _clamav_scan(path: str, settings: Settings) -> str:
-    """Run ClamAV scan on a file. Returns scan output."""
-    try:
-        # Try clamd network scan first
-        import socket
+    """Run ClamAV scan on a file via clamd protocol (INSTREAM) or fallback to clamscan."""
+    import struct
 
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(3)
-        sock.connect((settings.clamav_host, settings.clamav_port))
-        sock.close()
-
-        # Use clamdscan pointing to the daemon
-        proc = await asyncio.create_subprocess_exec(
-            "clamdscan",
-            "--host",
-            settings.clamav_host,
-            "--port",
-            str(settings.clamav_port),
-            path,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, _ = await proc.communicate()
-        return stdout.decode()
-    except ConnectionRefusedError:
-        # Fallback to local clamscan
+    async def _scan_via_clamd_socket(host: str, port: int, file_path: str) -> str:
+        """Scan a file using clamd INSTREAM protocol over TCP."""
         try:
-            proc = await asyncio.create_subprocess_exec(
-                "clamscan",
-                "--no-summary",
-                path,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
+            reader, writer = await asyncio.wait_for(
+                asyncio.open_connection(host, port), timeout=120
             )
-            stdout, _ = await proc.communicate()
-            return stdout.decode()
-        except FileNotFoundError:
-            return "OK (ClamAV not available - scan skipped)"
+
+            # Send INSTREAM command
+            writer.write(b"zINSTREAM\0")
+            await writer.drain()
+
+            # Stream file in chunks (max 4096 bytes per chunk)
+            chunk_size = 4096
+            with open(file_path, "rb") as f:
+                while True:
+                    chunk = f.read(chunk_size)
+                    if not chunk:
+                        break
+                    # Each chunk prefixed by its size as 4-byte big-endian int
+                    writer.write(struct.pack("!I", len(chunk)) + chunk)
+                    # writer.write(len(chunk).to_bytes(4, "big") + chunk)
+                    await writer.drain()
+
+            # End of stream: 4-byte zero
+            writer.write(struct.pack("!I", 0))
+            # writer.write((0).to_bytes(4, "big"))
+            await writer.drain()
+
+            # Read response
+            response = await asyncio.wait_for(reader.read(4096), timeout=60)
+            writer.close()
+            await writer.wait_closed()
+
+            result = response.decode(errors="replace").strip()
+            # clamd returns "stream: OK" or "stream: <virus> FOUND"
+            return result
+
+        except asyncio.TimeoutError:
+            raise ConnectionRefusedError("Timeout connecting to clamd")
+
+    # Try clamd daemon via TCP
+    try:
+        result = await _scan_via_clamd_socket(
+            settings.clamav_host, settings.clamav_port, path
+        )
+        # Normalize to clamscan-like output for the rest of the pipeline
+        if "OK" in result:
+            return f"{path}: OK"
+        elif "FOUND" in result:
+            return f"{path}: {result} FOUND"
+        else:
+            return f"{path}: {result} ERROR"
     except Exception as e:
         return f"OK (scan skipped: {str(e)})"
 
 
-async def _vuln_scan_image(image: str, tag: str, settings: Settings) -> dict:
-    """Run Trivy vulnerability scan on a Docker image."""
+async def _vuln_scan_tarball(tarball_path: str, vuln_cfg: dict) -> dict:
+    """
+    Run Trivy vulnerability scan on a local image tarball.
+    Uses the resolved vuln_cfg (already merged env + request overrides).
+    """
+    timeout_str = vuln_cfg["timeout"]
+    severities = vuln_cfg["severities"]
+    ignore_unfixed = vuln_cfg["ignore_unfixed"]
+
     cmd = [
         "trivy",
         "image",
@@ -236,13 +365,13 @@ async def _vuln_scan_image(image: str, tag: str, settings: Settings) -> dict:
         "--format",
         "json",
         "--timeout",
-        settings.vuln_scan_timeout,
+        timeout_str,
         "--severity",
-        ",".join(settings.vuln_severities),
+        ",".join(severities),
     ]
-    if settings.vuln_ignore_unfixed:
+    if ignore_unfixed:
         cmd.append("--ignore-unfixed")
-    cmd.append(f"{image}:{tag}")
+    cmd += ["--input", tarball_path]
 
     try:
         proc = await asyncio.create_subprocess_exec(
@@ -254,7 +383,20 @@ async def _vuln_scan_image(image: str, tag: str, settings: Settings) -> dict:
         raise Exception(
             "Trivy binary not found. Install trivy or disable VULN_SCAN_ENABLED."
         ) from exc
-    stdout, stderr = await proc.communicate()
+
+    timeout_seconds = _parse_timeout_seconds(timeout_str)
+    try:
+        stdout, stderr = await asyncio.wait_for(
+            proc.communicate(),
+            timeout=timeout_seconds,
+        )
+    except asyncio.TimeoutError:
+        proc.kill()
+        await proc.communicate()
+        raise Exception(
+            f"Trivy scan timed out after {timeout_str}. "
+            "Consider increasing VULN_SCAN_TIMEOUT."
+        )
 
     if proc.returncode != 0:
         raise Exception(f"Trivy scan failed: {stderr.decode() or stdout.decode()}")
@@ -270,27 +412,19 @@ async def _vuln_scan_image(image: str, tag: str, settings: Settings) -> dict:
             sev = (vuln.get("Severity") or "UNKNOWN").upper()
             counts[sev] = counts.get(sev, 0) + 1
 
-    blocked = any(counts.get(sev, 0) > 0 for sev in settings.vuln_severities)
-    summary = {
+    blocked = any(counts.get(sev, 0) > 0 for sev in severities)
+    return {
         "enabled": True,
         "blocked": blocked,
-        "severities": settings.vuln_severities,
+        "severities": severities,
         "counts": counts,
     }
-    return summary
 
 
 async def run_push_pipeline(
     job_id: str, target_image: str, target_tag: str, settings: Settings
 ):
-    """Background task: tag and push image to private registry.
-
-    REGISTRY_URL is used by the backend to talk to the registry API (inside Docker network).
-    REGISTRY_PUSH_HOST is the address the HOST Docker daemon uses to push images.
-    Since the Docker daemon runs on the host (socket mount), it cannot resolve
-    Docker-internal hostnames like "registry". Use "localhost:5000" instead,
-    which works because the registry port is published on the host.
-    """
+    """Background task: tag and push image to private registry."""
     _jobs[job_id]["status"] = JobStatus.PUSHING
     _jobs[job_id]["message"] = f"Pushing to registry as {target_image}:{target_tag}..."
     _jobs[job_id]["progress"] = 10
@@ -299,7 +433,6 @@ async def run_push_pipeline(
     original_tag = _jobs[job_id]["tag"]
     source = f"{original_image}:{original_tag}"
 
-    # Build push host: prefer explicit REGISTRY_PUSH_HOST, fallback to REGISTRY_URL stripped.
     if settings.registry_push_host:
         push_host = settings.registry_push_host.strip("/")
     else:
@@ -312,7 +445,6 @@ async def run_push_pipeline(
     full_target = f"{push_host}/{target_image}:{target_tag}"
 
     try:
-        # Authenticate against the push host if credentials are set
         if settings.registry_username and settings.registry_password:
             _jobs[job_id]["message"] = f"Authenticating against {push_host}..."
             login_proc = await asyncio.create_subprocess_exec(
@@ -332,7 +464,6 @@ async def run_push_pipeline(
             if login_proc.returncode != 0:
                 raise Exception(f"Registry login failed: {login_err.decode()}")
 
-        # Tag the image
         _jobs[job_id]["message"] = f"Tagging as {full_target}..."
         tag_proc = await asyncio.create_subprocess_exec(
             "docker",
@@ -349,7 +480,6 @@ async def run_push_pipeline(
         _jobs[job_id]["progress"] = 40
         _jobs[job_id]["message"] = f"Pushing {full_target}..."
 
-        # Push to registry
         push_proc = await asyncio.create_subprocess_exec(
             "docker",
             "push",
@@ -361,7 +491,6 @@ async def run_push_pipeline(
         if push_proc.returncode != 0:
             raise Exception(f"Push failed: {stderr.decode() or stdout.decode()}")
 
-        # Cleanup local images
         await asyncio.create_subprocess_exec(
             "docker",
             "rmi",
@@ -377,7 +506,6 @@ async def run_push_pipeline(
             stderr=asyncio.subprocess.DEVNULL,
         )
 
-        # Remove tarball
         tarball_path = os.path.join(settings.staging_dir, f"{job_id}.tar")
         if os.path.exists(tarball_path):
             os.remove(tarball_path)
@@ -398,6 +526,24 @@ async def run_push_pipeline(
 # ─── Endpoints ────────────────────────────────────────────────────────────────
 
 
+@router.get("/vuln-config", response_model=VulnConfigResponse)
+async def get_vuln_config(
+    settings: Settings = Depends(get_settings),
+    _: UserInfo = Depends(get_current_user),
+):
+    """
+    Return the server-side vuln scan defaults (from environment variables).
+    The frontend uses this as the base to display and potentially override
+    per-browser via localStorage.
+    """
+    return VulnConfigResponse(
+        enabled=settings.vuln_scan_enabled,
+        severities=settings.vuln_severities,
+        ignore_unfixed=settings.vuln_ignore_unfixed,
+        timeout=settings.vuln_scan_timeout,
+    )
+
+
 @router.post("/pull", response_model=StagingJob)
 async def pull_image(
     request: PullRequest,
@@ -405,7 +551,13 @@ async def pull_image(
     settings: Settings = Depends(get_settings),
     _: UserInfo = Depends(get_current_user),
 ):
-    """Start a pull+scan pipeline for a Docker Hub image."""
+    """
+    Start a pull+scan pipeline.
+    Vuln scan config is resolved from request overrides + server env vars.
+    """
+    # Resolve effective vuln config (request overrides > env vars)
+    vuln_cfg = _resolve_vuln_config(request, settings)
+
     job_id = str(uuid.uuid4())
     _jobs[job_id] = {
         "job_id": job_id,
@@ -422,17 +574,13 @@ async def pull_image(
     }
 
     background_tasks.add_task(
-        run_pull_pipeline, job_id, request.image, request.tag, settings
+        run_pull_pipeline, job_id, request.image, request.tag, settings, vuln_cfg
     )
     return StagingJob(**_jobs[job_id])
 
 
 @router.get("/jobs/{job_id}", response_model=StagingJob)
-async def get_job_status(
-    job_id: str,
-    _: UserInfo = Depends(get_current_user),
-):
-    """Get the current status of a staging job."""
+async def get_job_status(job_id: str, _: UserInfo = Depends(get_current_user)):
     if job_id not in _jobs:
         raise HTTPException(status_code=404, detail="Job not found")
     return StagingJob(**_jobs[job_id])
@@ -440,7 +588,6 @@ async def get_job_status(
 
 @router.get("/jobs", response_model=list[StagingJob])
 async def list_jobs(_: UserInfo = Depends(get_current_user)):
-    """List all staging jobs."""
     return [StagingJob(**job) for job in _jobs.values()]
 
 
@@ -451,7 +598,6 @@ async def push_image(
     settings: Settings = Depends(get_settings),
     _: UserInfo = Depends(get_current_user),
 ):
-    """Push a scanned image to the private registry (with optional rename)."""
     if request.job_id not in _jobs:
         raise HTTPException(status_code=404, detail="Job not found")
 
@@ -476,17 +622,13 @@ async def delete_job(
     settings: Settings = Depends(get_settings),
     _: UserInfo = Depends(get_current_user),
 ):
-    """Delete a staging job and its associated files."""
     if job_id not in _jobs:
         raise HTTPException(status_code=404, detail="Job not found")
-
-    # Validate that the job_id is a well-formed UUID to prevent path traversal
     try:
         uuid.UUID(job_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid job_id")
 
-    # Remove tarball if exists
     tarball_path = os.path.join(settings.staging_dir, f"{job_id}.tar")
     if os.path.exists(tarball_path):
         os.remove(tarball_path)
@@ -502,7 +644,6 @@ async def search_dockerhub(
     settings: Settings = Depends(get_settings),
     _: UserInfo = Depends(get_current_user),
 ):
-    """Search Docker Hub for images."""
     async with httpx.AsyncClient(
         timeout=15.0, proxy=settings.httpx_proxy.get("https://") or None
     ) as client:
@@ -513,18 +654,17 @@ async def search_dockerhub(
             )
             response.raise_for_status()
             data = response.json()
-            results = []
-            for item in data.get("results", []):
-                results.append(
-                    {
-                        "name": item.get("repo_name", ""),
-                        "description": item.get("short_description", ""),
-                        "star_count": item.get("star_count", 0),
-                        "pull_count": item.get("pull_count", 0),
-                        "is_official": item.get("is_official", False),
-                        "is_automated": item.get("is_automated", False),
-                    }
-                )
+            results = [
+                {
+                    "name": item.get("repo_name", ""),
+                    "description": item.get("short_description", ""),
+                    "star_count": item.get("star_count", 0),
+                    "pull_count": item.get("pull_count", 0),
+                    "is_official": item.get("is_official", False),
+                    "is_automated": item.get("is_automated", False),
+                }
+                for item in data.get("results", [])
+            ]
             return {"results": results, "count": data.get("count", 0)}
         except Exception as e:
             raise HTTPException(
@@ -538,8 +678,6 @@ async def get_dockerhub_tags(
     settings: Settings = Depends(get_settings),
     _: UserInfo = Depends(get_current_user),
 ):
-    """Get available tags for a Docker Hub image."""
-    # Handle official images (library)
     repo = image if "/" in image else f"library/{image}"
     async with httpx.AsyncClient(
         timeout=15.0, proxy=settings.httpx_proxy.get("https://") or None
@@ -551,8 +689,10 @@ async def get_dockerhub_tags(
             )
             response.raise_for_status()
             data = response.json()
-            tags = [item["name"] for item in data.get("results", [])]
-            return {"image": image, "tags": tags}
+            return {
+                "image": image,
+                "tags": [item["name"] for item in data.get("results", [])],
+            }
         except Exception as e:
             raise HTTPException(
                 status_code=502, detail=f"Failed to fetch tags: {str(e)}"

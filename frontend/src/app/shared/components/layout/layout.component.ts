@@ -160,85 +160,142 @@ import { ThemeService } from "../../../core/services/theme.service";
                 }
               </a>
             </li>
-
-            <li class="nav-item mt-3">
-              <span class="nav-section-label text-muted small px-2">
-                @if (!sidebarCollapsed()) {
-                  ADMIN
-                }
-              </span>
-            </li>
-            <li class="nav-item">
-              <a
-                routerLink="/settings"
-                routerLinkActive="active"
-                class="nav-link d-flex align-items-center gap-2"
-                [title]="sidebarCollapsed() ? 'Settings' : ''"
-              >
-                <i class="bi bi-gear nav-icon"></i>
-                @if (!sidebarCollapsed()) {
-                  <span>Settings</span>
-                }
-              </a>
-            </li>
           </ul>
         </div>
 
-        <!-- Theme + User -->
-        <div class="sidebar-footer p-3 border-top">
-          <!-- Theme switcher -->
-          <div
-            class="d-flex gap-1 mb-2"
-            [class.flex-column]="sidebarCollapsed()"
-          >
-            <button
-              class="btn btn-sm px-2 flex-fill"
-              [class.btn-primary]="themeService.theme() === 'light'"
-              [class.btn-outline-secondary]="themeService.theme() !== 'light'"
-              (click)="themeService.setTheme('light')"
-              title="Light"
+        <!-- Footer : Settings + séparateur + User -->
+        <div class="sidebar-footer d-flex flex-column">
+          <!-- Settings — toujours visible, juste au-dessus du séparateur -->
+          <div class="px-2 pb-2">
+            <a
+              routerLink="/settings"
+              routerLinkActive="active"
+              class="nav-link d-flex align-items-center gap-2"
+              [title]="sidebarCollapsed() ? 'Settings' : ''"
             >
-              <i class="bi bi-sun-fill"></i>
-            </button>
-            <button
-              class="btn btn-sm px-2 flex-fill"
-              [class.btn-primary]="themeService.theme() === 'dark'"
-              [class.btn-outline-secondary]="themeService.theme() !== 'dark'"
-              (click)="themeService.setTheme('dark')"
-              title="Dark"
-            >
-              <i class="bi bi-moon-fill"></i>
-            </button>
-            <button
-              class="btn btn-sm px-2 flex-fill"
-              [class.btn-primary]="themeService.theme() === 'auto'"
-              [class.btn-outline-secondary]="themeService.theme() !== 'auto'"
-              (click)="themeService.setTheme('auto')"
-              title="Auto"
-            >
-              <i class="bi bi-circle-half"></i>
-            </button>
+              <i class="bi bi-gear nav-icon"></i>
+              @if (!sidebarCollapsed()) {
+                <span>Settings</span>
+              }
+            </a>
           </div>
 
-          <!-- User info -->
-          <div class="d-flex align-items-center gap-2">
-            <div class="avatar-circle">
-              <i class="bi bi-person-fill"></i>
-            </div>
-            @if (!sidebarCollapsed()) {
-              <div class="flex-grow-1 overflow-hidden">
-                <div class="small fw-semibold text-truncate">
-                  {{ auth.currentUser()?.username }}
-                </div>
-                <div class="x-small text-muted">Administrator</div>
+          <!-- Séparateur -->
+          <div class="border-top mx-3"></div>
+
+          <!-- Zone utilisateur -->
+          <div class="p-3">
+            <!-- Menu replié : avatar cliquable qui ouvre le picker de thème -->
+            @if (sidebarCollapsed()) {
+              <div class="position-relative">
+                <button
+                  class="avatar-circle border-0 w-100"
+                  (click)="themePickerOpen.set(!themePickerOpen())"
+                  [title]="'Theme: ' + themeService.theme()"
+                >
+                  <i class="bi bi-person-fill"></i>
+                  <!-- Indicateur thème actif -->
+                  <span class="theme-dot">
+                    @if (themeService.theme() === "light") {
+                      <i class="bi bi-sun-fill"></i>
+                    } @else if (themeService.theme() === "dark") {
+                      <i class="bi bi-moon-fill"></i>
+                    } @else {
+                      <i class="bi bi-circle-half"></i>
+                    }
+                  </span>
+                </button>
+
+                <!-- Dropdown thème (flottant à droite) -->
+                @if (themePickerOpen()) {
+                  <div class="theme-dropdown-collapsed">
+                    <button
+                      class="theme-option"
+                      [class.active]="themeService.theme() === 'light'"
+                      (click)="setTheme('light')"
+                      title="Light"
+                    >
+                      <i class="bi bi-sun-fill"></i>
+                    </button>
+                    <button
+                      class="theme-option"
+                      [class.active]="themeService.theme() === 'dark'"
+                      (click)="setTheme('dark')"
+                      title="Dark"
+                    >
+                      <i class="bi bi-moon-fill"></i>
+                    </button>
+                    <button
+                      class="theme-option"
+                      [class.active]="themeService.theme() === 'auto'"
+                      (click)="setTheme('auto')"
+                      title="Auto"
+                    >
+                      <i class="bi bi-circle-half"></i>
+                    </button>
+                  </div>
+                }
               </div>
-              <button
-                class="btn btn-sm btn-link text-muted p-0"
-                (click)="auth.logout()"
-                title="Logout"
-              >
-                <i class="bi bi-box-arrow-right"></i>
-              </button>
+            }
+
+            <!-- Menu déplié : sélecteur thème inline + info utilisateur -->
+            @if (!sidebarCollapsed()) {
+              <!-- Theme switcher inline -->
+              <div class="d-flex gap-1 mb-2">
+                <button
+                  class="btn btn-sm px-2 flex-fill"
+                  [class.btn-primary]="themeService.theme() === 'light'"
+                  [class.btn-outline-secondary]="
+                    themeService.theme() !== 'light'
+                  "
+                  (click)="themeService.setTheme('light')"
+                  title="Light"
+                >
+                  <i class="bi bi-sun-fill"></i>
+                </button>
+                <button
+                  class="btn btn-sm px-2 flex-fill"
+                  [class.btn-primary]="themeService.theme() === 'dark'"
+                  [class.btn-outline-secondary]="
+                    themeService.theme() !== 'dark'
+                  "
+                  (click)="themeService.setTheme('dark')"
+                  title="Dark"
+                >
+                  <i class="bi bi-moon-fill"></i>
+                </button>
+                <button
+                  class="btn btn-sm px-2 flex-fill"
+                  [class.btn-primary]="themeService.theme() === 'auto'"
+                  [class.btn-outline-secondary]="
+                    themeService.theme() !== 'auto'
+                  "
+                  (click)="themeService.setTheme('auto')"
+                  title="Auto"
+                >
+                  <i class="bi bi-circle-half"></i>
+                </button>
+              </div>
+
+              <!-- User info -->
+              <div class="d-flex align-items-center gap-2">
+                <div class="avatar-circle">
+                  <i class="bi bi-person-fill"></i>
+                </div>
+                <div class="flex-grow-1 overflow-hidden">
+                  <div class="small fw-semibold text-truncate">
+                    {{ auth.currentUser()?.username }}
+                  </div>
+                  <div class="x-small text-muted">Administrator</div>
+                </div>
+                <button
+                  class="btn btn-sm btn-link text-muted p-0"
+                  (click)="auth.logout()"
+                  title="Logout"
+                >
+                  <i class="bi bi-box-arrow-right"></i>
+                </button>
+              </div>
             }
           </div>
         </div>
@@ -246,7 +303,7 @@ import { ThemeService } from "../../../core/services/theme.service";
         <!-- Collapse toggle -->
         <button
           class="sidebar-toggle btn btn-sm"
-          (click)="sidebarCollapsed.set(!sidebarCollapsed())"
+          (click)="toggleSidebar()"
           [title]="sidebarCollapsed() ? 'Expand sidebar' : 'Collapse sidebar'"
         >
           <i
@@ -270,6 +327,7 @@ import { ThemeService } from "../../../core/services/theme.service";
       .app-shell {
         min-height: 100vh;
       }
+
       .sidebar {
         width: 240px;
         min-width: 240px;
@@ -284,11 +342,14 @@ import { ThemeService } from "../../../core/services/theme.service";
         width: 64px;
         min-width: 64px;
       }
+
       .brand-name {
         font-size: 1.1rem;
         color: var(--pc-accent);
         white-space: nowrap;
       }
+
+      /* Navigation links */
       .nav-link {
         border-radius: 8px;
         color: var(--pc-text-muted);
@@ -312,11 +373,8 @@ import { ThemeService } from "../../../core/services/theme.service";
         min-width: 20px;
         text-align: center;
       }
-      .nav-section-label {
-        font-size: 0.65rem;
-        font-weight: 700;
-        letter-spacing: 0.08em;
-      }
+
+      /* Avatar */
       .avatar-circle {
         width: 32px;
         height: 32px;
@@ -328,10 +386,88 @@ import { ThemeService } from "../../../core/services/theme.service";
         justify-content: center;
         font-size: 0.875rem;
         flex-shrink: 0;
+        cursor: default;
+        position: relative;
       }
+
+      /* Avatar cliquable (mode replié) */
+      button.avatar-circle {
+        cursor: pointer;
+        transition:
+          background 0.15s,
+          transform 0.15s;
+        padding: 0;
+        margin: 0 auto;
+      }
+      button.avatar-circle:hover {
+        background: var(--pc-accent);
+        color: #fff;
+        transform: scale(1.08);
+      }
+
+      /* Indicateur thème actif sur l'avatar */
+      .theme-dot {
+        position: absolute;
+        bottom: -2px;
+        right: -2px;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: var(--pc-sidebar-bg);
+        border: 1px solid var(--pc-border);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.5rem;
+        color: var(--pc-accent-2);
+        pointer-events: none;
+      }
+
+      /* Dropdown thème en mode replié */
+      .theme-dropdown-collapsed {
+        position: absolute;
+        left: 44px;
+        bottom: 0;
+        background: var(--pc-card-bg);
+        border: 1px solid var(--pc-border);
+        border-radius: 10px;
+        padding: 6px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        box-shadow: 4px 4px 16px var(--pc-shadow);
+        z-index: 100;
+        min-width: 44px;
+      }
+      .theme-option {
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        border: 1px solid transparent;
+        background: transparent;
+        color: var(--pc-text-muted);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.85rem;
+        cursor: pointer;
+        transition: all 0.15s;
+      }
+      .theme-option:hover {
+        background: var(--pc-nav-hover);
+        color: var(--pc-accent);
+      }
+      .theme-option.active {
+        background: var(--pc-nav-active-bg);
+        border-color: var(--pc-accent);
+        color: var(--pc-accent);
+      }
+
       .x-small {
         font-size: 0.7rem;
       }
+
+      /* Collapse toggle button */
       .sidebar-toggle {
         position: absolute;
         top: 50%;
@@ -350,6 +486,7 @@ import { ThemeService } from "../../../core/services/theme.service";
         color: var(--pc-text-muted);
         z-index: 10;
       }
+
       .main-content {
         background: var(--pc-main-bg);
       }
@@ -360,4 +497,18 @@ export class LayoutComponent {
   auth = inject(AuthService);
   themeService = inject(ThemeService);
   sidebarCollapsed = signal(false);
+  themePickerOpen = signal(false);
+
+  toggleSidebar() {
+    this.sidebarCollapsed.set(!this.sidebarCollapsed());
+    // Ferme le picker quand on déplie le menu
+    if (!this.sidebarCollapsed()) {
+      this.themePickerOpen.set(false);
+    }
+  }
+
+  setTheme(theme: "light" | "dark" | "auto") {
+    this.themeService.setTheme(theme);
+    this.themePickerOpen.set(false);
+  }
 }

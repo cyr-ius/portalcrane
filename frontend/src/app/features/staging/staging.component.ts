@@ -6,6 +6,7 @@ import {
   StagingJob,
   DockerHubResult,
 } from "../../core/services/staging.service";
+import { VulnConfigService } from "../../core/services/vuln-config.service";
 
 @Component({
   selector: "app-staging",
@@ -16,7 +17,8 @@ import {
         <div>
           <h2 class="fw-bold mb-1">Staging Pipeline</h2>
           <p class="text-muted small mb-0">
-            Pull from Docker Hub → Scan → Push to Registry
+            Pull from Docker Hub → ClamAV Scan → Trivy CVE Scan → Push to
+            Registry
           </p>
         </div>
       </div>
@@ -24,6 +26,47 @@ import {
       <div class="row g-3">
         <!-- Left: Pull panel -->
         <div class="col-lg-5">
+          <!-- Active vuln config badge -->
+          <div
+            class="d-flex align-items-center gap-2 mb-3 p-2 rounded vuln-badge-bar"
+          >
+            <i class="bi bi-shield-check text-primary"></i>
+            <span class="small">
+              Trivy:
+              @if (vulnConfig.config().enabled) {
+                <span class="text-success fw-semibold">enabled</span>
+                — blocking
+                @for (
+                  sev of vulnConfig.config().severities;
+                  track sev;
+                  let last = $last
+                ) {
+                  <span class="badge sev-mini" [class]="getSevColor(sev)">{{
+                    sev
+                  }}</span>
+                }
+              } @else {
+                <span class="text-muted">disabled</span>
+              }
+            </span>
+            @if (vulnConfig.hasLocalOverrides()) {
+              <span
+                class="badge bg-warning-subtle text-warning ms-auto"
+                style="font-size:0.65rem"
+              >
+                <i class="bi bi-pencil-fill me-1"></i>Custom
+              </span>
+            }
+            <a
+              routerLink="/settings"
+              class="text-muted ms-auto"
+              style="font-size:0.75rem"
+              title="Edit in Settings"
+            >
+              <i class="bi bi-gear"></i>
+            </a>
+          </div>
+
           <!-- Search Docker Hub -->
           <div class="card border-0 mb-3">
             <div class="card-header border-0">
@@ -58,34 +101,40 @@ import {
                   @for (result of searchResults(); track result.name) {
                     <div
                       class="search-result-item p-2 rounded mb-1"
-                      (click)="selectDockerHubImage(result)"
                       [class.selected]="pullImage() === result.name"
+                      (click)="selectDockerHubImage(result)"
                     >
-                      <div class="d-flex align-items-start gap-2">
-                        <div class="flex-grow-1">
-                          <div class="d-flex align-items-center gap-1 mb-1">
-                            <strong class="small">{{ result.name }}</strong>
+                      <div class="d-flex align-items-center gap-2">
+                        <div class="flex-grow-1 min-w-0">
+                          <div class="fw-semibold small text-truncate">
+                            {{ result.name }}
                             @if (result.is_official) {
-                              <span
-                                class="badge bg-primary-subtle text-primary"
-                                style="font-size:0.6rem"
-                                >OFFICIAL</span
-                              >
+                              <i
+                                class="bi bi-patch-check-fill text-primary ms-1"
+                                title="Official"
+                              ></i>
                             }
                           </div>
-                          <div class="text-muted" style="font-size:0.72rem">
-                            {{ result.description | slice: 0 : 80
-                            }}{{ result.description.length > 80 ? "..." : "" }}
+                          @if (result.description) {
+                            <div
+                              class="text-muted text-truncate"
+                              style="font-size:0.7rem"
+                            >
+                              {{ result.description }}
+                            </div>
+                          }
+                        </div>
+                        <div
+                          class="text-muted text-end"
+                          style="font-size:0.7rem"
+                        >
+                          <div>
+                            <i class="bi bi-star-fill text-warning me-1"></i
+                            >{{ formatCount(result.star_count) }}
                           </div>
-                          <div class="d-flex gap-2 mt-1">
-                            <span class="text-muted" style="font-size:0.65rem">
-                              <i class="bi bi-star-fill text-warning"></i>
-                              {{ formatCount(result.star_count) }}
-                            </span>
-                            <span class="text-muted" style="font-size:0.65rem">
-                              <i class="bi bi-download"></i>
-                              {{ formatCount(result.pull_count) }}
-                            </span>
+                          <div>
+                            <i class="bi bi-download me-1"></i
+                            >{{ formatCount(result.pull_count) }}
                           </div>
                         </div>
                       </div>
@@ -100,16 +149,16 @@ import {
           <div class="card border-0">
             <div class="card-header border-0">
               <h6 class="fw-semibold mb-0">
-                <i class="bi bi-cloud-arrow-down me-2"></i>Pull Image
+                <i class="bi bi-cloud-download me-2"></i>Pull Image
               </h6>
             </div>
             <div class="card-body">
-              <div class="mb-3">
-                <label class="form-label small fw-semibold">Image Name</label>
+              <div class="mb-2">
+                <label class="form-label small fw-semibold">Image</label>
                 <input
                   type="text"
                   class="form-control"
-                  placeholder="e.g. nginx, library/redis, myorg/myapp"
+                  placeholder="nginx, library/redis, myorg/myimage..."
                   [value]="pullImage()"
                   (input)="onImageChange($any($event.target).value)"
                 />
@@ -122,8 +171,8 @@ import {
                     [value]="pullTag()"
                     (change)="pullTag.set($any($event.target).value)"
                   >
-                    @for (tag of availableTags(); track tag) {
-                      <option [value]="tag">{{ tag }}</option>
+                    @for (t of availableTags(); track t) {
+                      <option [value]="t">{{ t }}</option>
                     }
                   </select>
                 } @else {
@@ -136,7 +185,6 @@ import {
                   />
                 }
               </div>
-
               <button
                 class="btn btn-primary w-100"
                 (click)="startPull()"
@@ -144,10 +192,9 @@ import {
               >
                 @if (pulling()) {
                   <span class="spinner-border spinner-border-sm me-2"></span>
-                  Starting pipeline...
+                  Pulling...
                 } @else {
-                  <i class="bi bi-play-circle me-2"></i>
-                  Start Pipeline
+                  <i class="bi bi-cloud-download me-2"></i>Start Pipeline
                 }
               </button>
             </div>
@@ -162,9 +209,14 @@ import {
             >
               <h6 class="fw-semibold mb-0">
                 <i class="bi bi-list-task me-2"></i>Pipeline Jobs
+                @if (jobs().length > 0) {
+                  <span class="badge bg-secondary ms-2">{{
+                    jobs().length
+                  }}</span>
+                }
               </h6>
               <button
-                class="btn btn-sm btn-outline-secondary"
+                class="btn btn-sm btn-outline-secondary border-0"
                 (click)="loadJobs()"
               >
                 <i class="bi bi-arrow-clockwise"></i>
@@ -206,7 +258,7 @@ import {
                         </div>
                       </div>
 
-                      <!-- Progress -->
+                      <!-- Progress bar -->
                       <div class="mb-2">
                         <div class="progress mb-1" style="height:6px">
                           <div
@@ -217,17 +269,25 @@ import {
                             "
                             [class.bg-danger]="
                               job.status === 'failed' ||
-                              job.status === 'scan_infected'
+                              job.status === 'scan_infected' ||
+                              job.status === 'scan_vulnerable'
                             "
+                            [class.bg-warning]="job.status === 'vuln_scanning'"
                             [class.progress-bar-striped]="
-                              ['pulling', 'scanning', 'pushing'].includes(
-                                job.status
-                              )
+                              [
+                                'pulling',
+                                'scanning',
+                                'vuln_scanning',
+                                'pushing',
+                              ].includes(job.status)
                             "
                             [class.progress-bar-animated]="
-                              ['pulling', 'scanning', 'pushing'].includes(
-                                job.status
-                              )
+                              [
+                                'pulling',
+                                'scanning',
+                                'vuln_scanning',
+                                'pushing',
+                              ].includes(job.status)
                             "
                             [style.width.%]="job.progress"
                           ></div>
@@ -235,13 +295,102 @@ import {
                         <div class="small text-muted">{{ job.message }}</div>
                       </div>
 
-                      <!-- Scan result -->
+                      <!-- ClamAV scan result -->
                       @if (job.scan_result) {
                         <div
                           class="small mb-2 p-2 rounded bg-body-secondary font-monospace text-break"
                           style="font-size:0.7rem"
                         >
                           {{ job.scan_result }}
+                        </div>
+                      }
+
+                      <!-- Trivy vuln result -->
+                      @if (job.vuln_result) {
+                        <div
+                          class="small mb-2 p-2 rounded"
+                          [class.bg-danger-subtle]="job.vuln_result.blocked"
+                          [class.bg-success-subtle]="!job.vuln_result.blocked"
+                        >
+                          <div class="d-flex align-items-center gap-2 mb-1">
+                            <i
+                              class="bi"
+                              [class.bi-shield-x]="job.vuln_result.blocked"
+                              [class.bi-shield-check]="!job.vuln_result.blocked"
+                              [class.text-danger]="job.vuln_result.blocked"
+                              [class.text-success]="!job.vuln_result.blocked"
+                            ></i>
+                            <span class="fw-semibold" style="font-size:0.75rem">
+                              Trivy CVE —
+                              {{
+                                job.vuln_result.blocked
+                                  ? "Policy blocked"
+                                  : "Clean"
+                              }}
+                            </span>
+                          </div>
+                          <div class="d-flex flex-wrap gap-2">
+                            <span
+                              class="badge"
+                              [class.bg-danger]="
+                                job.vuln_result.counts['CRITICAL'] > 0
+                              "
+                              [class.bg-secondary]="
+                                job.vuln_result.counts['CRITICAL'] === 0
+                              "
+                            >
+                              CRITICAL {{ job.vuln_result.counts["CRITICAL"] }}
+                            </span>
+                            <span
+                              class="badge"
+                              [class.bg-danger]="
+                                job.vuln_result.counts['HIGH'] > 0
+                              "
+                              [class.bg-secondary]="
+                                job.vuln_result.counts['HIGH'] === 0
+                              "
+                            >
+                              HIGH {{ job.vuln_result.counts["HIGH"] }}
+                            </span>
+                            <span
+                              class="badge"
+                              [class.bg-warning]="
+                                job.vuln_result.counts['MEDIUM'] > 0
+                              "
+                              [class.bg-secondary]="
+                                job.vuln_result.counts['MEDIUM'] === 0
+                              "
+                            >
+                              MEDIUM {{ job.vuln_result.counts["MEDIUM"] }}
+                            </span>
+                            <span
+                              class="badge"
+                              [class.bg-info]="
+                                job.vuln_result.counts['LOW'] > 0
+                              "
+                              [class.bg-secondary]="
+                                job.vuln_result.counts['LOW'] === 0
+                              "
+                            >
+                              LOW {{ job.vuln_result.counts["LOW"] }}
+                            </span>
+                            @if (job.vuln_result.counts["UNKNOWN"] > 0) {
+                              <span class="badge bg-secondary"
+                                >UNKNOWN
+                                {{ job.vuln_result.counts["UNKNOWN"] }}</span
+                              >
+                            }
+                          </div>
+                          @if (job.vuln_result.blocked) {
+                            <div
+                              class="mt-1 text-danger"
+                              style="font-size:0.7rem"
+                            >
+                              <i class="bi bi-info-circle me-1"></i>
+                              Blocking:
+                              {{ job.vuln_result.severities.join(", ") }}
+                            </div>
+                          }
                         </div>
                       }
 
@@ -279,8 +428,8 @@ import {
                                 class="spinner-border spinner-border-sm me-1"
                               ></span>
                             }
-                            <i class="bi bi-cloud-upload me-1"></i>
-                            Push to Registry
+                            <i class="bi bi-cloud-upload me-1"></i>Push to
+                            Registry
                           </button>
                         </div>
                       }
@@ -299,6 +448,16 @@ import {
       .card {
         background: var(--pc-card-bg);
         border-radius: 12px;
+      }
+      .vuln-badge-bar {
+        background: var(--pc-card-bg);
+        border: 1px solid var(--pc-border);
+        border-radius: 8px;
+      }
+      .sev-mini {
+        font-size: 0.6rem;
+        padding: 2px 5px;
+        border-radius: 10px;
       }
       .search-results-list {
         max-height: 280px;
@@ -319,9 +478,10 @@ import {
       .job-card {
         background: var(--pc-main-bg);
         border: 1px solid var(--pc-border);
+        border-radius: 8px;
       }
       .job-list {
-        max-height: 600px;
+        max-height: 680px;
         overflow-y: auto;
       }
     `,
@@ -329,6 +489,7 @@ import {
 })
 export class StagingComponent implements OnInit, OnDestroy {
   private staging = inject(StagingService);
+  vulnConfig = inject(VulnConfigService);
 
   jobs = signal<StagingJob[]>([]);
   searchQuery = "";
@@ -343,14 +504,22 @@ export class StagingComponent implements OnInit, OnDestroy {
 
   private refreshInterval: ReturnType<typeof setInterval> | null = null;
 
+  private readonly ACTIVE_STATUSES: string[] = [
+    "pending",
+    "pulling",
+    "scanning",
+    "vuln_scanning",
+    "pushing",
+  ];
+
   ngOnInit() {
+    this.vulnConfig.loadConfig().subscribe();
     this.loadJobs();
-    // Auto-refresh active jobs
     this.refreshInterval = setInterval(() => {
-      const activeJobs = this.jobs().filter((j) =>
-        ["pending", "pulling", "scanning", "pushing"].includes(j.status),
+      const hasActive = this.jobs().some((j) =>
+        this.ACTIVE_STATUSES.includes(j.status),
       );
-      if (activeJobs.length > 0) this.loadJobs();
+      if (hasActive) this.loadJobs();
     }, 3000);
   }
 
@@ -359,9 +528,7 @@ export class StagingComponent implements OnInit, OnDestroy {
   }
 
   loadJobs() {
-    this.staging.listJobs().subscribe({
-      next: (jobs) => this.jobs.set(jobs),
-    });
+    this.staging.listJobs().subscribe({ next: (jobs) => this.jobs.set(jobs) });
   }
 
   searchDockerHub() {
@@ -384,21 +551,16 @@ export class StagingComponent implements OnInit, OnDestroy {
 
   onImageChange(value: string) {
     this.pullImage.set(value);
-    if (value.length > 2) {
-      this.loadAvailableTags(value);
-    } else {
-      this.availableTags.set([]);
-    }
+    if (value.length > 2) this.loadAvailableTags(value);
+    else this.availableTags.set([]);
   }
 
   loadAvailableTags(image: string) {
     this.staging.getDockerHubTags(image).subscribe({
       next: (data) => {
         this.availableTags.set(data.tags);
-        // Auto-select first tag if available
         if (data.tags.length > 0 && this.pullTag() === "latest") {
-          const hasLatest = data.tags.includes("latest");
-          if (!hasLatest) this.pullTag.set(data.tags[0]);
+          if (!data.tags.includes("latest")) this.pullTag.set(data.tags[0]);
         }
       },
       error: () => this.availableTags.set([]),
@@ -408,8 +570,9 @@ export class StagingComponent implements OnInit, OnDestroy {
   startPull() {
     if (!this.pullImage()) return;
     this.pulling.set(true);
+    const cfg = this.vulnConfig.config();
     this.staging
-      .pullImage(this.pullImage(), this.pullTag() || "latest")
+      .pullImage(this.pullImage(), this.pullTag() || "latest", cfg)
       .subscribe({
         next: (job) => {
           this.jobs.update((jobs) => [job, ...jobs]);
@@ -426,7 +589,6 @@ export class StagingComponent implements OnInit, OnDestroy {
     this.pushing.set(job.job_id);
     const targetImage = this.pushTargets[job.job_id + "_img"] || undefined;
     const targetTag = this.pushTargets[job.job_id + "_tag"] || undefined;
-
     this.staging.pushImage(job.job_id, targetImage, targetTag).subscribe({
       next: () => {
         this.pushing.set(null);
@@ -437,9 +599,7 @@ export class StagingComponent implements OnInit, OnDestroy {
   }
 
   deleteJob(jobId: string) {
-    this.staging.deleteJob(jobId).subscribe({
-      next: () => this.loadJobs(),
-    });
+    this.staging.deleteJob(jobId).subscribe({ next: () => this.loadJobs() });
   }
 
   getStatusBadgeClass(status: string): string {
@@ -447,13 +607,26 @@ export class StagingComponent implements OnInit, OnDestroy {
       pending: "badge bg-secondary-subtle text-secondary",
       pulling: "badge bg-info-subtle text-info",
       scanning: "badge bg-warning-subtle text-warning",
+      vuln_scanning: "badge bg-warning-subtle text-warning",
       scan_clean: "badge bg-success-subtle text-success",
       scan_infected: "badge bg-danger text-white",
+      scan_vulnerable: "badge bg-danger text-white",
       pushing: "badge bg-primary-subtle text-primary",
       done: "badge bg-success text-white",
       failed: "badge bg-danger text-white",
     };
-    return map[status] || "badge bg-secondary";
+    return map[status] ?? "badge bg-secondary";
+  }
+
+  getSevColor(sev: string): string {
+    const map: Record<string, string> = {
+      CRITICAL: "bg-danger",
+      HIGH: "bg-danger",
+      MEDIUM: "bg-warning text-dark",
+      LOW: "bg-info text-dark",
+      UNKNOWN: "bg-secondary",
+    };
+    return map[sev] ?? "bg-secondary";
   }
 
   formatCount(n: number): string {
