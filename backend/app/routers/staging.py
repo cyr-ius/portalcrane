@@ -594,6 +594,7 @@ async def get_job_status(
         raise HTTPException(status_code=404, detail="Job not found")
     return StagingJob(**_jobs[job_id])
 
+
 @router.get("/jobs", response_model=list[StagingJob])
 async def list_jobs(_: UserInfo = Depends(get_current_user)):
     """List all staging jobs, sorted so active jobs appear first,
@@ -611,6 +612,7 @@ async def list_jobs(_: UserInfo = Depends(get_current_user)):
     # Stable sort: active jobs bubble to the top
     all_jobs.sort(key=lambda j: 0 if j.status in active_statuses else 1)
     return all_jobs
+
 
 @router.post("/push")
 async def push_image(
