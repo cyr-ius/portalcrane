@@ -6,21 +6,7 @@ import { CommonModule } from "@angular/common";
 @Component({
   selector: "app-oidc-callback",
   imports: [CommonModule],
-  template: `
-    <div
-      class="d-flex flex-column align-items-center justify-content-center min-vh-100 gap-3"
-    >
-      @if (error()) {
-        <div class="alert alert-danger">
-          <i class="bi bi-exclamation-triangle-fill me-2"></i>
-          Authentication failed: {{ error() }}
-        </div>
-      } @else {
-        <div class="spinner-border text-primary" role="status"></div>
-        <p class="text-muted">Completing authentication...</p>
-      }
-    </div>
-  `,
+  templateUrl: "./oidc-callback.component.html",
 })
 export class OidcCallbackComponent implements OnInit {
   private route = inject(ActivatedRoute);

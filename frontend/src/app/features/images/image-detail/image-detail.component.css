@@ -1,0 +1,29 @@
+.card {
+  background: var(--pc-card-bg);
+  border-radius: 12px;
+}
+.list-group-item {
+  background: transparent;
+  transition: background 0.1s;
+}
+.list-group-item:hover {
+  background: var(--pc-nav-hover);
+}
+.active-tag {
+  background: var(--pc-nav-active-bg) !important;
+}
+.detail-pill {
+  background: var(--pc-card-bg);
+  border: 1px solid var(--pc-border);
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
+}
+.env-list {
+  max-height: 120px;
+  overflow-y: auto;
+  font-size: 0.75rem;
+}
+.layer-item {
+  background: var(--pc-card-bg);
+  border: 1px solid var(--pc-border);
+}

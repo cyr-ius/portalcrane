@@ -1,0 +1,24 @@
+.login-page {
+  background: var(--pc-bg-gradient);
+  min-height: 100vh;
+}
+.login-card {
+  width: 100%;
+  max-width: 420px;
+  border-radius: 16px;
+  overflow: hidden;
+}
+.logo-header {
+  background: var(--pc-header-bg);
+}
+.brand-title {
+  font-size: 1.8rem;
+  color: var(--pc-accent);
+  letter-spacing: -0.5px;
+}
+.divider-line {
+  flex: 1;
+  height: 1px;
+  background: currentColor;
+  opacity: 0.2;
+}

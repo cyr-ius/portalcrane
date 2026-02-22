@@ -1,0 +1,39 @@
+.card {
+  background: var(--pc-card-bg);
+  border-radius: 12px;
+}
+.search-results-list {
+  max-height: 220px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.search-result-item {
+  cursor: pointer;
+  background: var(--pc-bg-secondary, rgba(0, 0, 0, 0.03));
+  transition: background 0.15s;
+}
+.search-result-item:hover {
+  background: var(--bs-primary-bg-subtle);
+}
+.job-card {
+  background: var(--pc-bg-secondary, rgba(0, 0, 0, 0.03));
+  border: 1px solid var(--pc-border);
+}
+.job-list {
+  max-height: 600px;
+  overflow-y: auto;
+}
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+.spin {
+  display: inline-block;
+  animation: spin 0.8s linear infinite;
+}

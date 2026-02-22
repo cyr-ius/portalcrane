@@ -1,0 +1,11 @@
+.sev-btn {
+  font-size: 0.7rem;
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+.env-defaults {
+  background: var(--pc-main-bg);
+  border: 1px dashed var(--pc-border);
+}

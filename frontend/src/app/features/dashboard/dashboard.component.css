@@ -1,0 +1,60 @@
+.stat-card {
+  background: var(--pc-card-bg);
+  border-radius: 12px;
+  transition:
+    transform 0.15s,
+    box-shadow 0.15s;
+}
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px var(--pc-shadow);
+}
+.stat-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+}
+.stat-value {
+  font-size: 1.75rem;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--pc-text);
+}
+.fw-mono {
+  font-family: "Courier New", monospace;
+  font-size: 0.8rem;
+}
+.gc-panel {
+  background: var(--pc-main-bg);
+  border: 1px solid var(--pc-border);
+}
+.gc-output {
+  background: #0d1117;
+  color: #c9d1d9;
+  font-size: 0.7rem;
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  max-height: 120px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.spin {
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+.card {
+  background: var(--pc-card-bg);
+  border-radius: 12px;
+}

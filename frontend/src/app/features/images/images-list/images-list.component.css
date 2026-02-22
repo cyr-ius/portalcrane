@@ -1,0 +1,24 @@
+.card {
+  background: var(--pc-card-bg);
+  border-radius: 12px;
+}
+.image-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--pc-accent-soft);
+  color: var(--pc-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.875rem;
+  flex-shrink: 0;
+}
+.table > :not(caption) > * > * {
+  background: transparent;
+  padding: 0.875rem 1rem;
+}
+thead th {
+  font-size: 0.7rem;
+  letter-spacing: 0.05em;
+}

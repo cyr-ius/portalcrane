@@ -1,0 +1,166 @@
+.app-shell {
+  min-height: 100vh;
+}
+
+.sidebar {
+  width: 240px;
+  min-width: 240px;
+  transition:
+    width 0.25s ease,
+    min-width 0.25s ease;
+  background: var(--pc-sidebar-bg);
+  border-right: 1px solid var(--pc-border);
+  position: relative;
+}
+.sidebar.collapsed {
+  width: 64px;
+  min-width: 64px;
+}
+
+.brand-name {
+  font-size: 1.1rem;
+  color: var(--pc-accent);
+  white-space: nowrap;
+}
+
+/* Navigation links */
+.nav-link {
+  border-radius: 8px;
+  color: var(--pc-text-muted);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.nav-link:hover {
+  background: var(--pc-nav-hover);
+  color: var(--pc-accent);
+}
+.nav-link.active {
+  background: var(--pc-nav-active-bg);
+  color: var(--pc-accent);
+  font-weight: 600;
+}
+.nav-icon {
+  font-size: 1.1rem;
+  min-width: 20px;
+  text-align: center;
+}
+
+/* Avatar */
+.avatar-circle {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--pc-accent-soft);
+  color: var(--pc-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.875rem;
+  flex-shrink: 0;
+  cursor: default;
+  position: relative;
+}
+
+/* Avatar cliquable (mode replié) */
+button.avatar-circle {
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    transform 0.15s;
+  padding: 0;
+  margin: 0 auto;
+}
+button.avatar-circle:hover {
+  background: var(--pc-accent);
+  color: #fff;
+  transform: scale(1.08);
+}
+
+/* Indicateur thème actif sur l'avatar */
+.theme-dot {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--pc-sidebar-bg);
+  border: 1px solid var(--pc-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.5rem;
+  color: var(--pc-accent-2);
+  pointer-events: none;
+}
+
+/* Dropdown thème en mode replié */
+.theme-dropdown-collapsed {
+  position: absolute;
+  left: 44px;
+  bottom: 0;
+  background: var(--pc-card-bg);
+  border: 1px solid var(--pc-border);
+  border-radius: 10px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  box-shadow: 4px 4px 16px var(--pc-shadow);
+  z-index: 100;
+  min-width: 44px;
+}
+.theme-option {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--pc-text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.theme-option:hover {
+  background: var(--pc-nav-hover);
+  color: var(--pc-accent);
+}
+.theme-option.active {
+  background: var(--pc-nav-active-bg);
+  border-color: var(--pc-accent);
+  color: var(--pc-accent);
+}
+
+.x-small {
+  font-size: 0.7rem;
+}
+
+/* Collapse toggle button */
+.sidebar-toggle {
+  position: absolute;
+  top: 50%;
+  right: -12px;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--pc-sidebar-bg);
+  border: 1px solid var(--pc-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  font-size: 0.6rem;
+  color: var(--pc-text-muted);
+  z-index: 10;
+}
+
+.main-content {
+  background: var(--pc-main-bg);
+}
