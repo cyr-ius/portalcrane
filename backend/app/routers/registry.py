@@ -10,10 +10,9 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel
 
-from routers.auth import UserInfo, get_current_user
-
 from ..config import Settings, get_settings
 from ..services.registry_service import RegistryService
+from .auth import UserInfo, get_current_user
 
 router = APIRouter()
 
