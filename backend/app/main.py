@@ -5,9 +5,11 @@ Main FastAPI application entry point
 
 import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from .routers import (
@@ -22,6 +24,7 @@ from .routers import (
 
 _FRONTEND_DIR = "/app/frontend/dist/portalcrane/browser"
 _INDEX_HTML = os.path.join(_FRONTEND_DIR, "index.html")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

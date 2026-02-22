@@ -594,6 +594,7 @@ async def get_job_status(
         raise HTTPException(status_code=404, detail="Job not found")
     return StagingJob(**_jobs[job_id])
 
+
 @router.get("/jobs", response_model=list[StagingJob])
 async def list_jobs(_: UserInfo = Depends(get_current_user)):
     """List all staging jobs, sorted so active jobs appear first,
@@ -611,6 +612,7 @@ async def list_jobs(_: UserInfo = Depends(get_current_user)):
     # Stable sort: active jobs bubble to the top
     all_jobs.sort(key=lambda j: 0 if j.status in active_statuses else 1)
     return all_jobs
+
 
 @router.post("/push")
 async def push_image(
@@ -656,8 +658,12 @@ async def delete_job(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid job_id")
 
-    # Remove tarball if exists
-    tarball_path = os.path.join(settings.staging_dir, f"{job_id}.tar")
+    # Remove tarball if exists, ensuring the path stays within the staging directory
+    staging_root = os.path.realpath(settings.staging_dir)
+    tarball_path = os.path.realpath(os.path.join(staging_root, f"{job_id}.tar"))
+    # Ensure the resolved tarball_path is within the staging_root to prevent traversal
+    if os.path.commonpath([staging_root, tarball_path]) != staging_root:
+        raise HTTPException(status_code=400, detail="Invalid job_id")
     if os.path.exists(tarball_path):
         os.remove(tarball_path)
 
