@@ -110,6 +110,7 @@ if os.path.exists(_FRONTEND_DIR):
                 is_within_base = False
 
         if is_within_base and candidate.is_file():
-            return FileResponse(candidate)
+            safe_path = str(candidate)
+            return FileResponse(safe_path)
         # Otherwise fall back to index.html (Angular will handle the route)
         return FileResponse(_INDEX_HTML)
