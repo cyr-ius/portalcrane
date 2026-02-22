@@ -1,5 +1,6 @@
 import { CommonModule } from "@angular/common";
 import { Component, inject, OnInit } from "@angular/core";
+import { AboutService } from "../../core/services/about.service";
 import {
   AppConfigService,
   TRIVY_SEVERITIES,
@@ -7,8 +8,10 @@ import {
 } from "../../core/services/app-config.service";
 import { AuthService } from "../../core/services/auth.service";
 import { ThemeService } from "../../core/services/theme.service";
+import { ClamAvConfigPanelComponent } from "../../shared/components/clamav-config-panel/clamav-config-panel.component";
+import { VulnConfigPanelComponent } from "../../shared/components/vuln-config-panel/vuln-config-panel.component";
 
-/** Badge colour for each Trivy severity level */
+/** Badge colour mapping for each Trivy severity level. */
 const SEVERITY_STYLE: Record<
   TrivySeverity,
   { active: string; inactive: string; icon: string }
@@ -42,7 +45,7 @@ const SEVERITY_STYLE: Record<
 
 @Component({
   selector: "app-settings",
-  imports: [CommonModule],
+  imports: [CommonModule, VulnConfigPanelComponent, ClamAvConfigPanelComponent],
   templateUrl: "./settings.component.html",
   styleUrl: "./settings.component.css",
 })
@@ -51,14 +54,20 @@ export class SettingsComponent implements OnInit {
   authService = inject(AuthService);
   configService = inject(AppConfigService);
 
-  /** Expose the ordered severity list to the template */
+  /** Service exposing application metadata and GitHub version check. */
+  aboutService = inject(AboutService);
+
+  /** Ordered list of severity levels exposed to the template. */
   readonly severities = TRIVY_SEVERITIES;
 
-  ngOnInit() {
-    // Ensure config is loaded (may already be cached from app startup)
+  ngOnInit(): void {
+    // Ensure app config is loaded (may already be cached from app startup).
     if (!this.configService.serverConfig()) {
       this.configService.loadConfig().subscribe();
     }
+
+    // Trigger the version / about fetch (no-op if already loaded).
+    this.aboutService.load();
   }
 
   getSeverityClass(sev: TrivySeverity): string {

@@ -82,66 +82,12 @@
     </div>
   </div>
 
-  <!-- ── Vulnerability scanning ─────────────────────────────────────── -->
-  @if (configService.serverConfig()?.vuln_scan_enabled !== undefined) {
-    <div class="card border-0 mb-3">
-      <div class="card-header border-0">
-        <h6 class="fw-semibold mb-0">
-          <i class="bi bi-shield-check me-2"></i>Vulnerability Scanning
-        </h6>
-      </div>
-      <div class="card-body">
-        <!-- Severity filter buttons -->
-        <div class="mb-3">
-          <div class="small fw-semibold mb-2">Severity Levels</div>
-          <div class="d-flex flex-wrap gap-2">
-            @for (sev of severities; track sev) {
-              <button
-                [class]="getSeverityClass(sev)"
-                (click)="configService.toggleVulnSeverity(sev)"
-              >
-                <i [class]="'bi ' + getSeverityIcon(sev) + ' me-1'"></i>
-                {{ sev }}
-              </button>
-            }
-          </div>
-        </div>
+  @if (configService.advancedMode()) {
+    <!-- ── ClamAV ─────────────────────────────────────────────────────── -->
+    <app-clamav-config-panel />
 
-        <!-- Ignore unfixed toggle -->
-        <div
-          class="d-flex align-items-center justify-content-between scan-row rounded p-2"
-        >
-          <div>
-            <div class="small fw-semibold">Ignore Unfixed Vulnerabilities</div>
-            <div class="text-muted" style="font-size: 0.8rem">
-              Hide CVEs that do not yet have a fix available
-            </div>
-          </div>
-          <div class="form-check form-switch ms-4 flex-shrink-0">
-            <input
-              class="form-check-input"
-              type="checkbox"
-              id="ignoreUnfixedToggle"
-              style="width: 2.5em; height: 1.3em"
-              [checked]="configService.vulnIgnoreUnfixed()"
-              (change)="
-                configService.setVulnIgnoreUnfixed($any($event.target).checked)
-              "
-            />
-          </div>
-        </div>
-
-        <!-- Server origin note -->
-        @if (configService.serverConfig(); as cfg) {
-          <div class="text-muted mt-2" style="font-size: 0.75rem">
-            <i class="bi bi-server me-1"></i>Server default:
-            {{ cfg.vuln_scan_enabled ? "enabled" : "disabled" }} — severities:
-            {{ cfg.vuln_scan_severities }} — timeout:
-            {{ cfg.vuln_scan_timeout }}
-          </div>
-        }
-      </div>
-    </div>
+    <!-- ── Vulnerability config panel ─────────────────────────────────── -->
+    <app-vuln-config-panel />
   }
 
   <!-- ── Account ────────────────────────────────────────────────────── -->
@@ -169,7 +115,7 @@
   </div>
 
   <!-- ── About ──────────────────────────────────────────────────────── -->
-  <div class="card border-0">
+  <div class="card border-0 mb-3">
     <div class="card-header border-0">
       <h6 class="fw-semibold mb-0">
         <i class="bi bi-info-circle me-2"></i>About
@@ -286,6 +232,117 @@
         Open an issue on GitHub
         <i class="bi bi-box-arrow-up-right" style="font-size: 0.7rem"></i>
       </a>
+    </div>
+  </div>
+
+  <!-- ── About / Version ────────────────────────────────────────────── -->
+  <div class="card border-0 mb-3">
+    <div class="card-header border-0">
+      <h6 class="fw-semibold mb-0">
+        <i class="bi bi-info-circle me-2"></i>Release Information
+      </h6>
+    </div>
+    <div class="card-body">
+      <!-- Loading state -->
+      @if (aboutService.loading()) {
+        <div class="d-flex align-items-center gap-2 text-muted small">
+          <div class="spinner-border spinner-border-sm" role="status">
+            <span class="visually-hidden">Loading…</span>
+          </div>
+          Checking for updates…
+        </div>
+      }
+
+      <!-- HTTP error (could not reach /api/about at all) -->
+      @if (aboutService.error()) {
+        <div class="alert alert-warning py-2 small mb-3">
+          <i class="bi bi-exclamation-triangle me-1"></i>
+          Could not load application information: {{ aboutService.error() }}
+        </div>
+      }
+
+      <!-- About info block -->
+      @if (aboutService.info(); as info) {
+        <!-- Version row -->
+        <div class="row g-2 mb-3 align-items-start">
+          <!-- Current version -->
+          <div class="col-12 col-sm-6">
+            <div class="about-label">Current version</div>
+            <span class="badge bg-secondary font-monospace">
+              v{{ info.current_version }}
+            </span>
+          </div>
+
+          <!-- Latest GitHub release -->
+          <div class="col-12 col-sm-6">
+            <div class="about-label">Latest release on GitHub</div>
+
+            @if (info.github_error) {
+              <!-- GitHub API could not be reached -->
+              <span
+                class="badge bg-warning text-dark"
+                [title]="info.github_error"
+              >
+                <i class="bi bi-exclamation-triangle me-1"></i>Unavailable
+              </span>
+            } @else if (info.latest_version) {
+              <span
+                class="badge font-monospace me-2"
+                [class.bg-success]="!info.update_available"
+                [class.bg-danger]="info.update_available"
+              >
+                v{{ info.latest_version }}
+              </span>
+              @if (info.update_available) {
+                <a
+                  [href]="info.github_url + '/releases'"
+                  target="_blank"
+                  rel="noopener"
+                >
+                  View release notes
+                  <i class="bi bi-box-arrow-up-right ms-1"></i>
+                </a>
+              }
+            }
+          </div>
+        </div>
+
+        <!-- Up-to-date banner -->
+        @if (
+          !info.update_available && !info.github_error && info.latest_version
+        ) {
+          <div
+            class="alert alert-success py-2 small d-flex align-items-center gap-2 mb-3"
+          >
+            <i class="bi bi-check-circle-fill fs-5 flex-shrink-0"></i>
+            You are running the latest version.
+          </div>
+        }
+
+        <!-- Author and AI credits -->
+        <div class="row g-2">
+          <div class="col-12 col-sm-6">
+            <div class="about-label">Author</div>
+            <a
+              [href]="info.github_url"
+              target="_blank"
+              rel="noopener"
+              class="d-inline-flex align-items-center gap-1 text-decoration-none"
+            >
+              <i class="bi bi-github fs-5"></i>
+              <span class="fw-semibold">{{ info.author }}</span>
+            </a>
+          </div>
+
+          <div class="col-12 col-sm-6">
+            <div class="about-label">Code generated with</div>
+            <span class="d-inline-flex align-items-center gap-1">
+              <i class="bi bi-robot fs-5 text-primary"></i>
+              <span class="fw-semibold">{{ info.ai_generator }}</span>
+            </span>
+          </div>
+        </div>
+      }
     </div>
   </div>
 </div>

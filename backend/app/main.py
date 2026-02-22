@@ -10,8 +10,15 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from .routers import auth, dashboard, registry, registry_proxy, staging
-from .routers.config_router import router as config_router
+from .routers import (
+    about,
+    auth,
+    config_router,
+    dashboard,
+    registry,
+    registry_proxy,
+    staging,
+)
 
 
 @asynccontextmanager
@@ -45,7 +52,8 @@ app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(registry.router, prefix="/api/registry", tags=["Registry"])
 app.include_router(staging.router, prefix="/api/staging", tags=["Staging"])
 app.include_router(dashboard.router, prefix="/api/dashboard", tags=["Dashboard"])
-app.include_router(config_router, prefix="/api/config", tags=["Configuration"])
+app.include_router(config_router.router, prefix="/api/config", tags=["Configuration"])
+app.include_router(about.router, prefix="/api", tags=["About"])
 app.include_router(
     registry_proxy.router, prefix="/registry-proxy", tags=["Registry Proxy"]
 )

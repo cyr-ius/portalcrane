@@ -5,3 +5,12 @@
 .scan-row {
   background: var(--pc-bg-secondary, rgba(0, 0, 0, 0.03));
 }
+
+.about-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--bs-secondary-color, #6c757d);
+  margin-bottom: 0.25rem;
+}

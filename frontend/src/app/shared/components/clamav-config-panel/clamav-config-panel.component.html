@@ -1,0 +1,55 @@
+<div class="card border-0 mb-3">
+  <div
+    class="card-header border-0 d-flex align-items-center justify-content-between"
+  >
+    <h6 class="fw-semibold mb-0">
+      <i class="bi bi-bug me-2"></i>ClamAV Antivirus
+    </h6>
+    <span
+      class="badge"
+      [class.bg-success-subtle]="configService.clamavEnabled()"
+      [class.text-success]="configService.clamavEnabled()"
+      [class.bg-secondary-subtle]="!configService.clamavEnabled()"
+      [class.text-secondary]="!configService.clamavEnabled()"
+    >
+      {{ configService.clamavEnabled() ? "Enabled" : "Disabled" }}
+    </span>
+  </div>
+  <div class="card-body">
+    <p class="text-muted small mb-3">
+      Scans every pulled image against virus definitions before allowing a push
+      to the registry.
+    </p>
+
+    <!-- ClamAV toggle -->
+    <div
+      class="d-flex align-items-center justify-content-between py-3 rounded scan-row"
+    >
+      <div>
+        <div class="small fw-semibold">Enable ClamAV scan</div>
+        <div class="text-muted" style="font-size: 0.8rem">
+          When disabled the pipeline skips the antivirus step entirely.
+        </div>
+      </div>
+      <div class="form-check form-switch ms-4 flex-shrink-0">
+        <input
+          class="form-check-input"
+          type="checkbox"
+          id="clamavToggle"
+          style="width: 2.5em; height: 1.3em"
+          [checked]="configService.clamavEnabled()"
+          (change)="configService.setClamavEnabled($any($event.target).checked)"
+        />
+      </div>
+    </div>
+
+    <!-- Server origin note -->
+    @if (configService.serverConfig(); as cfg) {
+      <div class="text-muted mt-2" style="font-size: 0.75rem">
+        <i class="bi bi-server me-1"></i>Server default:
+        {{ cfg.clamav_enabled ? "enabled" : "disabled" }} —
+        {{ cfg.clamav_host }}:{{ cfg.clamav_port }}
+      </div>
+    }
+  </div>
+</div>
