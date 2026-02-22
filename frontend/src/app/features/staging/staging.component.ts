@@ -1,4 +1,11 @@
-import { Component, signal, inject, OnInit, OnDestroy } from "@angular/core";
+import {
+  Component,
+  signal,
+  inject,
+  OnInit,
+  OnDestroy,
+  computed,
+} from "@angular/core";
 import { CommonModule } from "@angular/common";
 import { FormsModule } from "@angular/forms";
 import {
@@ -6,67 +13,50 @@ import {
   StagingJob,
   DockerHubResult,
 } from "../../core/services/staging.service";
-import { VulnConfigService } from "../../core/services/vuln-config.service";
+import {
+  AppConfigService,
+  ClamAVStatus,
+} from "../../core/services/app-config.service";
 
 @Component({
   selector: "app-staging",
   imports: [CommonModule, FormsModule],
   template: `
     <div class="p-4">
-      <div class="d-flex align-items-center justify-content-between mb-4">
+      <!-- Page header + ClamAV live indicator -->
+      <div
+        class="d-flex align-items-start justify-content-between mb-4 flex-wrap gap-2"
+      >
         <div>
           <h2 class="fw-bold mb-1">Staging Pipeline</h2>
           <p class="text-muted small mb-0">
-            Pull from Docker Hub → ClamAV Scan → Trivy CVE Scan → Push to
-            Registry
+            Pull from Docker Hub → Scan → Push to Registry
           </p>
+        </div>
+
+        <!-- ClamAV status badge -->
+        <div class="d-flex align-items-center gap-2">
+          <span
+            [class]="clamavBadgeClass()"
+            [title]="clamavStatus()?.message ?? ''"
+            style="font-size:0.78rem; padding:0.35em 0.75em; cursor:default"
+          >
+            <i [class]="'bi ' + clamavBadgeIcon() + ' me-1'"></i>
+            {{ clamavBadgeLabel() }}
+          </span>
+          <button
+            class="btn btn-sm btn-outline-secondary border-0 p-1"
+            (click)="refreshClamAVStatus()"
+            title="Refresh ClamAV status"
+          >
+            <i class="bi bi-arrow-clockwise" [class.spin]="clamavLoading()"></i>
+          </button>
         </div>
       </div>
 
       <div class="row g-3">
         <!-- Left: Pull panel -->
         <div class="col-lg-5">
-          <!-- Active vuln config badge -->
-          <div
-            class="d-flex align-items-center gap-2 mb-3 p-2 rounded vuln-badge-bar"
-          >
-            <i class="bi bi-shield-check text-primary"></i>
-            <span class="small">
-              Trivy:
-              @if (vulnConfig.config().enabled) {
-                <span class="text-success fw-semibold">enabled</span>
-                — blocking
-                @for (
-                  sev of vulnConfig.config().severities;
-                  track sev;
-                  let last = $last
-                ) {
-                  <span class="badge sev-mini" [class]="getSevColor(sev)">{{
-                    sev
-                  }}</span>
-                }
-              } @else {
-                <span class="text-muted">disabled</span>
-              }
-            </span>
-            @if (vulnConfig.hasLocalOverrides()) {
-              <span
-                class="badge bg-warning-subtle text-warning ms-auto"
-                style="font-size:0.65rem"
-              >
-                <i class="bi bi-pencil-fill me-1"></i>Custom
-              </span>
-            }
-            <a
-              routerLink="/settings"
-              class="text-muted ms-auto"
-              style="font-size:0.75rem"
-              title="Edit in Settings"
-            >
-              <i class="bi bi-gear"></i>
-            </a>
-          </div>
-
           <!-- Search Docker Hub -->
           <div class="card border-0 mb-3">
             <div class="card-header border-0">
@@ -100,44 +90,37 @@ import { VulnConfigService } from "../../core/services/vuln-config.service";
                 <div class="search-results-list">
                   @for (result of searchResults(); track result.name) {
                     <div
-                      class="search-result-item p-2 rounded mb-1"
-                      [class.selected]="pullImage() === result.name"
+                      class="search-result-item p-2 rounded d-flex align-items-center justify-content-between gap-2"
                       (click)="selectDockerHubImage(result)"
                     >
-                      <div class="d-flex align-items-center gap-2">
-                        <div class="flex-grow-1 min-w-0">
-                          <div class="fw-semibold small text-truncate">
-                            {{ result.name }}
-                            @if (result.is_official) {
-                              <i
-                                class="bi bi-patch-check-fill text-primary ms-1"
-                                title="Official"
-                              ></i>
-                            }
-                          </div>
-                          @if (result.description) {
-                            <div
-                              class="text-muted text-truncate"
-                              style="font-size:0.7rem"
+                      <div class="overflow-hidden">
+                        <div class="fw-semibold small text-truncate">
+                          {{ result.name }}
+                          @if (result.is_official) {
+                            <span
+                              class="badge bg-primary-subtle text-primary ms-1"
+                              style="font-size:0.65rem"
+                              >Official</span
                             >
-                              {{ result.description }}
-                            </div>
                           }
                         </div>
-                        <div
-                          class="text-muted text-end"
-                          style="font-size:0.7rem"
-                        >
-                          <div>
-                            <i class="bi bi-star-fill text-warning me-1"></i
-                            >{{ formatCount(result.star_count) }}
-                          </div>
-                          <div>
-                            <i class="bi bi-download me-1"></i
-                            >{{ formatCount(result.pull_count) }}
-                          </div>
+                        <div class="text-muted small text-truncate">
+                          {{ result.description || "—" }}
+                        </div>
+                        <div class="text-muted" style="font-size:0.7rem">
+                          <i class="bi bi-star me-1"></i
+                          >{{ formatCount(result.star_count) }}
+                          <span class="ms-2"
+                            ><i class="bi bi-download me-1"></i
+                            >{{ formatCount(result.pull_count) }}</span
+                          >
                         </div>
                       </div>
+                      <button
+                        class="btn btn-sm btn-outline-primary flex-shrink-0"
+                      >
+                        <i class="bi bi-plus"></i>
+                      </button>
                     </div>
                   }
                 </div>
@@ -153,12 +136,12 @@ import { VulnConfigService } from "../../core/services/vuln-config.service";
               </h6>
             </div>
             <div class="card-body">
-              <div class="mb-2">
+              <div class="mb-3">
                 <label class="form-label small fw-semibold">Image</label>
                 <input
                   type="text"
                   class="form-control"
-                  placeholder="nginx, library/redis, myorg/myimage..."
+                  placeholder="nginx, library/redis, myorg/myapp"
                   [value]="pullImage()"
                   (input)="onImageChange($any($event.target).value)"
                 />
@@ -171,8 +154,8 @@ import { VulnConfigService } from "../../core/services/vuln-config.service";
                     [value]="pullTag()"
                     (change)="pullTag.set($any($event.target).value)"
                   >
-                    @for (t of availableTags(); track t) {
-                      <option [value]="t">{{ t }}</option>
+                    @for (tag of availableTags(); track tag) {
+                      <option [value]="tag">{{ tag }}</option>
                     }
                   </select>
                 } @else {
@@ -185,6 +168,43 @@ import { VulnConfigService } from "../../core/services/vuln-config.service";
                   />
                 }
               </div>
+
+              <!-- Active scan config summary (read-only, driven by Settings) -->
+              <div class="scan-summary d-flex gap-2 flex-wrap mb-3">
+                <span
+                  class="badge"
+                  [class.bg-success-subtle]="configService.clamavEnabled()"
+                  [class.text-success]="configService.clamavEnabled()"
+                  [class.bg-secondary-subtle]="!configService.clamavEnabled()"
+                  [class.text-secondary]="!configService.clamavEnabled()"
+                >
+                  <i class="bi bi-shield-virus me-1"></i>
+                  ClamAV {{ configService.clamavEnabled() ? "ON" : "OFF" }}
+                </span>
+                <span
+                  class="badge"
+                  [class.bg-success-subtle]="configService.vulnEnabled()"
+                  [class.text-success]="configService.vulnEnabled()"
+                  [class.bg-secondary-subtle]="!configService.vulnEnabled()"
+                  [class.text-secondary]="!configService.vulnEnabled()"
+                >
+                  <i class="bi bi-bug me-1"></i>
+                  Trivy {{ configService.vulnEnabled() ? "ON" : "OFF" }}
+                  @if (configService.vulnEnabled()) {
+                    <span class="ms-1 opacity-75"
+                      >({{ configService.vulnSeveritiesString() }})</span
+                    >
+                  }
+                </span>
+                <a
+                  routerLink="/settings"
+                  class="badge bg-body-secondary text-muted text-decoration-none"
+                  title="Configure scans in Settings"
+                >
+                  <i class="bi bi-gear me-1"></i>Configure
+                </a>
+              </div>
+
               <button
                 class="btn btn-primary w-100"
                 (click)="startPull()"
@@ -192,9 +212,10 @@ import { VulnConfigService } from "../../core/services/vuln-config.service";
               >
                 @if (pulling()) {
                   <span class="spinner-border spinner-border-sm me-2"></span>
-                  Pulling...
+                  Starting pipeline...
                 } @else {
-                  <i class="bi bi-cloud-download me-2"></i>Start Pipeline
+                  <i class="bi bi-play-circle me-2"></i>
+                  Start Pipeline
                 }
               </button>
             </div>
@@ -209,14 +230,9 @@ import { VulnConfigService } from "../../core/services/vuln-config.service";
             >
               <h6 class="fw-semibold mb-0">
                 <i class="bi bi-list-task me-2"></i>Pipeline Jobs
-                @if (jobs().length > 0) {
-                  <span class="badge bg-secondary ms-2">{{
-                    jobs().length
-                  }}</span>
-                }
               </h6>
               <button
-                class="btn btn-sm btn-outline-secondary border-0"
+                class="btn btn-sm btn-outline-secondary"
                 (click)="loadJobs()"
               >
                 <i class="bi bi-arrow-clockwise"></i>
@@ -258,21 +274,75 @@ import { VulnConfigService } from "../../core/services/vuln-config.service";
                         </div>
                       </div>
 
-                      <!-- Progress bar -->
+                      <!-- Scan badges applied on this job (advanced mode only) -->
+                      @if (configService.advancedMode()) {
+                        <div class="d-flex gap-1 mb-2 flex-wrap">
+                          @if (job.clamav_enabled_override !== null) {
+                            <span
+                              class="badge"
+                              [class.bg-success-subtle]="
+                                job.clamav_enabled_override
+                              "
+                              [class.text-success]="job.clamav_enabled_override"
+                              [class.bg-secondary-subtle]="
+                                !job.clamav_enabled_override
+                              "
+                              [class.text-secondary]="
+                                !job.clamav_enabled_override
+                              "
+                              style="font-size:0.65rem"
+                            >
+                              <i class="bi bi-shield-virus me-1"></i>ClamAV
+                              {{ job.clamav_enabled_override ? "ON" : "OFF" }}
+                            </span>
+                          }
+                          @if (job.vuln_scan_enabled_override !== null) {
+                            <span
+                              class="badge"
+                              [class.bg-success-subtle]="
+                                job.vuln_scan_enabled_override
+                              "
+                              [class.text-success]="
+                                job.vuln_scan_enabled_override
+                              "
+                              [class.bg-secondary-subtle]="
+                                !job.vuln_scan_enabled_override
+                              "
+                              [class.text-secondary]="
+                                !job.vuln_scan_enabled_override
+                              "
+                              style="font-size:0.65rem"
+                            >
+                              <i class="bi bi-bug me-1"></i>Trivy
+                              {{
+                                job.vuln_scan_enabled_override ? "ON" : "OFF"
+                              }}
+                              @if (
+                                job.vuln_scan_enabled_override &&
+                                job.vuln_severities_override
+                              ) {
+                                ({{ job.vuln_severities_override }})
+                              }
+                            </span>
+                          }
+                        </div>
+                      }
+
+                      <!-- Progress -->
                       <div class="mb-2">
                         <div class="progress mb-1" style="height:6px">
                           <div
                             class="progress-bar"
                             [class.bg-success]="
                               job.status === 'done' ||
-                              job.status === 'scan_clean'
+                              job.status === 'scan_clean' ||
+                              job.status === 'scan_skipped'
                             "
                             [class.bg-danger]="
                               job.status === 'failed' ||
                               job.status === 'scan_infected' ||
                               job.status === 'scan_vulnerable'
                             "
-                            [class.bg-warning]="job.status === 'vuln_scanning'"
                             [class.progress-bar-striped]="
                               [
                                 'pulling',
@@ -295,7 +365,7 @@ import { VulnConfigService } from "../../core/services/vuln-config.service";
                         <div class="small text-muted">{{ job.message }}</div>
                       </div>
 
-                      <!-- ClamAV scan result -->
+                      <!-- Scan result -->
                       @if (job.scan_result) {
                         <div
                           class="small mb-2 p-2 rounded bg-body-secondary font-monospace text-break"
@@ -305,107 +375,33 @@ import { VulnConfigService } from "../../core/services/vuln-config.service";
                         </div>
                       }
 
-                      <!-- Trivy vuln result -->
-                      @if (job.vuln_result) {
-                        <div
-                          class="small mb-2 p-2 rounded"
-                          [class.bg-danger-subtle]="job.vuln_result.blocked"
-                          [class.bg-success-subtle]="!job.vuln_result.blocked"
-                        >
-                          <div class="d-flex align-items-center gap-2 mb-1">
-                            <i
-                              class="bi"
-                              [class.bi-shield-x]="job.vuln_result.blocked"
-                              [class.bi-shield-check]="!job.vuln_result.blocked"
-                              [class.text-danger]="job.vuln_result.blocked"
-                              [class.text-success]="!job.vuln_result.blocked"
-                            ></i>
-                            <span class="fw-semibold" style="font-size:0.75rem">
-                              Trivy CVE —
-                              {{
-                                job.vuln_result.blocked
-                                  ? "Policy blocked"
-                                  : "Clean"
-                              }}
-                            </span>
-                          </div>
-                          <div class="d-flex flex-wrap gap-2">
-                            <span
-                              class="badge"
-                              [class.bg-danger]="
-                                job.vuln_result.counts['CRITICAL'] > 0
-                              "
-                              [class.bg-secondary]="
-                                job.vuln_result.counts['CRITICAL'] === 0
-                              "
-                            >
-                              CRITICAL {{ job.vuln_result.counts["CRITICAL"] }}
-                            </span>
-                            <span
-                              class="badge"
-                              [class.bg-danger]="
-                                job.vuln_result.counts['HIGH'] > 0
-                              "
-                              [class.bg-secondary]="
-                                job.vuln_result.counts['HIGH'] === 0
-                              "
-                            >
-                              HIGH {{ job.vuln_result.counts["HIGH"] }}
-                            </span>
-                            <span
-                              class="badge"
-                              [class.bg-warning]="
-                                job.vuln_result.counts['MEDIUM'] > 0
-                              "
-                              [class.bg-secondary]="
-                                job.vuln_result.counts['MEDIUM'] === 0
-                              "
-                            >
-                              MEDIUM {{ job.vuln_result.counts["MEDIUM"] }}
-                            </span>
-                            <span
-                              class="badge"
-                              [class.bg-info]="
-                                job.vuln_result.counts['LOW'] > 0
-                              "
-                              [class.bg-secondary]="
-                                job.vuln_result.counts['LOW'] === 0
-                              "
-                            >
-                              LOW {{ job.vuln_result.counts["LOW"] }}
-                            </span>
-                            @if (job.vuln_result.counts["UNKNOWN"] > 0) {
-                              <span class="badge bg-secondary"
-                                >UNKNOWN
-                                {{ job.vuln_result.counts["UNKNOWN"] }}</span
-                              >
-                            }
-                          </div>
-                          @if (job.vuln_result.blocked) {
-                            <div
-                              class="mt-1 text-danger"
-                              style="font-size:0.7rem"
-                            >
-                              <i class="bi bi-info-circle me-1"></i>
-                              Blocking:
-                              {{ job.vuln_result.severities.join(", ") }}
-                            </div>
-                          }
-                        </div>
-                      }
-
                       <!-- Push action -->
-                      @if (job.status === "scan_clean") {
+                      @if (
+                        job.status === "scan_clean" ||
+                        job.status === "scan_skipped"
+                      ) {
                         <div class="push-section border-top pt-2 mt-2">
-                          <div class="small fw-semibold mb-2 text-success">
-                            <i class="bi bi-shield-check me-1"></i>Ready to push
+                          <div
+                            class="small fw-semibold mb-2"
+                            [class.text-success]="job.status === 'scan_clean'"
+                            [class.text-secondary]="
+                              job.status === 'scan_skipped'
+                            "
+                          >
+                            @if (job.status === "scan_clean") {
+                              <i class="bi bi-shield-check me-1"></i>Ready to
+                              push
+                            } @else {
+                              <i class="bi bi-skip-forward me-1"></i>Ready to
+                              push (scan skipped)
+                            }
                           </div>
                           <div class="row g-2 mb-2">
                             <div class="col">
                               <input
                                 type="text"
                                 class="form-control form-control-sm"
-                                placeholder="Target image (optional rename)"
+                                placeholder="Target image (optional)"
                                 [(ngModel)]="pushTargets[job.job_id + '_img']"
                               />
                             </div>
@@ -413,23 +409,26 @@ import { VulnConfigService } from "../../core/services/vuln-config.service";
                               <input
                                 type="text"
                                 class="form-control form-control-sm"
-                                placeholder="Tag"
+                                placeholder="tag"
+                                style="width:90px"
                                 [(ngModel)]="pushTargets[job.job_id + '_tag']"
                               />
                             </div>
                           </div>
                           <button
-                            class="btn btn-sm btn-success w-100"
+                            class="btn btn-success btn-sm w-100"
                             (click)="pushImage(job)"
                             [disabled]="pushing() === job.job_id"
                           >
                             @if (pushing() === job.job_id) {
                               <span
-                                class="spinner-border spinner-border-sm me-1"
+                                class="spinner-border spinner-border-sm me-2"
                               ></span>
+                              Pushing...
+                            } @else {
+                              <i class="bi bi-cloud-upload me-2"></i>
+                              Push to Registry
                             }
-                            <i class="bi bi-cloud-upload me-1"></i>Push to
-                            Registry
                           </button>
                         </div>
                       }
@@ -449,48 +448,49 @@ import { VulnConfigService } from "../../core/services/vuln-config.service";
         background: var(--pc-card-bg);
         border-radius: 12px;
       }
-      .vuln-badge-bar {
-        background: var(--pc-card-bg);
-        border: 1px solid var(--pc-border);
-        border-radius: 8px;
-      }
-      .sev-mini {
-        font-size: 0.6rem;
-        padding: 2px 5px;
-        border-radius: 10px;
-      }
       .search-results-list {
-        max-height: 280px;
+        max-height: 220px;
         overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
       }
       .search-result-item {
         cursor: pointer;
-        transition: background 0.1s;
-        border: 1px solid var(--pc-border);
+        background: var(--pc-bg-secondary, rgba(0, 0, 0, 0.03));
+        transition: background 0.15s;
       }
       .search-result-item:hover {
-        background: var(--pc-nav-hover);
-      }
-      .search-result-item.selected {
-        background: var(--pc-nav-active-bg);
-        border-color: var(--pc-accent);
+        background: var(--bs-primary-bg-subtle);
       }
       .job-card {
-        background: var(--pc-main-bg);
+        background: var(--pc-bg-secondary, rgba(0, 0, 0, 0.03));
         border: 1px solid var(--pc-border);
-        border-radius: 8px;
       }
       .job-list {
-        max-height: 680px;
+        max-height: 600px;
         overflow-y: auto;
+      }
+      @keyframes spin {
+        from {
+          transform: rotate(0deg);
+        }
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      .spin {
+        display: inline-block;
+        animation: spin 0.8s linear infinite;
       }
     `,
   ],
 })
 export class StagingComponent implements OnInit, OnDestroy {
   private staging = inject(StagingService);
-  vulnConfig = inject(VulnConfigService);
+  readonly configService = inject(AppConfigService);
 
+  // ── Core state ─────────────────────────────────────────────────────────────
   jobs = signal<StagingJob[]>([]);
   searchQuery = "";
   searchResults = signal<DockerHubResult[]>([]);
@@ -502,34 +502,84 @@ export class StagingComponent implements OnInit, OnDestroy {
   availableTags = signal<string[]>([]);
   pushTargets: Record<string, string> = {};
 
-  private refreshInterval: ReturnType<typeof setInterval> | null = null;
+  // ── ClamAV live indicator ──────────────────────────────────────────────────
+  clamavStatus = signal<ClamAVStatus | null>(null);
+  clamavLoading = signal(false);
 
-  private readonly ACTIVE_STATUSES: string[] = [
-    "pending",
-    "pulling",
-    "scanning",
-    "vuln_scanning",
-    "pushing",
-  ];
+  private refreshInterval: ReturnType<typeof setInterval> | null = null;
+  private clamavInterval: ReturnType<typeof setInterval> | null = null;
 
   ngOnInit() {
-    this.vulnConfig.loadConfig().subscribe();
     this.loadJobs();
+    this.refreshClamAVStatus();
+
+    // Auto-refresh active jobs every 3 s
     this.refreshInterval = setInterval(() => {
-      const hasActive = this.jobs().some((j) =>
-        this.ACTIVE_STATUSES.includes(j.status),
+      const active = this.jobs().filter((j) =>
+        ["pending", "pulling", "scanning", "vuln_scanning", "pushing"].includes(
+          j.status,
+        ),
       );
-      if (hasActive) this.loadJobs();
+      if (active.length > 0) this.loadJobs();
     }, 3000);
+
+    // Refresh ClamAV status every 30 s
+    this.clamavInterval = setInterval(() => this.refreshClamAVStatus(), 30_000);
   }
 
   ngOnDestroy() {
     if (this.refreshInterval) clearInterval(this.refreshInterval);
+    if (this.clamavInterval) clearInterval(this.clamavInterval);
   }
 
-  loadJobs() {
-    this.staging.listJobs().subscribe({ next: (jobs) => this.jobs.set(jobs) });
+  // ── ClamAV indicator ───────────────────────────────────────────────────────
+
+  refreshClamAVStatus() {
+    this.clamavLoading.set(true);
+    this.configService.getClamAVStatus().subscribe({
+      next: (s) => {
+        this.clamavStatus.set(s);
+        this.clamavLoading.set(false);
+      },
+      error: () => this.clamavLoading.set(false),
+    });
   }
+
+  clamavBadgeClass = computed(() => {
+    const s = this.clamavStatus();
+    if (!s) return "badge bg-secondary-subtle text-secondary";
+    if (!s.enabled) return "badge bg-secondary-subtle text-secondary";
+    if (s.reachable) return "badge bg-success-subtle text-success";
+    return "badge bg-danger-subtle text-danger";
+  });
+
+  clamavBadgeIcon = computed(() => {
+    if (this.clamavLoading()) return "bi-hourglass-split";
+    const s = this.clamavStatus();
+    if (!s) return "bi-hourglass-split";
+    if (!s.enabled) return "bi-slash-circle";
+    if (s.reachable) return "bi-shield-check";
+    return "bi-shield-exclamation";
+  });
+
+  clamavBadgeLabel = computed(() => {
+    if (this.clamavLoading()) return "Checking…";
+    const s = this.clamavStatus();
+    if (!s) return "ClamAV: unknown";
+    if (!s.enabled) return "ClamAV disabled";
+    if (s.reachable) return `ClamAV online (${s.host}:${s.port})`;
+    return `ClamAV offline (${s.host}:${s.port})`;
+  });
+
+  // ── Jobs ───────────────────────────────────────────────────────────────────
+
+  loadJobs() {
+    this.staging.listJobs().subscribe({
+      next: (jobs) => this.jobs.set(jobs),
+    });
+  }
+
+  // ── Docker Hub ─────────────────────────────────────────────────────────────
 
   searchDockerHub() {
     if (!this.searchQuery.trim()) return;
@@ -560,19 +610,29 @@ export class StagingComponent implements OnInit, OnDestroy {
       next: (data) => {
         this.availableTags.set(data.tags);
         if (data.tags.length > 0 && this.pullTag() === "latest") {
-          if (!data.tags.includes("latest")) this.pullTag.set(data.tags[0]);
+          const hasLatest = data.tags.includes("latest");
+          if (!hasLatest) this.pullTag.set(data.tags[0]);
         }
       },
       error: () => this.availableTags.set([]),
     });
   }
 
+  // ── Pipeline ───────────────────────────────────────────────────────────────
+
   startPull() {
     if (!this.pullImage()) return;
     this.pulling.set(true);
-    const cfg = this.vulnConfig.config();
+
+    // Read scan preferences from the Settings service
     this.staging
-      .pullImage(this.pullImage(), this.pullTag() || "latest", cfg)
+      .pullImage({
+        image: this.pullImage(),
+        tag: this.pullTag() || "latest",
+        clamav_enabled_override: this.configService.clamavEnabled(),
+        vuln_scan_enabled_override: this.configService.vulnEnabled(),
+        vuln_severities_override: this.configService.vulnSeveritiesString(),
+      })
       .subscribe({
         next: (job) => {
           this.jobs.update((jobs) => [job, ...jobs]);
@@ -599,34 +659,28 @@ export class StagingComponent implements OnInit, OnDestroy {
   }
 
   deleteJob(jobId: string) {
-    this.staging.deleteJob(jobId).subscribe({ next: () => this.loadJobs() });
+    this.staging.deleteJob(jobId).subscribe({
+      next: () => this.loadJobs(),
+    });
   }
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
 
   getStatusBadgeClass(status: string): string {
     const map: Record<string, string> = {
       pending: "badge bg-secondary-subtle text-secondary",
       pulling: "badge bg-info-subtle text-info",
       scanning: "badge bg-warning-subtle text-warning",
+      scan_skipped: "badge bg-secondary-subtle text-secondary",
       vuln_scanning: "badge bg-warning-subtle text-warning",
       scan_clean: "badge bg-success-subtle text-success",
-      scan_infected: "badge bg-danger text-white",
       scan_vulnerable: "badge bg-danger text-white",
+      scan_infected: "badge bg-danger text-white",
       pushing: "badge bg-primary-subtle text-primary",
       done: "badge bg-success text-white",
       failed: "badge bg-danger text-white",
     };
-    return map[status] ?? "badge bg-secondary";
-  }
-
-  getSevColor(sev: string): string {
-    const map: Record<string, string> = {
-      CRITICAL: "bg-danger",
-      HIGH: "bg-danger",
-      MEDIUM: "bg-warning text-dark",
-      LOW: "bg-info text-dark",
-      UNKNOWN: "bg-secondary",
-    };
-    return map[sev] ?? "bg-secondary";
+    return map[status] || "badge bg-secondary";
   }
 
   formatCount(n: number): string {

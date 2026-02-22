@@ -36,8 +36,8 @@ services:
       - DOCKERHUB_USERNAME=${DOCKERHUB_USERNAME:-}
       - DOCKERHUB_PASSWORD=${DOCKERHUB_PASSWORD:-}
       # ClamAV
-      - CLAMAV_HOST=clamav
-      - CLAMAV_PORT=3310
+      - CLAMAV_HOST=${CLAMAV_HOST:-clamav}
+      - CLAMAV_PORT=${CLAMAV_PORT:-3310}
       # Other
       - STAGING_DIR=/tmp/staging
       - ADVANCED_MODE=${ADVANCED_MODE:-false}
@@ -54,7 +54,6 @@ services:
       # - NO_PROXY=localhost,127.0.0.1,registry
       # - DOCKER_PULL_PROXY=http://proxy.corp:3128
     volumes:
-      # Mount Docker socket for image pull/push in staging
       - /var/run/docker.sock:/var/run/docker.sock
       - staging_data:/tmp/staging
     depends_on:
@@ -78,7 +77,6 @@ services:
     environment:
       - REGISTRY_STORAGE_DELETE_ENABLED=true
       - REGISTRY_HTTP_SECRET=${REGISTRY_HTTP_SECRET:-registry-secret}
-      # v3: disable OpenTelemetry tracing if no OTLP collector is available
       - OTEL_TRACES_EXPORTER=none
       - OTEL_METRICS_EXPORTER=none
       - OTEL_LOGS_EXPORTER=none
@@ -103,11 +101,14 @@ services:
   clamav:
     image: clamav/clamav:stable
     container_name: portalcrane-clamav
-    environment:
-      - CLAMAV_NO_FRESHCLAMD=false
+    # environment:
+    # - HTTP_PROXY=http://proxy.corp:3128
+    # - HTTPS_PROXY=http://proxy.corp:3128
     volumes:
       - clamav_data:/var/lib/clamav
     restart: unless-stopped
+    user: clamav
+    entrypoint: ["/init-unprivileged"]
     healthcheck:
       test: ["CMD", "clamdcheck.sh"]
       interval: 60s

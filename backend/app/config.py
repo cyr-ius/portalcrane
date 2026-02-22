@@ -66,7 +66,9 @@ class Settings(BaseSettings):
     # If empty, falls back to https_proxy / http_proxy.
     docker_pull_proxy: str = ""
 
-    # ClamAV configuration
+    # ── ClamAV configuration ──────────────────────────────────────────────────
+    # Set CLAMAV_ENABLED=false to skip ClamAV scanning entirely in the pipeline.
+    clamav_enabled: bool = True
     clamav_host: str = "localhost"
     clamav_port: int = 3310
 

@@ -3,7 +3,6 @@ Portalcrane - Docker Registry Management Application
 Main FastAPI application entry point
 """
 
-import logging
 import os
 from contextlib import asynccontextmanager
 
@@ -12,14 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from .routers import auth, dashboard, registry, registry_proxy, staging
-
-# ── Logging configuration ────────────────────────────────────────────────────
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(name)s %(message)s",
-)
-
-logging.getLogger("portalcrane.audit").setLevel(logging.INFO)
+from .routers.config_router import router as config_router
 
 
 @asynccontextmanager
@@ -29,6 +21,7 @@ async def lifespan(app: FastAPI):
     staging_dir = os.getenv("STAGING_DIR", "/tmp/staging")
     os.makedirs(staging_dir, exist_ok=True)
     yield
+    # Shutdown: cleanup if needed
 
 
 app = FastAPI(
@@ -52,6 +45,7 @@ app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(registry.router, prefix="/api/registry", tags=["Registry"])
 app.include_router(staging.router, prefix="/api/staging", tags=["Staging"])
 app.include_router(dashboard.router, prefix="/api/dashboard", tags=["Dashboard"])
+app.include_router(config_router, prefix="/api/config", tags=["Configuration"])
 app.include_router(
     registry_proxy.router, prefix="/registry-proxy", tags=["Registry Proxy"]
 )

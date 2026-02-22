@@ -1,32 +1,19 @@
-import { Injectable } from "@angular/core";
 import { HttpClient } from "@angular/common/http";
+import { Injectable } from "@angular/core";
 import { Observable } from "rxjs";
-import { VulnConfig } from "./vuln-config.service";
 
 export type JobStatus =
   | "pending"
   | "pulling"
   | "scanning"
-  | "vuln_scanning"
+  | "scan_skipped"
   | "scan_clean"
   | "scan_infected"
+  | "vuln_scanning"
   | "scan_vulnerable"
   | "pushing"
   | "done"
   | "failed";
-
-export interface VulnResult {
-  enabled: boolean;
-  blocked: boolean;
-  severities: string[];
-  counts: {
-    CRITICAL: number;
-    HIGH: number;
-    MEDIUM: number;
-    LOW: number;
-    UNKNOWN: number;
-  };
-}
 
 export interface StagingJob {
   job_id: string;
@@ -40,6 +27,17 @@ export interface StagingJob {
   target_image: string | null;
   target_tag: string | null;
   error: string | null;
+  // Overrides that were applied for this job (null = server default was used)
+  clamav_enabled_override: boolean | null;
+  vuln_scan_enabled_override: boolean | null;
+  vuln_severities_override: string | null;
+}
+
+export interface VulnResult {
+  enabled: boolean;
+  blocked: boolean;
+  severities: string[];
+  counts: Record<string, number>;
 }
 
 export interface DockerHubResult {
@@ -51,29 +49,23 @@ export interface DockerHubResult {
   is_automated: boolean;
 }
 
+export interface PullOptions {
+  image: string;
+  tag: string;
+  /** User-level overrides coming from Settings (null = use server default) */
+  clamav_enabled_override?: boolean | null;
+  vuln_scan_enabled_override?: boolean | null;
+  vuln_severities_override?: string | null;
+}
+
 @Injectable({ providedIn: "root" })
 export class StagingService {
   private readonly BASE = "/api/staging";
 
   constructor(private http: HttpClient) {}
 
-  pullImage(
-    image: string,
-    tag: string,
-    vulnConfig?: VulnConfig | null,
-  ): Observable<StagingJob> {
-    return this.http.post<StagingJob>(`${this.BASE}/pull`, {
-      image,
-      tag,
-      ...(vulnConfig !== undefined && vulnConfig !== null
-        ? {
-            vuln_scan_enabled: vulnConfig.enabled,
-            vuln_scan_severities: vulnConfig.severities,
-            vuln_ignore_unfixed: vulnConfig.ignore_unfixed,
-            vuln_scan_timeout: vulnConfig.timeout,
-          }
-        : {}),
-    });
+  pullImage(options: PullOptions): Observable<StagingJob> {
+    return this.http.post<StagingJob>(`${this.BASE}/pull`, options);
   }
 
   getJob(jobId: string): Observable<StagingJob> {
