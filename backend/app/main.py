@@ -3,6 +3,7 @@ Portalcrane - Docker Registry Management Application
 Main FastAPI application entry point
 """
 
+import logging
 import os
 from contextlib import asynccontextmanager
 
@@ -10,7 +11,15 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from .routers import auth, dashboard, registry, staging
+from .routers import auth, dashboard, registry, registry_proxy, staging
+
+# ── Logging configuration ────────────────────────────────────────────────────
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+)
+
+logging.getLogger("portalcrane.audit").setLevel(logging.INFO)
 
 
 @asynccontextmanager
@@ -20,7 +29,6 @@ async def lifespan(app: FastAPI):
     staging_dir = os.getenv("STAGING_DIR", "/tmp/staging")
     os.makedirs(staging_dir, exist_ok=True)
     yield
-    # Shutdown: cleanup if needed
 
 
 app = FastAPI(
@@ -44,17 +52,23 @@ app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(registry.router, prefix="/api/registry", tags=["Registry"])
 app.include_router(staging.router, prefix="/api/staging", tags=["Staging"])
 app.include_router(dashboard.router, prefix="/api/dashboard", tags=["Dashboard"])
-
-# Serve Angular frontend static files (production)
-if os.path.exists("/app/frontend/dist"):
-    app.mount(
-        "/",
-        StaticFiles(directory="/app/frontend/dist/portalcrane/browser", html=True),
-        name="frontend",
-    )
+app.include_router(
+    registry_proxy.router, prefix="/registry-proxy", tags=["Registry Proxy"]
+)
 
 
+# Health check
 @app.get("/api/health")
 async def health_check():
     """Health check endpoint."""
     return {"status": "healthy", "app": "Portalcrane"}
+
+
+# Serve Angular frontend static files (production)
+_FRONTEND_DIR = "/app/frontend/dist/portalcrane/browser"
+if os.path.exists(_FRONTEND_DIR):
+    app.mount(
+        "/",
+        StaticFiles(directory=_FRONTEND_DIR, html=True),
+        name="frontend",
+    )
