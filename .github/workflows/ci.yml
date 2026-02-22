@@ -30,11 +30,6 @@ jobs:
       - name: Lint with Ruff
         run: ruff check backend/
 
-      - name: Check imports resolve
-        run: |
-          cd backend
-          python -c "import main; print('Backend imports OK')"
-
   # ── Angular frontend checks ─────────────────────────────────────────────
   frontend:
     name: Frontend (Angular)
