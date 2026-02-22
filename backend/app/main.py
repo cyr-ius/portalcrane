@@ -109,8 +109,16 @@ if os.path.exists(_FRONTEND_DIR):
             except ValueError:
                 is_within_base = False
 
+        # Defense in depth: additionally enforce that the absolute candidate path
+        # has the absolute base path as a proper prefix (directory boundary aware).
+        if is_within_base:
+            base_str = str(base)
+            candidate_str = str(candidate)
+            if not base_str.endswith(os.sep):
+                base_str = base_str + os.sep
+            is_within_base = candidate_str.startswith(base_str)
+
         if is_within_base and candidate.is_file():
-            safe_path = str(candidate)
-            return FileResponse(safe_path)
+            return FileResponse(candidate)
         # Otherwise fall back to index.html (Angular will handle the route)
         return FileResponse(_INDEX_HTML)
