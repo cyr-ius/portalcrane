@@ -26,19 +26,13 @@ LABEL org.opencontainers.image.licenses="MIT"
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     ca-certificates \
-    clamav \
-    clamav-daemon \
     clamdscan \
-    wget \
-    gnupg \
     lsb-release \
     && curl -fsSL https://get.docker.com -o get-docker.sh \
     && sh get-docker.sh \
     && rm get-docker.sh \
-    && wget https://github.com/aquasecurity/trivy/releases/download/v0.69.1/trivy_0.69.1_Linux-64bit.deb \
-    && dpkg -i trivy_0.69.1_Linux-64bit.deb \
-    && apt-get update \
-    && apt-get install -y --no-install-recommends trivy \
+    && curl -fsSL https://github.com/aquasecurity/trivy/releases/download/v0.69.1/trivy_0.69.1_Linux-64bit.deb -o /tmp/trivy_0.69.1_Linux-64bit.deb\
+    && dpkg -i /tmp/trivy_0.69.1_Linux-64bit.deb \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -57,19 +51,6 @@ RUN mkdir -p /tmp/staging
 
 # Expose port
 EXPOSE 8080
-
-# Default environment variables
-ENV REGISTRY_URL=http://localhost:5000 \
-    ADMIN_USERNAME=admin \
-    ADMIN_PASSWORD=changeme \
-    CLAMAV_HOST=localhost \
-    CLAMAV_PORT=3310 \
-    STAGING_DIR=/tmp/staging \
-    ADVANCED_MODE=false \
-    VULN_SCAN_ENABLED=false \
-    VULN_SCAN_SEVERITIES=CRITICAL,HIGH \
-    VULN_IGNORE_UNFIXED=false \
-    VULN_SCAN_TIMEOUT=5m
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
