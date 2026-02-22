@@ -7,7 +7,7 @@ import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -22,8 +22,8 @@ from .routers import (
     staging,
 )
 
-_FRONTEND_DIR = "/app/frontend/dist/portalcrane/browser"
-_INDEX_HTML = os.path.join(_FRONTEND_DIR, "index.html")
+_FRONTEND_DIR = Path("/app/frontend/dist/portalcrane/browser").resolve()
+_INDEX_HTML = _FRONTEND_DIR / "index.html"
 
 
 @asynccontextmanager
@@ -72,16 +72,16 @@ async def health_check():
 
 
 # Serve Angular frontend static files (production)
-if os.path.exists(_FRONTEND_DIR):
+if _FRONTEND_DIR.exists():
     app.mount(
         "/assets",
-        StaticFiles(directory=os.path.join(_FRONTEND_DIR, "assets")),
+        StaticFiles(directory=str(_FRONTEND_DIR / "assets")),
         name="assets",
     )
     # Mount the full browser dir under a dedicated prefix for hashed chunks
     app.mount(
         "/static",
-        StaticFiles(directory=_FRONTEND_DIR),
+        StaticFiles(directory=str(_FRONTEND_DIR)),
         name="static",
     )
 
@@ -92,10 +92,23 @@ if os.path.exists(_FRONTEND_DIR):
         Angular's client-side router can handle navigation (SPA fallback).
         Static asset requests (js/css chunks) are handled by the mounts above
         and will never reach this handler.
+
+        Security: path traversal is prevented by resolving the candidate path
+        and asserting it stays within _FRONTEND_DIR before serving it.
         """
-        # If the requested file physically exists, serve it directly
-        candidate = Path(_FRONTEND_DIR) / full_path
+        # Resolve the candidate path to eliminate any ".." sequences
+        candidate = (_FRONTEND_DIR / full_path).resolve()
+
+        # Guard against path traversal: the resolved path must remain inside
+        # the frontend directory. is_relative_to() returns False for any path
+        # that escapes the root (e.g. /etc/passwd, ../../secret).
+        if not candidate.is_relative_to(_FRONTEND_DIR):
+            raise HTTPException(status_code=404, detail="Not found")
+
+        # Serve the file only if it physically exists; fall back to index.html
+        # so that Angular's client-side router can handle the navigation.
         if candidate.is_file():
             return FileResponse(candidate)
-        # Otherwise fall back to index.html (Angular will handle the route)
+
+        # Unknown paths are handled client-side by Angular
         return FileResponse(_INDEX_HTML)
