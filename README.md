@@ -6,7 +6,6 @@ with a staging pipeline including antivirus scanning.
 
 <img width="1263" height="725" alt="image" src="https://github.com/user-attachments/assets/caa4d5e3-99aa-4463-8c4d-d8382aa6622d" />
 
-
 ## Features
 
 - 🎨 Modern UI with light/dark/auto themes
@@ -79,9 +78,7 @@ ng serve
 - **Container**: Single Nginx + Uvicorn container
 
 ## Screenshots
+
 <img width="1167" height="827" alt="image" src="https://github.com/user-attachments/assets/db327776-d66d-4dc1-8900-29a53cb78d74" />
 
 <img width="1263" height="725" alt="image" src="https://github.com/user-attachments/assets/3d0401a9-7c73-4185-a569-7f847db0b704" />
-
-
-
