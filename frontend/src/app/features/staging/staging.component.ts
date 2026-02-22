@@ -116,7 +116,7 @@ export class StagingComponent implements OnInit, OnDestroy {
       next: (jobs) => this.jobs.set(StagingService.sortJobs(jobs)),
     });
   }
-  
+
   // ── Docker Hub ─────────────────────────────────────────────────────────────
 
   searchDockerHub() {
