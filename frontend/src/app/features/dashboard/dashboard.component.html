@@ -101,7 +101,7 @@
       </div>
     </div>
 
-    <!-- Registry info & Quick actions -->
+    <!-- Registry info & Quick Actions -->
     <div class="row g-3">
       <div class="col-lg-6">
         <div class="card border-0">
@@ -168,12 +168,17 @@
         </div>
       </div>
 
+      <!-- ── Quick Actions card (navigation shortcuts only) ── -->
       <div class="col-lg-6">
         <div class="card border-0">
           <div class="card-header border-0 pb-0">
-            <h6 class="fw-semibold mb-0">Quick Actions</h6>
+            <h6 class="fw-semibold mb-0">
+              <i class="bi bi-lightning-charge me-2 text-primary"></i>Quick
+              Actions
+            </h6>
           </div>
           <div class="card-body d-flex flex-column gap-2">
+            <!-- Navigate to the image browser -->
             <a
               routerLink="/images"
               class="btn btn-outline-primary d-flex align-items-center gap-2"
@@ -181,6 +186,7 @@
               <i class="bi bi-layers"></i>
               Browse Images
             </a>
+            <!-- Navigate to the staging pipeline to pull from Docker Hub -->
             <a
               routerLink="/staging"
               class="btn btn-outline-success d-flex align-items-center gap-2"
@@ -188,7 +194,19 @@
               <i class="bi bi-cloud-arrow-down"></i>
               Pull Image from Docker Hub
             </a>
+          </div>
+        </div>
+      </div>
 
+      <!-- ── Maintenance Actions card (housekeeping operations) ── -->
+      <div class="col-12">
+        <div class="card border-0">
+          <div class="card-header border-0 pb-0">
+            <h6 class="fw-semibold mb-0">
+              <i class="bi bi-tools me-2 text-warning"></i>Maintenance Actions
+            </h6>
+          </div>
+          <div class="card-body d-flex flex-column gap-2">
             <!-- ── Garbage Collect ── -->
             <div class="gc-panel rounded p-3 mt-1">
               <div
@@ -221,7 +239,7 @@
               </div>
 
               @if (gcStatus() && gcStatus()!.status !== "idle") {
-                <!-- Status badge -->
+                <!-- GC status badge -->
                 <div class="d-flex align-items-center gap-2 mb-2">
                   <span [class]="getGCBadgeClass(gcStatus()!.status)">
                     {{ gcStatus()!.status }}
@@ -242,14 +260,14 @@
                   }
                 </div>
 
-                <!-- Output log -->
+                <!-- GC output log -->
                 @if (gcStatus()!.output || gcStatus()!.error) {
                   <pre class="gc-output mb-0">{{
                     gcStatus()!.error || gcStatus()!.output
                   }}</pre>
                 }
 
-                <!-- Timestamps -->
+                <!-- GC timestamps -->
                 @if (gcStatus()!.finished_at) {
                   <div class="text-muted mt-1" style="font-size: 0.68rem">
                     Finished: {{ gcStatus()!.finished_at | date: "medium" }}
@@ -265,7 +283,8 @@
                   <div
                     class="fw-semibold small d-flex align-items-center gap-2"
                   >
-                    <i class="bi bi-ghost text-secondary"></i>
+                    <!-- Ghost icon added for consistency with the other actions -->
+                    <i class="bi bi-shadows text-secondary"></i>
                     Ghost Repositories
                     @if (ghostCount() > 0) {
                       <span class="badge bg-warning-subtle text-warning">{{
