@@ -93,9 +93,23 @@ if os.path.exists(_FRONTEND_DIR):
         Static asset requests (js/css chunks) are handled by the mounts above
         and will never reach this handler.
         """
-        # If the requested file physically exists, serve it directly
-        candidate = Path(_FRONTEND_DIR) / full_path
-        if candidate.is_file():
+        # If the requested file physically exists within the frontend dir, serve it directly
+        base = Path(_FRONTEND_DIR).resolve()
+        candidate = (base / full_path).resolve()
+
+        # Ensure the resolved candidate path is still inside the frontend directory
+        is_within_base = False
+        if hasattr(candidate, "is_relative_to"):
+            # Python 3.9+
+            is_within_base = candidate.is_relative_to(base)
+        else:
+            try:
+                candidate.relative_to(base)
+                is_within_base = True
+            except ValueError:
+                is_within_base = False
+
+        if is_within_base and candidate.is_file():
             return FileResponse(candidate)
         # Otherwise fall back to index.html (Angular will handle the route)
         return FileResponse(_INDEX_HTML)
