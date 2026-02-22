@@ -20,6 +20,8 @@ from .routers import (
     staging,
 )
 
+_FRONTEND_DIR = "/app/frontend/dist/portalcrane/browser"
+_INDEX_HTML = os.path.join(_FRONTEND_DIR, "index.html")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -67,10 +69,30 @@ async def health_check():
 
 
 # Serve Angular frontend static files (production)
-_FRONTEND_DIR = "/app/frontend/dist/portalcrane/browser"
 if os.path.exists(_FRONTEND_DIR):
     app.mount(
-        "/",
-        StaticFiles(directory=_FRONTEND_DIR, html=True),
-        name="frontend",
+        "/assets",
+        StaticFiles(directory=os.path.join(_FRONTEND_DIR, "assets")),
+        name="assets",
     )
+    # Mount the full browser dir under a dedicated prefix for hashed chunks
+    app.mount(
+        "/static",
+        StaticFiles(directory=_FRONTEND_DIR),
+        name="static",
+    )
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def serve_spa(full_path: str) -> FileResponse:
+        """
+        Catch-all route: serve index.html for any unknown path so that
+        Angular's client-side router can handle navigation (SPA fallback).
+        Static asset requests (js/css chunks) are handled by the mounts above
+        and will never reach this handler.
+        """
+        # If the requested file physically exists, serve it directly
+        candidate = Path(_FRONTEND_DIR) / full_path
+        if candidate.is_file():
+            return FileResponse(candidate)
+        # Otherwise fall back to index.html (Angular will handle the route)
+        return FileResponse(_INDEX_HTML)
