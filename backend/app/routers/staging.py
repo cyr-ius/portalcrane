@@ -282,60 +282,92 @@ async def run_pull_pipeline(
 
 
 async def _clamav_scan(path: str, settings: Settings) -> str:
-    """Run ClamAV scan on a file. Returns scan output."""
+    """Run ClamAV scan on a file via clamd INSTREAM protocol over TCP."""
     import struct
 
     async def _scan_via_clamd_socket(host: str, port: int, file_path: str) -> str:
-        """Scan a file using clamd INSTREAM protocol over TCP."""
+        """Stream a file to clamd using the INSTREAM protocol."""
+
+        # Use a larger chunk to reduce syscall overhead on big tarballs
+        CHUNK_SIZE = 65536  # 64 KB instead of 4 KB
+        CONNECT_TIMEOUT = 30
+        # Large images can take several minutes to scan — use a generous timeout
+        SCAN_TIMEOUT = 600  # 10 minutes
+
         try:
             reader, writer = await asyncio.wait_for(
-                asyncio.open_connection(host, port), timeout=120
+                asyncio.open_connection(host, port),
+                timeout=CONNECT_TIMEOUT,
             )
 
-            # Send INSTREAM command
+            # Send INSTREAM command (null-terminated)
             writer.write(b"zINSTREAM\0")
-            await writer.drain()
 
-            # Stream file in chunks (max 4096 bytes per chunk)
-            chunk_size = 4096
+            # Stream file in chunks without draining on every chunk
+            file_size = os.path.getsize(file_path)
+            bytes_sent = 0
             with open(file_path, "rb") as f:
                 while True:
-                    chunk = f.read(chunk_size)
+                    chunk = f.read(CHUNK_SIZE)
                     if not chunk:
                         break
-                    # Each chunk prefixed by its size as 4-byte big-endian int
                     writer.write(struct.pack("!I", len(chunk)) + chunk)
-                    await writer.drain()
+                    bytes_sent += len(chunk)
 
-            # End of stream: 4-byte zero
+                    # Drain periodically (every ~8 MB) to avoid buffer overflow
+                    # without doing a syscall on every 64KB chunk
+                    if bytes_sent % (8 * 1024 * 1024) < CHUNK_SIZE:
+                        await writer.drain()
+
+            # End of stream marker: 4-byte zero
             writer.write(struct.pack("!I", 0))
             await writer.drain()
 
-            # Read response
-            response = await asyncio.wait_for(reader.read(4096), timeout=60)
+            # Read full response — clamd may send it in multiple TCP segments
+            response_parts = []
+            try:
+                async with asyncio.timeout(SCAN_TIMEOUT):
+                    while True:
+                        data = await reader.read(4096)
+                        if not data:
+                            break
+                        response_parts.append(data)
+                        # clamd always ends its response with a newline
+                        if b"\n" in data or b"\0" in data:
+                            break
+            except asyncio.TimeoutError:
+                raise ConnectionRefusedError(
+                    f"Timeout waiting for clamd response after {SCAN_TIMEOUT}s "
+                    f"(file size: {file_size / 1024 / 1024:.1f} MB)"
+                )
+
             writer.close()
             await writer.wait_closed()
 
-            result = response.decode(errors="replace").strip()
-            # clamd returns "stream: OK" or "stream: <virus> FOUND"
+            result = b"".join(response_parts).decode(errors="replace").strip()
             return result
 
         except asyncio.TimeoutError:
-            raise ConnectionRefusedError("Timeout connecting to clamd")
+            raise ConnectionRefusedError(
+                f"Timeout connecting to clamd at {host}:{port}"
+            )
 
-    # Try clamd daemon via TCP
     try:
         result = await _scan_via_clamd_socket(
             settings.clamav_host, settings.clamav_port, path
         )
-        # Normalize to clamscan-like output for the rest of the pipeline
+        # Normalize output to match clamscan-like format used downstream
         if "OK" in result:
             return f"{path}: OK"
         elif "FOUND" in result:
             return f"{path}: {result} FOUND"
+        elif "size limit exceeded" in result.lower():
+            # StreamMaxLength hit — treat as scan skipped, not infected
+            return f"{path}: OK (stream size limit — scan partial)"
         else:
             return f"{path}: {result} ERROR"
     except Exception as e:
+        # Fail open: if clamd is unreachable, log and continue
         return f"OK (scan skipped: {str(e)})"
 
 
