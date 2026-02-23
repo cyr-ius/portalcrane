@@ -167,7 +167,7 @@ async def get_oidc_config(settings: Settings = Depends(get_settings)):
     # Fetch OIDC discovery document
     authorization_endpoint = ""
     try:
-        proxy = settings.httpx_proxy.get("https://") or None
+        proxy = settings.httpx_proxy
         async with httpx.AsyncClient(proxy=proxy) as client:
             response = await client.get(
                 f"{settings.oidc_issuer}/.well-known/openid-configuration",
