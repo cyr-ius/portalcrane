@@ -1,7 +1,7 @@
-import { Injectable, signal, computed } from "@angular/core";
 import { HttpClient } from "@angular/common/http";
+import { computed, Injectable, signal } from "@angular/core";
 import { Router } from "@angular/router";
-import { tap, catchError, of } from "rxjs";
+import { tap } from "rxjs";
 
 export interface LoginResponse {
   access_token: string;
@@ -76,11 +76,15 @@ export class AuthService {
       );
   }
 
-  logout() {
+  clearSession() {
     this._token.set(null);
     this._user.set(null);
     localStorage.removeItem(this.TOKEN_KEY);
     localStorage.removeItem(this.USER_KEY);
+  }
+
+  logout() {
+    this.clearSession();
     this.router.navigate(["/auth"]);
   }
 

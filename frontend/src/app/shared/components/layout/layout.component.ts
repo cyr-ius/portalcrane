@@ -2,13 +2,19 @@ import { Component, inject, OnDestroy, OnInit, signal } from "@angular/core";
 import { RouterLink, RouterLinkActive, RouterOutlet } from "@angular/router";
 import { AuthService } from "../../../core/services/auth.service";
 import { ThemeService } from "../../../core/services/theme.service";
+import { SessionExpiredModalComponent } from "../session-expired-modal/session-expired-modal.component";
 
 // Breakpoint below which the sidebar auto-collapses (matches Bootstrap 'lg')
 const COLLAPSE_BREAKPOINT = 992;
 
 @Component({
   selector: "app-layout",
-  imports: [RouterOutlet, RouterLink, RouterLinkActive],
+  imports: [
+    RouterOutlet,
+    RouterLink,
+    RouterLinkActive,
+    SessionExpiredModalComponent,
+  ],
   templateUrl: "./layout.component.html",
   styleUrl: "./layout.component.css",
 })
