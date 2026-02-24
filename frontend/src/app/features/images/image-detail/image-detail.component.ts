@@ -1,4 +1,3 @@
-import { CommonModule } from "@angular/common";
 import { Component, inject, input, OnInit, signal } from "@angular/core";
 import { FormsModule } from "@angular/forms";
 import { RouterLink } from "@angular/router";
@@ -9,7 +8,7 @@ import {
 
 @Component({
   selector: "app-image-detail",
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [FormsModule, RouterLink],
   templateUrl: "./image-detail.component.html",
   styleUrl: "./image-detail.component.css",
 })

@@ -1,4 +1,3 @@
-import { CommonModule } from "@angular/common";
 import { Component, inject, OnInit } from "@angular/core";
 import { AboutService } from "../../core/services/about.service";
 import {
@@ -45,7 +44,7 @@ const SEVERITY_STYLE: Record<
 
 @Component({
   selector: "app-settings",
-  imports: [CommonModule, VulnConfigPanelComponent, ClamAvConfigPanelComponent],
+  imports: [VulnConfigPanelComponent, ClamAvConfigPanelComponent],
   templateUrl: "./settings.component.html",
   styleUrl: "./settings.component.css",
 })
@@ -53,8 +52,6 @@ export class SettingsComponent implements OnInit {
   themeService = inject(ThemeService);
   authService = inject(AuthService);
   configService = inject(AppConfigService);
-
-  /** Service exposing application metadata and GitHub version check. */
   aboutService = inject(AboutService);
 
   /** Ordered list of severity levels exposed to the template. */

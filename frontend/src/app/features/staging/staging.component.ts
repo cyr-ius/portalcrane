@@ -1,4 +1,3 @@
-import { CommonModule } from "@angular/common";
 import {
   Component,
   computed,
@@ -20,7 +19,7 @@ import {
 
 @Component({
   selector: "app-staging",
-  imports: [CommonModule, FormsModule],
+  imports: [FormsModule],
   templateUrl: "./staging.component.html",
   styleUrl: "./staging.component.css",
 })

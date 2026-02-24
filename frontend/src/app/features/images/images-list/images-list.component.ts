@@ -1,4 +1,3 @@
-import { CommonModule } from "@angular/common";
 import { Component, computed, inject, OnInit, signal } from "@angular/core";
 import { FormsModule } from "@angular/forms";
 import { RouterLink } from "@angular/router";
@@ -19,7 +18,7 @@ type TagFilter = "all" | "single" | "multi";
 
 @Component({
   selector: "app-images-list",
-  imports: [CommonModule, RouterLink, FormsModule],
+  imports: [RouterLink, FormsModule],
   templateUrl: "./images-list.component.html",
   styleUrl: "./images-list.component.css",
 })

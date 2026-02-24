@@ -1,4 +1,3 @@
-import { CommonModule } from "@angular/common";
 import { Component, inject } from "@angular/core";
 import {
   AppConfigService,
@@ -9,7 +8,7 @@ import {
 
 @Component({
   selector: "app-vuln-config-panel",
-  imports: [CommonModule],
+  imports: [],
   templateUrl: "./vuln-config-panel.component.html",
   styleUrl: "./vuln-config-panel.component.css",
 })

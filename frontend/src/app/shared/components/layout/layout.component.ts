@@ -1,12 +1,4 @@
-import { CommonModule } from "@angular/common";
-import {
-  Component,
-  effect,
-  inject,
-  OnDestroy,
-  OnInit,
-  signal,
-} from "@angular/core";
+import { Component, inject, OnDestroy, OnInit, signal } from "@angular/core";
 import { RouterLink, RouterLinkActive, RouterOutlet } from "@angular/router";
 import { AuthService } from "../../../core/services/auth.service";
 import { ThemeService } from "../../../core/services/theme.service";
@@ -16,7 +8,7 @@ const COLLAPSE_BREAKPOINT = 992;
 
 @Component({
   selector: "app-layout",
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, CommonModule],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive],
   templateUrl: "./layout.component.html",
   styleUrl: "./layout.component.css",
 })

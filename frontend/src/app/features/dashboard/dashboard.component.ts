@@ -1,4 +1,4 @@
-import { CommonModule } from "@angular/common";
+import { DatePipe, SlicePipe } from "@angular/common";
 import { Component, inject, OnDestroy, OnInit, signal } from "@angular/core";
 import { RouterLink } from "@angular/router";
 import { AppConfigService } from "../../core/services/app-config.service";
@@ -14,7 +14,7 @@ import { StagingService } from "../../core/services/staging.service";
 
 @Component({
   selector: "app-dashboard",
-  imports: [CommonModule, RouterLink],
+  imports: [SlicePipe, DatePipe, RouterLink],
   templateUrl: "./dashboard.component.html",
   styleUrl: "./dashboard.component.css",
 })
