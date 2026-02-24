@@ -199,7 +199,7 @@ async def oidc_callback(
 
     # Exchange authorization code for tokens
     try:
-        proxy = settings.httpx_proxy.get("https://") or None
+        proxy = settings.httpx_proxy
         async with httpx.AsyncClient(proxy=proxy) as client:
             # Get token endpoint from discovery
             discovery_response = await client.get(
