@@ -5,28 +5,18 @@ Provides application metadata: current version, latest GitHub release, author an
 
 import httpx
 from fastapi import APIRouter, Depends
+from pydantic import BaseModel
 
-from ..config import Settings, get_settings
-
-router = APIRouter()
-
-# ── Constants ─────────────────────────────────────────────────────────────────
-
-# GitHub repository coordinates (owner/repo)
-GITHUB_OWNER = "cyr-ius"
-GITHUB_REPO = "portalcrane"
-
-# Application metadata shown in the Settings page
-APP_AUTHOR = "cyr-ius"
-APP_AI_GENERATOR = "Claude (Anthropic)"
-
-# GitHub API endpoint to fetch the latest published release
-GITHUB_LATEST_RELEASE_URL = (
-    f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/releases/latest"
+from ..config import (
+    APP_AI_GENERATOR,
+    APP_AUTHOR,
+    GITHUB_LATEST_RELEASE_URL,
+    GITHUB_REPO_URL,
+    Settings,
+    get_settings,
 )
 
-# GitHub repository HTML URL displayed as a clickable link in the UI
-GITHUB_REPO_URL = f"https://github.com/{GITHUB_OWNER}/{GITHUB_REPO}"
+router = APIRouter()
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -37,10 +27,20 @@ def _strip_v(tag: str) -> str:
     return tag.lstrip("v")
 
 
+class AboutResponse(BaseModel):
+    current_version: str
+    latest_version: str | None
+    update_available: bool
+    author: str
+    ai_generator: str
+    github_url: str
+    github_error: str | None
+
+
 # ── Endpoint ──────────────────────────────────────────────────────────────────
 
 
-@router.get("/about")
+@router.get("/about", response_model=AboutResponse)
 async def get_about(settings: Settings = Depends(get_settings)) -> dict:
     """
     Return application metadata and check GitHub for a newer release.
@@ -63,7 +63,9 @@ async def get_about(settings: Settings = Depends(get_settings)) -> dict:
     # ── Query the GitHub Releases API ─────────────────────────────────────────
     proxy = getattr(settings, "httpx_proxy", None)
     try:
-        async with httpx.AsyncClient(proxy=proxy, timeout=10) as client:
+        async with httpx.AsyncClient(
+            proxy=proxy, timeout=settings.httpx_timeout
+        ) as client:
             resp = await client.get(
                 GITHUB_LATEST_RELEASE_URL,
                 headers={"Accept": "application/vnd.github+json"},
