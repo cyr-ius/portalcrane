@@ -1,5 +1,5 @@
 import { HttpClient } from "@angular/common/http";
-import { computed, Injectable, signal } from "@angular/core";
+import { computed, inject, Injectable, signal } from "@angular/core";
 import { Router } from "@angular/router";
 import { tap } from "rxjs";
 
@@ -24,6 +24,9 @@ export interface OidcConfig {
 
 @Injectable({ providedIn: "root" })
 export class AuthService {
+  private http = inject(HttpClient);
+  private router = inject(Router);
+
   private readonly TOKEN_KEY = "pc_token";
   private readonly USER_KEY = "pc_user";
 
@@ -35,11 +38,6 @@ export class AuthService {
 
   readonly isAuthenticated = computed(() => !!this._token());
   readonly currentUser = this._user.asReadonly();
-
-  constructor(
-    private http: HttpClient,
-    private router: Router,
-  ) {}
 
   login(username: string, password: string) {
     return this.http

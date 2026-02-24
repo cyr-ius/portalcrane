@@ -209,7 +209,10 @@
         </svg>
         <div>
           <div class="fw-bold fs-5">Portalcrane</div>
-          <div class="text-muted small">Docker Registry Manager v1.0.0</div>
+          <div class="text-muted small">
+            Docker Registry Manager
+            {{ aboutService.info()?.current_version ?? "v1.0.0" }}
+          </div>
         </div>
       </div>
       <p class="text-muted small mb-2">

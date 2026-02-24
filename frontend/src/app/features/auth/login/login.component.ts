@@ -1,6 +1,6 @@
 import { SlicePipe } from "@angular/common";
 import { Component, inject, signal } from "@angular/core";
-import { FormBuilder, ReactiveFormsModule } from "@angular/forms";
+import { ReactiveFormsModule } from "@angular/forms";
 import { form, FormField, required, submit } from "@angular/forms/signals";
 import { Router } from "@angular/router";
 import { firstValueFrom } from "rxjs";
@@ -16,13 +16,7 @@ import { ThemeService } from "../../../core/services/theme.service";
 export class LoginComponent {
   private auth = inject(AuthService);
   private router = inject(Router);
-  private fb = inject(FormBuilder);
   themeService = inject(ThemeService);
-
-  // loginForm = this.fb.group({
-  //   username: ["", Validators.required],
-  //   password: ["", Validators.required],
-  // });
 
   loginModel = signal({ username: "", password: "" });
   loginForm = form(this.loginModel, (p) => ({
@@ -44,7 +38,6 @@ export class LoginComponent {
   onSubmit(event: Event) {
     event.preventDefault();
 
-    // if (this.loginForm.invalid) return;
     this.loading.set(true);
     this.error.set("");
 
@@ -58,15 +51,6 @@ export class LoginComponent {
         this.loading.set(false);
       }
     });
-
-    // const { username, password } = this.loginForm.value;
-    // this.auth.login(username!, password!).subscribe({
-    //   next: () => this.router.navigate(["/"]),
-    //   error: (err) => {
-    //     this.error.set(err.error?.detail || "Authentication failed");
-    //     this.loading.set(false);
-    //   },
-    // });
   }
 
   loginWithOidc() {
