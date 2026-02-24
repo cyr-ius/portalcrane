@@ -31,7 +31,10 @@ export class AuthService {
   private readonly USER_KEY = "pc_user";
 
   // Signals
-  private _token = signal<string | null>(localStorage.getItem(this.TOKEN_KEY));
+  private _token = signal<string | null>(
+    typeof window !== "undefined" ? localStorage.getItem(this.TOKEN_KEY) : null,
+  );
+
   private _user = signal<UserInfo | null>(
     JSON.parse(localStorage.getItem(this.USER_KEY) || "null"),
   );
