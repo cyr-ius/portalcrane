@@ -1,12 +1,14 @@
 import {
   Component,
   computed,
+  DestroyRef,
   inject,
-  OnDestroy,
   OnInit,
   signal,
 } from "@angular/core";
+import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { FormsModule } from "@angular/forms";
+import { filter, switchMap, timer } from "rxjs";
 import {
   AppConfigService,
   ClamAVStatus,
@@ -17,14 +19,24 @@ import {
   StagingService,
 } from "../../core/services/staging.service";
 
+/** Job statuses that indicate an active pipeline step */
+const ACTIVE_STATUSES = new Set([
+  "pending",
+  "pulling",
+  "scanning",
+  "vuln_scanning",
+  "pushing",
+]);
+
 @Component({
   selector: "app-staging",
   imports: [FormsModule],
   templateUrl: "./staging.component.html",
   styleUrl: "./staging.component.css",
 })
-export class StagingComponent implements OnInit, OnDestroy {
+export class StagingComponent implements OnInit {
   private staging = inject(StagingService);
+  private destroyRef = inject(DestroyRef);
   readonly configService = inject(AppConfigService);
 
   // ── Core state ─────────────────────────────────────────────────────────────
@@ -37,36 +49,50 @@ export class StagingComponent implements OnInit, OnDestroy {
   pulling = signal(false);
   pushing = signal<string | null>(null);
   availableTags = signal<string[]>([]);
-  pushTargets: Record<string, string> = {};
+  pushTargets = signal<Record<string, string>>({});
 
   // ── ClamAV live indicator ──────────────────────────────────────────────────
   clamavStatus = signal<ClamAVStatus | null>(null);
   clamavLoading = signal(false);
 
-  private refreshInterval: ReturnType<typeof setInterval> | null = null;
-  private clamavInterval: ReturnType<typeof setInterval> | null = null;
-
   ngOnInit() {
     this.loadJobs();
     this.refreshClamAVStatus();
-
-    // Auto-refresh active jobs every 3 s
-    this.refreshInterval = setInterval(() => {
-      const active = this.jobs().filter((j) =>
-        ["pending", "pulling", "scanning", "vuln_scanning", "pushing"].includes(
-          j.status,
-        ),
-      );
-      if (active.length > 0) this.loadJobs();
-    }, 3000);
-
-    // Refresh ClamAV status every 30 s
-    this.clamavInterval = setInterval(() => this.refreshClamAVStatus(), 30_000);
+    this.startJobsAutoRefresh();
+    this.startClamAVAutoRefresh();
   }
 
-  ngOnDestroy() {
-    if (this.refreshInterval) clearInterval(this.refreshInterval);
-    if (this.clamavInterval) clearInterval(this.clamavInterval);
+  // ── Auto-refresh: active jobs every 3 s ───────────────────────────────────
+
+  /**
+   * Polls the job list every 3 s, but only when at least one job is active.
+   * Uses takeUntilDestroyed so no manual cleanup is needed.
+   */
+  private startJobsAutoRefresh(): void {
+    timer(3000, 3000)
+      .pipe(
+        filter(() => this.jobs().some((j) => ACTIVE_STATUSES.has(j.status))),
+        switchMap(() => this.staging.listJobs()),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe((jobs) => this.jobs.set(StagingService.sortJobs(jobs)));
+  }
+
+  // ── Auto-refresh: ClamAV status every 30 s ────────────────────────────────
+
+  /**
+   * Polls ClamAV reachability every 30 s automatically.
+   * Uses takeUntilDestroyed so no manual cleanup is needed.
+   */
+  private startClamAVAutoRefresh(): void {
+    timer(30_000, 30_000)
+      .pipe(
+        switchMap(() => this.configService.getClamAVStatus()),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe({
+        next: (s) => this.clamavStatus.set(s),
+      });
   }
 
   // ── ClamAV indicator ───────────────────────────────────────────────────────
@@ -184,8 +210,8 @@ export class StagingComponent implements OnInit, OnDestroy {
 
   pushImage(job: StagingJob) {
     this.pushing.set(job.job_id);
-    const targetImage = this.pushTargets[job.job_id + "_img"] || undefined;
-    const targetTag = this.pushTargets[job.job_id + "_tag"] || undefined;
+    const targetImage = this.pushTargets()[job.job_id + "_img"] || undefined;
+    const targetTag = this.pushTargets()[job.job_id + "_tag"] || undefined;
     this.staging.pushImage(job.job_id, targetImage, targetTag).subscribe({
       next: () => {
         this.pushing.set(null);

@@ -451,7 +451,7 @@
                             type="text"
                             class="form-control form-control-sm"
                             placeholder="Target image (optional)"
-                            [(ngModel)]="pushTargets[job.job_id + '_img']"
+                            [(ngModel)]="pushTargets()[job.job_id + '_img']"
                           />
                         </div>
                         <div class="col-auto">
@@ -460,7 +460,7 @@
                             class="form-control form-control-sm"
                             placeholder="tag (optional)"
                             style="width: 110px"
-                            [(ngModel)]="pushTargets[job.job_id + '_tag']"
+                            [(ngModel)]="pushTargets()[job.job_id + '_tag']"
                           />
                         </div>
                       </div>
