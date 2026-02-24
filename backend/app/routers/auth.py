@@ -171,7 +171,7 @@ async def get_oidc_config(settings: Settings = Depends(get_settings)):
         async with httpx.AsyncClient(proxy=proxy) as client:
             response = await client.get(
                 f"{settings.oidc_issuer}/.well-known/openid-configuration",
-                timeout=5.0,
+                timeout=settings.httpx_timeout,
             )
             if response.status_code == 200:
                 discovery = response.json()

@@ -86,6 +86,10 @@ class Settings(BaseSettings):
     # Logging level (DEBUG, INFO, WARNING, ERROR)
     log_level: str = "INFO"
 
+    # HTTP client timeout for GitHub API calls (in seconds)
+    httpx_timeout: float = 10.0  # seconds
+    proxy_timeout: float = 300.0  # seconds
+
     # Docker Hub API v2 endpoint (for search/tags).
     dockerhub_api_url: str = "https://hub.docker.com/v2"
 

@@ -19,6 +19,7 @@ class RegistryService:
         if settings.registry_username and settings.registry_password:
             self.auth = (settings.registry_username, settings.registry_password)
         self._proxies = settings.httpx_proxy
+        self._timeout = settings.proxy_timeout
 
     def _client(self) -> httpx.AsyncClient:
         """Create authenticated async HTTP client."""
@@ -28,7 +29,7 @@ class RegistryService:
         return httpx.AsyncClient(
             auth=self.auth,
             headers=headers,
-            timeout=30.0,
+            timeout=self._timeout,
             follow_redirects=True,
             # No proxy for registry — it runs on the internal network
         )
