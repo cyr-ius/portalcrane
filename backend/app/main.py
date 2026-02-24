@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from .config import get_settings
 from .routers import (
     about,
     auth,
@@ -30,8 +31,8 @@ _INDEX_HTML = _FRONTEND_DIR / "index.html"
 async def lifespan(app: FastAPI):
     """Application lifespan manager - startup and shutdown events."""
     # Startup: ensure staging directory exists
-    staging_dir = os.getenv("STAGING_DIR", "/tmp/staging")
-    os.makedirs(staging_dir, exist_ok=True)
+    settings = get_settings()
+    os.makedirs(settings.staging_dir, exist_ok=True)
     yield
     # Shutdown: cleanup if needed
 
