@@ -3,9 +3,9 @@ Portalcrane - Application Configuration
 All settings loaded from environment variables
 """
 
-import secrets
 from functools import lru_cache
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings
 
 
@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     admin_password: str = "changeme"
 
     # JWT configuration
-    secret_key: str = secrets.token_hex(32)
+    secret_key: str = "change-this-secret-key-in-production"
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 480  # 8 hours
 
@@ -67,7 +67,6 @@ class Settings(BaseSettings):
     docker_pull_proxy: str = ""
 
     # ── ClamAV configuration ──────────────────────────────────────────────────
-    # Set CLAMAV_ENABLED=false to skip ClamAV scanning entirely in the pipeline.
     clamav_enabled: bool = True
     clamav_host: str = "localhost"
     clamav_port: int = 3310
@@ -90,9 +89,7 @@ class Settings(BaseSettings):
     # Docker Hub API v2 endpoint (for search/tags).
     dockerhub_api_url: str = "https://hub.docker.com/v2"
 
-    # Application version exposed via GET /api/about for GitHub update checks.
-    # Override with the APP_VERSION environment variable at container startup.
-    # The Dockerfile / CI pipeline should set this to the git tag (e.g. "1.2.3").
+    # Application version. Automatically set during build, can be overridden via env for testing.
     app_version: str = "1.0.0"
 
     class Config:
@@ -135,6 +132,15 @@ class Settings(BaseSettings):
         return [
             s.strip().upper() for s in self.vuln_scan_severities.split(",") if s.strip()
         ]
+
+    @model_validator(mode="after")
+    def check_secret_key(self) -> "Settings":
+        if (
+            not self.secret_key
+            or self.secret_key == "change-this-secret-key-in-production"
+        ):
+            raise ValueError("SECRET_KEY environment variable must be set")
+        return self
 
 
 @lru_cache()
