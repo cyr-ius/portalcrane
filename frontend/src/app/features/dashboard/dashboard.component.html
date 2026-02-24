@@ -412,10 +412,11 @@
                 </div>
 
                 <!-- GC output log -->
-                @if (gcStatus()!.output || gcStatus()!.error) {
-                  <pre class="gc-output mb-0">{{
-                    gcStatus()!.error || gcStatus()!.output
-                  }}</pre>
+                @if (gcStatus()!.error) {
+                  <pre class="gc-output mb-0">{{ gcStatus()!.error }}</pre>
+                }
+                @if (gcStatus()!.output) {
+                  <pre class="gc-output mb-0">{{ gcStatus()!.output }}</pre>
                 }
 
                 <!-- GC timestamps -->
