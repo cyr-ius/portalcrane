@@ -180,7 +180,7 @@
       }
 
       <!-- Local Login Form -->
-      <form [formGroup]="loginForm" (ngSubmit)="onSubmit()">
+      <form (submit)="onSubmit($event)">
         <div class="mb-3">
           <label class="form-label fw-semibold small">Username</label>
           <div class="input-group">
@@ -190,9 +190,9 @@
             <input
               type="text"
               class="form-control"
-              formControlName="username"
               placeholder="admin"
               autocomplete="username"
+              [formField]="loginForm.username"
             />
           </div>
         </div>
@@ -206,7 +206,7 @@
             <input
               [type]="showPassword() ? 'text' : 'password'"
               class="form-control"
-              formControlName="password"
+              [formField]="loginForm.password"
               placeholder="••••••••"
               autocomplete="current-password"
             />
@@ -233,7 +233,7 @@
         <button
           type="submit"
           class="btn btn-primary w-100 d-flex align-items-center justify-content-center gap-2"
-          [disabled]="loading() || loginForm.invalid"
+          [disabled]="loading() || loginForm().invalid()"
         >
           @if (loading()) {
             <span class="spinner-border spinner-border-sm"></span>

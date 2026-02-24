@@ -1,13 +1,15 @@
-import { CommonModule } from "@angular/common";
+import { SlicePipe } from "@angular/common";
 import { Component, inject, signal } from "@angular/core";
-import { FormBuilder, ReactiveFormsModule, Validators } from "@angular/forms";
+import { FormBuilder, ReactiveFormsModule } from "@angular/forms";
+import { form, FormField, required, submit } from "@angular/forms/signals";
 import { Router } from "@angular/router";
+import { firstValueFrom } from "rxjs";
 import { AuthService, OidcConfig } from "../../../core/services/auth.service";
 import { ThemeService } from "../../../core/services/theme.service";
 
 @Component({
   selector: "app-login",
-  imports: [CommonModule, ReactiveFormsModule],
+  imports: [SlicePipe, ReactiveFormsModule, FormField],
   templateUrl: "./login.component.html",
   styleUrl: "./login.component.css",
 })
@@ -17,10 +19,16 @@ export class LoginComponent {
   private fb = inject(FormBuilder);
   themeService = inject(ThemeService);
 
-  loginForm = this.fb.group({
-    username: ["", Validators.required],
-    password: ["", Validators.required],
-  });
+  // loginForm = this.fb.group({
+  //   username: ["", Validators.required],
+  //   password: ["", Validators.required],
+  // });
+
+  loginModel = signal({ username: "", password: "" });
+  loginForm = form(this.loginModel, (p) => ({
+    username: [required(p.username)],
+    password: [required(p.password)],
+  }));
 
   loading = signal(false);
   error = signal("");
@@ -33,19 +41,32 @@ export class LoginComponent {
     });
   }
 
-  onSubmit() {
-    if (this.loginForm.invalid) return;
+  onSubmit(event: Event) {
+    event.preventDefault();
+
+    // if (this.loginForm.invalid) return;
     this.loading.set(true);
     this.error.set("");
 
-    const { username, password } = this.loginForm.value;
-    this.auth.login(username!, password!).subscribe({
-      next: () => this.router.navigate(["/"]),
-      error: (err) => {
+    submit(this.loginForm, async (form) => {
+      const { username, password } = form().value();
+      try {
+        await firstValueFrom(this.auth.login(username!, password!));
+        this.router.navigate(["/"]);
+      } catch (err: any) {
         this.error.set(err.error?.detail || "Authentication failed");
         this.loading.set(false);
-      },
+      }
     });
+
+    // const { username, password } = this.loginForm.value;
+    // this.auth.login(username!, password!).subscribe({
+    //   next: () => this.router.navigate(["/"]),
+    //   error: (err) => {
+    //     this.error.set(err.error?.detail || "Authentication failed");
+    //     this.loading.set(false);
+    //   },
+    // });
   }
 
   loginWithOidc() {
