@@ -36,7 +36,7 @@ import logging
 import time
 
 import httpx
-from fastapi import APIRouter, Request, Response
+from fastapi import APIRouter, Request, Response, status
 
 from ..config import get_settings
 from ..services.audit_service import AuditService
@@ -105,14 +105,14 @@ async def _proxy(request: Request, v2_path: str) -> Response:
         logger.error("Registry unreachable at %s: %s", upstream_url, exc)
         return Response(
             content=json.dumps({"detail": "Registry unreachable", "error": str(exc)}),
-            status_code=503,
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             media_type="application/json",
         )
     except httpx.TimeoutException as exc:
         logger.error("Registry request timed out: %s", exc)
         return Response(
             content=json.dumps({"detail": "Registry request timed out"}),
-            status_code=504,
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
             media_type="application/json",
         )
 

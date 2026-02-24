@@ -8,7 +8,7 @@ import re
 import shutil
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 
 from ..config import Settings, get_settings
@@ -162,7 +162,9 @@ async def get_tag_detail(
     """Get detailed information about a specific image tag (advanced mode)."""
     manifest = await registry.get_manifest(repository, tag)
     if not manifest:
-        raise HTTPException(status_code=404, detail="Tag not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Tag not found"
+        )
 
     config_digest = manifest.get("config", {}).get("digest", "")
     config = {}
@@ -206,7 +208,10 @@ async def delete_tag(
     """Delete a specific tag from an image repository."""
     success = await registry.delete_tag(repository, tag)
     if not success:
-        raise HTTPException(status_code=500, detail="Failed to delete tag")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete tag",
+        )
     return {"message": f"Tag '{tag}' deleted from '{repository}'"}
 
 
@@ -220,7 +225,8 @@ async def delete_image(
     tags = await registry.list_tags(repository)
     if not tags:
         raise HTTPException(
-            status_code=404, detail="Repository not found or has no tags"
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Repository not found or has no tags",
         )
 
     errors = []
@@ -230,7 +236,10 @@ async def delete_image(
             errors.append(tag)
 
     if errors:
-        raise HTTPException(status_code=500, detail=f"Failed to delete tags: {errors}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete tags: {errors}",
+        )
 
     return {"message": f"Image '{repository}' and all its tags deleted"}
 
@@ -247,7 +256,8 @@ async def add_tag(
     manifest = await registry.get_manifest(repository, request.source_tag)
     if not manifest:
         raise HTTPException(
-            status_code=404, detail=f"Source tag '{request.source_tag}' not found"
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Source tag '{request.source_tag}' not found",
         )
 
     content_type = manifest.get(
@@ -261,7 +271,10 @@ async def add_tag(
         repository, request.new_tag, clean_manifest, content_type
     )
     if not success:
-        raise HTTPException(status_code=500, detail="Failed to create new tag")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create new tag",
+        )
 
     return {
         "message": f"Tag '{request.new_tag}' created from '{request.source_tag}' in '{repository}'"
@@ -431,7 +444,8 @@ async def start_garbage_collect(
     """
     if _gc_state["status"] == "running":
         raise HTTPException(
-            status_code=409, detail="A garbage-collect is already running"
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A garbage-collect is already running",
         )
 
     background_tasks.add_task(_run_gc, settings)
@@ -504,7 +518,7 @@ async def purge_empty_repositories(
 
     if not container_name:
         raise HTTPException(
-            status_code=503,
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Registry container not found. Cannot purge directories without docker exec access.",
         )
 

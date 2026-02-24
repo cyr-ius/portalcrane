@@ -11,7 +11,7 @@ import uuid
 from enum import Enum
 
 import httpx
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from pydantic import BaseModel
 
 from ..config import Settings, get_settings
@@ -623,7 +623,9 @@ async def get_job_status(
 ):
     """Get the current status of a staging job."""
     if job_id not in _jobs:
-        raise HTTPException(status_code=404, detail="Job not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Job not found"
+        )
     return StagingJob(**_jobs[job_id])
 
 
@@ -655,13 +657,15 @@ async def push_image(
 ):
     """Push a scanned image to the private registry (with optional rename)."""
     if request.job_id not in _jobs:
-        raise HTTPException(status_code=404, detail="Job not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Job not found"
+        )
 
     job = _jobs[request.job_id]
     # Allow push when scan is clean OR when ClamAV was skipped
     if job["status"] not in (JobStatus.SCAN_CLEAN, JobStatus.SCAN_SKIPPED):
         raise HTTPException(
-            status_code=400,
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail="Image must pass scanning (or have scan skipped) before pushing",
         )
 
@@ -682,20 +686,26 @@ async def delete_job(
 ):
     """Delete a staging job and its associated files."""
     if job_id not in _jobs:
-        raise HTTPException(status_code=404, detail="Job not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Job not found"
+        )
 
     # Validate that the job_id is a well-formed UUID to prevent path traversal
     try:
         uuid.UUID(job_id)
     except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid job_id")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid job_id"
+        )
 
     # Remove tarball if exists, ensuring the path stays within the staging directory
     staging_root = os.path.realpath(settings.staging_dir)
     tarball_path = os.path.realpath(os.path.join(staging_root, f"{job_id}.tar"))
     # Ensure the resolved tarball_path is within the staging_root to prevent traversal
     if os.path.commonpath([staging_root, tarball_path]) != staging_root:
-        raise HTTPException(status_code=400, detail="Invalid job_id")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid job_id"
+        )
     if os.path.exists(tarball_path):
         os.remove(tarball_path)
 
@@ -794,7 +804,7 @@ async def list_dangling_images(
     stdout, stderr = await proc.communicate()
     if proc.returncode != 0:
         raise HTTPException(
-            status_code=500,
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"docker images failed: {stderr.decode().strip()}",
         )
 
@@ -829,7 +839,7 @@ async def purge_dangling_images(
     stdout, stderr = await proc.communicate()
     if proc.returncode != 0:
         raise HTTPException(
-            status_code=500,
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"docker image prune failed: {stderr.decode().strip()}",
         )
     output = stdout.decode().strip()
