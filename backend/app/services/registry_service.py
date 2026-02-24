@@ -3,7 +3,10 @@ Portalcrane - Registry Service
 Async service layer for Docker Registry API (OCI Distribution Spec)
 """
 
+import asyncio
+
 import httpx
+
 from ..config import Settings
 
 
@@ -42,11 +45,12 @@ class RegistryService:
     async def list_repositories(
         self, n: int = 1000, last: str = "", include_empty: bool = False
     ) -> list[str]:
-        """List all repositories in the registry.
+        """
+        List all repositories in the registry.
 
-        By default, repositories with no tags are excluded — they are ghost entries
-        left behind after all tags were deleted. The registry catalog API has no way
-        to remove them; only a GC + filesystem cleanup can do so.
+        By default, repositories with no tags are excluded — they are ghost
+        entries left behind after all tags were deleted.  Tag-presence checks
+        are now performed concurrently instead of sequentially.
         """
         url = f"{self.base_url}/v2/_catalog?n={n}"
         if last:
@@ -60,28 +64,36 @@ class RegistryService:
         if include_empty:
             return repositories
 
-        # Filter out repositories that have no tags (ghost repos after tag deletion)
-        non_empty = []
-        for repo in repositories:
-            tags = await self.list_tags(repo)
-            if tags:
-                non_empty.append(repo)
-        return non_empty
+        # Check all repositories concurrently for the presence of at least one tag
+        tags_results: list[list[str]] = await asyncio.gather(
+            *[self.list_tags(repo) for repo in repositories],
+            return_exceptions=False,
+        )
+
+        return [repo for repo, tags in zip(repositories, tags_results) if tags]
 
     async def list_empty_repositories(self) -> list[str]:
-        """Return repositories that have no tags (ghost entries)."""
+        """
+        Return repositories that have no tags (ghost entries).
+
+        Tag-presence checks are performed concurrently.
+        """
         url = f"{self.base_url}/v2/_catalog?n=1000"
         async with self._client() as client:
             response = await client.get(url)
             response.raise_for_status()
             all_repos = response.json().get("repositories", [])
 
-        empty = []
-        for repo in all_repos:
-            tags = await self.list_tags(repo)
-            if not tags:
-                empty.append(repo)
-        return empty
+        if not all_repos:
+            return []
+
+        # Fetch all tag lists concurrently
+        tags_results: list[list[str]] = await asyncio.gather(
+            *[self.list_tags(repo) for repo in all_repos],
+            return_exceptions=False,
+        )
+
+        return [repo for repo, tags in zip(all_repos, tags_results) if not tags]
 
     async def list_tags(self, repository: str) -> list[str]:
         """List all tags for a repository."""
@@ -185,26 +197,89 @@ class RegistryService:
             )
             return response.status_code in (200, 201)
 
-    async def get_registry_stats(self) -> dict:
-        """Compute registry-wide statistics."""
-        repositories = await self.list_repositories()
-        total_images = len(repositories)
-        total_size = 0
-        largest_image = {"name": "", "size": 0}
-        tag_count = 0
+    async def _get_repo_stats(self, repo: str) -> dict:
+        """
+        Fetch all tag sizes for a single repository in parallel.
 
-        for repo in repositories:
-            tags = await self.list_tags(repo)
-            tag_count += len(tags)
-            for tag in tags:
-                size = await self.get_image_size(repo, tag)
-                total_size += size
-                if size > largest_image["size"]:
-                    largest_image = {"name": f"{repo}:{tag}", "size": size}
+        Returns a dict summarising the repository's tag count and total size,
+        plus the name/size of its largest tagged image so the caller can
+        determine the registry-wide largest image without a second pass.
+        """
+        tags = await self.list_tags(repo)
+        if not tags:
+            return {
+                "repo": repo,
+                "tags": [],
+                "total_size": 0,
+                "largest": {"name": "", "size": 0},
+            }
+
+        # Fetch all tag sizes concurrently instead of one-by-one
+        sizes: list[int] = await asyncio.gather(
+            *[self.get_image_size(repo, tag) for tag in tags],
+            return_exceptions=False,
+        )
+
+        total_size = sum(sizes)
+
+        # Identify the largest tag within this repository
+        largest_size = 0
+        largest_name = ""
+        for tag, size in zip(tags, sizes):
+            if size > largest_size:
+                largest_size = size
+                largest_name = f"{repo}:{tag}"
 
         return {
-            "total_images": total_images,
-            "total_tags": tag_count,
+            "repo": repo,
+            "tags": tags,
+            "total_size": total_size,
+            "largest": {"name": largest_name, "size": largest_size},
+        }
+
+    async def get_registry_stats(self) -> dict:
+        """
+        Compute registry-wide statistics (image count, tag count, total size,
+        largest image).
+
+        Performance: all repositories are queried concurrently, and within each
+        repository all tag sizes are fetched concurrently as well.  This reduces
+        wall-clock time from O(repos × tags) sequential HTTP round-trips to
+        roughly O(max_tags_per_repo) — a significant improvement on large
+        registries.
+        """
+        repositories = await self.list_repositories()
+
+        if not repositories:
+            return {
+                "total_images": 0,
+                "total_tags": 0,
+                "total_size_bytes": 0,
+                "largest_image": {"name": "", "size": 0},
+            }
+
+        # Query every repository concurrently
+        repo_results: list[dict] = await asyncio.gather(
+            *[self._get_repo_stats(repo) for repo in repositories],
+            return_exceptions=False,
+        )
+
+        # Aggregate results in a single pass
+        total_size = 0
+        total_tags = 0
+        largest_image: dict = {"name": "", "size": 0}
+
+        for result in repo_results:
+            total_size += result["total_size"]
+            total_tags += len(result["tags"])
+
+            # Track the registry-wide largest tagged image
+            if result["largest"]["size"] > largest_image["size"]:
+                largest_image = result["largest"]
+
+        return {
+            "total_images": len(repositories),
+            "total_tags": total_tags,
             "total_size_bytes": total_size,
             "largest_image": largest_image,
         }
