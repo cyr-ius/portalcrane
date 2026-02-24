@@ -1,5 +1,12 @@
 import { DatePipe, SlicePipe } from "@angular/common";
-import { Component, inject, OnDestroy, OnInit, signal } from "@angular/core";
+import {
+  Component,
+  computed,
+  inject,
+  OnDestroy,
+  OnInit,
+  signal,
+} from "@angular/core";
 import { RouterLink } from "@angular/router";
 import { AppConfigService } from "../../core/services/app-config.service";
 import {
@@ -30,7 +37,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   // Ghost repositories
   ghostRepos = signal<string[]>([]);
-  ghostCount = signal(0);
+  readonly ghostCount = computed(() => this.ghostRepos().length);
   ghostsChecked = signal(false);
   purgingGhosts = signal(false);
 
@@ -44,7 +51,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       created: string;
     }[]
   >([]);
-  danglingCount = signal(0);
+  readonly danglingCount = computed(() => this.danglingImages().length);
   danglingChecked = signal(false);
   purgingDangling = signal(false);
 
@@ -126,7 +133,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.registryService.getEmptyRepositories().subscribe({
       next: (res) => {
         this.ghostRepos.set(res.empty_repositories);
-        this.ghostCount.set(res.count);
         this.ghostsChecked.set(true);
       },
     });
@@ -151,7 +157,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.stagingService.getDanglingImages().subscribe({
       next: (res) => {
         this.danglingImages.set(res.images);
-        this.danglingCount.set(res.count);
         this.danglingChecked.set(true);
       },
       error: () => this.danglingChecked.set(true),

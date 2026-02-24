@@ -25,8 +25,8 @@ export class ImageDetailComponent implements OnInit {
   detailLoading = signal(false);
   showAddTag = signal(false);
   showAdvanced = signal(false);
-  addTagSource = "";
-  newTagName = "";
+  addTagSource = signal("");
+  newTagName = signal("");
   addingTag = signal(false);
   deleteTagTarget = signal<string | null>(null);
   deletingTag = signal(false);
@@ -44,7 +44,7 @@ export class ImageDetailComponent implements OnInit {
         this.tags.set(data.tags);
         this.tagsLoading.set(false);
         if (data.tags.length > 0) {
-          this.addTagSource = data.tags[0];
+          this.addTagSource.set(data.tags[0]);
         }
       },
       error: () => this.tagsLoading.set(false),
@@ -68,10 +68,10 @@ export class ImageDetailComponent implements OnInit {
     if (!this.newTagName || !this.addTagSource) return;
     this.addingTag.set(true);
     this.registry
-      .addTag(this.repository(), this.addTagSource, this.newTagName)
+      .addTag(this.repository(), this.addTagSource(), this.newTagName())
       .subscribe({
         next: () => {
-          this.newTagName = "";
+          this.newTagName.set("");
           this.showAddTag.set(false);
           this.addingTag.set(false);
           this.loadTags();

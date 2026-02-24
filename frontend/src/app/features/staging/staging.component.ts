@@ -29,7 +29,7 @@ export class StagingComponent implements OnInit, OnDestroy {
 
   // ── Core state ─────────────────────────────────────────────────────────────
   jobs = signal<StagingJob[]>([]);
-  searchQuery = "";
+  searchQuery = signal("");
   searchResults = signal<DockerHubResult[]>([]);
   searching = signal(false);
   pullImage = signal("");
@@ -119,9 +119,9 @@ export class StagingComponent implements OnInit, OnDestroy {
   // ── Docker Hub ─────────────────────────────────────────────────────────────
 
   searchDockerHub() {
-    if (!this.searchQuery.trim()) return;
+    if (!this.searchQuery().trim()) return;
     this.searching.set(true);
-    this.staging.searchDockerHub(this.searchQuery).subscribe({
+    this.staging.searchDockerHub(this.searchQuery()).subscribe({
       next: (data) => {
         this.searchResults.set(data.results);
         this.searching.set(false);
