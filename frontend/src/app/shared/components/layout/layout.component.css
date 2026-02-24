@@ -20,10 +20,25 @@
   min-width: 64px;
 }
 
+.sidebar-brand {
+  min-height: 110px;
+  border-bottom: 1px solid var(--pc-border);
+  margin-bottom: 4px;
+  transition: min-height 0.25s ease;
+}
+
+.sidebar-brand--collapsed {
+  min-height: 64px;
+  padding-top: 0.875rem !important;
+  padding-bottom: 0.875rem !important;
+}
+
 .brand-name {
-  font-size: 1.1rem;
+  font-size: 1.15rem;
+  letter-spacing: 0.03em;
   color: var(--pc-accent);
   white-space: nowrap;
+  text-align: center;
 }
 
 /* Navigation links */

@@ -5,92 +5,1048 @@
     [class.collapsed]="sidebarCollapsed()"
   >
     <!-- Logo -->
-    <div class="sidebar-brand d-flex align-items-center gap-2 px-3 py-3">
+    <div
+      class="sidebar-brand d-flex flex-column align-items-center px-3 py-4"
+      [class.sidebar-brand--collapsed]="sidebarCollapsed()"
+    >
+      <!-- Portalcrane SVG logo — redesigned for better clarity -->
       <svg
-        width="32"
-        height="32"
         viewBox="0 0 200 200"
         xmlns="http://www.w3.org/2000/svg"
+        [attr.width]="sidebarCollapsed() ? '36' : '64'"
+        [attr.height]="sidebarCollapsed() ? '36' : '64'"
+        style="
+          transition:
+            width 0.25s ease,
+            height 0.25s ease;
+          flex-shrink: 0;
+        "
       >
+        <defs>
+          <linearGradient id="cylo" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="#1555a0" />
+            <stop offset="45%" stop-color="#2E7FCF" />
+            <stop offset="100%" stop-color="#1B4D7E" />
+          </linearGradient>
+          <linearGradient id="cab" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#3088df" />
+            <stop offset="100%" stop-color="#1B4D7E" />
+          </linearGradient>
+          <clipPath id="circle-clip">
+            <circle cx="100" cy="100" r="96" />
+          </clipPath>
+        </defs>
+
+        <!-- ── Background ── -->
         <circle
           cx="100"
           cy="100"
           r="96"
           fill="#0D1B2A"
           stroke="#2E7FCF"
-          stroke-width="2"
+          stroke-width="3"
         />
-        <rect x="30" y="155" width="140" height="12" rx="3" fill="#1B4D7E" />
-        <rect x="62" y="60" width="12" height="97" rx="2" fill="#2E7FCF" />
-        <rect x="62" y="60" width="96" height="10" rx="2" fill="#2E7FCF" />
-        <rect x="30" y="60" width="34" height="8" rx="2" fill="#1B4D7E" />
-        <rect x="22" y="55" width="16" height="18" rx="3" fill="#1B4D7E" />
+
+        <!-- Clipping everything inside the circle -->
+        <g clip-path="url(#circle-clip)">
+          <!-- ── Quay / ground ── -->
+          <rect x="0" y="174" width="200" height="30" fill="#071520" />
+          <rect x="0" y="174" width="200" height="4" fill="#1B4D7E" />
+          <!-- Water wave -->
+          <path
+            d="M0 178 Q30 172 60 178 Q90 184 120 178 Q155 172 200 178"
+            stroke="#1e4a70"
+            stroke-width="1.5"
+            fill="none"
+          />
+          <!-- Rail lines -->
+          <rect
+            x="8"
+            y="174"
+            width="184"
+            height="2.5"
+            rx="1"
+            fill="#2562a0"
+            opacity="0.5"
+          />
+
+          <!-- ════════════════════════════════════
+             PORTAL BASE — 4 splayed A-frame legs
+             Left pair:  legs at x≈30 and x≈58 on quay → converge at x≈72,78
+             Right pair: legs at x≈118 and x≈148 on quay → converge at x≈112,122
+        ════════════════════════════════════ -->
+
+          <!-- Left outer leg -->
+          <line
+            x1="28"
+            y1="174"
+            x2="68"
+            y2="136"
+            stroke="#1B4D7E"
+            stroke-width="8"
+            stroke-linecap="round"
+          />
+          <line
+            x1="28"
+            y1="174"
+            x2="68"
+            y2="136"
+            stroke="#2E7FCF"
+            stroke-width="2.5"
+            stroke-linecap="round"
+            opacity="0.4"
+          />
+          <!-- Left inner leg -->
+          <line
+            x1="58"
+            y1="174"
+            x2="80"
+            y2="136"
+            stroke="#1B4D7E"
+            stroke-width="8"
+            stroke-linecap="round"
+          />
+          <line
+            x1="58"
+            y1="174"
+            x2="80"
+            y2="136"
+            stroke="#2E7FCF"
+            stroke-width="2.5"
+            stroke-linecap="round"
+            opacity="0.4"
+          />
+
+          <!-- Right inner leg -->
+          <line
+            x1="120"
+            y1="174"
+            x2="120"
+            y2="136"
+            stroke="#1B4D7E"
+            stroke-width="8"
+            stroke-linecap="round"
+          />
+          <line
+            x1="120"
+            y1="174"
+            x2="120"
+            y2="136"
+            stroke="#2E7FCF"
+            stroke-width="2.5"
+            stroke-linecap="round"
+            opacity="0.4"
+          />
+          <!-- Right outer leg -->
+          <line
+            x1="152"
+            y1="174"
+            x2="130"
+            y2="136"
+            stroke="#1B4D7E"
+            stroke-width="8"
+            stroke-linecap="round"
+          />
+          <line
+            x1="152"
+            y1="174"
+            x2="130"
+            y2="136"
+            stroke="#2E7FCF"
+            stroke-width="2.5"
+            stroke-linecap="round"
+            opacity="0.4"
+          />
+
+          <!-- Diagonal cross-braces -->
+          <line
+            x1="36"
+            y1="168"
+            x2="66"
+            y2="150"
+            stroke="#163d66"
+            stroke-width="2.5"
+            stroke-linecap="round"
+          />
+          <line
+            x1="50"
+            y1="168"
+            x2="36"
+            y2="155"
+            stroke="#163d66"
+            stroke-width="2.5"
+            stroke-linecap="round"
+          />
+          <line
+            x1="122"
+            y1="168"
+            x2="144"
+            y2="155"
+            stroke="#163d66"
+            stroke-width="2.5"
+            stroke-linecap="round"
+          />
+          <line
+            x1="136"
+            y1="168"
+            x2="122"
+            y2="155"
+            stroke="#163d66"
+            stroke-width="2.5"
+            stroke-linecap="round"
+          />
+          <!-- Portal horizontal cross-member between inner legs mid-height -->
+          <line
+            x1="68"
+            y1="158"
+            x2="122"
+            y2="158"
+            stroke="#163d66"
+            stroke-width="3"
+            stroke-linecap="round"
+          />
+          <line
+            x1="72"
+            y1="148"
+            x2="120"
+            y2="148"
+            stroke="#163d66"
+            stroke-width="2"
+            stroke-linecap="round"
+            opacity="0.6"
+          />
+
+          <!-- Portal top platform deck -->
+          <rect x="66" y="130" width="66" height="10" rx="3" fill="#1B4D7E" />
+          <rect
+            x="66"
+            y="130"
+            width="66"
+            height="3"
+            rx="2"
+            fill="#2E7FCF"
+            opacity="0.45"
+          />
+          <!-- Platform safety railing -->
+          <line
+            x1="66"
+            y1="130"
+            x2="66"
+            y2="122"
+            stroke="#E8A020"
+            stroke-width="1.3"
+          />
+          <line
+            x1="132"
+            y1="130"
+            x2="132"
+            y2="122"
+            stroke="#E8A020"
+            stroke-width="1.3"
+          />
+          <line
+            x1="66"
+            y1="122"
+            x2="132"
+            y2="122"
+            stroke="#E8A020"
+            stroke-width="1.3"
+          />
+          <line
+            x1="88"
+            y1="130"
+            x2="88"
+            y2="122"
+            stroke="#E8A020"
+            stroke-width="1"
+            opacity="0.7"
+          />
+          <line
+            x1="110"
+            y1="130"
+            x2="110"
+            y2="122"
+            stroke="#E8A020"
+            stroke-width="1"
+            opacity="0.7"
+          />
+
+          <!-- ════════════════════════════════════
+             PEDESTAL CYLINDER
+             Sits on deck, centre x=99
+        ════════════════════════════════════ -->
+          <!-- Cylinder body -->
+          <rect x="84" y="92" width="30" height="40" rx="5" fill="url(#cylo)" />
+          <!-- Cylinder ribs / flanges -->
+          <rect
+            x="84"
+            y="104"
+            width="30"
+            height="3"
+            rx="1"
+            fill="#0f2a42"
+            opacity="0.8"
+          />
+          <rect
+            x="84"
+            y="114"
+            width="30"
+            height="3"
+            rx="1"
+            fill="#0f2a42"
+            opacity="0.8"
+          />
+          <rect
+            x="84"
+            y="124"
+            width="30"
+            height="3"
+            rx="1"
+            fill="#0f2a42"
+            opacity="0.8"
+          />
+          <!-- Cylinder top ellipse -->
+          <ellipse cx="99" cy="92" rx="15" ry="4" fill="#2a6ab8" />
+
+          <!-- Slewing ring (large gear) -->
+          <ellipse
+            cx="99"
+            cy="90"
+            rx="22"
+            ry="6"
+            fill="#0f2a42"
+            stroke="#2E7FCF"
+            stroke-width="2"
+          />
+          <ellipse cx="99" cy="90" rx="15" ry="4" fill="#163d66" />
+          <!-- Gear teeth suggestion -->
+          <ellipse
+            cx="99"
+            cy="90"
+            rx="22"
+            ry="6"
+            fill="none"
+            stroke="#1a5090"
+            stroke-width="1.5"
+            stroke-dasharray="3,2"
+          />
+
+          <!-- Small access platform on left of pedestal -->
+          <rect x="55" y="114" width="28" height="5" rx="2" fill="#163d66" />
+          <rect x="55" y="105" width="28" height="5" rx="2" fill="#163d66" />
+          <line
+            x1="55"
+            y1="105"
+            x2="55"
+            y2="119"
+            stroke="#1B4D7E"
+            stroke-width="2"
+          />
+          <line
+            x1="83"
+            y1="105"
+            x2="83"
+            y2="119"
+            stroke="#1B4D7E"
+            stroke-width="2"
+          />
+          <!-- Railing -->
+          <line
+            x1="55"
+            y1="105"
+            x2="55"
+            y2="100"
+            stroke="#E8A020"
+            stroke-width="1.2"
+          />
+          <line
+            x1="68"
+            y1="105"
+            x2="68"
+            y2="100"
+            stroke="#E8A020"
+            stroke-width="1.2"
+          />
+          <line
+            x1="83"
+            y1="105"
+            x2="83"
+            y2="100"
+            stroke="#E8A020"
+            stroke-width="1.2"
+          />
+          <line
+            x1="55"
+            y1="100"
+            x2="83"
+            y2="100"
+            stroke="#E8A020"
+            stroke-width="1.2"
+          />
+
+          <!-- ════════════════════════════════════
+             ROTATING SUPERSTRUCTURE
+             Cabin centred on the slewing ring, pivot at x=99
+        ════════════════════════════════════ -->
+
+          <!-- Cabin body -->
+          <rect x="70" y="58" width="40" height="34" rx="4" fill="url(#cab)" />
+          <!-- Cabin windows — 3 panes on front face -->
+          <rect
+            x="73"
+            y="63"
+            width="9"
+            height="11"
+            rx="1.5"
+            fill="#9ecef5"
+            opacity="0.9"
+          />
+          <rect
+            x="85"
+            y="63"
+            width="9"
+            height="11"
+            rx="1.5"
+            fill="#9ecef5"
+            opacity="0.9"
+          />
+          <rect
+            x="97"
+            y="63"
+            width="10"
+            height="11"
+            rx="1.5"
+            fill="#9ecef5"
+            opacity="0.9"
+          />
+          <!-- Window glare -->
+          <line
+            x1="74"
+            y1="64"
+            x2="77"
+            y2="73"
+            stroke="#fff"
+            stroke-width="0.9"
+            opacity="0.3"
+          />
+          <line
+            x1="86"
+            y1="64"
+            x2="89"
+            y2="73"
+            stroke="#fff"
+            stroke-width="0.9"
+            opacity="0.3"
+          />
+          <!-- Cabin side ventilation slats -->
+          <line
+            x1="73"
+            y1="79"
+            x2="108"
+            y2="79"
+            stroke="#0f2a42"
+            stroke-width="1.2"
+            opacity="0.7"
+          />
+          <line
+            x1="73"
+            y1="83"
+            x2="108"
+            y2="83"
+            stroke="#0f2a42"
+            stroke-width="1.2"
+            opacity="0.7"
+          />
+          <line
+            x1="73"
+            y1="87"
+            x2="108"
+            y2="87"
+            stroke="#0f2a42"
+            stroke-width="1.2"
+            opacity="0.7"
+          />
+          <!-- Cabin roof -->
+          <rect x="67" y="53" width="46" height="7" rx="2.5" fill="#2E7FCF" />
+          <rect
+            x="67"
+            y="53"
+            width="46"
+            height="2.5"
+            rx="1"
+            fill="#5BA8E8"
+            opacity="0.4"
+          />
+
+          <!-- ── MACHINERY HOUSE (left of cabin, houses the winch) ── -->
+          <rect x="48" y="65" width="24" height="24" rx="3" fill="#1B4D7E" />
+          <rect x="50" y="67" width="20" height="10" rx="2" fill="#163d66" />
+          <!-- Winch drum circle -->
+          <circle
+            cx="60"
+            cy="77"
+            r="8"
+            fill="#0f2a42"
+            stroke="#2E7FCF"
+            stroke-width="1.8"
+          />
+          <circle cx="60" cy="77" r="4" fill="#1B4D7E" />
+          <circle cx="60" cy="77" r="1.5" fill="#E8A020" />
+          <!-- Drum spokes -->
+          <line
+            x1="60"
+            y1="69"
+            x2="60"
+            y2="85"
+            stroke="#163d66"
+            stroke-width="1"
+            opacity="0.8"
+          />
+          <line
+            x1="52"
+            y1="77"
+            x2="68"
+            y2="77"
+            stroke="#163d66"
+            stroke-width="1"
+            opacity="0.8"
+          />
+          <line
+            x1="54"
+            y1="71"
+            x2="66"
+            y2="83"
+            stroke="#163d66"
+            stroke-width="1"
+            opacity="0.6"
+          />
+          <line
+            x1="66"
+            y1="71"
+            x2="54"
+            y2="83"
+            stroke="#163d66"
+            stroke-width="1"
+            opacity="0.6"
+          />
+
+          <!-- Superstructure walkway platform (wraps cabin base) -->
+          <rect x="45" y="91" width="66" height="5" rx="2" fill="#1B4D7E" />
+          <!-- Walkway railing posts -->
+          <line
+            x1="47"
+            y1="91"
+            x2="47"
+            y2="85"
+            stroke="#E8A020"
+            stroke-width="1.2"
+          />
+          <line
+            x1="57"
+            y1="91"
+            x2="57"
+            y2="85"
+            stroke="#E8A020"
+            stroke-width="1.2"
+          />
+          <line
+            x1="67"
+            y1="91"
+            x2="67"
+            y2="85"
+            stroke="#E8A020"
+            stroke-width="1.2"
+          />
+          <line
+            x1="77"
+            y1="91"
+            x2="77"
+            y2="85"
+            stroke="#E8A020"
+            stroke-width="1.2"
+          />
+          <line
+            x1="87"
+            y1="91"
+            x2="87"
+            y2="85"
+            stroke="#E8A020"
+            stroke-width="1.2"
+          />
+          <line
+            x1="97"
+            y1="91"
+            x2="97"
+            y2="85"
+            stroke="#E8A020"
+            stroke-width="1.2"
+          />
+          <line
+            x1="107"
+            y1="91"
+            x2="107"
+            y2="85"
+            stroke="#E8A020"
+            stroke-width="1.2"
+          />
+          <line
+            x1="45"
+            y1="85"
+            x2="111"
+            y2="85"
+            stroke="#E8A020"
+            stroke-width="1.2"
+          />
+
+          <!-- ════════════════════════════════════
+             BACK ARM (contre-flèche)
+             Goes from pivot point (x=99, y=55) toward upper-LEFT
+             ending at the counterweight drum
+        ════════════════════════════════════ -->
+
+          <!-- Back arm / contre-flèche structure
+             From pivot (99,53) diagonally up-left to tip (42, 28) -->
+          <line
+            x1="99"
+            y1="53"
+            x2="42"
+            y2="28"
+            stroke="#1B4D7E"
+            stroke-width="7"
+            stroke-linecap="round"
+          />
+          <line
+            x1="99"
+            y1="53"
+            x2="42"
+            y2="28"
+            stroke="#2E7FCF"
+            stroke-width="2.5"
+            stroke-linecap="round"
+            opacity="0.45"
+          />
+          <!-- Back arm lattice diagonals -->
+          <line
+            x1="88"
+            y1="49"
+            x2="84"
+            y2="42"
+            stroke="#163d66"
+            stroke-width="1.8"
+            opacity="0.9"
+          />
+          <line
+            x1="76"
+            y1="44"
+            x2="72"
+            y2="37"
+            stroke="#163d66"
+            stroke-width="1.8"
+            opacity="0.9"
+          />
+          <line
+            x1="63"
+            y1="38"
+            x2="59"
+            y2="31"
+            stroke="#163d66"
+            stroke-width="1.8"
+            opacity="0.9"
+          />
+
+          <!-- ── COUNTERWEIGHT DRUM (at tip of back arm) ── -->
+          <!-- Large cylindrical drum — the distinctive feature of the real crane -->
+          <!-- Outer drum ring -->
+          <circle
+            cx="42"
+            cy="27"
+            r="13"
+            fill="#0f2a42"
+            stroke="#2E7FCF"
+            stroke-width="2"
+          />
+          <!-- Inner drum face -->
+          <circle cx="42" cy="27" r="10" fill="#163d66" />
+          <!-- Yellow/black warning stripes on drum face (like the real crane) -->
+          <path d="M32 27 A10 10 0 0 1 42 17 L42 27 Z" fill="#E8A020" />
+          <path d="M42 17 A10 10 0 0 1 52 27 L42 27 Z" fill="#0f2a42" />
+          <path d="M52 27 A10 10 0 0 1 42 37 L42 27 Z" fill="#E8A020" />
+          <path d="M42 37 A10 10 0 0 1 32 27 L42 27 Z" fill="#0f2a42" />
+          <!-- Drum centre hub -->
+          <circle
+            cx="42"
+            cy="27"
+            r="3.5"
+            fill="#2E7FCF"
+            stroke="#0D1B2A"
+            stroke-width="1"
+          />
+          <circle cx="42" cy="27" r="1.2" fill="#0D1B2A" />
+
+          <!-- ════════════════════════════════════
+             FRONT BOOM ASSEMBLY
+             Pivot at top of cabin: (110, 53)
+             Lower boom goes steeply up-right to elbow (155, 25)
+             Upper jib continues shallower to tip (190, 18)
+        ════════════════════════════════════ -->
+
+          <!-- Boom pivot circle -->
+          <circle
+            cx="110"
+            cy="53"
+            r="4.5"
+            fill="#163d66"
+            stroke="#2E7FCF"
+            stroke-width="1.5"
+          />
+
+          <!-- Lower boom (main luffing jib) — thick lattice structure -->
+          <line
+            x1="110"
+            y1="53"
+            x2="156"
+            y2="24"
+            stroke="#1B4D7E"
+            stroke-width="9"
+            stroke-linecap="round"
+          />
+          <!-- Lower boom highlight face -->
+          <line
+            x1="110"
+            y1="53"
+            x2="156"
+            y2="24"
+            stroke="#2E7FCF"
+            stroke-width="3"
+            stroke-linecap="round"
+            opacity="0.45"
+          />
+          <!-- Lower boom lattice diagonals -->
+          <line
+            x1="118"
+            y1="49"
+            x2="122"
+            y2="41"
+            stroke="#163d66"
+            stroke-width="2"
+            opacity="0.85"
+          />
+          <line
+            x1="128"
+            y1="43"
+            x2="132"
+            y2="35"
+            stroke="#163d66"
+            stroke-width="2"
+            opacity="0.85"
+          />
+          <line
+            x1="140"
+            y1="36"
+            x2="144"
+            y2="28"
+            stroke="#163d66"
+            stroke-width="2"
+            opacity="0.85"
+          />
+          <!-- Reverse diagonals -->
+          <line
+            x1="120"
+            y1="42"
+            x2="124"
+            y2="50"
+            stroke="#163d66"
+            stroke-width="1.2"
+            opacity="0.5"
+          />
+          <line
+            x1="133"
+            y1="35"
+            x2="137"
+            y2="43"
+            stroke="#163d66"
+            stroke-width="1.2"
+            opacity="0.5"
+          />
+
+          <!-- Elbow joint -->
+          <circle
+            cx="156"
+            cy="24"
+            r="5.5"
+            fill="#163d66"
+            stroke="#2E7FCF"
+            stroke-width="2"
+          />
+
+          <!-- Upper jib — shallower angle, thinner -->
+          <line
+            x1="156"
+            y1="24"
+            x2="192"
+            y2="16"
+            stroke="#1B4D7E"
+            stroke-width="6"
+            stroke-linecap="round"
+          />
+          <line
+            x1="156"
+            y1="24"
+            x2="192"
+            y2="16"
+            stroke="#2E7FCF"
+            stroke-width="2"
+            stroke-linecap="round"
+            opacity="0.45"
+          />
+          <!-- Upper jib lattice -->
+          <line
+            x1="163"
+            y1="23"
+            x2="165"
+            y2="19"
+            stroke="#163d66"
+            stroke-width="1.5"
+            opacity="0.8"
+          />
+          <line
+            x1="172"
+            y1="21"
+            x2="174"
+            y2="17"
+            stroke="#163d66"
+            stroke-width="1.5"
+            opacity="0.8"
+          />
+          <line
+            x1="181"
+            y1="19"
+            x2="183"
+            y2="15"
+            stroke="#163d66"
+            stroke-width="1.5"
+            opacity="0.8"
+          />
+
+          <!-- Jib tip pulley -->
+          <circle
+            cx="192"
+            cy="16"
+            r="5"
+            fill="#0f2a42"
+            stroke="#E8A020"
+            stroke-width="2"
+          />
+          <circle cx="192" cy="16" r="2" fill="#E8A020" />
+
+          <!-- Backstay cable: jib tip → back of cabin top -->
+          <line
+            x1="192"
+            y1="16"
+            x2="96"
+            y2="52"
+            stroke="#E8A020"
+            stroke-width="1.8"
+            opacity="0.65"
+          />
+          <!-- Secondary backstay -->
+          <line
+            x1="192"
+            y1="16"
+            x2="108"
+            y2="50"
+            stroke="#E8A020"
+            stroke-width="1.2"
+            opacity="0.4"
+          />
+
+          <!-- ════════════════════════════════════
+             HOIST CABLES (4 fall arrangement)
+             From jib tip down to spreader bar
+        ════════════════════════════════════ -->
+          <line
+            x1="189"
+            y1="19"
+            x2="161"
+            y2="140"
+            stroke="#E8A020"
+            stroke-width="1.8"
+            stroke-dasharray="5,3"
+          />
+          <line
+            x1="191"
+            y1="18"
+            x2="168"
+            y2="140"
+            stroke="#E8A020"
+            stroke-width="1.8"
+            stroke-dasharray="5,3"
+          />
+          <!-- Guide rope to spreader -->
+          <line
+            x1="192"
+            y1="19"
+            x2="172"
+            y2="140"
+            stroke="#E8A020"
+            stroke-width="1.2"
+            opacity="0.4"
+          />
+
+          <!-- ════════════════════════════════════
+             SPREADER BAR (twistlock frame)
+        ════════════════════════════════════ -->
+          <rect x="156" y="140" width="20" height="4" rx="2" fill="#c8a020" />
+          <!-- Spreader corner twistlocks -->
+          <rect x="155" y="140" width="5" height="8" rx="1" fill="#b07010" />
+          <rect x="172" y="140" width="5" height="8" rx="1" fill="#b07010" />
+
+          <!-- ════════════════════════════════════
+             ISO CONTAINER
+             Standard 20ft container shape
+             Hanging under spreader
+        ════════════════════════════════════ -->
+          <!-- Container body -->
+          <rect x="148" y="148" width="40" height="22" rx="3" fill="#2a7a3a" />
+          <!-- Container roof — lighter shade -->
+          <rect x="148" y="148" width="40" height="5" rx="2" fill="#3a9a4a" />
+          <!-- Container corrugation lines (vertical ribs) -->
+          <line
+            x1="156"
+            y1="153"
+            x2="156"
+            y2="170"
+            stroke="#1e5c2a"
+            stroke-width="1.2"
+          />
+          <line
+            x1="163"
+            y1="153"
+            x2="163"
+            y2="170"
+            stroke="#1e5c2a"
+            stroke-width="1.2"
+          />
+          <line
+            x1="170"
+            y1="153"
+            x2="170"
+            y2="170"
+            stroke="#1e5c2a"
+            stroke-width="1.2"
+          />
+          <line
+            x1="177"
+            y1="153"
+            x2="177"
+            y2="170"
+            stroke="#1e5c2a"
+            stroke-width="1.2"
+          />
+          <!-- Container door divider (centre) -->
+          <line
+            x1="168"
+            y1="153"
+            x2="168"
+            y2="170"
+            stroke="#1a4a22"
+            stroke-width="2"
+          />
+          <!-- Door panels -->
+          <rect
+            x="150"
+            y="154"
+            width="16"
+            height="14"
+            rx="1"
+            fill="none"
+            stroke="#1a4a22"
+            stroke-width="0.8"
+          />
+          <rect
+            x="169"
+            y="154"
+            width="17"
+            height="14"
+            rx="1"
+            fill="none"
+            stroke="#1a4a22"
+            stroke-width="0.8"
+          />
+          <!-- Corner castings (ISO standard) -->
+          <rect x="148" y="148" width="6" height="6" rx="1" fill="#1a5c28" />
+          <rect x="182" y="148" width="6" height="6" rx="1" fill="#1a5c28" />
+          <rect x="148" y="164" width="6" height="6" rx="1" fill="#1a5c28" />
+          <rect x="182" y="164" width="6" height="6" rx="1" fill="#1a5c28" />
+          <!-- "PORTALCRANE" label on container side (tiny text hint) -->
+          <rect
+            x="152"
+            y="158"
+            width="14"
+            height="3"
+            rx="1"
+            fill="#1a5c28"
+            opacity="0.5"
+          />
+          <rect
+            x="169"
+            y="158"
+            width="14"
+            height="3"
+            rx="1"
+            fill="#1a5c28"
+            opacity="0.5"
+          />
+        </g>
+        <!-- end clip-path -->
+
+        <!-- ── Gold accent sparkles (top-left) ── -->
+        <circle cx="22" cy="32" r="2.2" fill="#E8A020" opacity="0.8" />
         <line
-          x1="158"
-          y1="65"
-          x2="68"
-          y2="40"
+          x1="22"
+          y1="25"
+          x2="22"
+          y2="28"
           stroke="#E8A020"
-          stroke-width="1.5"
+          stroke-width="1.3"
+          stroke-linecap="round"
           opacity="0.8"
         />
-        <rect x="56" y="35" width="24" height="28" rx="3" fill="#1B4D7E" />
-        <circle
-          cx="68"
-          cy="49"
-          r="7"
-          fill="#0D1B2A"
-          stroke="#E8A020"
-          stroke-width="2"
-        />
-        <circle cx="68" cy="49" r="3" fill="#E8A020" opacity="0.8" />
         <line
-          x1="150"
-          y1="70"
-          x2="150"
-          y2="128"
+          x1="22"
+          y1="36"
+          x2="22"
+          y2="39"
           stroke="#E8A020"
-          stroke-width="2"
-          stroke-dasharray="4,3"
-        />
-        <rect x="128" y="128" width="44" height="26" rx="3" fill="#E8A020" />
-        <rect x="128" y="128" width="44" height="5" rx="2" fill="#F0B030" />
-        <circle
-          cx="50"
-          cy="157"
-          r="5"
-          fill="#2E7FCF"
-          stroke="#0D1B2A"
-          stroke-width="1.5"
-        />
-        <circle
-          cx="86"
-          cy="157"
-          r="5"
-          fill="#2E7FCF"
-          stroke="#0D1B2A"
-          stroke-width="1.5"
-        />
-        <rect x="56" y="100" width="24" height="20" rx="3" fill="#1B4D7E" />
-        <rect
-          x="59"
-          y="103"
-          width="18"
-          height="11"
-          rx="2"
-          fill="#B0D4F1"
-          opacity="0.85"
-        />
-        <path
-          d="M28 165 Q64 155 100 165 Q136 175 172 165"
-          stroke="#2E7FCF"
-          stroke-width="2.5"
-          fill="none"
+          stroke-width="1.3"
           stroke-linecap="round"
+          opacity="0.8"
+        />
+        <line
+          x1="15"
+          y1="32"
+          x2="18"
+          y2="32"
+          stroke="#E8A020"
+          stroke-width="1.3"
+          stroke-linecap="round"
+          opacity="0.8"
+        />
+        <line
+          x1="26"
+          y1="32"
+          x2="29"
+          y2="32"
+          stroke="#E8A020"
+          stroke-width="1.3"
+          stroke-linecap="round"
+          opacity="0.8"
         />
       </svg>
+
+      <!-- Brand name — only visible when sidebar is expanded -->
       @if (!sidebarCollapsed()) {
-        <span class="brand-name fw-bold">Portalcrane</span>
+        <span class="brand-name fw-bold mt-2">Portalcrane</span>
       }
     </div>
 
