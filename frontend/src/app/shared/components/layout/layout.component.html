@@ -268,7 +268,8 @@
 
     <!-- Collapse toggle -->
     <button
-      class="sidebar-toggle btn btn-sm"
+      class="sidebar-toggle"
+      [class.is-collapsed]="sidebarCollapsed()"
       (click)="toggleSidebar()"
       [title]="sidebarCollapsed() ? 'Expand sidebar' : 'Collapse sidebar'"
     >

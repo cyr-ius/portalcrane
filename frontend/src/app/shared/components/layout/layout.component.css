@@ -146,22 +146,38 @@ button.avatar-circle:hover {
 
 /* Collapse toggle button */
 .sidebar-toggle {
-  position: absolute;
+  position: fixed;
   top: 50%;
-  right: -12px;
   transform: translateY(-50%);
   width: 24px;
   height: 24px;
   border-radius: 50%;
   background: var(--pc-sidebar-bg);
   border: 1px solid var(--pc-border);
+  box-shadow: 2px 0 6px var(--pc-shadow);
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 0;
   font-size: 0.6rem;
   color: var(--pc-text-muted);
-  z-index: 10;
+  /* Above sidebar and main content */
+  z-index: 200;
+  /* Tracks sidebar width via CSS transition */
+  left: calc(240px - 12px);
+  transition:
+    left 0.25s ease,
+    background 0.15s;
+}
+
+.sidebar.collapsed + .sidebar-toggle,
+.sidebar-toggle.is-collapsed {
+  left: calc(64px - 12px);
+}
+
+.sidebar-toggle:hover {
+  background: var(--pc-accent-soft);
+  color: var(--pc-accent);
 }
 
 .main-content {
