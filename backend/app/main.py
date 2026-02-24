@@ -3,6 +3,7 @@ Portalcrane - Docker Registry Management Application
 Main FastAPI application entry point
 """
 
+import logging
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -26,12 +27,18 @@ from .routers import (
 _FRONTEND_DIR = Path("/app/frontend/dist/portalcrane/browser").resolve()
 _INDEX_HTML = _FRONTEND_DIR / "index.html"
 
+settings = get_settings()
+
+logging.basicConfig(
+    level=settings.log_level,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager - startup and shutdown events."""
     # Startup: ensure staging directory exists
-    settings = get_settings()
     os.makedirs(settings.staging_dir, exist_ok=True)
     yield
     # Shutdown: cleanup if needed
