@@ -126,17 +126,11 @@ async def list_images(
     page_repos = repositories[start:end]
 
     # Fetch tag info for current page
-    items = []
-    for repo in page_repos:
-        tags = await registry.list_tags(repo)
-        items.append(
-            ImageInfo(
-                name=repo,
-                tags=tags,
-                tag_count=len(tags),
-                total_size=0,  # Computed on demand to avoid slowness
-            )
-        )
+    tags_list = await asyncio.gather(*[registry.list_tags(r) for r in page_repos])
+    items = [
+        ImageInfo(name=repo, tags=tags, tag_count=len(tags), total_size=0)
+        for repo, tags in zip(page_repos, tags_list)
+    ]
 
     return PaginatedImages(
         items=items,
