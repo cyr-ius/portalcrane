@@ -2,12 +2,15 @@ import { DatePipe, SlicePipe } from "@angular/common";
 import {
   Component,
   computed,
+  DestroyRef,
   inject,
   OnDestroy,
   OnInit,
   signal,
 } from "@angular/core";
+import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { RouterLink } from "@angular/router";
+import { Subject, switchMap, takeWhile } from "rxjs";
 import { AppConfigService } from "../../core/services/app-config.service";
 import {
   DashboardService,
@@ -29,6 +32,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   private dashboardService = inject(DashboardService);
   private registryService = inject(RegistryService);
   private stagingService = inject(StagingService);
+  private destroyRef = inject(DestroyRef);
   readonly configService = inject(AppConfigService);
 
   stats = signal<DashboardStats | null>(null);
@@ -57,20 +61,48 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   // Orphan .tar files in staging directory
   orphanTarballs = signal<string[]>([]);
-  orphanTarballsCount = signal(0);
+  readonly orphanTarballsCount = computed(() => this.orphanTarballs().length);
   orphanTarballsSize = signal("");
   orphanTarballsChecked = signal(false);
   purgingOrphanTarballs = signal(false);
 
-  private gcPollInterval: ReturnType<typeof setInterval> | null = null;
+  private gcPollTrigger$ = new Subject<void>();
 
   ngOnInit() {
     this.refresh();
   }
 
   ngOnDestroy() {
-    this.stopGCPoll();
+    this.refresh();
+    this.setupGCPolling();
   }
+
+  private setupGCPolling(): void {
+    import("rxjs").then(({ timer }) => {
+      this.gcPollTrigger$
+        .pipe(
+          switchMap(() =>
+            timer(0, 2000).pipe(
+              switchMap(() => this.registryService.getGCStatus()),
+              takeWhile((s) => s.status === "running", /* inclusive */ true),
+            ),
+          ),
+          takeUntilDestroyed(this.destroyRef),
+        )
+        .subscribe((s) => {
+          this.gcStatus.set(s);
+          // Once GC finishes, refresh stats and ghost repos
+          if (s.status === "done") {
+            this.loadStats();
+            this.checkGhostRepos();
+          }
+        });
+    });
+  }
+
+  // ── Public methods ────────────────────────────────────────────────────────
+
+  ngOnInit_inner() {} // placeholder — remove if not needed
 
   refresh() {
     this.loadStats();
@@ -97,34 +129,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.registryService.startGarbageCollect().subscribe({
       next: (s) => {
         this.gcStatus.set(s);
-        this.startGCPoll();
+        this.gcPollTrigger$.next();
       },
     });
-  }
-
-  private startGCPoll() {
-    this.stopGCPoll();
-    this.gcPollInterval = setInterval(() => {
-      this.registryService.getGCStatus().subscribe({
-        next: (s) => {
-          this.gcStatus.set(s);
-          if (s.status !== "running") {
-            this.stopGCPoll();
-            if (s.status === "done") {
-              this.loadStats();
-              this.checkGhostRepos();
-            }
-          }
-        },
-      });
-    }, 2000);
-  }
-
-  private stopGCPoll() {
-    if (this.gcPollInterval) {
-      clearInterval(this.gcPollInterval);
-      this.gcPollInterval = null;
-    }
   }
 
   // ── Ghost repositories ────────────────────────────────────────────────────
@@ -181,7 +188,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.stagingService.getOrphanTarballs().subscribe({
       next: (res) => {
         this.orphanTarballs.set(res.files);
-        this.orphanTarballsCount.set(res.count);
         this.orphanTarballsSize.set(res.total_size_human);
         this.orphanTarballsChecked.set(true);
       },
