@@ -4,6 +4,7 @@ All endpoints for browsing and managing Docker Registry images and tags
 """
 
 import asyncio
+import re
 import shutil
 from datetime import datetime, timezone
 
@@ -336,51 +337,38 @@ async def _run_gc(settings: Settings):
         output_lines: list[str] = []
 
         # ── Strategy 1: docker exec into the registry container ──────────────
-        # Filter by label set by docker-compose (more reliable than ancestor
-        # which requires an exact image tag match).
-        # Try name=portalcrane-registry first, then fall back to ancestor=registry:3.
-        for docker_filter in [
-            ("--filter", "name=portalcrane-registry"),
-            ("--filter", "ancestor=registry:3"),
-        ]:
-            find_proc = await asyncio.create_subprocess_exec(
-                "docker",
-                "ps",
-                *docker_filter,
-                "--filter",
-                "status=running",
-                "--format",
-                "{{.Names}}",
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            stdout, _ = await find_proc.communicate()
-            container_name = stdout.decode().strip().split("\n")[0]
-            if container_name:
-                break
+        container_name = await _find_registry_container_name()
 
         if container_name:
             output_lines.append(f"Found registry container: {container_name}")
-            gc_proc = await asyncio.create_subprocess_exec(
-                "docker",
-                "exec",
-                container_name,
-                "registry",
-                "garbage-collect",
-                "--delete-untagged=true",
-                "/etc/distribution/config.yml",
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            gc_out, gc_err = await gc_proc.communicate()
-            output_lines.append(gc_out.decode())
+            gc_proc, gc_out, gc_err = await _run_registry_gc(container_name)
+            output_lines.append(gc_out)
             if gc_err:
-                output_lines.append(gc_err.decode())
+                output_lines.append(gc_err)
 
             if gc_proc.returncode != 0:
-                raise Exception(
-                    f"garbage-collect exited with code {gc_proc.returncode}"
+                cleaned_ghosts = await _cleanup_ghosts_from_gc_error(
+                    container_name, gc_out, gc_err
                 )
+                if cleaned_ghosts:
+                    output_lines.append(
+                        "Detected ghost repository filesystem issues. "
+                        f"Cleaned {len(cleaned_ghosts)} ghost path(s): "
+                        + ", ".join(cleaned_ghosts)
+                    )
+                    output_lines.append("Retrying garbage-collect after ghost cleanup...")
+                    retry_proc, retry_out, retry_err = await _run_registry_gc(container_name)
+                    output_lines.append(retry_out)
+                    if retry_err:
+                        output_lines.append(retry_err)
+                    if retry_proc.returncode != 0:
+                        raise Exception(
+                            f"garbage-collect exited with code {retry_proc.returncode}"
+                        )
+                else:
+                    raise Exception(
+                        f"garbage-collect exited with code {gc_proc.returncode}"
+                    )
 
         else:
             # ── Strategy 2: run a temporary registry container for GC ─────────
@@ -514,26 +502,7 @@ async def purge_empty_repositories(
         return {"message": "No empty repositories found", "purged": []}
 
     # Find the registry container — try by name first, then by image
-    container_name = ""
-    for docker_filter in [
-        ("--filter", "name=portalcrane-registry"),
-        ("--filter", "ancestor=registry:3"),
-    ]:
-        find_proc = await asyncio.create_subprocess_exec(
-            "docker",
-            "ps",
-            *docker_filter,
-            "--filter",
-            "status=running",
-            "--format",
-            "{{.Names}}",
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, _ = await find_proc.communicate()
-        container_name = stdout.decode().strip().split("\n")[0]
-        if container_name:
-            break
+    container_name = await _find_registry_container_name()
 
     if not container_name:
         raise HTTPException(
@@ -567,3 +536,77 @@ async def purge_empty_repositories(
         "purged": purged,
         "errors": errors,
     }
+
+
+async def _find_registry_container_name() -> str:
+    """Return the running registry container name if available."""
+    container_name = ""
+    for docker_filter in [
+        ("--filter", "name=portalcrane-registry"),
+        ("--filter", "ancestor=registry:3"),
+    ]:
+        find_proc = await asyncio.create_subprocess_exec(
+            "docker",
+            "ps",
+            *docker_filter,
+            "--filter",
+            "status=running",
+            "--format",
+            "{{.Names}}",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, _ = await find_proc.communicate()
+        container_name = stdout.decode().strip().split("\n")[0]
+        if container_name:
+            break
+    return container_name
+
+
+async def _run_registry_gc(container_name: str):
+    """Run `registry garbage-collect` inside the given container."""
+    gc_proc = await asyncio.create_subprocess_exec(
+        "docker",
+        "exec",
+        container_name,
+        "registry",
+        "garbage-collect",
+        "--delete-untagged=true",
+        "/etc/distribution/config.yml",
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    gc_out, gc_err = await gc_proc.communicate()
+    return gc_proc, gc_out.decode(), gc_err.decode()
+
+
+async def _cleanup_ghosts_from_gc_error(
+    container_name: str, gc_stdout: str, gc_stderr: str
+) -> list[str]:
+    """Cleanup ghost repository directories when GC fails on missing _layers paths."""
+    ghost_paths = set(
+        re.findall(
+            r"Path not found: (/docker/registry/v2/repositories/[^\s]+/_layers)",
+            f"{gc_stdout}\n{gc_stderr}",
+        )
+    )
+    if not ghost_paths:
+        return []
+
+    cleaned: list[str] = []
+    for ghost_path in sorted(ghost_paths):
+        repo_path = ghost_path.rsplit("/_layers", 1)[0]
+        rm_proc = await asyncio.create_subprocess_exec(
+            "docker",
+            "exec",
+            container_name,
+            "rm",
+            "-rf",
+            f"/var/lib/registry{repo_path}",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        await rm_proc.communicate()
+        if rm_proc.returncode == 0:
+            cleaned.append(repo_path.replace("/docker/registry/v2/repositories/", ""))
+    return cleaned
