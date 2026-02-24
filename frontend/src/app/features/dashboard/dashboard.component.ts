@@ -28,7 +28,7 @@ import { StagingService } from "../../core/services/staging.service";
   templateUrl: "./dashboard.component.html",
   styleUrl: "./dashboard.component.css",
 })
-export class DashboardComponent implements OnInit, OnDestroy {
+export class DashboardComponent implements OnInit {
   private dashboardService = inject(DashboardService);
   private registryService = inject(RegistryService);
   private stagingService = inject(StagingService);
@@ -69,12 +69,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
   private gcPollTrigger$ = new Subject<void>();
 
   ngOnInit() {
-    this.refresh();
-  }
-
-  ngOnDestroy() {
-    this.refresh();
     this.setupGCPolling();
+    this.refresh();
   }
 
   private setupGCPolling(): void {
