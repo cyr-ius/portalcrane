@@ -8,6 +8,26 @@ from functools import lru_cache
 from pydantic import model_validator
 from pydantic_settings import BaseSettings
 
+# ── Constants ─────────────────────────────────────────────────────────────────
+
+# GitHub repository coordinates (owner/repo)
+GITHUB_OWNER = "cyr-ius"
+GITHUB_REPO = "portalcrane"
+
+# Application metadata shown in the Settings page
+APP_AUTHOR = "cyr-ius"
+APP_AI_GENERATOR = "Claude (Anthropic)"
+
+# GitHub API endpoint to fetch the latest published release
+GITHUB_LATEST_RELEASE_URL = (
+    f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/releases/latest"
+)
+
+# GitHub repository HTML URL displayed as a clickable link in the UI
+GITHUB_REPO_URL = f"https://github.com/{GITHUB_OWNER}/{GITHUB_REPO}"
+
+# ── Settings ─────────────────────────────────────────────────────────────────
+
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
