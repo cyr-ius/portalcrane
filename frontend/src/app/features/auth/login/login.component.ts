@@ -1,6 +1,5 @@
 import { SlicePipe } from "@angular/common";
 import { Component, inject, signal } from "@angular/core";
-import { ReactiveFormsModule } from "@angular/forms";
 import { form, FormField, required, submit } from "@angular/forms/signals";
 import { Router } from "@angular/router";
 import { firstValueFrom } from "rxjs";
@@ -9,7 +8,7 @@ import { ThemeService } from "../../../core/services/theme.service";
 
 @Component({
   selector: "app-login",
-  imports: [SlicePipe, ReactiveFormsModule, FormField],
+  imports: [SlicePipe, FormField],
   templateUrl: "./login.component.html",
   styleUrl: "./login.component.css",
 })
@@ -29,7 +28,7 @@ export class LoginComponent {
   showPassword = signal(false);
   oidcConfig = signal<OidcConfig | null>(null);
 
-  constructor() {
+  ngOnInit() {
     this.auth.getOidcConfig().subscribe({
       next: (config) => this.oidcConfig.set(config),
     });

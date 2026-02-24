@@ -1,5 +1,5 @@
 import { HttpClient } from "@angular/common/http";
-import { Injectable, signal } from "@angular/core";
+import { inject, Injectable, signal } from "@angular/core";
 
 /** Shape of the /api/about response from the backend. */
 export interface AboutInfo {
@@ -18,6 +18,7 @@ export interface AboutInfo {
  */
 @Injectable({ providedIn: "root" })
 export class AboutService {
+  private http = inject(HttpClient);
   /** Cached about information; null until first load. */
   readonly info = signal<AboutInfo | null>(null);
 
@@ -26,8 +27,6 @@ export class AboutService {
 
   /** Non-null when the HTTP call itself fails (network/auth). */
   readonly error = signal<string | null>(null);
-
-  constructor(private http: HttpClient) {}
 
   /** Fetch /api/about and store the result. Idempotent: skips if already loaded. */
   load(): void {
