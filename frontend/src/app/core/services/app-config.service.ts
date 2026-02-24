@@ -1,5 +1,5 @@
 import { HttpClient } from "@angular/common/http";
-import { computed, Injectable, signal } from "@angular/core";
+import { computed, inject, Injectable, signal } from "@angular/core";
 import { tap } from "rxjs";
 
 export interface PublicConfig {
@@ -64,6 +64,7 @@ export class AppConfigService {
   /** Server-side defaults loaded at startup (read-only reference). */
   private _serverConfig = signal<PublicConfig | null>(null);
   readonly serverConfig = this._serverConfig.asReadonly();
+  private http = inject(HttpClient);
 
   // ── User preferences (persisted in localStorage) ──────────────────────────
 
@@ -107,8 +108,6 @@ export class AppConfigService {
   readonly vulnSeveritiesString = computed(() =>
     this._vulnSeverities().join(","),
   );
-
-  constructor(private http: HttpClient) {}
 
   // ── Bootstrap ─────────────────────────────────────────────────────────────
 

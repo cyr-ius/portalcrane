@@ -1,5 +1,5 @@
 import { SlicePipe } from "@angular/common";
-import { Component, inject, signal } from "@angular/core";
+import { Component, inject, OnInit, signal } from "@angular/core";
 import { form, FormField, required, submit } from "@angular/forms/signals";
 import { Router } from "@angular/router";
 import { firstValueFrom } from "rxjs";
@@ -12,7 +12,7 @@ import { ThemeService } from "../../../core/services/theme.service";
   templateUrl: "./login.component.html",
   styleUrl: "./login.component.css",
 })
-export class LoginComponent {
+export class LoginComponent implements OnInit {
   private auth = inject(AuthService);
   private router = inject(Router);
   themeService = inject(ThemeService);
@@ -45,8 +45,10 @@ export class LoginComponent {
       try {
         await firstValueFrom(this.auth.login(username!, password!));
         this.router.navigate(["/"]);
-      } catch (err: any) {
-        this.error.set(err.error?.detail || "Authentication failed");
+      } catch (err: unknown) {
+        const httpErr = err as { error?: { detail?: string } };
+        this.error.set(httpErr.error?.detail ?? "Authentication failed");
+      } finally {
         this.loading.set(false);
       }
     });

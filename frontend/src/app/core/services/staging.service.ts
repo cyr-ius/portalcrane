@@ -1,5 +1,5 @@
 import { HttpClient } from "@angular/common/http";
-import { Injectable } from "@angular/core";
+import { inject, Injectable } from "@angular/core";
 import { Observable } from "rxjs";
 
 export type JobStatus =
@@ -90,8 +90,7 @@ const ACTIVE_STATUSES: JobStatus[] = [
 @Injectable({ providedIn: "root" })
 export class StagingService {
   private readonly BASE = "/api/staging";
-
-  constructor(private http: HttpClient) {}
+  private http = inject(HttpClient);
 
   pullImage(options: PullOptions): Observable<StagingJob> {
     return this.http.post<StagingJob>(`${this.BASE}/pull`, options);

@@ -1,4 +1,4 @@
-import { Injectable } from "@angular/core";
+import { inject, Injectable } from "@angular/core";
 import { HttpClient } from "@angular/common/http";
 import { Observable } from "rxjs";
 
@@ -23,7 +23,7 @@ export interface DashboardStats {
 
 @Injectable({ providedIn: "root" })
 export class DashboardService {
-  constructor(private http: HttpClient) {}
+  private http = inject(HttpClient);
 
   getStats(): Observable<DashboardStats> {
     return this.http.get<DashboardStats>("/api/dashboard/stats");

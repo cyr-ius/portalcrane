@@ -1,4 +1,4 @@
-import { Injectable } from "@angular/core";
+import { inject, Injectable } from "@angular/core";
 import { HttpClient, HttpParams } from "@angular/common/http";
 import { Observable } from "rxjs";
 
@@ -52,8 +52,7 @@ export interface GCStatus {
 @Injectable({ providedIn: "root" })
 export class RegistryService {
   private readonly BASE = "/api/registry";
-
-  constructor(private http: HttpClient) {}
+  private http = inject(HttpClient);
 
   getImages(page = 1, pageSize = 20, search = ""): Observable<PaginatedImages> {
     let params = new HttpParams().set("page", page).set("page_size", pageSize);
