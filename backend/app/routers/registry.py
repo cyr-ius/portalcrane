@@ -382,34 +382,7 @@ async def _run_gc(settings: Settings):
                     )
 
         else:
-            # ── Strategy 2: run a temporary registry container for GC ─────────
-            # This works when the registry data volume is accessible
             output_lines.append("No running registry container found.")
-            output_lines.append("Attempting GC via temporary container...")
-
-            gc_proc = await asyncio.create_subprocess_exec(
-                "docker",
-                "run",
-                "--rm",
-                "-v",
-                f"{registry_dir}:/var/lib/registry",
-                "registry:3",
-                "garbage-collect",
-                "--delete-untagged=true",
-                "/etc/distribution/config.yml",
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            gc_out, gc_err = await gc_proc.communicate()
-            output_lines.append(gc_out.decode())
-            if gc_err:
-                output_lines.append(gc_err.decode())
-
-            if gc_proc.returncode != 0:
-                raise Exception(
-                    f"GC temporary container failed (code {gc_proc.returncode}). "
-                    "Ensure Docker socket is mounted and registry data volume is accessible."
-                )
 
         # Measure disk usage after GC
         try:
