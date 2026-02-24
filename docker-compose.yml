@@ -106,6 +106,8 @@ services:
     # - HTTPS_PROXY=http://proxy.corp:3128
     volumes:
       - clamav_data:/var/lib/clamav
+      - ./clamav/clamd.conf:/etc/clamav/clamd.conf:ro
+      - ./clamav/freshclam.conf:/etc/clamav/freshclam.conf:ro
     restart: unless-stopped
     user: clamav
     entrypoint: ["/init-unprivileged"]
