@@ -356,8 +356,12 @@ async def _run_gc(settings: Settings):
                         f"Cleaned {len(cleaned_ghosts)} ghost path(s): "
                         + ", ".join(cleaned_ghosts)
                     )
-                    output_lines.append("Retrying garbage-collect after ghost cleanup...")
-                    retry_proc, retry_out, retry_err = await _run_registry_gc(container_name)
+                    output_lines.append(
+                        "Retrying garbage-collect after ghost cleanup..."
+                    )
+                    retry_proc, retry_out, retry_err = await _run_registry_gc(
+                        container_name
+                    )
                     output_lines.append(retry_out)
                     if retry_err:
                         output_lines.append(retry_err)
