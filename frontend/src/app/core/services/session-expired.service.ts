@@ -6,7 +6,9 @@ export class SessionExpiredService {
   readonly isVisible = signal(false);
 
   show() {
-    this.isVisible.set(true);
+    if (!this.isVisible()) {
+      this.isVisible.set(true);
+    }
   }
 
   hide() {

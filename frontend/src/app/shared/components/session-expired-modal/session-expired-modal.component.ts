@@ -14,6 +14,15 @@ export class SessionExpiredModalComponent implements OnInit, OnDestroy {
 
   private modal: Modal | null = null;
 
+  constructor() {
+    // effect() must be created in injection context
+    effect(() => {
+      if (this.sessionExpired.isVisible()) {
+        this.modal?.show();
+      }
+    });
+  }
+
   ngOnInit() {
     const el = document.getElementById("sessionExpiredModal");
     if (el) {
@@ -25,13 +34,6 @@ export class SessionExpiredModalComponent implements OnInit, OnDestroy {
         this.router.navigate(["/auth"]);
       });
     }
-
-    // React to signal changes
-    effect(() => {
-      if (this.sessionExpired.isVisible()) {
-        this.modal?.show();
-      }
-    });
   }
 
   ngOnDestroy() {
