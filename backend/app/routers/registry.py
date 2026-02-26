@@ -4,7 +4,6 @@ All endpoints for browsing and managing Docker Registry images and tags
 """
 
 import asyncio
-import re
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
@@ -508,77 +507,3 @@ async def purge_empty_repositories(
         "purged": purged,
         "errors": errors,
     }
-
-
-async def _find_registry_container_name() -> str:
-    """Return the running registry container name if available."""
-    container_name = ""
-    for docker_filter in [
-        ("--filter", "name=portalcrane-registry"),
-        ("--filter", "ancestor=registry:3"),
-    ]:
-        find_proc = await asyncio.create_subprocess_exec(
-            "docker",
-            "ps",
-            *docker_filter,
-            "--filter",
-            "status=running",
-            "--format",
-            "{{.Names}}",
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, _ = await find_proc.communicate()
-        container_name = stdout.decode().strip().split("\n")[0]
-        if container_name:
-            break
-    return container_name
-
-
-async def _run_registry_gc(container_name: str):
-    """Run `registry garbage-collect` inside the given container."""
-    gc_proc = await asyncio.create_subprocess_exec(
-        "docker",
-        "exec",
-        container_name,
-        "registry",
-        "garbage-collect",
-        "--delete-untagged=true",
-        "/etc/distribution/config.yml",
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
-    gc_out, gc_err = await gc_proc.communicate()
-    return gc_proc, gc_out.decode(), gc_err.decode()
-
-
-async def _cleanup_ghosts_from_gc_error(
-    container_name: str, gc_stdout: str, gc_stderr: str
-) -> list[str]:
-    """Cleanup ghost repository directories when GC fails on missing _layers paths."""
-    ghost_paths = set(
-        re.findall(
-            r"Path not found: (/docker/registry/v2/repositories/[^\s]+/_layers)",
-            f"{gc_stdout}\n{gc_stderr}",
-        )
-    )
-    if not ghost_paths:
-        return []
-
-    cleaned: list[str] = []
-    for ghost_path in sorted(ghost_paths):
-        repo_path = ghost_path.rsplit("/_layers", 1)[0]
-        rm_proc = await asyncio.create_subprocess_exec(
-            "docker",
-            "exec",
-            container_name,
-            "rm",
-            "-rf",
-            f"/var/lib/registry{repo_path}",
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        await rm_proc.communicate()
-        if rm_proc.returncode == 0:
-            cleaned.append(repo_path.replace("/docker/registry/v2/repositories/", ""))
-    return cleaned
