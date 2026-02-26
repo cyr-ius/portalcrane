@@ -4,9 +4,6 @@ import { tap } from "rxjs";
 
 export interface PublicConfig {
   advanced_mode: boolean;
-  clamav_enabled: boolean;
-  clamav_host: string;
-  clamav_port: number;
   vuln_scan_enabled: boolean;
   vuln_scan_severities: string;
   vuln_ignore_unfixed: boolean;
@@ -43,7 +40,6 @@ export type TrivyTimeoutOption = (typeof TRIVY_TIMEOUT_OPTIONS)[number];
 
 const KEYS = {
   ADVANCED_MODE: "pc_advanced_mode",
-  CLAMAV_ENABLED: "pc_clamav_enabled",
   VULN_ENABLED: "pc_vuln_enabled",
   VULN_SEVERITIES: "pc_vuln_severities",
   VULN_IGNORE_UNFIXED: "pc_vuln_ignore_unfixed",
@@ -74,10 +70,6 @@ export class AppConfigService {
       : false,
   );
   readonly advancedMode = this._advancedMode.asReadonly();
-
-  /** Whether the user has enabled ClamAV scanning (local override). */
-  private _clamavEnabled = signal<boolean>(readBool(KEYS.CLAMAV_ENABLED, true));
-  readonly clamavEnabled = this._clamavEnabled.asReadonly();
 
   /** Whether the user has enabled Trivy CVE scanning (local override). */
   private _vulnEnabled = signal<boolean>(readBool(KEYS.VULN_ENABLED, false));
@@ -118,8 +110,6 @@ export class AppConfigService {
         // Apply server defaults only when no local override exists yet
         if (localStorage.getItem(KEYS.ADVANCED_MODE) === null)
           this._advancedMode.set(cfg.advanced_mode);
-        if (localStorage.getItem(KEYS.CLAMAV_ENABLED) === null)
-          this._clamavEnabled.set(cfg.clamav_enabled);
         if (localStorage.getItem(KEYS.VULN_ENABLED) === null)
           this._vulnEnabled.set(cfg.vuln_scan_enabled);
         if (localStorage.getItem(KEYS.VULN_SEVERITIES) === null) {
@@ -144,11 +134,6 @@ export class AppConfigService {
   setAdvancedMode(value: boolean) {
     this._advancedMode.set(value);
     localStorage.setItem(KEYS.ADVANCED_MODE, String(value));
-  }
-
-  setClamavEnabled(value: boolean) {
-    this._clamavEnabled.set(value);
-    localStorage.setItem(KEYS.CLAMAV_ENABLED, String(value));
   }
 
   setVulnEnabled(value: boolean) {
@@ -178,11 +163,5 @@ export class AppConfigService {
   setVulnTimeout(value: string) {
     this._vulnTimeout.set(value);
     localStorage.setItem(KEYS.VULN_TIMEOUT, String(value));
-  }
-
-  // ── ClamAV live probe ─────────────────────────────────────────────────────
-
-  getClamAVStatus() {
-    return this.http.get<ClamAVStatus>("/api/staging/clamav/status");
   }
 }
