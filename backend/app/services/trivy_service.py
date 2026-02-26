@@ -6,16 +6,17 @@ The Trivy server runs on localhost:4954 (managed by supervisord).
 
 import asyncio
 import json
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
-
-import httpx
 
 TRIVY_BINARY = "/usr/local/bin/trivy"
 TRIVY_CACHE_DIR = "/var/cache/trivy"
 TRIVY_DB_METADATA = Path(TRIVY_CACHE_DIR) / "db" / "metadata.json"
 TRIVY_SERVER_URL = "http://127.0.0.1:4954"
+
+logger = logging.getLogger(__name__)
 
 
 async def get_trivy_db_info() -> dict:
@@ -55,66 +56,12 @@ async def scan_image(
     ignore_unfixed: bool = False,
 ) -> dict:
     """
-    Scans a container image using the Trivy server HTTP API.
-    The image must be accessible from inside the container (e.g. localhost:5000/myimage:tag).
+    Scans a container image using Trivy CLI in client mode.
+    Connects to the local Trivy server for cached DB access.
 
     Args:
         image_ref: Full image reference, e.g. localhost:5000/myimage:latest
         severity: Filter by severity levels, e.g. ["HIGH", "CRITICAL"]
-        ignore_unfixed: Skip vulnerabilities without a known fix
-    """
-    if severity is None:
-        severity = ["UNKNOWN", "LOW", "MEDIUM", "HIGH", "CRITICAL"]
-
-    # Build Trivy server scan request payload
-    payload = {
-        "image": image_ref,
-        "options": {
-            "severity": severity,
-            "ignoreUnfixed": ignore_unfixed,
-            "insecure": True,  # Allow self-signed certs on local registry
-        },
-    }
-
-    try:
-        async with httpx.AsyncClient(timeout=300) as client:
-            response = await client.post(
-                f"{TRIVY_SERVER_URL}/scan",
-                json=payload,
-            )
-            response.raise_for_status()
-            raw = response.json()
-    except httpx.HTTPError as exc:
-        return {
-            "success": False,
-            "error": f"Trivy server unreachable: {exc}",
-            "image": image_ref,
-        }
-
-    try:
-        return _parse_trivy_result(image_ref, raw)
-    except Exception as exc:
-        return {
-            "success": False,
-            "error": f"Failed to parse Trivy response: {exc}",
-            "image": image_ref,
-        }
-
-
-async def scan_tarball(
-    tarball_path: str,
-    severity: list[str] | None = None,
-    ignore_unfixed: bool = False,
-) -> dict:
-    """
-    Scans a local tarball using the Trivy CLI (--input flag).
-    Used by the staging pipeline which exports images as .tar before scanning.
-    The Trivy server does not support tarball scanning via HTTP, so we fall back
-    to the CLI here, reusing the shared cache populated by the server.
-
-    Args:
-        tarball_path: Absolute path to the .tar file
-        severity: Filter by severity levels
         ignore_unfixed: Skip vulnerabilities without a known fix
     """
     if severity is None:
@@ -126,12 +73,77 @@ async def scan_tarball(
         "--quiet",
         "--format",
         "json",
-        "--cache-dir",
-        TRIVY_CACHE_DIR,
+        "--server",
+        TRIVY_SERVER_URL,  # use the local trivy-server for DB
         "--severity",
         ",".join(severity),
-        "--skip-db-update",  # DB already managed by trivy-server / updater
-        "--skip-java-db-update",  # Avoid redundant network calls
+        "--insecure",  # allow HTTP on local registry
+    ]
+
+    if ignore_unfixed:
+        cmd.append("--ignore-unfixed")
+
+    cmd.append(image_ref)
+
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+    except FileNotFoundError:
+        return {
+            "success": False,
+            "error": "Trivy binary not found at /usr/local/bin/trivy",
+            "image": image_ref,
+        }
+
+    stdout, stderr = await proc.communicate()
+
+    # 0 = no vulns, 1 = vulns found — both are valid
+    if proc.returncode not in (0, 1):
+        return {
+            "success": False,
+            "error": f"Trivy scan failed: {stderr.decode() or stdout.decode()}",
+            "image": image_ref,
+        }
+
+    try:
+        raw = json.loads(stdout.decode() or "{}")
+    except json.JSONDecodeError as exc:
+        return {
+            "success": False,
+            "error": f"Unable to parse Trivy output: {exc}",
+            "image": image_ref,
+        }
+
+    return _parse_trivy_result(image_ref, raw)
+
+
+async def scan_tarball(
+    tarball_path: str,
+    severity: list[str] | None = None,
+    ignore_unfixed: bool = False,
+) -> dict:
+    """
+    Scans a local tarball using the Trivy CLI in client mode.
+    Uses --server to leverage the trivy-server's shared DB cache.
+    Falls back to --skip-db-update with local cache if server is unreachable.
+    """
+    if severity is None:
+        severity = ["UNKNOWN", "LOW", "MEDIUM", "HIGH", "CRITICAL"]
+
+    cmd = [
+        TRIVY_BINARY,
+        "image",
+        "--quiet",
+        "--format",
+        "json",
+        "--server",
+        TRIVY_SERVER_URL,  # use trivy-server for shared DB
+        "--severity",
+        ",".join(severity),
+        "--skip-java-db-update",
     ]
 
     if ignore_unfixed:
@@ -157,6 +169,9 @@ async def scan_tarball(
 
     try:
         raw = json.loads(stdout.decode() or "{}")
+        logger.debug(
+            f"Trivy scan completed for {tarball_path} with {len(raw.get('Results', []))} results"
+        )
     except json.JSONDecodeError as exc:
         raise RuntimeError(f"Unable to parse Trivy output: {exc}") from exc
 

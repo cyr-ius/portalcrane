@@ -49,7 +49,7 @@ services:
       - ADVANCED_MODE=${ADVANCED_MODE:-false}
 
       # ── Vulnerability scanning (Trivy) ────────────────────────────────────
-      - VULN_SCAN_ENABLED=${VULN_SCAN_ENABLED:-false}
+      - VULN_SCAN_ENABLED=${VULN_SCAN_ENABLED:-true}
       - VULN_SCAN_SEVERITIES=${VULN_SCAN_SEVERITIES:-CRITICAL,HIGH}
       - VULN_IGNORE_UNFIXED=${VULN_IGNORE_UNFIXED:-false}
       - VULN_SCAN_TIMEOUT=${VULN_SCAN_TIMEOUT:-5m}
@@ -61,6 +61,10 @@ services:
       # - HTTPS_PROXY=http://proxy.corp:3128
       # - NO_PROXY=localhost,127.0.0.1
       # - DOCKER_PULL_PROXY=http://proxy.corp:3128
+
+      # ── Logging ───────────────────────────────────────────────────────────
+      - LOG_LEVEL=${LOG_LEVEL:-DEBUG}
+
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - registry_data:/var/lib/registry
@@ -71,6 +75,35 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+
+  # ── Docker Registry (CNCF Distribution v3) ───────────────────────────────
+  # registry:
+  #   image: registry:3
+  #   container_name: portalcrane-registry
+  #   ports:
+  #     - "5000:5000"
+  #   environment:
+  #     - REGISTRY_STORAGE_DELETE_ENABLED=true
+  #     - REGISTRY_HTTP_SECRET=${REGISTRY_HTTP_SECRET:-registry-secret}
+  #     - OTEL_TRACES_EXPORTER=none
+  #     - OTEL_METRICS_EXPORTER=none
+  #     - OTEL_LOGS_EXPORTER=none
+  #   volumes:
+  #     - registry_data:/var/lib/registry
+  #   restart: unless-stopped
+  #   healthcheck:
+  #     test:
+  #       [
+  #         "CMD",
+  #         "wget",
+  #         "--quiet",
+  #         "--tries=1",
+  #         "--spider",
+  #         "http://localhost:5000/v2/",
+  #       ]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
 
 volumes:
   registry_data:

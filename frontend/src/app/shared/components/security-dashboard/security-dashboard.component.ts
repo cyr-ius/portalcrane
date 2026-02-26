@@ -6,6 +6,7 @@ import {
   SystemService,
   TrivyDbInfo,
 } from "../../../core/services/system.service";
+import { RegistryService } from "../../../core/services/registry.service";
 
 @Component({
   selector: "app-security-dashboard",
@@ -14,32 +15,32 @@ import {
 })
 export class SecurityDashboardComponent implements OnInit {
   private svc = inject(SystemService);
+  private registry = inject(RegistryService);
 
-  // Process monitoring
   processes = signal<any[]>([]);
-
-  // Trivy DB status
   trivyDb = signal<TrivyDbInfo | null>(null);
   updatingDb = signal(false);
 
-  // Scan state
+  // Registry image list for the dropdown
+  registryImages = signal<string[]>([]);
+  loadingImages = signal(false);
+
   imageToScan = signal("");
   severityFilter = signal<string[]>(["HIGH", "CRITICAL"]);
   ignoreUnfixed = signal(false);
   scanning = signal(false);
   scanResult = signal<ScanResult | null>(null);
 
-  // GC state
   gcRunning = signal(false);
   gcOutput = signal<string | null>(null);
 
-  // Computed — critical count badge
   criticalCount = computed(() => this.scanResult()?.summary?.["CRITICAL"] ?? 0);
 
   readonly severities = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "UNKNOWN"];
 
   ngOnInit(): void {
     this.loadAll();
+    this.loadRegistryImages();
   }
 
   async loadAll(): Promise<void> {
@@ -49,6 +50,29 @@ export class SecurityDashboardComponent implements OnInit {
     ]);
     this.processes.set(procs);
     this.trivyDb.set(db);
+  }
+
+  // Load all repo:tag combinations from the local registry
+  loadRegistryImages(): void {
+    this.loadingImages.set(true);
+    this.registry.getImages(1, 100).subscribe({
+      next: (data) => {
+        // Flatten each repo's tags into "repo:tag" entries
+        const images: string[] = [];
+        for (const item of data.items) {
+          for (const tag of item.tags) {
+            images.push(`localhost:5000/${item.name}:${tag}`);
+          }
+        }
+        this.registryImages.set(images);
+        // Pre-select the first image if the field is empty
+        if (images.length > 0 && !this.imageToScan()) {
+          this.imageToScan.set(images[0]);
+        }
+        this.loadingImages.set(false);
+      },
+      error: () => this.loadingImages.set(false),
+    });
   }
 
   toggleSeverity(sev: string): void {

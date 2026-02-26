@@ -115,13 +115,20 @@ export class StagingComponent implements OnInit {
     if (!this.pullImage()) return;
     this.pulling.set(true);
 
-    // Read scan preferences from the Settings service
+    // Only send overrides when advanced mode is active.
+    // Otherwise pass null so the backend uses its own env-var config.
+    const advanced = this.configService.advancedMode();
+
     this.staging
       .pullImage({
         image: this.pullImage(),
         tag: this.pullTag() || "latest",
-        vuln_scan_enabled_override: this.configService.vulnEnabled(),
-        vuln_severities_override: this.configService.vulnSeveritiesString(),
+        vuln_scan_enabled_override: advanced
+          ? this.configService.vulnEnabled()
+          : null,
+        vuln_severities_override: advanced
+          ? this.configService.vulnSeveritiesString()
+          : null,
       })
       .subscribe({
         next: (job) => {
