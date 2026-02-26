@@ -32,11 +32,26 @@ export interface StagingJob {
   vuln_severities_override: string | null;
 }
 
+export interface VulnerabilityEntry {
+  id: string;
+  package: string;
+  installed_version: string;
+  fixed_version: string | null;
+  severity: string;
+  title: string | null;
+  cvss_score: number | null;
+  target: string;
+}
+
 export interface VulnResult {
   enabled: boolean;
   blocked: boolean;
   severities: string[];
   counts: Record<string, number>;
+  // Full CVE list (present in registry_inside branch)
+  vulnerabilities?: VulnerabilityEntry[];
+  total?: number;
+  scanned_at?: string;
 }
 
 export interface DockerHubResult {

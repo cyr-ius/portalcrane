@@ -262,8 +262,7 @@ async def _vuln_scan_image(
 ) -> dict:
     """
     Run Trivy vulnerability scan on a staged image tarball.
-    Delegates to trivy_service.scan_tarball() which uses the shared DB cache
-    populated by the trivy-server process, avoiding redundant DB downloads.
+    Returns full vulnerability details for frontend display.
     """
     from ..services.trivy_service import scan_tarball
 
@@ -288,6 +287,10 @@ async def _vuln_scan_image(
         "blocked": blocked,
         "severities": effective_severities,
         "counts": counts,
+        # Full vulnerability list for frontend CVE table display
+        "vulnerabilities": result.get("vulnerabilities", []),
+        "total": result.get("total", 0),
+        "scanned_at": result.get("scanned_at"),
     }
 
 
