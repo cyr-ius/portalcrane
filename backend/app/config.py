@@ -92,6 +92,8 @@ class Settings(BaseSettings):
     vuln_ignore_unfixed: bool = False
     vuln_scan_timeout: str = "5m"
 
+    trivy_server_url: str = "http://127.0.0.1:4954"
+
     # Staging configuration
     staging_dir: str = "/tmp/staging"
 

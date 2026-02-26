@@ -18,3 +18,13 @@ mkdir -p /var/lib/registry
 
 echo "[entrypoint] Starting supervisord (registry + portalcrane)..."
 exec /usr/bin/supervisord -c /etc/supervisor/supervisord.conf
+
+# Wait for Trivy server to be ready (max 60s)
+echo "[entrypoint] Waiting for Trivy server on 127.0.0.1:4954..."
+for i in $(seq 1 30); do
+    if curl -sf http://127.0.0.1:4954/healthz > /dev/null 2>&1; then
+        echo "[entrypoint] Trivy server is ready."
+        break
+    fi
+    sleep 2
+done
