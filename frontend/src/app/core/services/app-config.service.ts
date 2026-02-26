@@ -10,14 +10,6 @@ export interface PublicConfig {
   vuln_scan_timeout: string;
 }
 
-export interface ClamAVStatus {
-  enabled: boolean;
-  reachable: boolean;
-  host: string;
-  port: number;
-  message: string;
-}
-
 /** All severity levels supported by Trivy, in display order */
 export const TRIVY_SEVERITIES = [
   "CRITICAL",

@@ -13,7 +13,7 @@ with a staging pipeline including antivirus scanning.
 - 📦 Browse, search, paginate images and tags
 - 🗑️ Delete images or individual tags
 - 🏷️ Add new tags (retag)
-- 🚀 Staging pipeline: Pull from Docker Hub → ClamAV scan → Trivy CVE scan (optional) → Push to registry
+- 🚀 Staging pipeline: Pull from Docker Hub → Trivy CVE scan (optional) → Push to registry
 - 📊 Dashboard with stats (image count, disk usage, largest image)
 - 🔍 Advanced mode for detailed image metadata
 - 🐳 Single container deployment
@@ -35,8 +35,6 @@ with a staging pipeline including antivirus scanning.
 | `OIDC_REDIRECT_URI`    | OIDC redirect URI                              | -                       |
 | `DOCKERHUB_USERNAME`   | Docker Hub username (optional)                 | -                       |
 | `DOCKERHUB_PASSWORD`   | Docker Hub password (optional)                 | -                       |
-| `CLAMAV_HOST`          | ClamAV host                                    | `localhost`             |
-| `CLAMAV_PORT`          | ClamAV port                                    | `3310`                  |
 | `STAGING_DIR`          | Staging directory for pulled images            | `/tmp/staging`          |
 | `ADVANCED_MODE`        | Enable advanced mode by default                | `false`                 |
 | `VULN_SCAN_ENABLED`    | Enable complementary Trivy CVE scan in staging | `false`                 |

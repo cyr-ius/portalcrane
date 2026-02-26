@@ -24,8 +24,7 @@
   <div class="card-body">
     <p class="text-muted small mb-3">
       Scans every pulled image for known vulnerabilities (CVEs) before allowing
-      a push to the registry. Requires ClamAV to be enabled as it runs after the
-      antivirus step.
+      a push to the registry.
     </p>
 
     <!-- Enable / Disable toggle -->
@@ -33,7 +32,7 @@
       <div>
         <div class="fw-semibold small">Enable Trivy scan</div>
         <div class="text-muted" style="font-size: 0.75rem">
-          Run CVE scan after ClamAV before allowing push
+          Run CVE scan before allowing push
         </div>
       </div>
       <div class="form-check form-switch mb-0">
