@@ -35,9 +35,6 @@ services:
       # Docker Hub (optional)
       - DOCKERHUB_USERNAME=${DOCKERHUB_USERNAME:-}
       - DOCKERHUB_PASSWORD=${DOCKERHUB_PASSWORD:-}
-      # ClamAV
-      - CLAMAV_HOST=${CLAMAV_HOST:-clamav}
-      - CLAMAV_PORT=${CLAMAV_PORT:-3310}
       # Other
       - STAGING_DIR=/tmp/staging
       - ADVANCED_MODE=${ADVANCED_MODE:-false}
@@ -56,11 +53,6 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - staging_data:/tmp/staging
-    depends_on:
-      registry:
-        condition: service_healthy
-      clamav:
-        condition: service_healthy
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
@@ -68,57 +60,5 @@ services:
       timeout: 10s
       retries: 3
 
-  # ── Docker Registry (CNCF Distribution v3) ───────────────────────────────
-  registry:
-    image: registry:3
-    container_name: portalcrane-registry
-    ports:
-      - "5000:5000"
-    environment:
-      - REGISTRY_STORAGE_DELETE_ENABLED=true
-      - REGISTRY_HTTP_SECRET=${REGISTRY_HTTP_SECRET:-registry-secret}
-      - OTEL_TRACES_EXPORTER=none
-      - OTEL_METRICS_EXPORTER=none
-      - OTEL_LOGS_EXPORTER=none
-    volumes:
-      - registry_data:/var/lib/registry
-    restart: unless-stopped
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "wget",
-          "--quiet",
-          "--tries=1",
-          "--spider",
-          "http://localhost:5000/v2/",
-        ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # ── ClamAV Antivirus ─────────────────────────────────────────────────────
-  clamav:
-    image: clamav/clamav:stable
-    container_name: portalcrane-clamav
-    # environment:
-    # - HTTP_PROXY=http://proxy.corp:3128
-    # - HTTPS_PROXY=http://proxy.corp:3128
-    volumes:
-      - clamav_data:/var/lib/clamav
-      - ./clamav/clamd.conf:/etc/clamav/clamd.conf:ro
-      - ./clamav/freshclam.conf:/etc/clamav/freshclam.conf:ro
-    restart: unless-stopped
-    user: clamav
-    entrypoint: ["/init-unprivileged"]
-    healthcheck:
-      test: ["CMD", "clamdcheck.sh"]
-      interval: 60s
-      timeout: 30s
-      retries: 3
-      start_period: 120s # ClamAV needs time to download virus definitions
-
 volumes:
-  registry_data:
-  clamav_data:
   staging_data:

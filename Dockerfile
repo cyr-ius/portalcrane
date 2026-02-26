@@ -22,34 +22,33 @@ LABEL org.opencontainers.image.source="https://github.com/cyr-ius/portalcrane"
 LABEL org.opencontainers.image.url="https://github.com/cyr-ius/portalcrane"
 LABEL org.opencontainers.image.licenses="MIT"
 
+# Registry version — update this ARG to upgrade
+ARG REGISTRY_VERSION=3.0.0
+
 # Trivy version — update this ARG to upgrade
 ARG TRIVY_VERSION=0.69.1
 
 # Install system dependencies (Docker CLI for staging pipeline + ClamAV client)
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    supervisor \
     curl \
     ca-certificates \
-    clamdscan \
     lsb-release \
     && curl -LsSf https://get.docker.com | sh \
-    # Install Trivy from the official .deb (single install, no APT conflict)
-    && ARCH="$(dpkg --print-architecture)" \
-    && case "$ARCH" in \
-         amd64) TRIVY_ARCH="Linux-64bit" ;; \
-         arm64) TRIVY_ARCH="Linux-ARM64" ;; \
-         *) echo "Unsupported architecture: $ARCH" && exit 1 ;; \
-       esac \
-    && curl -fsSL -o /tmp/trivy.deb \
-         "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_${TRIVY_ARCH}.deb" \
-    && dpkg -i /tmp/trivy.deb \
-    && rm /tmp/trivy.deb \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip3 install --no-cache-dir uv
+# Download and install registry binary
+RUN curl -L https://github.com/distribution/distribution/releases/download/v${REGISTRY_VERSION}/registry_${REGISTRY_VERSION}_linux_amd64.tar.gz \
+    | tar xz -C /usr/local/bin registry
 
-ENV UV_SYSTEM_PYTHON=true \
-    UV_NO_CACHE=true
+# Download and install Trivy binary
+RUN curl -L https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz \
+    | tar xz -C /usr/local/bin trivy
+
+# Create Trivy cache directory
+RUN mkdir -p /var/cache/trivy
+
 
 WORKDIR /app
 
@@ -57,6 +56,9 @@ WORKDIR /app
 COPY backend/ ./
 
 # Install Python dependencies
+ENV UV_SYSTEM_PYTHON=true \
+    UV_NO_CACHE=true
+RUN pip3 install --no-cache-dir uv
 RUN uv pip install --no-cache-dir -r requirements.txt
 
 # Copy built frontend
@@ -76,5 +78,17 @@ ENV APP_VERSION=${VERSION}
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
     CMD curl -f http://localhost:8080/api/health || exit 1
 
+
+# Copy Supervisor configuration and registry config template
+COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+COPY registry-config.yml.template /etc/registry/config.yml.template
+
+# Entrypoint generates registry config from env vars then starts supervisord
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
+
+# For staging pipeline (if needed)
+EXPOSE 8000 5000
+
 # Start application
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080", "--workers", "1"]
+CMD ["/docker-entrypoint.sh"]
