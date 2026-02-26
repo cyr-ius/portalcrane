@@ -1,11 +1,4 @@
-import {
-  Component,
-  computed,
-  DestroyRef,
-  inject,
-  OnInit,
-  signal,
-} from "@angular/core";
+import { Component, DestroyRef, inject, OnInit, signal } from "@angular/core";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { FormsModule } from "@angular/forms";
 import { filter, switchMap, timer } from "rxjs";
@@ -57,9 +50,7 @@ export class StagingComponent implements OnInit {
 
   ngOnInit() {
     this.loadJobs();
-    this.refreshClamAVStatus();
     this.startJobsAutoRefresh();
-    this.startClamAVAutoRefresh();
   }
 
   // ── Auto-refresh: active jobs every 3 s ───────────────────────────────────
@@ -77,62 +68,6 @@ export class StagingComponent implements OnInit {
       )
       .subscribe((jobs) => this.jobs.set(StagingService.sortJobs(jobs)));
   }
-
-  // ── Auto-refresh: ClamAV status every 30 s ────────────────────────────────
-
-  /**
-   * Polls ClamAV reachability every 30 s automatically.
-   * Uses takeUntilDestroyed so no manual cleanup is needed.
-   */
-  private startClamAVAutoRefresh(): void {
-    timer(30_000, 30_000)
-      .pipe(
-        switchMap(() => this.configService.getClamAVStatus()),
-        takeUntilDestroyed(this.destroyRef),
-      )
-      .subscribe({
-        next: (s) => this.clamavStatus.set(s),
-      });
-  }
-
-  // ── ClamAV indicator ───────────────────────────────────────────────────────
-
-  refreshClamAVStatus() {
-    this.clamavLoading.set(true);
-    this.configService.getClamAVStatus().subscribe({
-      next: (s) => {
-        this.clamavStatus.set(s);
-        this.clamavLoading.set(false);
-      },
-      error: () => this.clamavLoading.set(false),
-    });
-  }
-
-  clamavBadgeClass = computed(() => {
-    const s = this.clamavStatus();
-    if (!s) return "badge bg-secondary-subtle text-secondary";
-    if (!s.enabled) return "badge bg-secondary-subtle text-secondary";
-    if (s.reachable) return "badge bg-success-subtle text-success";
-    return "badge bg-danger-subtle text-danger";
-  });
-
-  clamavBadgeIcon = computed(() => {
-    if (this.clamavLoading()) return "bi-hourglass-split";
-    const s = this.clamavStatus();
-    if (!s) return "bi-hourglass-split";
-    if (!s.enabled) return "bi-slash-circle";
-    if (s.reachable) return "bi-shield-check";
-    return "bi-shield-exclamation";
-  });
-
-  clamavBadgeLabel = computed(() => {
-    if (this.clamavLoading()) return "Checking…";
-    const s = this.clamavStatus();
-    if (!s) return "ClamAV: unknown";
-    if (!s.enabled) return "ClamAV disabled";
-    if (s.reachable) return `ClamAV online (${s.host}:${s.port})`;
-    return `ClamAV offline (${s.host}:${s.port})`;
-  });
 
   // ── Jobs ───────────────────────────────────────────────────────────────────
 
@@ -192,7 +127,6 @@ export class StagingComponent implements OnInit {
       .pullImage({
         image: this.pullImage(),
         tag: this.pullTag() || "latest",
-        clamav_enabled_override: this.configService.clamavEnabled(),
         vuln_scan_enabled_override: this.configService.vulnEnabled(),
         vuln_severities_override: this.configService.vulnSeveritiesString(),
       })

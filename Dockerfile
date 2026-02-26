@@ -58,7 +58,7 @@ COPY backend/ ./
 # Install Python dependencies
 ENV UV_SYSTEM_PYTHON=true \
     UV_NO_CACHE=true
-RUN pip3 install --no-cache-dir uv
+RUN pip3 install --no-cache-dir uv envsubst
 RUN uv pip install --no-cache-dir -r requirements.txt
 
 # Copy built frontend

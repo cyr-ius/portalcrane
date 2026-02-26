@@ -1,17 +1,16 @@
 import { Component, computed, inject, OnInit, signal } from "@angular/core";
 import { FormsModule } from "@angular/forms";
+import { RouterLink } from "@angular/router";
 import {
   ScanResult,
   SystemService,
   TrivyDbInfo,
-} from "../../services/system.service";
+} from "../../../core/services/system.service";
 
 @Component({
   selector: "app-security-dashboard",
-  standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, RouterLink],
   templateUrl: "./security-dashboard.component.html",
-  styleUrl: "./security-dashboard.component.scss",
 })
 export class SecurityDashboardComponent implements OnInit {
   private svc = inject(SystemService);

@@ -9,25 +9,6 @@
         Pull from Docker Hub → Scan → Push to Registry
       </p>
     </div>
-
-    <!-- ClamAV status badge -->
-    <div class="d-flex align-items-center gap-2">
-      <span
-        [class]="clamavBadgeClass()"
-        [title]="clamavStatus()?.message ?? ''"
-        style="font-size: 0.78rem; padding: 0.35em 0.75em; cursor: default"
-      >
-        <i [class]="'bi ' + clamavBadgeIcon() + ' me-1'"></i>
-        {{ clamavBadgeLabel() }}
-      </span>
-      <button
-        class="btn btn-sm btn-outline-secondary border-0 p-1"
-        (click)="refreshClamAVStatus()"
-        title="Refresh ClamAV status"
-      >
-        <i class="bi bi-arrow-clockwise" [class.spin]="clamavLoading()"></i>
-      </button>
-    </div>
   </div>
 
   <div class="row g-3">
@@ -145,16 +126,6 @@
 
           <!-- Active scan config summary (read-only, driven by Settings) -->
           <div class="scan-summary d-flex gap-2 flex-wrap mb-3">
-            <span
-              class="badge"
-              [class.bg-success-subtle]="configService.clamavEnabled()"
-              [class.text-success]="configService.clamavEnabled()"
-              [class.bg-secondary-subtle]="!configService.clamavEnabled()"
-              [class.text-secondary]="!configService.clamavEnabled()"
-            >
-              <i class="bi bi-shield-virus me-1"></i>
-              ClamAV {{ configService.clamavEnabled() ? "ON" : "OFF" }}
-            </span>
             <span
               class="badge"
               [class.bg-success-subtle]="configService.vulnEnabled()"

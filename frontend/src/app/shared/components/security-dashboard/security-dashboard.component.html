@@ -1,0 +1,283 @@
+<!-- security-dashboard.component.html -->
+<div class="container-fluid py-3">
+  <!-- ── Process Status ──────────────────────────────────────────────── -->
+  <div class="card border-0 mb-3">
+    <div
+      class="card-header border-0 d-flex align-items-center justify-content-between"
+    >
+      <h6 class="fw-semibold mb-0">
+        <i class="bi bi-cpu me-2"></i>Process Status
+      </h6>
+      <button class="btn btn-sm btn-outline-secondary" (click)="loadAll()">
+        <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+      </button>
+    </div>
+    <div class="card-body p-0">
+      @if (processes().length === 0) {
+        <div class="text-muted small p-3">Loading processes...</div>
+      } @else {
+        <div class="list-group list-group-flush">
+          @for (proc of processes(); track proc.name) {
+            <div
+              class="list-group-item d-flex align-items-center justify-content-between border-0 px-3 py-2"
+            >
+              <div class="d-flex align-items-center gap-2">
+                <span
+                  class="badge rounded-pill"
+                  [class.bg-success]="proc.running"
+                  [class.bg-danger]="!proc.running"
+                  style="width: 10px; height: 10px; padding: 0"
+                >
+                </span>
+                <span class="fw-medium small">{{ proc.name }}</span>
+              </div>
+              <div
+                class="d-flex align-items-center gap-2 text-muted"
+                style="font-size: 0.75rem"
+              >
+                <span>{{ proc.state }}</span>
+                @if (proc.pid) {
+                  <span>PID {{ proc.pid }}</span>
+                }
+                @if (proc.uptime_seconds && proc.uptime_seconds > 0) {
+                  <span>up {{ proc.uptime_seconds }}s</span>
+                }
+              </div>
+            </div>
+          }
+        </div>
+      }
+    </div>
+  </div>
+
+  <!-- ── Trivy DB Status ──────────────────────────────────────────────── -->
+  <div class="card border-0 mb-3">
+    <div
+      class="card-header border-0 d-flex align-items-center justify-content-between"
+    >
+      <h6 class="fw-semibold mb-0">
+        <i class="bi bi-database me-2"></i>Trivy Vulnerability Database
+      </h6>
+      <button
+        class="btn btn-sm btn-outline-primary"
+        (click)="updateTrivyDb()"
+        [disabled]="updatingDb()"
+      >
+        @if (updatingDb()) {
+          <span class="spinner-border spinner-border-sm me-1"></span>Updating...
+        } @else {
+          <i class="bi bi-cloud-download me-1"></i>Force Update
+        }
+      </button>
+    </div>
+    <div class="card-body">
+      @if (!trivyDb()) {
+        <div class="text-muted small">Loading...</div>
+      } @else if (trivyDb()!.error) {
+        <div class="alert alert-warning py-2 small mb-0">
+          <i class="bi bi-exclamation-triangle me-1"></i>{{ trivyDb()!.error }}
+        </div>
+      } @else {
+        <div class="row g-2">
+          <div class="col-sm-4">
+            <div class="text-muted" style="font-size: 0.7rem">Status</div>
+            <span
+              class="badge"
+              [class.bg-success]="trivyDb()!.up_to_date"
+              [class.bg-warning]="!trivyDb()!.up_to_date"
+              [class.text-dark]="!trivyDb()!.up_to_date"
+            >
+              {{ trivyDb()!.up_to_date ? "Up to date" : "Outdated" }}
+            </span>
+          </div>
+          <div class="col-sm-4">
+            <div class="text-muted" style="font-size: 0.7rem">Last updated</div>
+            <div class="small">{{ trivyDb()!.last_update ?? "—" }}</div>
+          </div>
+          <div class="col-sm-4">
+            <div class="text-muted" style="font-size: 0.7rem">Next update</div>
+            <div class="small">{{ trivyDb()!.next_update ?? "—" }}</div>
+          </div>
+        </div>
+      }
+    </div>
+  </div>
+
+  <!-- ── On-demand Scan ──────────────────────────────────────────────── -->
+  <div class="card border-0 mb-3">
+    <div class="card-header border-0">
+      <h6 class="fw-semibold mb-0">
+        <i class="bi bi-bug me-2"></i>On-demand Vulnerability Scan
+      </h6>
+    </div>
+    <div class="card-body">
+      <div class="row g-2 align-items-end mb-3">
+        <div class="col-sm-6">
+          <label class="form-label small fw-semibold">Image reference</label>
+          <input
+            type="text"
+            class="form-control form-control-sm"
+            placeholder="localhost:5000/myimage:latest"
+            [value]="imageToScan()"
+            (input)="imageToScan.set($any($event.target).value)"
+          />
+        </div>
+        <div class="col-sm-4">
+          <label class="form-label small fw-semibold">Severities</label>
+          <div class="d-flex flex-wrap gap-1">
+            @for (sev of severities; track sev) {
+              <button
+                type="button"
+                class="btn btn-xs"
+                [class]="severityBadgeClass(sev)"
+                [class.opacity-50]="!severityFilter().includes(sev)"
+                style="font-size: 0.7rem; padding: 2px 8px"
+                (click)="toggleSeverity(sev)"
+              >
+                {{ sev }}
+              </button>
+            }
+          </div>
+        </div>
+        <div class="col-sm-2 d-flex align-items-end gap-2">
+          <div class="form-check form-switch mb-0">
+            <input
+              class="form-check-input"
+              type="checkbox"
+              id="ignoreUnfixed"
+              [checked]="ignoreUnfixed()"
+              (change)="ignoreUnfixed.set($any($event.target).checked)"
+            />
+            <label class="form-check-label small" for="ignoreUnfixed">
+              Ignore unfixed
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <button
+        class="btn btn-primary btn-sm"
+        (click)="runScan()"
+        [disabled]="!imageToScan() || scanning()"
+      >
+        @if (scanning()) {
+          <span class="spinner-border spinner-border-sm me-1"></span>Scanning...
+        } @else {
+          <i class="bi bi-search me-1"></i>Scan Image
+        }
+      </button>
+
+      @if (scanResult()) {
+        <div class="mt-3">
+          <!-- Summary badges -->
+          <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
+            <span class="small fw-semibold"
+              >Results for {{ scanResult()!.image }}:</span
+            >
+            @for (sev of severities; track sev) {
+              @if ((scanResult()!.summary[sev] ?? 0) > 0) {
+                <span [class]="severityBadgeClass(sev)">
+                  {{ sev }}: {{ scanResult()!.summary[sev] }}
+                </span>
+              }
+            }
+            @if (scanResult()!.total === 0) {
+              <span class="badge bg-success">✅ No vulnerabilities found</span>
+            }
+          </div>
+
+          <!-- Vulnerability table -->
+          @if (scanResult()!.vulnerabilities.length > 0) {
+            <div
+              class="table-responsive"
+              style="max-height: 350px; overflow-y: auto"
+            >
+              <table
+                class="table table-sm table-hover mb-0"
+                style="font-size: 0.78rem"
+              >
+                <thead class="sticky-top table-light">
+                  <tr>
+                    <th>CVE ID</th>
+                    <th>Severity</th>
+                    <th>Package</th>
+                    <th>Installed</th>
+                    <th>Fixed</th>
+                    <th>CVSS</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (vuln of scanResult()!.vulnerabilities; track vuln.id) {
+                    <tr>
+                      <td>
+                        <a
+                          [href]="'https://nvd.nist.gov/vuln/detail/' + vuln.id"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          class="text-decoration-none"
+                          >{{ vuln.id }}</a
+                        >
+                      </td>
+                      <td>
+                        <span [class]="severityBadgeClass(vuln.severity)">{{
+                          vuln.severity
+                        }}</span>
+                      </td>
+                      <td>{{ vuln.package }}</td>
+                      <td>{{ vuln.installed_version }}</td>
+                      <td>{{ vuln.fixed_version ?? "—" }}</td>
+                      <td>{{ vuln.cvss_score ?? "—" }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+        </div>
+      }
+    </div>
+  </div>
+
+  <!-- ── Garbage Collection ──────────────────────────────────────────── -->
+  <div class="card border-0 mb-3">
+    <div class="card-header border-0">
+      <h6 class="fw-semibold mb-0">
+        <i class="bi bi-trash3 me-2"></i>Registry Garbage Collection
+      </h6>
+    </div>
+    <div class="card-body">
+      <p class="text-muted small mb-3">
+        Removes unreferenced blobs from the registry storage. The registry will
+        be briefly stopped during this operation.
+      </p>
+      <div class="d-flex gap-2">
+        <button
+          class="btn btn-sm btn-outline-secondary"
+          (click)="runGc(true)"
+          [disabled]="gcRunning()"
+        >
+          <i class="bi bi-eye me-1"></i>Dry Run
+        </button>
+        <button
+          class="btn btn-sm btn-danger"
+          (click)="runGc(false)"
+          [disabled]="gcRunning()"
+        >
+          @if (gcRunning()) {
+            <span class="spinner-border spinner-border-sm me-1"></span
+            >Running...
+          } @else {
+            <i class="bi bi-play-fill me-1"></i>Run GC
+          }
+        </button>
+      </div>
+      @if (gcOutput()) {
+        <pre
+          class="mt-3 p-2 bg-body-secondary rounded small"
+          style="max-height: 200px; overflow-y: auto; font-size: 0.72rem"
+          >{{ gcOutput() }}</pre
+        >
+      }
+    </div>
+  </div>
+</div>

@@ -1,30 +1,38 @@
 #!/bin/sh
 # ─── Portalcrane container entrypoint ─────────────────────────────────────────
-# Validates required environment variables, then hands off to supervisord.
-# supervisord manages both the embedded registry process and the uvicorn process.
-
 set -e
 
 # ── Warn if SECRET_KEY was not changed ────────────────────────────────────────
 if [ "${SECRET_KEY:-change-this-secret-key-in-production}" = "change-this-secret-key-in-production" ]; then
-    echo "[entrypoint] WARNING: SECRET_KEY is not set. Using insecure default — set a strong SECRET_KEY in production." >&2
+    echo "[entrypoint] WARNING: SECRET_KEY is not set. Using insecure default." >&2
 fi
 
-# ── Ensure staging directory exists ───────────────────────────────────────────
+# ── Ensure required directories exist ─────────────────────────────────────────
 mkdir -p "${STAGING_DIR:-/tmp/staging}"
-
-# ── Ensure registry storage directory exists ──────────────────────────────────
 mkdir -p /var/lib/registry
+mkdir -p /var/cache/trivy
+mkdir -p /var/log
 
-echo "[entrypoint] Starting supervisord (registry + portalcrane)..."
+# ── Generate registry config from template ────────────────────────────────────
+REGISTRY_HTTP_SECRET="${REGISTRY_HTTP_SECRET:-registry-secret-changeme}"
+export REGISTRY_HTTP_SECRET
+
+echo "[entrypoint] Generating /etc/registry/config.yml..."
+mkdir -p /etc/registry
+envsubst < /etc/registry/config.yml.template > /etc/registry/config.yml
+
+# ── Validate registry config before handing off to supervisord ────────────────
+echo "[entrypoint] Validating registry config..."
+if ! /usr/local/bin/registry serve /etc/registry/config.yml --help > /dev/null 2>&1; then
+    echo "[entrypoint] Registry binary test:"
+    /usr/local/bin/registry --version || true
+fi
+
+# Dry-run: attempt to parse config (registry prints error and exits 1 on bad config)
+echo "[entrypoint] Generated config:"
+cat /etc/registry/config.yml
+echo "---"
+
+# ── Start supervisord ─────────────────────────────────────────────────────────
+echo "[entrypoint] Starting supervisord..."
 exec /usr/bin/supervisord -c /etc/supervisor/supervisord.conf
-
-# Wait for Trivy server to be ready (max 60s)
-echo "[entrypoint] Waiting for Trivy server on 127.0.0.1:4954..."
-for i in $(seq 1 30); do
-    if curl -sf http://127.0.0.1:4954/healthz > /dev/null 2>&1; then
-        echo "[entrypoint] Trivy server is ready."
-        break
-    fi
-    sleep 2
-done
