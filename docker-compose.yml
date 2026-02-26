@@ -15,7 +15,7 @@ services:
       - "8080:8080"
     environment:
       # Registry connection
-      - REGISTRY_URL=http://registry:5000
+      - REGISTRY_URL=http://localhost:5000
       # REGISTRY_PUSH_HOST: the Docker daemon runs on the HOST, not inside the compose network.
       # The registry port 5000 is published on the host, so localhost:5000 always works.
       - REGISTRY_PUSH_HOST=localhost:5000
