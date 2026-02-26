@@ -1,17 +1,28 @@
 version: 0.1
+
 log:
   level: info
+  formatter: text
 
 storage:
   filesystem:
     rootdirectory: /var/lib/registry
   delete:
     enabled: true
+  redirect:
+    disable: false
+  maintenance:
+    uploadpurging:
+      enabled: true
+      age: 168h
+      interval: 24h
+      dryrun: false
 
 http:
   addr: 0.0.0.0:5000
   headers:
     X-Content-Type-Options: [nosniff]
+    X-Frame-Options: [SAMEORIGIN]
 
 health:
   storagedriver:

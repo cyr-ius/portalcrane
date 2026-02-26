@@ -13,45 +13,57 @@ services:
     container_name: portalcrane
     ports:
       - "8080:8080"
+      - "5000:5000"
     environment:
-      # Registry connection
+      # ── Registry — loopback because registry runs in the same container ───
       - REGISTRY_URL=http://localhost:5000
-      # REGISTRY_PUSH_HOST: the Docker daemon runs on the HOST, not inside the compose network.
-      # The registry port 5000 is published on the host, so localhost:5000 always works.
-      - REGISTRY_PUSH_HOST=localhost:5000
+      # REGISTRY_PUSH_HOST: the HOST Docker daemon cannot resolve "localhost"
+      # inside the container network. Use "127.0.0.1:5000" to push via the
+      # published port on the host.
+      - REGISTRY_PUSH_HOST=127.0.0.1:5000
       - REGISTRY_USERNAME=${REGISTRY_USERNAME:-}
       - REGISTRY_PASSWORD=${REGISTRY_PASSWORD:-}
-      # Admin credentials
+      # Optional: override the registry HTTP secret
+      - REGISTRY_HTTP_SECRET=${REGISTRY_HTTP_SECRET:-registry-secret}
+
+      # ── Admin credentials ─────────────────────────────────────────────────
       - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-changeme}
-      # JWT
+
+      # ── JWT ───────────────────────────────────────────────────────────────
       - SECRET_KEY=${SECRET_KEY:-change-this-secret-key-in-production}
-      # OIDC (optional)
+
+      # ── OIDC (optional) ───────────────────────────────────────────────────
       - OIDC_ENABLED=${OIDC_ENABLED:-false}
       - OIDC_ISSUER=${OIDC_ISSUER:-}
       - OIDC_CLIENT_ID=${OIDC_CLIENT_ID:-}
       - OIDC_CLIENT_SECRET=${OIDC_CLIENT_SECRET:-}
       - OIDC_REDIRECT_URI=${OIDC_REDIRECT_URI:-http://localhost:8080/auth/callback}
-      # Docker Hub (optional)
+
+      # ── Docker Hub (optional, for staging pulls) ──────────────────────────
       - DOCKERHUB_USERNAME=${DOCKERHUB_USERNAME:-}
       - DOCKERHUB_PASSWORD=${DOCKERHUB_PASSWORD:-}
-      # Other
+
+      # ── Staging ───────────────────────────────────────────────────────────
       - STAGING_DIR=/tmp/staging
       - ADVANCED_MODE=${ADVANCED_MODE:-false}
-      # Vulnerability scan policy (optional, requires trivy in the app image)
+
+      # ── Vulnerability scanning (Trivy) ────────────────────────────────────
       - VULN_SCAN_ENABLED=${VULN_SCAN_ENABLED:-false}
       - VULN_SCAN_SEVERITIES=${VULN_SCAN_SEVERITIES:-CRITICAL,HIGH}
       - VULN_IGNORE_UNFIXED=${VULN_IGNORE_UNFIXED:-false}
       - VULN_SCAN_TIMEOUT=${VULN_SCAN_TIMEOUT:-5m}
-      # HTTP Proxy (optional — uncomment if Docker Hub is not directly accessible)
-      # Only applies to Portalcrane's own outbound calls (Hub API, docker pull/push).
-      # The Docker daemon itself is NOT affected — external pulls remain unchanged.
+
+      # ── HTTP Proxy (optional) ─────────────────────────────────────────────
+      # Applies to Portalcrane outbound calls (Docker Hub API, OIDC, docker pull/push).
+      # Does NOT affect the Docker daemon itself.
       # - HTTP_PROXY=http://proxy.corp:3128
       # - HTTPS_PROXY=http://proxy.corp:3128
-      # - NO_PROXY=localhost,127.0.0.1,registry
+      # - NO_PROXY=localhost,127.0.0.1
       # - DOCKER_PULL_PROXY=http://proxy.corp:3128
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      - registry_data:/var/lib/registry
       - staging_data:/tmp/staging
     restart: unless-stopped
     healthcheck:
@@ -61,4 +73,5 @@ services:
       retries: 3
 
 volumes:
+  registry_data:
   staging_data:
