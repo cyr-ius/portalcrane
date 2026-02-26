@@ -86,11 +86,6 @@ class Settings(BaseSettings):
     # If empty, falls back to https_proxy / http_proxy.
     docker_pull_proxy: str = ""
 
-    # ── ClamAV configuration ──────────────────────────────────────────────────
-    clamav_enabled: bool = True
-    clamav_host: str = "localhost"
-    clamav_port: int = 3310
-
     # Vulnerability scanning configuration (complementary to ClamAV malware scan)
     vuln_scan_enabled: bool = True
     vuln_scan_severities: str = "CRITICAL,HIGH"

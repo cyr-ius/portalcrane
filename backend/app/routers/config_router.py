@@ -17,10 +17,6 @@ class PublicConfig(BaseModel):
     """Non-sensitive application configuration exposed to the frontend."""
 
     advanced_mode: bool
-    # ClamAV
-    clamav_enabled: bool
-    clamav_host: str
-    clamav_port: int
     # Vulnerability scanning
     vuln_scan_enabled: bool
     vuln_scan_severities: str
@@ -40,9 +36,6 @@ async def get_public_config(
     """
     return PublicConfig(
         advanced_mode=settings.advanced_mode,
-        clamav_enabled=settings.clamav_enabled,
-        clamav_host=settings.clamav_host,
-        clamav_port=settings.clamav_port,
         vuln_scan_enabled=settings.vuln_scan_enabled,
         vuln_scan_severities=settings.vuln_scan_severities,
         vuln_ignore_unfixed=settings.vuln_ignore_unfixed,
