@@ -22,6 +22,7 @@ from .routers import (
     registry,
     registry_proxy,
     staging,
+    system,
 )
 
 _FRONTEND_DIR = Path("/app/frontend/dist/portalcrane/browser").resolve()
@@ -70,6 +71,7 @@ app.include_router(about.router, prefix="/api", tags=["About"])
 app.include_router(
     registry_proxy.router, prefix="/registry-proxy", tags=["Registry Proxy"]
 )
+app.include_router(system.router)
 
 
 # Health check

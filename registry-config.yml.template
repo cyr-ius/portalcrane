@@ -1,3 +1,5 @@
+# registry-config.yml.template
+# Configuration for Docker Distribution Registry v3 (CNCF)
 version: 0.1
 
 log:
@@ -9,8 +11,6 @@ storage:
     rootdirectory: /var/lib/registry
   delete:
     enabled: true
-  redirect:
-    disable: false
   maintenance:
     uploadpurging:
       enabled: true
@@ -20,12 +20,7 @@ storage:
 
 http:
   addr: 0.0.0.0:5000
+  secret: ${REGISTRY_HTTP_SECRET}
   headers:
     X-Content-Type-Options: [nosniff]
     X-Frame-Options: [SAMEORIGIN]
-
-health:
-  storagedriver:
-    enabled: true
-    interval: 10s
-    threshold: 3

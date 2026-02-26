@@ -1092,6 +1092,19 @@
             }
           </a>
         </li>
+        <li class="nav-item">
+          <a
+            routerLink="/system"
+            routerLinkActive="active"
+            class="nav-link d-flex align-items-center gap-2"
+            [title]="sidebarCollapsed() ? 'System' : ''"
+          >
+            <i class="bi bi-shield-check nav-icon"></i>
+            @if (!sidebarCollapsed()) {
+              <span>System</span>
+            }
+          </a>
+        </li>
       </ul>
     </div>
 

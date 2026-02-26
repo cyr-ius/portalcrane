@@ -7,7 +7,6 @@ import {
 } from "../../core/services/app-config.service";
 import { AuthService } from "../../core/services/auth.service";
 import { ThemeService } from "../../core/services/theme.service";
-import { ClamAvConfigPanelComponent } from "../../shared/components/clamav-config-panel/clamav-config-panel.component";
 import { VulnConfigPanelComponent } from "../../shared/components/vuln-config-panel/vuln-config-panel.component";
 
 /** Badge colour mapping for each Trivy severity level. */
@@ -44,7 +43,7 @@ const SEVERITY_STYLE: Record<
 
 @Component({
   selector: "app-settings",
-  imports: [VulnConfigPanelComponent, ClamAvConfigPanelComponent],
+  imports: [VulnConfigPanelComponent],
   templateUrl: "./settings.component.html",
   styleUrl: "./settings.component.css",
 })
