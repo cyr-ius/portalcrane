@@ -7,6 +7,7 @@ import asyncio
 import re
 import shutil
 from datetime import datetime, timezone
+from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from pydantic import BaseModel
@@ -17,9 +18,15 @@ from .auth import UserInfo, get_current_user
 
 router = APIRouter()
 
+REGISTRY_BINARY = "/usr/local/bin/registry"
+REGISTRY_CONFIG = "/etc/registry/config.yml"
+REGISTRY_DATA_DIR = "/var/lib/registry"
+REGISTRY_REPOS_DIR = f"{REGISTRY_DATA_DIR}/docker/registry/v2/repositories"
+
+
 # In-memory GC job state
 _gc_state: dict = {
-    "status": "idle",  # idle | running | done | failed
+    "status": "idle",
     "started_at": None,
     "finished_at": None,
     "output": "",
@@ -316,14 +323,12 @@ def _bytes_to_human(size: int) -> str:
 
 async def _run_gc(settings: Settings):
     """
-    Background task: run registry garbage-collect.
-
-    Strategy:
-      1. Try to exec `registry garbage-collect` inside the registry container
-         via Docker CLI (most reliable when Docker socket is mounted).
-      2. Fallback: call the registry API storage delete endpoint if available.
-      3. Measure disk usage before/after to compute freed space.
+    Run registry garbage-collect directly inside the container.
+    Uses supervisord XML-RPC to stop/start the registry process,
+    then runs the registry binary directly (no docker exec needed).
     """
+    import xmlrpc.client
+
     global _gc_state
     _gc_state["status"] = "running"
     _gc_state["started_at"] = datetime.now(timezone.utc).isoformat()
@@ -331,63 +336,56 @@ async def _run_gc(settings: Settings):
     _gc_state["error"] = None
     _gc_state["freed_bytes"] = 0
 
-    registry_dir = "/var/lib/registry"
+    output_lines: list[str] = []
 
     try:
         # Measure disk usage before GC
         try:
-            before = shutil.disk_usage(registry_dir)
-            size_before = before.used
+            size_before = shutil.disk_usage(REGISTRY_DATA_DIR).used
         except Exception:
             size_before = 0
 
-        output_lines: list[str] = []
-
-        # ── Strategy 1: docker exec into the registry container ──────────────
-        container_name = await _find_registry_container_name()
-
-        if container_name:
-            output_lines.append(f"Found registry container: {container_name}")
-            gc_proc, gc_out, gc_err = await _run_registry_gc(container_name)
-            output_lines.append(gc_out)
-            if gc_err:
-                output_lines.append(gc_err)
-
-            if gc_proc.returncode != 0:
-                cleaned_ghosts = await _cleanup_ghosts_from_gc_error(
-                    container_name, gc_out, gc_err
-                )
-                if cleaned_ghosts:
-                    output_lines.append(
-                        "Detected ghost repository filesystem issues. "
-                        f"Cleaned {len(cleaned_ghosts)} ghost path(s): "
-                        + ", ".join(cleaned_ghosts)
-                    )
-                    output_lines.append(
-                        "Retrying garbage-collect after ghost cleanup..."
-                    )
-                    retry_proc, retry_out, retry_err = await _run_registry_gc(
-                        container_name
-                    )
-                    output_lines.append(retry_out)
-                    if retry_err:
-                        output_lines.append(retry_err)
-                    if retry_proc.returncode != 0:
-                        raise Exception(
-                            f"garbage-collect exited with code {retry_proc.returncode}"
-                        )
-                else:
-                    raise Exception(
-                        f"garbage-collect exited with code {gc_proc.returncode}"
-                    )
-
-        else:
-            output_lines.append("No running registry container found.")
-
-        # Measure disk usage after GC
+        # Stop registry via supervisord RPC
+        proxy = xmlrpc.client.ServerProxy("http://127.0.0.1:9001/RPC2")
+        output_lines.append("Stopping registry process via supervisord...")
         try:
-            after = shutil.disk_usage(registry_dir)
-            size_after = after.used
+            proxy.supervisor.stopProcess("registry")
+            await asyncio.sleep(2)
+            output_lines.append("Registry stopped.")
+        except Exception as e:
+            output_lines.append(f"Warning: could not stop registry cleanly: {e}")
+
+        try:
+            # Run garbage-collect directly with the local binary
+            cmd = [REGISTRY_BINARY, "garbage-collect", REGISTRY_CONFIG]
+            output_lines.append(f"Running: {' '.join(cmd)}")
+
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            gc_out, gc_err = await proc.communicate()
+            output_lines.append(gc_out.decode())
+            if gc_err.decode().strip():
+                output_lines.append(gc_err.decode())
+
+            if proc.returncode != 0:
+                raise Exception(f"garbage-collect exited with code {proc.returncode}")
+
+            output_lines.append("Garbage collection completed.")
+
+        finally:
+            # Always restart registry
+            try:
+                proxy.supervisor.startProcess("registry")
+                output_lines.append("Registry restarted.")
+            except Exception as e:
+                output_lines.append(f"Warning: could not restart registry: {e}")
+
+        # Measure after
+        try:
+            size_after = shutil.disk_usage(REGISTRY_DATA_DIR).used
             freed = max(0, size_before - size_after)
         except Exception:
             freed = 0
@@ -400,7 +398,7 @@ async def _run_gc(settings: Settings):
     except Exception as e:
         _gc_state["status"] = "failed"
         _gc_state["error"] = str(e)
-        _gc_state["output"] = "\n".join(output_lines) if "output_lines" in dir() else ""
+        _gc_state["output"] = "\n".join(output_lines).strip()
         _gc_state["finished_at"] = datetime.now(timezone.utc).isoformat()
 
 
@@ -474,47 +472,36 @@ async def purge_empty_repositories(
     _: UserInfo = Depends(get_current_user),
 ):
     """
-    Purge all ghost repositories (repositories with no tags) from the registry
-    filesystem.
-
-    The Distribution Registry stores repository metadata in the filesystem under
-    /var/lib/registry/docker/registry/v2/repositories/<name>/. Since the HTTP API
-    offers no endpoint to delete a repository entry, we remove the directory
-    directly via docker exec into the registry container.
+    Purge ghost repositories directly from the local filesystem.
+    In registry_inside mode, the registry data is at /var/lib/registry
+    inside the same container — no docker exec needed.
     """
     empty = await registry.list_empty_repositories()
     if not empty:
         return {"message": "No empty repositories found", "purged": []}
 
-    # Find the registry container — try by name first, then by image
-    container_name = await _find_registry_container_name()
-
-    if not container_name:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Registry container not found. Cannot purge directories without docker exec access.",
-        )
-
     purged = []
     errors = []
 
     for repo in empty:
-        repo_path = f"/var/lib/registry/docker/registry/v2/repositories/{repo}"
-        rm_proc = await asyncio.create_subprocess_exec(
-            "docker",
-            "exec",
-            container_name,
-            "rm",
-            "-rf",
-            repo_path,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        _, stderr = await rm_proc.communicate()
-        if rm_proc.returncode == 0:
-            purged.append(repo)
-        else:
-            errors.append({"repo": repo, "error": stderr.decode().strip()})
+        # Safely resolve path to prevent directory traversal
+        repo_path = Path(REGISTRY_REPOS_DIR) / repo
+        try:
+            # Ensure the resolved path stays within the repositories directory
+            resolved = repo_path.resolve()
+            base = Path(REGISTRY_REPOS_DIR).resolve()
+            if not str(resolved).startswith(str(base)):
+                errors.append({"repo": repo, "error": "Path traversal attempt blocked"})
+                continue
+
+            if resolved.exists():
+                shutil.rmtree(resolved)
+                purged.append(repo)
+            else:
+                # Directory already gone — consider it purged
+                purged.append(repo)
+        except Exception as e:
+            errors.append({"repo": repo, "error": str(e)})
 
     return {
         "message": f"Purged {len(purged)} empty repositories",

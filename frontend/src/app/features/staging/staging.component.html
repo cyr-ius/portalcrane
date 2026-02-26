@@ -372,6 +372,86 @@
                     </div>
                   }
 
+                  @if (
+                    job.vuln_result &&
+                    job.vuln_result.vulnerabilities &&
+                    job.vuln_result.vulnerabilities.length > 0
+                  ) {
+                    <div class="mt-2">
+                      <div class="text-muted mb-1" style="font-size: 0.7rem">
+                        <i class="bi bi-list-ul me-1"></i
+                        >{{ job.vuln_result.total }} CVE(s) found
+                      </div>
+                      <div
+                        class="table-responsive"
+                        style="max-height: 250px; overflow-y: auto"
+                      >
+                        <table
+                          class="table table-sm table-hover mb-0"
+                          style="font-size: 0.72rem"
+                        >
+                          <thead class="sticky-top table-light">
+                            <tr>
+                              <th>CVE</th>
+                              <th>Severity</th>
+                              <th>Package</th>
+                              <th>Installed</th>
+                              <th>Fixed</th>
+                              <th>CVSS</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            @for (
+                              vuln of job.vuln_result.vulnerabilities;
+                              track vuln.id
+                            ) {
+                              <tr>
+                                <td>
+                                  <a
+                                    [href]="
+                                      'https://nvd.nist.gov/vuln/detail/' +
+                                      vuln.id
+                                    "
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    class="text-decoration-none font-monospace"
+                                    style="font-size: 0.68rem"
+                                    >{{ vuln.id }}</a
+                                  >
+                                </td>
+                                <td>
+                                  <span
+                                    class="badge"
+                                    [class.bg-danger]="
+                                      vuln.severity === 'CRITICAL'
+                                    "
+                                    [class.bg-warning]="
+                                      vuln.severity === 'HIGH'
+                                    "
+                                    [class.text-dark]="vuln.severity === 'HIGH'"
+                                    [class.bg-primary]="
+                                      vuln.severity === 'MEDIUM'
+                                    "
+                                    [class.bg-secondary]="
+                                      vuln.severity === 'LOW' ||
+                                      vuln.severity === 'UNKNOWN'
+                                    "
+                                    style="font-size: 0.6rem"
+                                    >{{ vuln.severity }}</span
+                                  >
+                                </td>
+                                <td>{{ vuln.package }}</td>
+                                <td>{{ vuln.installed_version }}</td>
+                                <td>{{ vuln.fixed_version ?? "—" }}</td>
+                                <td>{{ vuln.cvss_score ?? "—" }}</td>
+                              </tr>
+                            }
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  }
+
                   <!-- Scan result -->
                   @if (job.scan_result) {
                     <div
