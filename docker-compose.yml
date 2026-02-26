@@ -16,15 +16,14 @@ services:
       - "5000:5000"
     environment:
       # ── Registry — loopback because registry runs in the same container ───
-      - REGISTRY_URL=http://localhost:5000
-      # REGISTRY_PUSH_HOST: the HOST Docker daemon cannot resolve "localhost"
-      # inside the container network. Use "127.0.0.1:5000" to push via the
-      # published port on the host.
-      - REGISTRY_PUSH_HOST=127.0.0.1:5000
       - REGISTRY_USERNAME=${REGISTRY_USERNAME:-}
       - REGISTRY_PASSWORD=${REGISTRY_PASSWORD:-}
       # Optional: override the registry HTTP secret
       - REGISTRY_HTTP_SECRET=${REGISTRY_HTTP_SECRET:-registry-secret}
+      # REGISTRY_PUSH_HOST: the HOST Docker daemon cannot resolve "localhost"
+      # inside the container network. Use "127.0.0.1:5000" to push via the
+      # published port on the host.
+      - REGISTRY_PUSH_HOST=127.0.0.1:8080/registry-proxy
 
       # ── Admin credentials ─────────────────────────────────────────────────
       - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}

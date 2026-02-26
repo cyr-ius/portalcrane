@@ -82,7 +82,13 @@ async def _proxy(request: Request, v2_path: str) -> Response:
 
     upstream_url = f"{settings.registry_url.rstrip('/')}/v2/{v2_path}"
     method = request.method
+
+    # Filter hop-by-hop headers AND remove the original Host header.
+    # The Host header MUST match the registry's own address for _state JWT
+    # validation to succeed on blob upload sessions (PATCH after POST).
     req_headers = _filter_headers(dict(request.headers))
+    req_headers.pop("host", None)  # httpx will set the correct Host automatically
+
     body = await request.body()
 
     auth = None
@@ -93,7 +99,9 @@ async def _proxy(request: Request, v2_path: str) -> Response:
 
     try:
         async with httpx.AsyncClient(
-            auth=auth, timeout=settings.proxy_timeout, follow_redirects=True
+            auth=auth,
+            timeout=settings.proxy_timeout,
+            follow_redirects=False,
         ) as client:
             upstream = await client.request(
                 method=method,
@@ -119,7 +127,6 @@ async def _proxy(request: Request, v2_path: str) -> Response:
     elapsed = time.monotonic() - t0
     ip = _client_ip(request)
 
-    # Audit logging
     if method in _PULL_METHODS:
         await audit.log_pull(
             path=v2_path,
@@ -139,12 +146,14 @@ async def _proxy(request: Request, v2_path: str) -> Response:
             client_ip=ip,
         )
 
-    # Rewrite Location headers so clients follow the proxy, not the internal host
     resp_headers = _filter_headers(dict(upstream.headers))
+
+    # Rewrite Location: replace internal registry URL with the proxy prefix
+    # so Docker follows the correct path on the next request.
     if "location" in resp_headers:
-        resp_headers["location"] = resp_headers["location"].replace(
-            settings.registry_url.rstrip("/"), "/registry-proxy"
-        )
+        loc = resp_headers["location"]
+        resp_headers["location"] = loc
+        logger.debug("Rewrote Location: %s", loc)
 
     return Response(
         content=upstream.content,

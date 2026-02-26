@@ -71,6 +71,7 @@ app.include_router(about.router, prefix="/api", tags=["About"])
 app.include_router(
     registry_proxy.router, prefix="/registry-proxy", tags=["Registry Proxy"]
 )
+app.include_router(registry_proxy.router, prefix="", tags=["Registry Proxy (root v2)"])
 app.include_router(system.router)
 
 
