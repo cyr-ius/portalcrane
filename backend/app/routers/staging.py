@@ -6,7 +6,6 @@ Pipeline: Pull from Docker Hub → ClamAV Scan (optional) → Trivy CVE Scan (op
 import asyncio
 import json
 import os
-import socket
 import uuid
 from enum import Enum
 
@@ -90,16 +89,6 @@ class DockerHubSearchResult(BaseModel):
     is_automated: bool
 
 
-class ClamAVStatus(BaseModel):
-    """ClamAV daemon reachability status."""
-
-    enabled: bool  # whether ClamAV scanning is enabled in server config
-    reachable: bool  # whether the daemon TCP socket is reachable right now
-    host: str
-    port: int
-    message: str
-
-
 class DanglingImagesResult(BaseModel):
     """Result of dangling images inspection on the host Docker daemon."""
 
@@ -117,11 +106,6 @@ class OrphanTarballsResult(BaseModel):
 
 
 # ─── Override helpers ────────────────────────────────────────────────────────
-
-
-def _effective_clamav(settings: Settings, override: bool | None) -> bool:
-    """Return the effective ClamAV-enabled flag for a given job."""
-    return override if override is not None else settings.clamav_enabled
 
 
 def _effective_vuln(settings: Settings, override: bool | None) -> bool:
@@ -152,7 +136,6 @@ async def run_pull_pipeline(
     image: str,
     tag: str,
     settings: Settings,
-    clamav_enabled_override: bool | None = None,
     vuln_scan_enabled_override: bool | None = None,
     vuln_severities_override: str | None = None,
 ):
@@ -168,13 +151,15 @@ async def run_pull_pipeline(
     pull_env = {**os.environ, **settings.docker_env_proxy}
 
     # Resolve effective scan behaviour for this job
-    do_clamav = _effective_clamav(settings, clamav_enabled_override)
+    pull_env = {**os.environ, **settings.docker_env_proxy}
     do_vuln = _effective_vuln(settings, vuln_scan_enabled_override)
     severities = _effective_severities(settings, vuln_severities_override)
 
     try:
         # Build docker pull command
         pull_image = f"{image}:{tag}"
+
+        # Optional Docker Hub authentication
         if settings.dockerhub_username and settings.dockerhub_password:
             # Login first
             login_proc = await asyncio.create_subprocess_exec(
@@ -206,7 +191,7 @@ async def run_pull_pipeline(
 
         _jobs[job_id]["progress"] = 50
 
-        if do_clamav or do_vuln:
+        if do_vuln:
             _jobs[job_id]["message"] = "Image pulled. Saving for scanning..."
 
             # Export image to tarball for scanning
@@ -222,40 +207,27 @@ async def run_pull_pipeline(
             await save_proc.communicate()
             _jobs[job_id]["message"] = "Image saved. Starting scans..."
 
-        # ── ClamAV scan (optional) ────────────────────────────────────────────
-        if do_clamav:
-            _jobs[job_id]["progress"] = 70
-            _jobs[job_id]["status"] = JobStatus.SCANNING
-            _jobs[job_id]["message"] = "Scanning with ClamAV..."
-
-            # ClamAV scan via clamdscan
-            scan_result = await _clamav_scan(tarball_path, settings)
-            _jobs[job_id]["scan_result"] = scan_result
-
-            if "FOUND" in scan_result or "ERROR" in scan_result:
-                _jobs[job_id]["status"] = JobStatus.SCAN_INFECTED
-                _jobs[job_id]["message"] = f"⚠️ Scan FAILED: {scan_result}"
-                _jobs[job_id]["progress"] = 100
-                # Remove infected tarball
-                if os.path.exists(tarball_path):
-                    os.remove(tarball_path)
-                return
-        else:
-            # ClamAV disabled for this job — skip to vuln or clean state
-            _jobs[job_id]["status"] = JobStatus.SCAN_SKIPPED
-            _jobs[job_id]["scan_result"] = "ClamAV scan disabled — skipped."
-            _jobs[job_id]["progress"] = 70
-            _jobs[job_id]["message"] = "ClamAV scan skipped."
+        # ── Export image to tarball for Trivy scan ────────────────────────────
+        if do_vuln:
+            _jobs[job_id]["message"] = "Image pulled. Saving for Trivy scan..."
+            save_proc = await asyncio.create_subprocess_exec(
+                "docker",
+                "save",
+                "-o",
+                tarball_path,
+                pull_image,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            await save_proc.communicate()
+            _jobs[job_id]["message"] = "Image saved. Queuing Trivy scan..."
 
         # ── Vulnerability scan (optional) ─────────────────────────────────────
         if do_vuln:
             _jobs[job_id]["status"] = JobStatus.VULN_SCANNING
-            _jobs[job_id]["progress"] = 85
-            _jobs[job_id]["message"] = (
-                "ClamAV clean. Running vulnerability scan..."
-                if do_clamav
-                else "Running vulnerability scan..."
-            )
+            _jobs[job_id]["progress"] = 75
+            _jobs[job_id]["message"] = "Running Trivy vulnerability scan..."
+
             vuln_summary = await _vuln_scan_image(tarball_path, settings, severities)
             _jobs[job_id]["vuln_result"] = vuln_summary
 
@@ -270,6 +242,12 @@ async def run_pull_pipeline(
                     os.remove(tarball_path)
                 return
 
+        else:
+            _jobs[job_id]["status"] = JobStatus.SCAN_SKIPPED
+            _jobs[job_id]["vuln_result"] = None
+            _jobs[job_id]["progress"] = 75
+            _jobs[job_id]["message"] = "Trivy scan disabled — skipped."
+
         _jobs[job_id]["status"] = JobStatus.SCAN_CLEAN
         _jobs[job_id]["message"] = "✅ Scan passed. Ready to push to registry."
         _jobs[job_id]["progress"] = 100
@@ -279,96 +257,6 @@ async def run_pull_pipeline(
         _jobs[job_id]["error"] = str(e)
         _jobs[job_id]["message"] = f"Failed: {str(e)}"
         _jobs[job_id]["progress"] = 100
-
-
-async def _clamav_scan(path: str, settings: Settings) -> str:
-    """Run ClamAV scan on a file via clamd INSTREAM protocol over TCP."""
-    import struct
-
-    async def _scan_via_clamd_socket(host: str, port: int, file_path: str) -> str:
-        """Stream a file to clamd using the INSTREAM protocol."""
-
-        # Use a larger chunk to reduce syscall overhead on big tarballs
-        CHUNK_SIZE = 65536  # 64 KB instead of 4 KB
-        CONNECT_TIMEOUT = 30
-        # Large images can take several minutes to scan — use a generous timeout
-        SCAN_TIMEOUT = 600  # 10 minutes
-
-        try:
-            reader, writer = await asyncio.wait_for(
-                asyncio.open_connection(host, port),
-                timeout=CONNECT_TIMEOUT,
-            )
-
-            # Send INSTREAM command (null-terminated)
-            writer.write(b"zINSTREAM\0")
-
-            # Stream file in chunks without draining on every chunk
-            file_size = os.path.getsize(file_path)
-            bytes_sent = 0
-            with open(file_path, "rb") as f:
-                while True:
-                    chunk = f.read(CHUNK_SIZE)
-                    if not chunk:
-                        break
-                    writer.write(struct.pack("!I", len(chunk)) + chunk)
-                    bytes_sent += len(chunk)
-
-                    # Drain periodically (every ~8 MB) to avoid buffer overflow
-                    # without doing a syscall on every 64KB chunk
-                    if bytes_sent % (8 * 1024 * 1024) < CHUNK_SIZE:
-                        await writer.drain()
-
-            # End of stream marker: 4-byte zero
-            writer.write(struct.pack("!I", 0))
-            await writer.drain()
-
-            # Read full response — clamd may send it in multiple TCP segments
-            response_parts = []
-            try:
-                async with asyncio.timeout(SCAN_TIMEOUT):
-                    while True:
-                        data = await reader.read(4096)
-                        if not data:
-                            break
-                        response_parts.append(data)
-                        # clamd always ends its response with a newline
-                        if b"\n" in data or b"\0" in data:
-                            break
-            except asyncio.TimeoutError:
-                raise ConnectionRefusedError(
-                    f"Timeout waiting for clamd response after {SCAN_TIMEOUT}s "
-                    f"(file size: {file_size / 1024 / 1024:.1f} MB)"
-                )
-
-            writer.close()
-            await writer.wait_closed()
-
-            result = b"".join(response_parts).decode(errors="replace").strip()
-            return result
-
-        except asyncio.TimeoutError:
-            raise ConnectionRefusedError(
-                f"Timeout connecting to clamd at {host}:{port}"
-            )
-
-    try:
-        result = await _scan_via_clamd_socket(
-            settings.clamav_host, settings.clamav_port, path
-        )
-        # Normalize output to match clamscan-like format used downstream
-        if "OK" in result:
-            return f"{path}: OK"
-        elif "FOUND" in result:
-            return f"{path}: {result} FOUND"
-        elif "size limit exceeded" in result.lower():
-            # StreamMaxLength hit — treat as scan skipped, not infected
-            return f"{path}: OK (stream size limit — scan partial)"
-        else:
-            return f"{path}: {result} ERROR"
-    except Exception as e:
-        # Fail open: if clamd is unreachable, log and continue
-        return f"OK (scan skipped: {str(e)})"
 
 
 async def _vuln_scan_image(
@@ -390,8 +278,10 @@ async def _vuln_scan_image(
         "--severity",
         ",".join(effective_severities),
     ]
+
     if settings.vuln_ignore_unfixed:
         cmd.append("--ignore-unfixed")
+
     cmd += ["--input", tarball_path]
 
     try:
@@ -477,6 +367,22 @@ async def run_push_pipeline(
 
         _jobs[job_id]["progress"] = 40
 
+        # Login to registry if credentials are configured
+        if settings.registry_username and settings.registry_password:
+            login_proc = await asyncio.create_subprocess_exec(
+                "docker",
+                "login",
+                push_host,
+                "-u",
+                settings.registry_username,
+                "-p",
+                settings.registry_password,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                env=pull_env,
+            )
+            await login_proc.communicate()
+
         # Push to the private registry
         push_proc = await asyncio.create_subprocess_exec(
             "docker",
@@ -529,52 +435,6 @@ async def run_push_pipeline(
 
 
 # ─── Endpoints ────────────────────────────────────────────────────────────────
-
-
-@router.get("/clamav/status", response_model=ClamAVStatus)
-async def get_clamav_status(
-    settings: Settings = Depends(get_settings),
-    _: UserInfo = Depends(get_current_user),
-):
-    """
-    Check whether ClamAV is enabled in the server configuration and whether
-    its daemon TCP socket is reachable right now.
-    Used by the frontend to display a live health indicator.
-    """
-    if not settings.clamav_enabled:
-        return ClamAVStatus(
-            enabled=False,
-            reachable=False,
-            host=settings.clamav_host,
-            port=settings.clamav_port,
-            message="ClamAV is disabled in configuration (CLAMAV_ENABLED=false).",
-        )
-
-    # Non-blocking TCP probe
-    reachable = False
-    try:
-        loop = asyncio.get_event_loop()
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(3)
-        await loop.run_in_executor(
-            None, sock.connect, (settings.clamav_host, settings.clamav_port)
-        )
-        sock.close()
-        reachable = True
-    except Exception:
-        reachable = False
-
-    return ClamAVStatus(
-        enabled=True,
-        reachable=reachable,
-        host=settings.clamav_host,
-        port=settings.clamav_port,
-        message=(
-            f"ClamAV daemon reachable at {settings.clamav_host}:{settings.clamav_port}"
-            if reachable
-            else f"ClamAV daemon NOT reachable at {settings.clamav_host}:{settings.clamav_port}"
-        ),
-    )
 
 
 @router.post("/pull", response_model=StagingJob)
