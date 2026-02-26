@@ -126,19 +126,30 @@
 
           <!-- Active scan config summary (read-only, driven by Settings) -->
           <div class="scan-summary d-flex gap-2 flex-wrap mb-3">
-            <span
-              class="badge"
-              [class.bg-success-subtle]="configService.vulnEnabled()"
-              [class.text-success]="configService.vulnEnabled()"
-              [class.bg-secondary-subtle]="!configService.vulnEnabled()"
-              [class.text-secondary]="!configService.vulnEnabled()"
-            >
+            <span class="badge ...">
               <i class="bi bi-bug me-1"></i>
-              Trivy {{ configService.vulnEnabled() ? "ON" : "OFF" }}
-              @if (configService.vulnEnabled()) {
-                <span class="ms-1 opacity-75"
-                  >({{ configService.vulnSeveritiesString() }})</span
-                >
+              Trivy
+              @if (configService.advancedMode()) {
+                {{ configService.vulnEnabled() ? "ON" : "OFF" }}
+                @if (configService.vulnEnabled()) {
+                  <span class="ms-1 opacity-75"
+                    >({{ configService.vulnSeveritiesString() }})</span
+                  >
+                }
+              } @else {
+                <!-- Display server-side defaults when advanced mode is off -->
+                {{
+                  configService.serverConfig()?.vuln_scan_enabled
+                    ? "ON (env)"
+                    : "OFF (env)"
+                }}
+                @if (configService.serverConfig()?.vuln_scan_enabled) {
+                  <span class="ms-1 opacity-75"
+                    >({{
+                      configService.serverConfig()?.vuln_scan_severities
+                    }})</span
+                  >
+                }
               }
             </span>
             <a

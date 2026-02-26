@@ -189,22 +189,6 @@ async def run_pull_pipeline(
 
         _jobs[job_id]["progress"] = 50
 
-        if do_vuln:
-            _jobs[job_id]["message"] = "Image pulled. Saving for scanning..."
-
-            # Export image to tarball for scanning
-            save_proc = await asyncio.create_subprocess_exec(
-                "docker",
-                "save",
-                "-o",
-                tarball_path,
-                pull_image,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            await save_proc.communicate()
-            _jobs[job_id]["message"] = "Image saved. Starting scans..."
-
         # ── Export image to tarball for Trivy scan ────────────────────────────
         if do_vuln:
             _jobs[job_id]["message"] = "Image pulled. Saving for Trivy scan..."
@@ -220,8 +204,7 @@ async def run_pull_pipeline(
             await save_proc.communicate()
             _jobs[job_id]["message"] = "Image saved. Queuing Trivy scan..."
 
-        # ── Vulnerability scan (optional) ─────────────────────────────────────
-        if do_vuln:
+            # ── Vulnerability scan ─────────────────────────────────────
             _jobs[job_id]["status"] = JobStatus.VULN_SCANNING
             _jobs[job_id]["progress"] = 75
             _jobs[job_id]["message"] = "Running Trivy vulnerability scan..."
@@ -262,7 +245,8 @@ async def _vuln_scan_image(
 ) -> dict:
     """
     Run Trivy vulnerability scan on a staged image tarball.
-    Returns full vulnerability details for frontend display.
+    Delegates to trivy_service.scan_tarball() to get full CVE details
+    including individual vulnerabilities for the frontend table.
     """
     from ..services.trivy_service import scan_tarball
 
@@ -287,7 +271,6 @@ async def _vuln_scan_image(
         "blocked": blocked,
         "severities": effective_severities,
         "counts": counts,
-        # Full vulnerability list for frontend CVE table display
         "vulnerabilities": result.get("vulnerabilities", []),
         "total": result.get("total", 0),
         "scanned_at": result.get("scanned_at"),
