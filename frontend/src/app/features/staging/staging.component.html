@@ -1,5 +1,5 @@
 <div class="p-4">
-  <!-- Page header + ClamAV live indicator -->
+  <!-- Page header -->
   <div
     class="d-flex align-items-start justify-content-between mb-4 flex-wrap gap-2"
   >
@@ -218,23 +218,6 @@
                   <!-- Scan badges applied on this job (advanced mode only) -->
                   @if (configService.advancedMode()) {
                     <div class="d-flex gap-1 mb-2 flex-wrap">
-                      @if (job.clamav_enabled_override !== null) {
-                        <span
-                          class="badge"
-                          [class.bg-success-subtle]="
-                            job.clamav_enabled_override
-                          "
-                          [class.text-success]="job.clamav_enabled_override"
-                          [class.bg-secondary-subtle]="
-                            !job.clamav_enabled_override
-                          "
-                          [class.text-secondary]="!job.clamav_enabled_override"
-                          style="font-size: 0.65rem"
-                        >
-                          <i class="bi bi-shield-virus me-1"></i>ClamAV
-                          {{ job.clamav_enabled_override ? "ON" : "OFF" }}
-                        </span>
-                      }
                       @if (job.vuln_scan_enabled_override !== null) {
                         <span
                           class="badge"

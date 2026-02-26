@@ -28,7 +28,6 @@ export interface StagingJob {
   target_tag: string | null;
   error: string | null;
   // Overrides that were applied for this job (null = server default was used)
-  clamav_enabled_override: boolean | null;
   vuln_scan_enabled_override: boolean | null;
   vuln_severities_override: string | null;
 }
@@ -53,7 +52,6 @@ export interface PullOptions {
   image: string;
   tag: string;
   /** User-level overrides coming from Settings (null = use server default) */
-  clamav_enabled_override?: boolean | null;
   vuln_scan_enabled_override?: boolean | null;
   vuln_severities_override?: string | null;
 }

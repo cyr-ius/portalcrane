@@ -86,7 +86,7 @@ class Settings(BaseSettings):
     # If empty, falls back to https_proxy / http_proxy.
     docker_pull_proxy: str = ""
 
-    # Vulnerability scanning configuration (complementary to ClamAV malware scan)
+    # Vulnerability scanning configuration
     vuln_scan_enabled: bool = True
     vuln_scan_severities: str = "CRITICAL,HIGH"
     vuln_ignore_unfixed: bool = False

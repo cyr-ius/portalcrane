@@ -2,10 +2,7 @@ import { Component, DestroyRef, inject, OnInit, signal } from "@angular/core";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { FormsModule } from "@angular/forms";
 import { filter, switchMap, timer } from "rxjs";
-import {
-  AppConfigService,
-  ClamAVStatus,
-} from "../../core/services/app-config.service";
+import { AppConfigService } from "../../core/services/app-config.service";
 import {
   DockerHubResult,
   StagingJob,
@@ -43,10 +40,6 @@ export class StagingComponent implements OnInit {
   pushing = signal<string | null>(null);
   availableTags = signal<string[]>([]);
   pushTargets = signal<Record<string, string>>({});
-
-  // ── ClamAV live indicator ──────────────────────────────────────────────────
-  clamavStatus = signal<ClamAVStatus | null>(null);
-  clamavLoading = signal(false);
 
   ngOnInit() {
     this.loadJobs();

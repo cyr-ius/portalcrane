@@ -1,6 +1,6 @@
 """
 Portalcrane - Staging Router
-Pipeline: Pull from Docker Hub → ClamAV Scan (optional) → Trivy CVE Scan (optional) → Push to Registry
+Pipeline: Pull from Docker Hub → Trivy CVE Scan (optional) → Push to Registry
 """
 
 import asyncio
@@ -54,7 +54,6 @@ class StagingJob(BaseModel):
     target_tag: str | None = None
     error: str | None = None
     # Per-job scan overrides (null = use server default)
-    clamav_enabled_override: bool | None = None
     vuln_scan_enabled_override: bool | None = None
     vuln_severities_override: str | None = None
 
@@ -65,7 +64,6 @@ class PullRequest(BaseModel):
     image: str
     tag: str = "latest"
     # Optional per-job overrides — only honoured when advanced mode is active server-side
-    clamav_enabled_override: bool | None = None
     vuln_scan_enabled_override: bool | None = None
     vuln_severities_override: str | None = None
 
@@ -139,7 +137,7 @@ async def run_pull_pipeline(
     vuln_scan_enabled_override: bool | None = None,
     vuln_severities_override: str | None = None,
 ):
-    """Background task: pull image, optionally scan with ClamAV then Trivy."""
+    """Background task: pull image, optionally scan with Trivy."""
     staging_dir = settings.staging_dir
     tarball_path = os.path.join(staging_dir, f"{job_id}.tar")
 
@@ -430,7 +428,6 @@ async def pull_image(
         "target_image": None,
         "target_tag": None,
         "error": None,
-        "clamav_enabled_override": request.clamav_enabled_override,
         "vuln_scan_enabled_override": request.vuln_scan_enabled_override,
         "vuln_severities_override": request.vuln_severities_override,
     }
@@ -441,7 +438,6 @@ async def pull_image(
         request.image,
         request.tag,
         settings,
-        request.clamav_enabled_override,
         request.vuln_scan_enabled_override,
         request.vuln_severities_override,
     )
@@ -494,7 +490,6 @@ async def push_image(
         )
 
     job = _jobs[request.job_id]
-    # Allow push when scan is clean OR when ClamAV was skipped
     if job["status"] not in (JobStatus.SCAN_CLEAN, JobStatus.SCAN_SKIPPED):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -580,8 +575,17 @@ async def get_dockerhub_tags(
     settings: Settings = Depends(get_settings),
     _: UserInfo = Depends(get_current_user),
 ):
-    """Get available tags for a Docker Hub image."""
-    url = f"{settings.dockerhub_api_url}/repositories/{image}/tags/?page_size=20&ordering=last_updated"
+    """Get available tags for a Docker Hub image.
+
+    Official images (e.g. 'nginx', 'redis') live under the 'library' namespace
+    on Docker Hub. The API requires the full path: library/nginx.
+    User/org images (e.g. 'bitnami/nginx') are passed through unchanged.
+    """
+    # Normalize official images: "nginx" → "library/nginx"
+    # Images that already contain a slash are user/org images and stay as-is
+    api_image = image if "/" in image else f"library/{image}"
+
+    url = f"{settings.dockerhub_api_url}/repositories/{api_image}/tags/?page_size=20&ordering=last_updated"
     proxy = settings.httpx_proxy
     try:
         async with httpx.AsyncClient(
@@ -593,7 +597,7 @@ async def get_dockerhub_tags(
         tags = [t["name"] for t in data.get("results", [])]
     except Exception:
         tags = ["latest"]
-    return {"tags": tags}
+    return {"image": image, "tags": tags}
 
 
 @router.get("/vuln-config")
