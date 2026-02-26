@@ -14,7 +14,7 @@ mkdir -p /var/cache/trivy
 mkdir -p /var/log
 
 # ── Generate registry config from template ────────────────────────────────────
-REGISTRY_HTTP_SECRET="${REGISTRY_HTTP_SECRET:-registry-secret-changeme}"
+REGISTRY_HTTP_SECRET=${SECRET_KEY}
 export REGISTRY_HTTP_SECRET
 
 echo "[entrypoint] Generating /etc/registry/config.yml..."
