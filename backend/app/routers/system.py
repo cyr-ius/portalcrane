@@ -1,10 +1,11 @@
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
+
 from ..services.process_manager import (
     get_all_process_statuses,
     run_registry_garbage_collect,
 )
-from services.trivy_service import get_trivy_db_info, scan_image, update_trivy_db
+from ..services.trivy_service import get_trivy_db_info, scan_image, update_trivy_db
 
 router = APIRouter(prefix="/api/system", tags=["system"])
 

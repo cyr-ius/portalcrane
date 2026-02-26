@@ -1,12 +1,21 @@
+"""
+Portalcrane - Trivy Service
+Calls the Trivy server HTTP API instead of spawning a subprocess.
+The Trivy server runs on localhost:4954 (managed by supervisord).
+"""
+
 import asyncio
 import json
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
+import httpx
+
 TRIVY_BINARY = "/usr/local/bin/trivy"
 TRIVY_CACHE_DIR = "/var/cache/trivy"
 TRIVY_DB_METADATA = Path(TRIVY_CACHE_DIR) / "db" / "metadata.json"
+TRIVY_SERVER_URL = "http://127.0.0.1:4954"
 
 
 async def get_trivy_db_info() -> dict:
@@ -31,7 +40,6 @@ async def get_trivy_db_info() -> dict:
         info["next_update"] = data.get("NextUpdate")
         info["version"] = data.get("Version")
 
-        # Consider up to date if next update is in the future
         if info["next_update"]:
             next_dt = datetime.fromisoformat(info["next_update"].replace("Z", "+00:00"))
             info["up_to_date"] = datetime.now(next_dt.tzinfo) < next_dt
@@ -47,8 +55,8 @@ async def scan_image(
     ignore_unfixed: bool = False,
 ) -> dict:
     """
-    Scans a container image stored in the local registry using Trivy.
-    Returns structured vulnerability results.
+    Scans a container image using the Trivy server HTTP API.
+    The image must be accessible from inside the container (e.g. localhost:5000/myimage:tag).
 
     Args:
         image_ref: Full image reference, e.g. localhost:5000/myimage:latest
@@ -58,46 +66,101 @@ async def scan_image(
     if severity is None:
         severity = ["UNKNOWN", "LOW", "MEDIUM", "HIGH", "CRITICAL"]
 
+    # Build Trivy server scan request payload
+    payload = {
+        "image": image_ref,
+        "options": {
+            "severity": severity,
+            "ignoreUnfixed": ignore_unfixed,
+            "insecure": True,  # Allow self-signed certs on local registry
+        },
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=300) as client:
+            response = await client.post(
+                f"{TRIVY_SERVER_URL}/scan",
+                json=payload,
+            )
+            response.raise_for_status()
+            raw = response.json()
+    except httpx.HTTPError as exc:
+        return {
+            "success": False,
+            "error": f"Trivy server unreachable: {exc}",
+            "image": image_ref,
+        }
+
+    try:
+        return _parse_trivy_result(image_ref, raw)
+    except Exception as exc:
+        return {
+            "success": False,
+            "error": f"Failed to parse Trivy response: {exc}",
+            "image": image_ref,
+        }
+
+
+async def scan_tarball(
+    tarball_path: str,
+    severity: list[str] | None = None,
+    ignore_unfixed: bool = False,
+) -> dict:
+    """
+    Scans a local tarball using the Trivy CLI (--input flag).
+    Used by the staging pipeline which exports images as .tar before scanning.
+    The Trivy server does not support tarball scanning via HTTP, so we fall back
+    to the CLI here, reusing the shared cache populated by the server.
+
+    Args:
+        tarball_path: Absolute path to the .tar file
+        severity: Filter by severity levels
+        ignore_unfixed: Skip vulnerabilities without a known fix
+    """
+    if severity is None:
+        severity = ["UNKNOWN", "LOW", "MEDIUM", "HIGH", "CRITICAL"]
+
     cmd = [
         TRIVY_BINARY,
         "image",
-        "--cache-dir",
-        TRIVY_CACHE_DIR,
+        "--quiet",
         "--format",
         "json",
+        "--cache-dir",
+        TRIVY_CACHE_DIR,
         "--severity",
         ",".join(severity),
-        "--insecure",  # Allow self-signed certs on local registry
+        "--skip-db-update",  # DB already managed by trivy-server / updater
+        "--skip-java-db-update",  # Avoid redundant network calls
     ]
 
     if ignore_unfixed:
         cmd.append("--ignore-unfixed")
 
-    cmd.append(image_ref)
+    cmd += ["--input", tarball_path]
 
-    proc = await asyncio.create_subprocess_exec(
-        *cmd,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+    except FileNotFoundError as exc:
+        raise RuntimeError(
+            "Trivy binary not found. Check /usr/local/bin/trivy."
+        ) from exc
+
     stdout, stderr = await proc.communicate()
 
     if proc.returncode not in (0, 1):  # 0 = clean, 1 = vulnerabilities found
-        return {
-            "success": False,
-            "error": stderr.decode(),
-            "image": image_ref,
-        }
+        raise RuntimeError(f"Trivy scan failed: {stderr.decode() or stdout.decode()}")
 
     try:
-        raw = json.loads(stdout.decode())
-        return _parse_trivy_result(image_ref, raw)
-    except json.JSONDecodeError:
-        return {
-            "success": False,
-            "error": "Failed to parse Trivy output",
-            "image": image_ref,
-        }
+        raw = json.loads(stdout.decode() or "{}")
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"Unable to parse Trivy output: {exc}") from exc
+
+    return _parse_trivy_result(tarball_path, raw)
 
 
 def _parse_trivy_result(image_ref: str, raw: dict) -> dict:
@@ -130,7 +193,6 @@ def _parse_trivy_result(image_ref: str, raw: dict) -> dict:
                 }
             )
 
-    # Sort by CVSS score descending
     vulnerabilities.sort(key=lambda v: v.get("cvss_score") or 0, reverse=True)
 
     return {
@@ -146,18 +208,19 @@ def _parse_trivy_result(image_ref: str, raw: dict) -> dict:
 def _extract_cvss(vuln: dict) -> Optional[float]:
     """Extracts the highest CVSS v3 score available from a vulnerability entry."""
     cvss_map = vuln.get("CVSS", {})
-    scores = []
-    for source, data in cvss_map.items():
-        v3 = data.get("V3Score")
-        if v3 is not None:
-            scores.append(float(v3))
+    scores = [
+        float(data["V3Score"])
+        for data in cvss_map.values()
+        if data.get("V3Score") is not None
+    ]
     return max(scores) if scores else None
 
 
 async def update_trivy_db() -> dict:
     """
-    Forces an immediate Trivy database update.
-    Called on-demand from the API.
+    Forces an immediate Trivy database update via the CLI.
+    The trivy-server process will pick up the refreshed DB automatically
+    since it reads from the shared cache directory.
     """
     proc = await asyncio.create_subprocess_exec(
         TRIVY_BINARY,

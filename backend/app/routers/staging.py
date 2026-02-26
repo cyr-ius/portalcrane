@@ -262,63 +262,35 @@ async def run_pull_pipeline(
 async def _vuln_scan_image(
     tarball_path: str, settings: Settings, severities: list[str] | None = None
 ) -> dict:
-    """Run Trivy vulnerability scan on a Docker image."""
+    """
+    Run Trivy vulnerability scan on a staged image tarball.
+    Delegates to trivy_service.scan_tarball() which uses the shared DB cache
+    populated by the trivy-server process, avoiding redundant DB downloads.
+    """
+    from ..services.trivy_service import scan_tarball
+
     effective_severities = (
         severities if severities is not None else settings.vuln_severities
     )
 
-    cmd = [
-        "trivy",
-        "image",
-        "--quiet",
-        "--format",
-        "json",
-        "--timeout",
-        settings.vuln_scan_timeout,
-        "--severity",
-        ",".join(effective_severities),
-    ]
-
-    if settings.vuln_ignore_unfixed:
-        cmd.append("--ignore-unfixed")
-
-    cmd += ["--input", tarball_path]
-
     try:
-        proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
+        result = await scan_tarball(
+            tarball_path,
+            severity=effective_severities,
+            ignore_unfixed=settings.vuln_ignore_unfixed,
         )
-    except FileNotFoundError as exc:
-        raise Exception(
-            "Trivy binary not found. Install trivy or disable VULN_SCAN_ENABLED."
-        ) from exc
+    except RuntimeError as exc:
+        raise Exception(str(exc)) from exc
 
-    stdout, stderr = await proc.communicate()
-
-    if proc.returncode != 0:
-        raise Exception(f"Trivy scan failed: {stderr.decode() or stdout.decode()}")
-
-    try:
-        payload = json.loads(stdout.decode() or "{}")
-    except Exception as exc:
-        raise Exception(f"Unable to parse Trivy output: {exc}")
-
-    counts = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0, "UNKNOWN": 0}
-    for result in payload.get("Results", []) or []:
-        for vuln in result.get("Vulnerabilities", []) or []:
-            sev = (vuln.get("Severity") or "UNKNOWN").upper()
-            counts[sev] = counts.get(sev, 0) + 1
-
+    counts = result.get("summary", {})
     blocked = any(counts.get(sev, 0) > 0 for sev in effective_severities)
-    summary = {
+
+    return {
         "enabled": True,
         "blocked": blocked,
         "severities": effective_severities,
         "counts": counts,
     }
-    return summary
 
 
 async def run_push_pipeline(
