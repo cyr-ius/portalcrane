@@ -19,6 +19,7 @@ from .routers import (
     auth,
     config_router,
     dashboard,
+    external_registries,
     registry,
     registry_proxy,
     staging,
@@ -73,6 +74,9 @@ app.include_router(
 )
 app.include_router(registry_proxy.router, prefix="", tags=["Registry Proxy (root v2)"])
 app.include_router(system.router)
+app.include_router(
+    external_registries.router, prefix="/api/external", tags=["External Registries"]
+)
 
 
 # Health check

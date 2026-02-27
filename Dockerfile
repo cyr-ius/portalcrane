@@ -31,6 +31,7 @@ ARG TRIVY_VERSION=0.69.1
 # Install system dependencies (Docker CLI for staging pipeline)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     supervisor \
+    skopeo \
     curl \
     ca-certificates \
     lsb-release \

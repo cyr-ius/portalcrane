@@ -40,8 +40,7 @@ class Settings(BaseSettings):
     # Needed when REGISTRY_URL uses a Docker-internal hostname (e.g. "registry")
     # that the host Docker daemon cannot resolve.
     # Example: "localhost:5000" or "192.168.1.10:5000"
-    # Defaults to REGISTRY_URL's host:port if not set.
-    registry_push_host: str = ""
+    registry_push_host: str = "127.0.0.1:8080"
 
     # Admin credentials (local auth)
     admin_username: str = "admin"
@@ -85,6 +84,7 @@ class Settings(BaseSettings):
     # Useful when the Docker CLI needs a different proxy than the backend HTTP client.
     # If empty, falls back to https_proxy / http_proxy.
     docker_pull_proxy: str = ""
+    skopeo_proxy: str = ""
 
     # Vulnerability scanning configuration
     vuln_scan_enabled: bool = True
@@ -131,14 +131,17 @@ class Settings(BaseSettings):
         return self.https_proxy or self.http_proxy or None
 
     @property
-    def docker_env_proxy(self) -> dict:
-        """Build env vars to inject into docker pull subprocess."""
-        env = {}
-        proxy = self.docker_pull_proxy or self.http_proxy
+    def skopeo_env_proxy(self) -> dict:
+        """
+        Build environment variables injected into every skopeo subprocess.
+        skopeo reads the standard HTTP_PROXY / HTTPS_PROXY variables.
+        """
+        env: dict = {}
+        proxy = self.skopeo_proxy or self.http_proxy
         if proxy:
             env["HTTP_PROXY"] = proxy
             env["http_proxy"] = proxy
-        proxy_s = self.docker_pull_proxy or self.https_proxy or self.http_proxy
+        proxy_s = self.skopeo_proxy or self.https_proxy or self.http_proxy
         if proxy_s:
             env["HTTPS_PROXY"] = proxy_s
             env["https_proxy"] = proxy_s

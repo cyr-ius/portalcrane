@@ -297,6 +297,62 @@ async def ping_registry(
     return {"status": "ok" if is_up else "unreachable", "url": registry.base_url}
 
 
+@router.post("/images/{repository:path}/rename")
+async def rename_image(
+    repository: str,
+    request: RenameImageRequest,
+    settings: Settings = Depends(get_settings),
+    _: UserInfo = Depends(get_current_user),
+):
+    """
+    Retag an image to a new repository/name using skopeo copy.
+    skopeo copies the manifest directly between two registry locations
+    without pulling the full image layers to disk.
+    """
+    from urllib.parse import urlparse
+
+    registry_host = urlparse(settings.registry_url).netloc
+    source = f"docker://{registry_host}/{repository}:{request.new_tag}"
+    dest = f"docker://{registry_host}/{request.new_repository}:{request.new_tag}"
+
+    # Disable TLS verification for plain HTTP registries (e.g. localhost:5000)
+    tls_flags = (
+        ["--src-tls-verify=false", "--dest-tls-verify=false"]
+        if settings.registry_url.startswith("http://")
+        else []
+    )
+
+    cred_flags: list[str] = []
+    if settings.registry_username and settings.registry_password:
+        creds = f"{settings.registry_username}:{settings.registry_password}"
+        cred_flags = ["--src-creds", creds, "--dest-creds", creds]
+
+    proc = await asyncio.create_subprocess_exec(
+        "skopeo",
+        "copy",
+        *tls_flags,
+        *cred_flags,
+        source,
+        dest,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    _, stderr = await proc.communicate()
+
+    if proc.returncode != 0:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"skopeo copy failed: {stderr.decode()}",
+        )
+
+    return {
+        "message": (
+            f"Image '{repository}' retagged to "
+            f"'{request.new_repository}:{request.new_tag}'"
+        )
+    }
+
+
 # ─── Garbage Collection ───────────────────────────────────────────────────────
 
 
