@@ -1,146 +1,87 @@
-<!-- security-dashboard.component.html -->
-<div class="container-fluid py-3">
-  <!-- ── Process Status ──────────────────────────────────────────────── -->
-  <div class="card border-0 mb-3">
-    <div
-      class="card-header border-0 d-flex align-items-center justify-content-between"
-    >
-      <h6 class="fw-semibold mb-0">
-        <i class="bi bi-cpu me-2"></i>Process Status
-      </h6>
-      <button class="btn btn-sm btn-outline-secondary" (click)="loadAll()">
-        <i class="bi bi-arrow-clockwise me-1"></i>Refresh
-      </button>
-    </div>
-    <div class="card-body p-0">
-      @if (processes().length === 0) {
-        <div class="text-muted small p-3">Loading processes...</div>
-      } @else {
-        <div class="list-group list-group-flush">
-          @for (proc of processes(); track proc.name) {
-            <div
-              class="list-group-item d-flex align-items-center justify-content-between border-0 px-3 py-2"
-            >
-              <div class="d-flex align-items-center gap-2">
-                <span
-                  class="badge rounded-pill"
-                  [class.bg-success]="proc.running"
-                  [class.bg-danger]="!proc.running"
-                  style="width: 10px; height: 10px; padding: 0"
-                >
-                </span>
-                <span class="fw-medium small">{{ proc.name }}</span>
-              </div>
-              <div
-                class="d-flex align-items-center gap-2 text-muted"
-                style="font-size: 0.75rem"
-              >
-                <span>{{ proc.state }}</span>
-                @if (proc.pid) {
-                  <span>PID {{ proc.pid }}</span>
-                }
-                @if (proc.uptime_seconds && proc.uptime_seconds > 0) {
-                  <span>up {{ proc.uptime_seconds }}s</span>
-                }
-              </div>
-            </div>
-          }
-        </div>
-      }
-    </div>
-  </div>
+<!-- Portalcrane - Security Dashboard Template -->
+<!-- Fix: replaced scanResult()!.summary[sev] ?? 0 with getSeverityCount(sev) -->
+<!-- Fix: removed RouterLink from the component imports (unused) -->
+<div class="p-4">
+  <h2 class="fw-bold mb-1">Security</h2>
+  <p class="text-muted small mb-4">
+    Trivy database status, manual image scan and garbage collection
+  </p>
 
-  <!-- ── Trivy DB Status ──────────────────────────────────────────────── -->
-  <div class="card border-0 mb-3">
-    <div
-      class="card-header border-0 d-flex align-items-center justify-content-between"
-    >
-      <h6 class="fw-semibold mb-0">
-        <i class="bi bi-database me-2"></i>Trivy Vulnerability Database
-      </h6>
-      <button
-        class="btn btn-sm btn-outline-primary"
-        (click)="updateTrivyDb()"
-        [disabled]="updatingDb()"
-      >
-        @if (updatingDb()) {
-          <span class="spinner-border spinner-border-sm me-1"></span>Updating...
-        } @else {
-          <i class="bi bi-cloud-download me-1"></i>Force Update
-        }
-      </button>
-    </div>
-    <div class="card-body">
-      @if (!trivyDb()) {
-        <div class="text-muted small">Loading...</div>
-      } @else if (trivyDb()!.error) {
-        <div class="alert alert-warning py-2 small mb-0">
-          <i class="bi bi-exclamation-triangle me-1"></i>{{ trivyDb()!.error }}
-        </div>
-      } @else {
-        <div class="row g-2">
-          <div class="col-sm-4">
-            <div class="text-muted" style="font-size: 0.7rem">Status</div>
-            <span
-              class="badge"
-              [class.bg-success]="trivyDb()!.up_to_date"
-              [class.bg-warning]="!trivyDb()!.up_to_date"
-              [class.text-dark]="!trivyDb()!.up_to_date"
-            >
-              {{ trivyDb()!.up_to_date ? "Up to date" : "Outdated" }}
-            </span>
-          </div>
-          <div class="col-sm-4">
-            <div class="text-muted" style="font-size: 0.7rem">Last updated</div>
-            <div class="small">{{ trivyDb()!.last_update ?? "—" }}</div>
-          </div>
-          <div class="col-sm-4">
-            <div class="text-muted" style="font-size: 0.7rem">Next update</div>
-            <div class="small">{{ trivyDb()!.next_update ?? "—" }}</div>
-          </div>
-        </div>
-      }
-    </div>
-  </div>
-
-  <!-- ── On-demand Scan ──────────────────────────────────────────────── -->
+  <!-- ── Trivy DB status ──────────────────────────────────────────────────── -->
   <div class="card border-0 mb-3">
     <div class="card-header border-0">
       <h6 class="fw-semibold mb-0">
-        <i class="bi bi-bug me-2"></i>On-demand Vulnerability Scan
+        <i class="bi bi-database me-2"></i>Trivy Vulnerability Database
       </h6>
     </div>
     <div class="card-body">
-      <div class="row g-2 align-items-end mb-3">
-        <div class="col-sm-6">
-          <label class="form-label small fw-semibold">Image reference</label>
+      @if (trivyDb()) {
+        <div class="d-flex align-items-center gap-3 flex-wrap">
+          <div>
+            <div class="small text-muted">Schema version</div>
+            <div class="fw-semibold">{{ trivyDb()!.schema_version }}</div>
+          </div>
+          <div>
+            <div class="small text-muted">Updated at</div>
+            <div class="fw-semibold">
+              {{ trivyDb()!.updated_at ?? "Unknown" }}
+            </div>
+          </div>
+          <div>
+            <div class="small text-muted">Next update</div>
+            <div class="fw-semibold">
+              {{ trivyDb()!.next_update ?? "Unknown" }}
+            </div>
+          </div>
+          <div class="ms-auto">
+            <button
+              class="btn btn-sm btn-outline-primary"
+              (click)="updateTrivyDb()"
+              [disabled]="updatingDb()"
+            >
+              @if (updatingDb()) {
+                <span class="spinner-border spinner-border-sm me-1"></span>
+                Updating…
+              } @else {
+                <i class="bi bi-arrow-clockwise me-1"></i>Update DB
+              }
+            </button>
+          </div>
+        </div>
+      } @else {
+        <div class="d-flex justify-content-center py-3">
+          <span class="spinner-border text-primary spinner-border-sm"></span>
+        </div>
+      }
+    </div>
+  </div>
 
+  <!-- ── Manual scan ──────────────────────────────────────────────────────── -->
+  <div class="card border-0 mb-3">
+    <div class="card-header border-0">
+      <h6 class="fw-semibold mb-0">
+        <i class="bi bi-shield-check me-2"></i>Manual Image Scan
+      </h6>
+    </div>
+    <div class="card-body">
+      <div class="row g-3 mb-3">
+        <!-- Image selector -->
+        <div class="col-sm-6">
+          <label class="form-label small fw-semibold">Image to scan</label>
           @if (loadingImages()) {
-            <!-- Skeleton while images load -->
             <div class="form-control form-control-sm placeholder-glow">
               <span class="placeholder w-75"></span>
             </div>
           } @else if (registryImages().length > 0) {
-            <!-- Dropdown populated with registry images + free-text fallback via datalist -->
-            <input
-              type="text"
-              class="form-control form-control-sm"
-              list="registry-images-list"
-              placeholder="Select or type an image reference…"
+            <select
+              class="form-select form-select-sm"
               [value]="imageToScan()"
-              (input)="imageToScan.set($any($event.target).value)"
               (change)="imageToScan.set($any($event.target).value)"
-            />
-            <datalist id="registry-images-list">
+            >
               @for (img of registryImages(); track img) {
                 <option [value]="img">{{ img }}</option>
               }
-            </datalist>
-            <div class="text-muted mt-1" style="font-size: 0.72rem">
-              <i class="bi bi-info-circle me-1"></i>
-              {{ registryImages().length }} image(s) found in registry. You can
-              also type any image reference manually.
-            </div>
+            </select>
           } @else {
             <!-- Fallback: no images in registry yet, plain text input -->
             <input
@@ -156,6 +97,8 @@
             </div>
           }
         </div>
+
+        <!-- Severity toggles -->
         <div class="col-sm-4">
           <label class="form-label small fw-semibold">Severities</label>
           <div class="d-flex flex-wrap gap-1">
@@ -173,6 +116,8 @@
             }
           </div>
         </div>
+
+        <!-- Ignore unfixed -->
         <div class="col-sm-2 d-flex align-items-end gap-2">
           <div class="form-check form-switch mb-0">
             <input
@@ -203,15 +148,15 @@
 
       @if (scanResult()) {
         <div class="mt-3">
-          <!-- Summary badges -->
+          <!-- Summary badges — getSeverityCount() avoids the TS2769 ?? warning -->
           <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
-            <span class="small fw-semibold"
-              >Results for {{ scanResult()!.image }}:</span
-            >
+            <span class="small fw-semibold">
+              Results for {{ scanResult()!.image }}:
+            </span>
             @for (sev of severities; track sev) {
-              @if ((scanResult()!.summary[sev] ?? 0) > 0) {
+              @if (getSeverityCount(sev) > 0) {
                 <span [class]="severityBadgeClass(sev)">
-                  {{ sev }}: {{ scanResult()!.summary[sev] }}
+                  {{ sev }}: {{ getSeverityCount(sev) }}
                 </span>
               }
             }
@@ -253,9 +198,9 @@
                         >
                       </td>
                       <td>
-                        <span [class]="severityBadgeClass(vuln.severity)">{{
-                          vuln.severity
-                        }}</span>
+                        <span [class]="severityBadgeClass(vuln.severity)">
+                          {{ vuln.severity }}
+                        </span>
                       </td>
                       <td>{{ vuln.package }}</td>
                       <td>{{ vuln.installed_version }}</td>
@@ -272,7 +217,7 @@
     </div>
   </div>
 
-  <!-- ── Garbage Collection ──────────────────────────────────────────── -->
+  <!-- ── Garbage Collection ───────────────────────────────────────────────── -->
   <div class="card border-0 mb-3">
     <div class="card-header border-0">
       <h6 class="fw-semibold mb-0">
@@ -290,7 +235,12 @@
           (click)="runGc(true)"
           [disabled]="gcRunning()"
         >
-          <i class="bi bi-eye me-1"></i>Dry Run
+          @if (gcRunning()) {
+            <span class="spinner-border spinner-border-sm me-1"></span>
+          } @else {
+            <i class="bi bi-eye me-1"></i>
+          }
+          Dry run
         </button>
         <button
           class="btn btn-sm btn-danger"
@@ -298,16 +248,16 @@
           [disabled]="gcRunning()"
         >
           @if (gcRunning()) {
-            <span class="spinner-border spinner-border-sm me-1"></span
-            >Running...
+            <span class="spinner-border spinner-border-sm me-1"></span>
           } @else {
-            <i class="bi bi-play-fill me-1"></i>Run GC
+            <i class="bi bi-trash3 me-1"></i>
           }
+          Run GC
         </button>
       </div>
       @if (gcOutput()) {
         <pre
-          class="mt-3 p-2 bg-body-secondary rounded small"
+          class="mt-3 p-2 rounded bg-body-secondary small font-monospace text-break"
           style="max-height: 200px; overflow-y: auto; font-size: 0.72rem"
           >{{ gcOutput() }}</pre
         >
