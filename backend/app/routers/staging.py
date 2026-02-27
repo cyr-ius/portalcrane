@@ -66,9 +66,6 @@ class PullRequest(BaseModel):
     vuln_severities_override: str | None = None
 
 
-PUSH_REQUEST_MODEL = ""
-
-
 class PushRequest(BaseModel):
     """Request to push a staged image to the local or an external registry."""
 

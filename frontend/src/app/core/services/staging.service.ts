@@ -170,6 +170,37 @@ export class StagingService {
     return this.http.get<OrphanTarballsResult>(`${this.BASE}/orphan-tarballs`);
   }
 
+  // ── Quick Actions: Dangling Images ────────────────────────────────────────
+
+  getDanglingImages(): Observable<{
+    images: {
+      id: string;
+      repository: string;
+      tag: string;
+      size: string;
+      created: string;
+    }[];
+    count: number;
+  }> {
+    return this.http.get<{
+      images: {
+        id: string;
+        repository: string;
+        tag: string;
+        size: string;
+        created: string;
+      }[];
+      count: number;
+    }>(`${this.BASE}/dangling-images`);
+  }
+
+  purgeDanglingImages(): Observable<{ message: string; output: string }> {
+    return this.http.post<{ message: string; output: string }>(
+      `${this.BASE}/dangling-images/purge`,
+      {},
+    );
+  }
+
   purgeOrphanTarballs(): Observable<{
     message: string;
     deleted: string[];

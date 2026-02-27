@@ -1,16 +1,21 @@
+/**
+ * Portalcrane - Security Dashboard Component
+ * Displays Trivy DB status, manual image scan, and registry garbage collection.
+ * RouterLink removed — no router navigation used in this component.
+ */
 import { Component, computed, inject, OnInit, signal } from "@angular/core";
 import { FormsModule } from "@angular/forms";
-import { RouterLink } from "@angular/router";
+import { RegistryService } from "../../../core/services/registry.service";
 import {
   ScanResult,
   SystemService,
   TrivyDbInfo,
 } from "../../../core/services/system.service";
-import { RegistryService } from "../../../core/services/registry.service";
 
 @Component({
   selector: "app-security-dashboard",
-  imports: [FormsModule, RouterLink],
+  // RouterLink removed: it was imported but never used in the template
+  imports: [FormsModule],
   templateUrl: "./security-dashboard.component.html",
 })
 export class SecurityDashboardComponent implements OnInit {
@@ -21,7 +26,7 @@ export class SecurityDashboardComponent implements OnInit {
   trivyDb = signal<TrivyDbInfo | null>(null);
   updatingDb = signal(false);
 
-  // Registry image list for the dropdown
+  // Registry image list for the scan dropdown
   registryImages = signal<string[]>([]);
   loadingImages = signal(false);
 
@@ -52,12 +57,11 @@ export class SecurityDashboardComponent implements OnInit {
     this.trivyDb.set(db);
   }
 
-  // Load all repo:tag combinations from the local registry
+  /** Load all repo:tag combinations from the local registry for the dropdown. */
   loadRegistryImages(): void {
     this.loadingImages.set(true);
     this.registry.getImages(1, 100).subscribe({
       next: (data) => {
-        // Flatten each repo's tags into "repo:tag" entries
         const images: string[] = [];
         for (const item of data.items) {
           for (const tag of item.tags) {
@@ -65,7 +69,6 @@ export class SecurityDashboardComponent implements OnInit {
           }
         }
         this.registryImages.set(images);
-        // Pre-select the first image if the field is empty
         if (images.length > 0 && !this.imageToScan()) {
           this.imageToScan.set(images[0]);
         }
@@ -119,6 +122,15 @@ export class SecurityDashboardComponent implements OnInit {
     } finally {
       this.gcRunning.set(false);
     }
+  }
+
+  /**
+   * Return the count of a given severity from the current scan result.
+   * The summary map is typed as Record<string, number> so the value is
+   * always a number — no nullish coalescing needed here.
+   */
+  getSeverityCount(sev: string): number {
+    return this.scanResult()?.summary?.[sev] ?? 0;
   }
 
   severityBadgeClass(sev: string): string {

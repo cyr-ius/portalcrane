@@ -264,6 +264,29 @@ export class SettingsComponent implements OnInit {
       });
   }
 
+  // ── Registry lookup helpers (called from template to avoid lambdas) ────────
+
+  /**
+   * Return the host label of a registry by its ID.
+   * Falls back to the raw ID if not found.
+   * Used in sync history rows to display the destination host.
+   */
+  getRegistryHost(registryId: string): string {
+    const reg = this.registries().find((r) => r.id === registryId);
+    return reg ? reg.host : registryId;
+  }
+
+  /**
+   * Return the host of the currently selected sync destination registry.
+   * Used in the preview line of the sync form.
+   */
+  getSyncDestHost(): string {
+    const reg = this.registries().find((r) => r.id === this.syncDestId());
+    return reg ? reg.host : "";
+  }
+
+  // ── Status badge / icon helpers ────────────────────────────────────────────
+
   syncStatusBadge(status: string): string {
     const map: Record<string, string> = {
       running: "badge bg-info-subtle text-info",

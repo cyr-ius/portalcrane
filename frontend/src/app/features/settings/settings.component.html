@@ -70,7 +70,8 @@
             [class.btn-outline-secondary]="themeService.theme() !== 'light'"
             (click)="themeService.setTheme('light')"
           >
-            <i class="bi bi-sun-fill fs-4"></i><span class="small">Light</span>
+            <i class="bi bi-sun-fill fs-4"></i>
+            <span class="small">Light</span>
           </button>
           <button
             class="btn d-flex flex-column align-items-center gap-1 p-3"
@@ -78,7 +79,8 @@
             [class.btn-outline-secondary]="themeService.theme() !== 'dark'"
             (click)="themeService.setTheme('dark')"
           >
-            <i class="bi bi-moon-fill fs-4"></i><span class="small">Dark</span>
+            <i class="bi bi-moon-fill fs-4"></i>
+            <span class="small">Dark</span>
           </button>
           <button
             class="btn d-flex flex-column align-items-center gap-1 p-3"
@@ -86,8 +88,8 @@
             [class.btn-outline-secondary]="themeService.theme() !== 'auto'"
             (click)="themeService.setTheme('auto')"
           >
-            <i class="bi bi-circle-half fs-4"></i
-            ><span class="small">Auto</span>
+            <i class="bi bi-circle-half fs-4"></i>
+            <span class="small">Auto</span>
           </button>
         </div>
       </div>
@@ -130,9 +132,8 @@
                   type="text"
                   class="form-control form-control-sm"
                   placeholder="e.g. Docker Hub"
-                  [(ngModel)]="formName"
-                  [ngModel]="formName()"
-                  (ngModelChange)="formName.set($event)"
+                  [value]="formName()"
+                  (input)="formName.set($any($event.target).value)"
                 />
               </div>
               <div class="col-md-6">
@@ -143,9 +144,8 @@
                   type="text"
                   class="form-control form-control-sm"
                   placeholder="registry.example.com"
-                  [(ngModel)]="formHost"
-                  [ngModel]="formHost()"
-                  (ngModelChange)="formHost.set($event)"
+                  [value]="formHost()"
+                  (input)="formHost.set($any($event.target).value)"
                 />
               </div>
               <div class="col-md-6">
@@ -153,9 +153,8 @@
                 <input
                   type="text"
                   class="form-control form-control-sm"
-                  [(ngModel)]="formUser"
-                  [ngModel]="formUser()"
-                  (ngModelChange)="formUser.set($event)"
+                  [value]="formUser()"
+                  (input)="formUser.set($any($event.target).value)"
                 />
               </div>
               <div class="col-md-6">
@@ -170,9 +169,8 @@
                 <input
                   type="password"
                   class="form-control form-control-sm"
-                  [(ngModel)]="formPass"
-                  [ngModel]="formPass()"
-                  (ngModelChange)="formPass.set($event)"
+                  [value]="formPass()"
+                  (input)="formPass.set($any($event.target).value)"
                 />
               </div>
             </div>
@@ -386,12 +384,13 @@
                 [value]="syncFolder()"
                 (input)="syncFolder.set($any($event.target).value)"
               />
+              <!-- Preview line: uses getSyncDestHost() instead of find() lambda -->
               @if (syncDestId()) {
                 <div class="text-muted mt-1" style="font-size: 0.72rem">
                   <i class="bi bi-arrow-right me-1"></i>
                   Preview:
                   <code>
-                    {{ registries().find(r => r.id === syncDestId())?.host }}/{{
+                    {{ getSyncDestHost() }}/{{
                       syncFolder() ? syncFolder() + "/" : ""
                     }}{{ syncSource() === "(all)" ? "*" : syncSource() }}
                   </code>
@@ -453,12 +452,13 @@
                         job.source
                       }}</code>
                       <i class="bi bi-arrow-right text-muted small"></i>
+                      <!-- getRegistryHost() replaces the find() lambda -->
                       <code
                         class="small bg-body-tertiary px-1 rounded text-truncate"
                         style="max-width: 220px"
                       >
-                        {{ registries().find(r => r.id === job.dest_registry_id)?.host ?? job.dest_registry_id }}
-                        {{ job.dest_folder ? "/" + job.dest_folder : "" }}
+                        {{ getRegistryHost(job.dest_registry_id)
+                        }}{{ job.dest_folder ? "/" + job.dest_folder : "" }}
                       </code>
                     </div>
                     <div class="d-flex align-items-center gap-2 flex-wrap">
