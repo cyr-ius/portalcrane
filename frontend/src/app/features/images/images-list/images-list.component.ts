@@ -1,3 +1,8 @@
+/**
+ * Portalcrane - Images List Component
+ * Displays registry images in flat list or hierarchical folder tree view.
+ * New feature: viewMode signal toggles between "flat" and "tree".
+ */
 import { Component, computed, inject, OnInit, signal } from "@angular/core";
 import { FormsModule } from "@angular/forms";
 import { RouterLink } from "@angular/router";
@@ -7,14 +12,24 @@ import {
   RegistryService,
 } from "../../../core/services/registry.service";
 
-/** Available sort fields for the image list */
+/** Available sort fields for the image list. */
 type SortField = "name" | "tag_count";
 
-/** Sort direction */
+/** Sort direction. */
 type SortDir = "asc" | "desc";
 
-/** Tag count filter presets */
+/** Tag count filter presets. */
 type TagFilter = "all" | "single" | "multi";
+
+/** Display mode for the images page. */
+type ViewMode = "flat" | "tree";
+
+/** A folder node in the tree view. */
+interface FolderNode {
+  /** Folder name, e.g. "app/backend" or "(root)". */
+  name: string;
+  images: ImageInfo[];
+}
 
 @Component({
   selector: "app-images-list",
@@ -33,26 +48,21 @@ export class ImagesListComponent implements OnInit {
   searchQuery = "";
   private searchTimeout: ReturnType<typeof setTimeout> | null = null;
 
+  // ── View mode ──────────────────────────────────────────────────────────────
+  /** Toggle between flat list and hierarchical folder tree. */
+  viewMode = signal<ViewMode>("flat");
+
+  /** Set of expanded folder names in tree mode. */
+  expandedFolders = signal<Set<string>>(new Set());
+
   // ── Client-side sort & filter state ────────────────────────────────────────
-  /** Active sort field — default alphabetical by name */
   sortField = signal<SortField>("name");
-
-  /** Sort direction */
   sortDir = signal<SortDir>("asc");
-
-  /** Tag count filter: all | single (= 1 tag) | multi (≥ 2 tags) */
   tagFilter = signal<TagFilter>("all");
 
-  // ── Derived list (sort + filter applied on top of backend page) ────────────
-  /**
-   * Applies client-side sort and tag-count filter to the current page items.
-   * The backend already handles text search and pagination; this computed
-   * signal only post-processes what is already in memory.
-   */
+  // ── Derived: flat list ─────────────────────────────────────────────────────
   filteredItems = computed(() => {
     const items = this.data()?.items ?? [];
-
-    // Apply tag-count filter
     const tagF = this.tagFilter();
     const filtered =
       tagF === "single"
@@ -60,17 +70,57 @@ export class ImagesListComponent implements OnInit {
         : tagF === "multi"
           ? items.filter((i) => i.tag_count >= 2)
           : items;
-
-    // Apply sort
     const field = this.sortField();
     const dir = this.sortDir() === "asc" ? 1 : -1;
     return [...filtered].sort((a, b) => {
-      if (field === "tag_count") {
-        return (a.tag_count - b.tag_count) * dir;
-      }
+      if (field === "tag_count") return (a.tag_count - b.tag_count) * dir;
       return a.name.localeCompare(b.name) * dir;
     });
   });
+
+  // ── Derived: folder tree ───────────────────────────────────────────────────
+  /**
+   * Builds a folder tree from the flat image list.
+   * Images without a "/" in their name go to "(root)".
+   * Images like "app/backend/api" are grouped under "app/backend".
+   */
+  folderTree = computed<FolderNode[]>(() => {
+    const items = this.data()?.items ?? [];
+    const map = new Map<string, ImageInfo[]>();
+
+    for (const img of items) {
+      const slashIdx = img.name.lastIndexOf("/");
+      const folder =
+        slashIdx === -1 ? "(root)" : img.name.substring(0, slashIdx);
+      if (!map.has(folder)) map.set(folder, []);
+      map.get(folder)!.push(img);
+    }
+
+    // Sort: root first, then alphabetical
+    const nodes: FolderNode[] = [];
+    const sortedKeys = [...map.keys()].sort((a, b) => {
+      if (a === "(root)") return -1;
+      if (b === "(root)") return 1;
+      return a.localeCompare(b);
+    });
+
+    for (const key of sortedKeys) {
+      nodes.push({
+        name: key,
+        images: map.get(key)!.sort((a, b) => a.name.localeCompare(b.name)),
+      });
+    }
+    return nodes;
+  });
+
+  /**
+   * Image name relative to its folder (last segment of the path).
+   * Used in tree view to show only "api" under "app/backend" folder.
+   */
+  imageShortName(img: ImageInfo): string {
+    const idx = img.name.lastIndexOf("/");
+    return idx === -1 ? img.name : img.name.substring(idx + 1);
+  }
 
   // ── Pagination helpers ─────────────────────────────────────────────────────
   pageStart = computed(() => {
@@ -119,6 +169,9 @@ export class ImagesListComponent implements OnInit {
       .subscribe({
         next: (data) => {
           this.data.set(data);
+          // Expand all folders by default in tree mode
+          const allFolders = new Set(this.folderTree().map((n) => n.name));
+          this.expandedFolders.set(allFolders);
           this.loading.set(false);
         },
         error: () => this.loading.set(false),
@@ -151,11 +204,29 @@ export class ImagesListComponent implements OnInit {
     this.loadImages();
   }
 
+  // ── View mode helpers ──────────────────────────────────────────────────────
+
+  setViewMode(mode: ViewMode) {
+    this.viewMode.set(mode);
+  }
+
+  toggleFolder(folderName: string) {
+    this.expandedFolders.update((s) => {
+      const next = new Set(s);
+      if (next.has(folderName)) {
+        next.delete(folderName);
+      } else {
+        next.add(folderName);
+      }
+      return next;
+    });
+  }
+
+  isFolderExpanded(folderName: string): boolean {
+    return this.expandedFolders().has(folderName);
+  }
+
   // ── Sort helpers ───────────────────────────────────────────────────────────
-  /**
-   * Toggle sort: if the same field is clicked again, reverse direction;
-   * otherwise switch to the new field ascending.
-   */
   toggleSort(field: SortField) {
     if (this.sortField() === field) {
       this.sortDir.set(this.sortDir() === "asc" ? "desc" : "asc");
@@ -165,7 +236,6 @@ export class ImagesListComponent implements OnInit {
     }
   }
 
-  /** Returns the Bootstrap icon class for the sort indicator of a given column */
   sortIcon(field: SortField): string {
     if (this.sortField() !== field)
       return "bi-arrow-down-up text-muted opacity-50";
@@ -174,7 +244,6 @@ export class ImagesListComponent implements OnInit {
       : "bi-sort-alpha-up-alt";
   }
 
-  /** Sort icon specifically for numeric column (tag count) */
   sortIconNumeric(field: SortField): string {
     if (this.sortField() !== field)
       return "bi-arrow-down-up text-muted opacity-50";

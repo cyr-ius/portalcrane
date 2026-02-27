@@ -1,15 +1,28 @@
+/**
+ * Portalcrane - Staging Component
+ * Pull pipeline: Docker Hub → Trivy CVE scan → Push (local or external registry).
+ * New features:
+ *   - Optional folder prefix when pushing
+ *   - Push to external registry (saved or ad-hoc)
+ *   - Per-job push mode toggle (local / external)
+ */
+import { SlicePipe } from "@angular/common";
 import { Component, DestroyRef, inject, OnInit, signal } from "@angular/core";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { FormsModule } from "@angular/forms";
 import { filter, switchMap, timer } from "rxjs";
 import { AppConfigService } from "../../core/services/app-config.service";
 import {
+  ExternalRegistry,
+  ExternalRegistryService,
+} from "../../core/services/external-registry.service";
+import {
   DockerHubResult,
   StagingJob,
   StagingService,
 } from "../../core/services/staging.service";
 
-/** Job statuses that indicate an active pipeline step */
+/** Job statuses that indicate an active pipeline step. */
 const ACTIVE_STATUSES = new Set([
   "pending",
   "pulling",
@@ -18,14 +31,18 @@ const ACTIVE_STATUSES = new Set([
   "pushing",
 ]);
 
+/** Push destination modes. */
+export type PushMode = "local" | "external";
+
 @Component({
   selector: "app-staging",
-  imports: [FormsModule],
+  imports: [FormsModule, SlicePipe],
   templateUrl: "./staging.component.html",
   styleUrl: "./staging.component.css",
 })
 export class StagingComponent implements OnInit {
   private staging = inject(StagingService);
+  private externalRegistryService = inject(ExternalRegistryService);
   private destroyRef = inject(DestroyRef);
   readonly configService = inject(AppConfigService);
 
@@ -39,21 +56,66 @@ export class StagingComponent implements OnInit {
   pulling = signal(false);
   pushing = signal<string | null>(null);
   availableTags = signal<string[]>([]);
+
+  /**
+   * Per-job push state keyed by `{job_id}_{field}`.
+   * Fields: _img (target image name), _tag (target tag), _folder (folder prefix).
+   */
   pushTargets = signal<Record<string, string>>({});
+
+  /**
+   * Per-job push mode: "local" or "external".
+   * Defaults to "local" when not set.
+   */
+  pushModes = signal<Record<string, PushMode>>({});
+
+  /**
+   * Per-job external registry selection.
+   * Value is either a registry ID (saved) or "" for ad-hoc entry.
+   */
+  pushExtRegistryId = signal<Record<string, string>>({});
+
+  // ── External registries list ───────────────────────────────────────────────
+  externalRegistries = signal<ExternalRegistry[]>([]);
+
+  // ── Derived: preview path ──────────────────────────────────────────────────
+  /**
+   * Compute the push preview string for a given job.
+   * Used by the template for real-time feedback.
+   */
+  pushPreview(job: StagingJob): string {
+    const mode = this.pushModes()[job.job_id] ?? "local";
+    const folder = (this.pushTargets()[job.job_id + "_folder"] ?? "").trim();
+    const img = (
+      this.pushTargets()[job.job_id + "_img"] ??
+      job.image.split("/").pop() ??
+      job.image
+    ).trim();
+    const tag = (this.pushTargets()[job.job_id + "_tag"] ?? job.tag).trim();
+    const path = folder ? `${folder}/${img}` : img;
+
+    if (mode === "local") {
+      return `localhost:5000/${path}:${tag}`;
+    }
+    const regId = this.pushExtRegistryId()[job.job_id] ?? "";
+    const reg = this.externalRegistries().find((r) => r.id === regId);
+    const host = reg
+      ? reg.host
+      : (this.pushTargets()[job.job_id + "_ext_host"] ?? "<registry>");
+    return `${host}/${path}:${tag}`;
+  }
 
   ngOnInit() {
     this.loadJobs();
     this.startJobsAutoRefresh();
+    this.loadExternalRegistries();
   }
 
-  // ── Auto-refresh: active jobs every 3 s ───────────────────────────────────
+  // ── Auto-refresh ───────────────────────────────────────────────────────────
 
-  /**
-   * Polls the job list every 3 s, but only when at least one job is active.
-   * Uses takeUntilDestroyed so no manual cleanup is needed.
-   */
-  private startJobsAutoRefresh(): void {
-    timer(3000, 3000)
+  /** Poll job list every 3 s while at least one job is active. */
+  private startJobsAutoRefresh() {
+    timer(0, 3000)
       .pipe(
         filter(() => this.jobs().some((j) => ACTIVE_STATUSES.has(j.status))),
         switchMap(() => this.staging.listJobs()),
@@ -62,7 +124,7 @@ export class StagingComponent implements OnInit {
       .subscribe((jobs) => this.jobs.set(StagingService.sortJobs(jobs)));
   }
 
-  // ── Jobs ───────────────────────────────────────────────────────────────────
+  // ── Data loading ───────────────────────────────────────────────────────────
 
   loadJobs() {
     this.staging.listJobs().subscribe({
@@ -70,55 +132,45 @@ export class StagingComponent implements OnInit {
     });
   }
 
-  // ── Docker Hub ─────────────────────────────────────────────────────────────
+  loadExternalRegistries() {
+    this.externalRegistryService.listRegistries().subscribe({
+      next: (regs) => this.externalRegistries.set(regs),
+    });
+  }
 
-  searchDockerHub() {
-    if (!this.searchQuery().trim()) return;
+  // ── Search ─────────────────────────────────────────────────────────────────
+
+  onSearch() {
+    const q = this.searchQuery().trim();
+    if (!q) {
+      this.searchResults.set([]);
+      return;
+    }
     this.searching.set(true);
-    this.staging.searchDockerHub(this.searchQuery()).subscribe({
-      next: (data) => {
-        this.searchResults.set(data.results);
+    this.staging.searchDockerHub(q).subscribe({
+      next: ({ results }) => {
+        this.searchResults.set(results);
         this.searching.set(false);
       },
       error: () => this.searching.set(false),
     });
   }
 
-  selectDockerHubImage(result: DockerHubResult) {
-    this.pullImage.set(result.name);
-    this.pullTag.set("latest");
-    this.loadAvailableTags(result.name);
-  }
-
-  onImageChange(value: string) {
-    this.pullImage.set(value);
-    if (value.length > 2) this.loadAvailableTags(value);
-    else this.availableTags.set([]);
-  }
-
-  loadAvailableTags(image: string) {
-    this.staging.getDockerHubTags(image).subscribe({
-      next: (data) => {
-        this.availableTags.set(data.tags);
-        if (data.tags.length > 0 && this.pullTag() === "latest") {
-          const hasLatest = data.tags.includes("latest");
-          if (!hasLatest) this.pullTag.set(data.tags[0]);
-        }
-      },
-      error: () => this.availableTags.set([]),
+  selectImage(name: string) {
+    this.pullImage.set(name);
+    this.searchResults.set([]);
+    this.searchQuery.set("");
+    this.staging.getDockerHubTags(name).subscribe({
+      next: ({ tags }) => this.availableTags.set(tags),
     });
   }
 
-  // ── Pipeline ───────────────────────────────────────────────────────────────
+  // ── Pull ───────────────────────────────────────────────────────────────────
 
   startPull() {
     if (!this.pullImage()) return;
     this.pulling.set(true);
-
-    // Only send overrides when advanced mode is active.
-    // Otherwise pass null so the backend uses its own env-var config.
     const advanced = this.configService.advancedMode();
-
     this.staging
       .pullImage({
         image: this.pullImage(),
@@ -142,18 +194,76 @@ export class StagingComponent implements OnInit {
       });
   }
 
+  // ── Push mode helpers ──────────────────────────────────────────────────────
+
+  getPushMode(job: StagingJob): PushMode {
+    return this.pushModes()[job.job_id] ?? "local";
+  }
+
+  setPushMode(job: StagingJob, mode: PushMode) {
+    this.pushModes.update((m) => ({ ...m, [job.job_id]: mode }));
+  }
+
+  getExtRegistryId(job: StagingJob): string {
+    return this.pushExtRegistryId()[job.job_id] ?? "";
+  }
+
+  setExtRegistryId(job: StagingJob, id: string) {
+    this.pushExtRegistryId.update((m) => ({ ...m, [job.job_id]: id }));
+  }
+
+  updatePushTarget(job: StagingJob, field: string, value: string) {
+    this.pushTargets.update((t) => ({
+      ...t,
+      [`${job.job_id}_${field}`]: value,
+    }));
+  }
+
+  getPushTarget(job: StagingJob, field: string): string {
+    return this.pushTargets()[`${job.job_id}_${field}`] ?? "";
+  }
+
+  // ── Push ───────────────────────────────────────────────────────────────────
+
   pushImage(job: StagingJob) {
     this.pushing.set(job.job_id);
-    const targetImage = this.pushTargets()[job.job_id + "_img"] || undefined;
-    const targetTag = this.pushTargets()[job.job_id + "_tag"] || undefined;
-    this.staging.pushImage(job.job_id, targetImage, targetTag).subscribe({
-      next: () => {
-        this.pushing.set(null);
-        this.loadJobs();
-      },
-      error: () => this.pushing.set(null),
-    });
+
+    const mode = this.getPushMode(job);
+    const folder = this.getPushTarget(job, "folder") || null;
+    const targetImage = this.getPushTarget(job, "img") || null;
+    const targetTag = this.getPushTarget(job, "tag") || null;
+
+    const isExternal = mode === "external";
+    const regId = this.getExtRegistryId(job) || null;
+    const adHocHost = this.getPushTarget(job, "ext_host") || null;
+
+    this.staging
+      .pushImage({
+        job_id: job.job_id,
+        target_image: targetImage,
+        target_tag: targetTag,
+        folder,
+        external_registry_id: isExternal ? regId : null,
+        external_registry_host: isExternal && !regId ? adHocHost : null,
+        external_registry_username:
+          isExternal && !regId
+            ? this.getPushTarget(job, "ext_user") || null
+            : null,
+        external_registry_password:
+          isExternal && !regId
+            ? this.getPushTarget(job, "ext_pass") || null
+            : null,
+      })
+      .subscribe({
+        next: () => {
+          this.pushing.set(null);
+          this.loadJobs();
+        },
+        error: () => this.pushing.set(null),
+      });
   }
+
+  // ── Delete ─────────────────────────────────────────────────────────────────
 
   deleteJob(jobId: string) {
     this.staging.deleteJob(jobId).subscribe({
@@ -161,7 +271,7 @@ export class StagingComponent implements OnInit {
     });
   }
 
-  // ── Helpers ────────────────────────────────────────────────────────────────
+  // ── Template helpers ───────────────────────────────────────────────────────
 
   getStatusBadgeClass(status: string): string {
     const map: Record<string, string> = {
@@ -177,7 +287,7 @@ export class StagingComponent implements OnInit {
       done: "badge bg-success text-white",
       failed: "badge bg-danger text-white",
     };
-    return map[status] || "badge bg-secondary";
+    return map[status] ?? "badge bg-secondary";
   }
 
   formatCount(n: number): string {
@@ -188,5 +298,30 @@ export class StagingComponent implements OnInit {
 
   getVulnCount(job: StagingJob, severity: string): number {
     return job.vuln_result?.counts[severity] ?? 0;
+  }
+
+  /** Severity badge CSS class for the CVE table rows. */
+  getSeverityBadge(sev: string): string {
+    const map: Record<string, string> = {
+      CRITICAL: "badge bg-danger text-white",
+      HIGH: "badge bg-warning text-dark",
+      MEDIUM: "badge bg-info text-dark",
+      LOW: "badge bg-success text-white",
+      UNKNOWN: "badge bg-secondary text-white",
+    };
+    return map[sev] ?? "badge bg-secondary";
+  }
+
+  /** CSS row class to highlight blocking CVE rows in the table. */
+  getCveRowClass(job: StagingJob, sev: string): string {
+    const blocking = job.vuln_result?.severities ?? [];
+    if (blocking.includes(sev)) {
+      return sev === "CRITICAL"
+        ? "table-danger"
+        : sev === "HIGH"
+          ? "table-warning"
+          : "";
+    }
+    return "";
   }
 }

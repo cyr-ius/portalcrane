@@ -1,6 +1,13 @@
+/**
+ * Portalcrane - Staging Service
+ * HTTP client for /api/staging endpoints.
+ * Updated to support folder prefix and external registry push.
+ */
 import { HttpClient } from "@angular/common/http";
 import { inject, Injectable } from "@angular/core";
 import { Observable } from "rxjs";
+
+// ── Models ────────────────────────────────────────────────────────────────────
 
 export type JobStatus =
   | "pending"
@@ -14,23 +21,6 @@ export type JobStatus =
   | "pushing"
   | "done"
   | "failed";
-
-export interface StagingJob {
-  job_id: string;
-  status: JobStatus;
-  image: string;
-  tag: string;
-  progress: number;
-  message: string;
-  scan_result: string | null;
-  vuln_result: VulnResult | null;
-  target_image: string | null;
-  target_tag: string | null;
-  error: string | null;
-  // Overrides that were applied for this job (null = server default was used)
-  vuln_scan_enabled_override: boolean | null;
-  vuln_severities_override: string | null;
-}
 
 export interface VulnerabilityEntry {
   id: string;
@@ -48,10 +38,25 @@ export interface VulnResult {
   blocked: boolean;
   severities: string[];
   counts: Record<string, number>;
-  // Full CVE list (present in registry_inside branch)
   vulnerabilities?: VulnerabilityEntry[];
   total?: number;
   scanned_at?: string;
+}
+
+export interface StagingJob {
+  job_id: string;
+  status: JobStatus;
+  image: string;
+  tag: string;
+  progress: number;
+  message: string;
+  scan_result: string | null;
+  vuln_result: VulnResult | null;
+  target_image: string | null;
+  target_tag: string | null;
+  error: string | null;
+  vuln_scan_enabled_override: boolean | null;
+  vuln_severities_override: string | null;
 }
 
 export interface DockerHubResult {
@@ -66,22 +71,29 @@ export interface DockerHubResult {
 export interface PullOptions {
   image: string;
   tag: string;
-  /** User-level overrides coming from Settings (null = use server default) */
   vuln_scan_enabled_override?: boolean | null;
   vuln_severities_override?: string | null;
 }
 
-export interface DanglingImage {
-  id: string;
-  repository: string;
-  tag: string;
-  size: string;
-  created: string;
-}
-
-export interface DanglingImagesResult {
-  images: DanglingImage[];
-  count: number;
+/**
+ * Push options sent to /api/staging/push.
+ * When external_registry_id or external_registry_host is set
+ * the backend routes the push to the external registry.
+ */
+export interface PushOptions {
+  job_id: string;
+  /** Optional rename (image name only, no host/folder). */
+  target_image?: string | null;
+  /** Optional retag. */
+  target_tag?: string | null;
+  /** Optional folder prefix, e.g. "infra" or "app/backend". */
+  folder?: string | null;
+  /** ID of a saved external registry — mutually exclusive with host. */
+  external_registry_id?: string | null;
+  /** Ad-hoc external registry host — used when not saved. */
+  external_registry_host?: string | null;
+  external_registry_username?: string | null;
+  external_registry_password?: string | null;
 }
 
 export interface OrphanTarballsResult {
@@ -91,7 +103,7 @@ export interface OrphanTarballsResult {
   total_size_human: string;
 }
 
-/** Active job statuses — used to sort running jobs to the top */
+/** Active job statuses — used to sort running jobs to the top. */
 const ACTIVE_STATUSES: JobStatus[] = [
   "pending",
   "pulling",
@@ -99,6 +111,8 @@ const ACTIVE_STATUSES: JobStatus[] = [
   "vuln_scanning",
   "pushing",
 ];
+
+// ── Service ───────────────────────────────────────────────────────────────────
 
 @Injectable({ providedIn: "root" })
 export class StagingService {
@@ -117,18 +131,16 @@ export class StagingService {
     return this.http.get<StagingJob[]>(`${this.BASE}/jobs`);
   }
 
+  /**
+   * Push a staged image.
+   * Supports folder prefix and external registry routing.
+   */
   pushImage(
-    jobId: string,
-    targetImage?: string,
-    targetTag?: string,
+    options: PushOptions,
   ): Observable<{ message: string; job_id: string }> {
     return this.http.post<{ message: string; job_id: string }>(
       `${this.BASE}/push`,
-      {
-        job_id: jobId,
-        target_image: targetImage || null,
-        target_tag: targetTag || null,
-      },
+      options,
     );
   }
 
@@ -154,21 +166,6 @@ export class StagingService {
     );
   }
 
-  // ── Quick Actions: Dangling Images ────────────────────────────────────────
-
-  getDanglingImages(): Observable<DanglingImagesResult> {
-    return this.http.get<DanglingImagesResult>(`${this.BASE}/dangling-images`);
-  }
-
-  purgeDanglingImages(): Observable<{ message: string; output: string }> {
-    return this.http.post<{ message: string; output: string }>(
-      `${this.BASE}/dangling-images/purge`,
-      {},
-    );
-  }
-
-  // ── Quick Actions: Orphan Tarballs ────────────────────────────────────────
-
   getOrphanTarballs(): Observable<OrphanTarballsResult> {
     return this.http.get<OrphanTarballsResult>(`${this.BASE}/orphan-tarballs`);
   }
@@ -189,10 +186,7 @@ export class StagingService {
     }>(`${this.BASE}/orphan-tarballs/purge`, {});
   }
 
-  /**
-   * Sort jobs so that active ones (pending/pulling/scanning/pushing) always
-   * appear at the top of the list, then by most recent (reverse insertion order).
-   */
+  /** Sort jobs so active ones appear at the top. */
   static sortJobs(jobs: StagingJob[]): StagingJob[] {
     return [...jobs].sort((a, b) => {
       const aActive = ACTIVE_STATUSES.includes(a.status) ? 0 : 1;

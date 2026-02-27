@@ -16,14 +16,13 @@ services:
       - "5000:5000"
     environment:
       # ── Registry — loopback because registry runs in the same container ───
-      - REGISTRY_USERNAME=${REGISTRY_USERNAME:-}
-      - REGISTRY_PASSWORD=${REGISTRY_PASSWORD:-}
-      # Optional: override the registry HTTP secret
-      - REGISTRY_HTTP_SECRET=${REGISTRY_HTTP_SECRET:-registry-secret}
+      # The Portal Crane application uses the host to pull or push images
+      # through the Docker socket. It is necessary to expose the container port
+      # so that the host can push the images to the registry
       # REGISTRY_PUSH_HOST: the HOST Docker daemon cannot resolve "localhost"
       # inside the container network. Use "127.0.0.1:5000" to push via the
       # published port on the host.
-      - REGISTRY_PUSH_HOST=127.0.0.1:8080/registry-proxy
+      # - REGISTRY_PUSH_HOST=${REGISTRY_PUSH_HOST:-127.0.0.1:8080}
 
       # ── Admin credentials ─────────────────────────────────────────────────
       - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
