@@ -1,603 +1,526 @@
 <!-- Portalcrane - Staging Component Template -->
+<!-- Angular 21: @if / @for control flow, [value]/(input) signal bindings, no *ngIf / *ngFor -->
 <div class="p-4">
   <!-- ── Page header ─────────────────────────────────────────────────────── -->
   <div class="d-flex align-items-center justify-content-between mb-4">
     <div>
-      <h2 class="fw-bold mb-1">Staging</h2>
+      <h2 class="fw-bold mb-1">Staging Pipeline</h2>
       <p class="text-muted small mb-0">
-        Pull from Docker Hub · Trivy CVE scan · Push to registry
+        Search Docker Hub → Pull → CVE scan → Push to registry
       </p>
     </div>
   </div>
 
-  <!-- ── Pull form ───────────────────────────────────────────────────────── -->
-  <div class="card border-0 mb-4">
-    <div class="card-header border-0">
-      <h6 class="fw-semibold mb-0">
-        <i class="bi bi-cloud-download me-2"></i>Pull from Docker Hub
-      </h6>
-    </div>
-    <div class="card-body">
-      <div class="row g-2 align-items-end">
-        <!-- Image search -->
-        <div class="col">
-          <label class="form-label small fw-semibold">Image</label>
-          <div class="position-relative">
+  <div class="row g-3">
+    <!-- ── Left column: search + pull form ─────────────────────────────── -->
+    <div class="col-lg-5">
+      <!-- Search Docker Hub card -->
+      <div class="card border-0 mb-3">
+        <div class="card-header border-0">
+          <h6 class="fw-semibold mb-0">
+            <i class="bi bi-search me-2"></i>Search Docker Hub
+          </h6>
+        </div>
+        <div class="card-body">
+          <!-- Search input + button -->
+          <div class="input-group mb-2">
             <input
               type="text"
               class="form-control"
-              placeholder="Search Docker Hub… (e.g. nginx, redis)"
+              placeholder="nginx, redis, node…"
               [value]="searchQuery()"
-              (input)="searchQuery.set($any($event.target).value); onSearch()"
-              (ngModelChange)="pullImage.set($event)"
-              [(ngModel)]="searchQuery"
+              (input)="searchQuery.set($any($event.target).value)"
+              (keyup.enter)="searchDockerHub()"
             />
-            @if (searching()) {
-              <div
-                class="position-absolute end-0 top-50 translate-middle-y pe-3"
-              >
-                <span
-                  class="spinner-border spinner-border-sm text-muted"
-                ></span>
-              </div>
-            }
-            <!-- Search suggestions -->
-            @if (searchResults().length > 0) {
-              <div
-                class="dropdown-menu show w-100 shadow-sm"
-                style="max-height: 250px; overflow-y: auto"
-              >
-                @for (result of searchResults(); track result.name) {
-                  <button
-                    class="dropdown-item d-flex align-items-center justify-content-between py-2"
-                    (click)="selectImage(result.name)"
-                  >
-                    <div>
-                      <span class="fw-semibold font-monospace">{{
-                        result.name
-                      }}</span>
-                      @if (result.is_official) {
-                        <span
-                          class="badge bg-primary-subtle text-primary ms-2 small"
-                          >official</span
-                        >
-                      }
-                      <div
-                        class="text-muted small text-truncate"
-                        style="max-width: 400px"
-                      >
-                        {{ result.description || "No description" }}
-                      </div>
-                    </div>
-                    <span class="text-muted small"
-                      >⭐ {{ formatCount(result.star_count) }}</span
-                    >
-                  </button>
-                }
-              </div>
-            }
-          </div>
-        </div>
-
-        <!-- Tag selector -->
-        <div class="col-auto" style="min-width: 180px">
-          <label class="form-label small fw-semibold">Tag</label>
-          @if (availableTags().length > 0) {
-            <select
-              class="form-select"
-              [(ngModel)]="pullTag"
-              [ngModel]="pullTag()"
-            >
-              @for (t of availableTags(); track t) {
-                <option [value]="t">{{ t }}</option>
-              }
-            </select>
-          } @else {
-            <input
-              type="text"
-              class="form-control"
-              placeholder="latest"
-              [(ngModel)]="pullTag"
-            />
-          }
-        </div>
-
-        <!-- Pull button -->
-        <div class="col-auto">
-          <button
-            class="btn btn-primary"
-            (click)="startPull()"
-            [disabled]="pulling() || !pullImage()"
-          >
-            @if (pulling()) {
-              <span class="spinner-border spinner-border-sm me-2"></span
-              >Pulling…
-            } @else {
-              <i class="bi bi-cloud-download me-2"></i>Pull
-            }
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ── Jobs list ───────────────────────────────────────────────────────── -->
-  @if (jobs().length === 0) {
-    <div class="text-center py-5 text-muted">
-      <i class="bi bi-cloud-download display-4 d-block mb-3"></i>
-      No staging jobs yet. Pull an image to get started.
-    </div>
-  } @else {
-    <div class="d-flex flex-column gap-3">
-      @for (job of jobs(); track job.job_id) {
-        <div class="card border-0">
-          <!-- Job header -->
-          <div class="card-header border-0 d-flex align-items-center gap-3">
-            <div class="image-icon">
-              <i class="bi bi-box-seam"></i>
-            </div>
-            <div class="flex-grow-1">
-              <div class="d-flex align-items-center gap-2 flex-wrap">
-                <span class="fw-semibold font-monospace">
-                  {{ job.image }}:{{ job.tag }}
-                </span>
-                <span [class]="getStatusBadgeClass(job.status)">
-                  {{ job.status }}
-                </span>
-              </div>
-              <div class="text-muted small mt-1">{{ job.message }}</div>
-            </div>
             <button
-              class="btn btn-sm btn-outline-secondary"
-              (click)="deleteJob(job.job_id)"
-              title="Remove job"
+              class="btn btn-primary"
+              (click)="searchDockerHub()"
+              [disabled]="searching()"
+              type="button"
             >
-              <i class="bi bi-trash"></i>
+              @if (searching()) {
+                <span class="spinner-border spinner-border-sm"></span>
+              } @else {
+                <i class="bi bi-search"></i>
+              }
             </button>
           </div>
 
-          <!-- Progress bar -->
-          <div class="px-3 pt-1 pb-2">
-            <div class="progress" style="height: 4px">
-              <div
-                class="progress-bar"
-                [class.bg-danger]="
-                  job.status === 'scan_vulnerable' ||
-                  job.status === 'scan_infected' ||
-                  job.status === 'failed'
-                "
-                [class.bg-success]="
-                  job.status === 'done' || job.status === 'scan_clean'
-                "
-                [class.progress-bar-striped]="
-                  [
-                    'pending',
-                    'pulling',
-                    'scanning',
-                    'vuln_scanning',
-                    'pushing',
-                  ].includes(job.status)
-                "
-                [class.progress-bar-animated]="
-                  [
-                    'pending',
-                    'pulling',
-                    'scanning',
-                    'vuln_scanning',
-                    'pushing',
-                  ].includes(job.status)
-                "
-                [style.width.%]="job.progress"
-              ></div>
+          <!-- Search results list -->
+          @if (searchResults().length > 0) {
+            <div class="search-results-list">
+              @for (result of searchResults(); track result.name) {
+                <div
+                  class="search-result-item p-2 rounded d-flex align-items-center justify-content-between gap-2"
+                  [class.selected]="pullImage() === result.name"
+                  (click)="selectImage(result.name)"
+                  role="button"
+                  tabindex="0"
+                  (keyup.enter)="selectImage(result.name)"
+                >
+                  <!-- Left: name, badges, description, stats -->
+                  <div class="overflow-hidden flex-grow-1">
+                    <!-- Row 1: image name + official/automated badges -->
+                    <div class="fw-semibold small text-truncate">
+                      {{ result.name }}
+                      @if (result.is_official) {
+                        <span
+                          class="badge bg-primary-subtle text-primary ms-1"
+                          style="font-size: 0.65rem"
+                          >Official</span
+                        >
+                      }
+                      @if (result.is_automated) {
+                        <span
+                          class="badge bg-secondary-subtle text-secondary ms-1"
+                          style="font-size: 0.65rem"
+                          >Automated</span
+                        >
+                      }
+                    </div>
+
+                    <!-- Row 2: description -->
+                    <div class="text-muted small text-truncate">
+                      {{ result.description || "—" }}
+                    </div>
+
+                    <!-- Row 3: star count + download count -->
+                    <div class="text-muted" style="font-size: 0.7rem">
+                      <i class="bi bi-star me-1"></i
+                      >{{ formatCount(result.star_count) }}
+                      <span class="ms-2">
+                        <i class="bi bi-download me-1"></i
+                        >{{ formatCount(result.pull_count) }}
+                      </span>
+                    </div>
+                  </div>
+
+                  <!-- Right: select button — shows checkmark when already selected -->
+                  <button
+                    class="btn btn-sm flex-shrink-0"
+                    [class.btn-primary]="pullImage() === result.name"
+                    [class.btn-outline-primary]="pullImage() !== result.name"
+                    (click)="selectImage(result.name); $event.stopPropagation()"
+                    type="button"
+                    title="Select {{ result.name }}"
+                  >
+                    @if (pullImage() === result.name) {
+                      <i class="bi bi-check"></i>
+                    } @else {
+                      <i class="bi bi-plus"></i>
+                    }
+                  </button>
+                </div>
+              }
+            </div>
+          }
+        </div>
+      </div>
+
+      <!-- Pull form card -->
+      <div class="card border-0 mb-3">
+        <div class="card-header border-0">
+          <h6 class="fw-semibold mb-0">
+            <i class="bi bi-cloud-download me-2"></i>Pull Image
+          </h6>
+        </div>
+        <div class="card-body">
+          <div class="row g-2 align-items-end">
+            <!-- Image name input -->
+            <div class="col">
+              <label class="form-label small fw-semibold">Image</label>
+              <input
+                type="text"
+                class="form-control"
+                placeholder="e.g. nginx, library/postgres"
+                [value]="pullImage()"
+                (input)="pullImage.set($any($event.target).value)"
+              />
+            </div>
+
+            <!-- Tag selector or free-text input -->
+            <div class="col-auto" style="min-width: 160px">
+              <label class="form-label small fw-semibold">Tag</label>
+              @if (availableTags().length > 0) {
+                <select
+                  class="form-select"
+                  [value]="pullTag()"
+                  (change)="pullTag.set($any($event.target).value)"
+                >
+                  @for (t of availableTags(); track t) {
+                    <option [value]="t">{{ t }}</option>
+                  }
+                </select>
+              } @else {
+                <input
+                  type="text"
+                  class="form-control"
+                  placeholder="latest"
+                  [value]="pullTag()"
+                  (input)="pullTag.set($any($event.target).value)"
+                />
+              }
+            </div>
+
+            <!-- Pull button -->
+            <div class="col-auto">
+              <button
+                class="btn btn-primary"
+                (click)="startPull()"
+                [disabled]="pulling() || !pullImage()"
+                type="button"
+              >
+                @if (pulling()) {
+                  <span class="spinner-border spinner-border-sm me-1"></span>
+                  Pulling…
+                } @else {
+                  <i class="bi bi-cloud-download me-1"></i>Pull
+                }
+              </button>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+    <!-- ── End left column ──────────────────────────────────────────────── -->
 
-          <!-- Job body -->
-          <div class="card-body pt-0">
-            <!-- ── Vulnerability scan summary ──────────────────────────── -->
-            @if (job.vuln_result) {
-              <div class="border rounded p-2 mb-3 bg-body-tertiary">
-                <!-- CVE counts row -->
-                <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
-                  <span class="text-muted small">
-                    <i class="bi bi-bug me-1"></i>CVE:
-                  </span>
-                  @for (
-                    sev of ["CRITICAL", "HIGH", "MEDIUM", "LOW", "UNKNOWN"];
-                    track sev
-                  ) {
-                    @if (
-                      getVulnCount(job, sev) > 0 ||
-                      job.vuln_result!.severities.includes(sev)
-                    ) {
-                      <span
-                        class="badge"
-                        [class.bg-danger]="
-                          sev === 'CRITICAL' && getVulnCount(job, sev) > 0
-                        "
-                        [class.bg-danger-subtle]="
-                          sev === 'CRITICAL' && getVulnCount(job, sev) === 0
-                        "
-                        [class.text-danger]="
-                          sev === 'CRITICAL' && getVulnCount(job, sev) === 0
-                        "
-                        [class.text-white]="
-                          sev === 'CRITICAL' && getVulnCount(job, sev) > 0
-                        "
-                        [class.bg-warning]="
-                          sev === 'HIGH' && getVulnCount(job, sev) > 0
-                        "
-                        [class.bg-warning-subtle]="
-                          sev === 'HIGH' && getVulnCount(job, sev) === 0
-                        "
-                        [class.text-warning]="
-                          sev === 'HIGH' && getVulnCount(job, sev) === 0
-                        "
-                        [class.text-dark]="
-                          sev === 'HIGH' && getVulnCount(job, sev) > 0
-                        "
-                        [class.bg-info-subtle]="sev === 'MEDIUM'"
-                        [class.text-info]="sev === 'MEDIUM'"
-                        [class.bg-secondary-subtle]="
-                          sev === 'LOW' || sev === 'UNKNOWN'
-                        "
-                        [class.text-secondary]="
-                          sev === 'LOW' || sev === 'UNKNOWN'
-                        "
-                      >
-                        {{ sev }} {{ getVulnCount(job, sev) }}
-                      </span>
-                    }
-                  }
-                  @if (job.vuln_result!.scanned_at) {
-                    <span class="text-muted ms-auto" style="font-size: 0.7rem">
-                      <i class="bi bi-clock me-1"></i
-                      >{{ job.vuln_result!.scanned_at | slice: 0 : 16 }}
-                    </span>
-                  }
-                </div>
-
-                <!-- No blocking CVEs message -->
-                @if (!job.vuln_result!.blocked) {
-                  <div class="text-success small">
-                    <i class="bi bi-check-circle me-1"></i>
-                    No CVEs matching blocked severities ({{
-                      job.vuln_result!.severities.join(", ")
-                    }})
-                  </div>
-                }
-
-                <!-- CVE detail table -->
-                @if (
-                  job.vuln_result!.vulnerabilities &&
-                  job.vuln_result!.vulnerabilities!.length > 0
-                ) {
-                  <div class="mt-2">
-                    <div class="text-muted mb-1 small">
-                      <i class="bi bi-list-ul me-1"></i>
-                      {{ job.vuln_result!.total }} CVE(s) found
+    <!-- ── Right column: job list ───────────────────────────────────────── -->
+    <div class="col-lg-7">
+      <div class="card border-0">
+        <div
+          class="card-header border-0 d-flex align-items-center justify-content-between"
+        >
+          <h6 class="fw-semibold mb-0">
+            <i class="bi bi-list-task me-2"></i>Pipeline Jobs
+          </h6>
+          <span class="badge bg-secondary-subtle text-secondary">
+            {{ jobs().length }}
+          </span>
+        </div>
+        <div class="card-body p-0">
+          @if (jobs().length === 0) {
+            <div class="text-center py-5 text-muted">
+              <i
+                class="bi bi-cloud-download display-4 d-block mb-3 opacity-25"
+              ></i>
+              No staging jobs yet. Search and pull an image to get started.
+            </div>
+          } @else {
+            <div class="job-list">
+              @for (job of jobs(); track job.job_id) {
+                <div class="job-card m-3 p-3 rounded">
+                  <!-- Job header row -->
+                  <div class="d-flex align-items-start gap-2 mb-2">
+                    <div class="flex-grow-1">
+                      <div class="d-flex align-items-center gap-2 flex-wrap">
+                        <span class="fw-semibold font-monospace small">
+                          {{ job.image }}:{{ job.tag }}
+                        </span>
+                        <span [class]="getStatusBadgeClass(job.status)">
+                          {{ job.status }}
+                        </span>
+                      </div>
+                      @if (job.message) {
+                        <div class="text-muted small mt-1">
+                          {{ job.message }}
+                        </div>
+                      }
                     </div>
+                    <button
+                      class="btn btn-sm btn-outline-secondary border-0"
+                      (click)="deleteJob(job.job_id)"
+                      title="Remove job"
+                      type="button"
+                    >
+                      <i class="bi bi-trash"></i>
+                    </button>
+                  </div>
+
+                  <!-- Progress bar -->
+                  <div class="progress mb-2" style="height: 4px">
                     <div
-                      class="table-responsive"
-                      style="max-height: 260px; overflow-y: auto"
-                    >
-                      <table
-                        class="table table-sm table-hover mb-0"
-                        style="font-size: 0.72rem"
-                      >
-                        <thead class="sticky-top table-light">
-                          <tr>
-                            <th>CVE ID</th>
-                            <th>Severity</th>
-                            <th>Package</th>
-                            <th>Installed</th>
-                            <th>Fixed</th>
-                            <th>CVSS</th>
-                            <th>Target</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          @for (
-                            vuln of job.vuln_result!.vulnerabilities;
-                            track vuln.id
-                          ) {
-                            <tr [class]="getCveRowClass(job, vuln.severity)">
-                              <td>
-                                <a
-                                  [href]="
-                                    'https://nvd.nist.gov/vuln/detail/' +
-                                    vuln.id
-                                  "
-                                  target="_blank"
-                                  class="font-monospace text-decoration-none link-primary small"
-                                >
-                                  {{ vuln.id }}
-                                </a>
-                              </td>
-                              <td>
-                                <span
-                                  [class]="getSeverityBadge(vuln.severity)"
-                                  style="font-size: 0.65rem"
-                                >
-                                  {{ vuln.severity }}
-                                </span>
-                              </td>
-                              <td class="font-monospace">{{ vuln.package }}</td>
-                              <td class="font-monospace text-danger">
-                                {{ vuln.installed_version }}
-                              </td>
-                              <td class="font-monospace text-success">
-                                {{ vuln.fixed_version ?? "—" }}
-                              </td>
-                              <td>
-                                <strong
-                                  [class.text-danger]="
-                                    (vuln.cvss_score ?? 0) >= 9
-                                  "
-                                  [class.text-warning]="
-                                    (vuln.cvss_score ?? 0) >= 7 &&
-                                    (vuln.cvss_score ?? 0) < 9
-                                  "
-                                  [class.text-success]="
-                                    (vuln.cvss_score ?? 0) < 7 &&
-                                    vuln.cvss_score !== null
-                                  "
-                                >
-                                  {{ vuln.cvss_score ?? "—" }}
-                                </strong>
-                              </td>
-                              <td class="text-muted" style="font-size: 0.67rem">
-                                {{ vuln.target }}
-                              </td>
-                            </tr>
-                          }
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                }
-              </div>
-            }
-
-            <!-- ── ClamAV scan result ───────────────────────────────────── -->
-            @if (job.scan_result) {
-              <div
-                class="small mb-3 p-2 rounded bg-body-secondary font-monospace text-break"
-                style="font-size: 0.7rem"
-              >
-                {{ job.scan_result }}
-              </div>
-            }
-
-            <!-- ── Push section (scan_clean or scan_skipped) ────────────── -->
-            @if (job.status === "scan_clean" || job.status === "scan_skipped") {
-              <div class="push-section border-top pt-3 mt-1">
-                <!-- Ready label -->
-                <div
-                  class="small fw-semibold mb-3"
-                  [class.text-success]="job.status === 'scan_clean'"
-                  [class.text-secondary]="job.status === 'scan_skipped'"
-                >
-                  @if (job.status === "scan_clean") {
-                    <i class="bi bi-shield-check me-1"></i>Ready to push
-                  } @else {
-                    <i class="bi bi-skip-forward me-1"></i>Ready to push (scan
-                    skipped)
-                  }
-                </div>
-
-                <!-- Destination selector -->
-                <div class="mb-3">
-                  <label
-                    class="form-label small fw-semibold text-uppercase text-muted"
-                    style="font-size: 0.7rem; letter-spacing: 0.06em"
-                  >
-                    Destination
-                  </label>
-                  <div class="d-flex gap-2">
-                    <button
-                      class="btn btn-sm flex-fill d-flex align-items-center justify-content-center gap-1"
-                      [class.btn-primary]="getPushMode(job) === 'local'"
-                      [class.btn-outline-secondary]="
-                        getPushMode(job) !== 'local'
-                      "
-                      (click)="setPushMode(job, 'local')"
-                    >
-                      <i class="bi bi-hdd-network me-1"></i>Local registry
-                    </button>
-                    <button
-                      class="btn btn-sm flex-fill d-flex align-items-center justify-content-center gap-1"
-                      [class.btn-purple]="getPushMode(job) === 'external'"
-                      [class.btn-outline-secondary]="
-                        getPushMode(job) !== 'external'
-                      "
-                      (click)="setPushMode(job, 'external')"
-                    >
-                      <i class="bi bi-globe me-1"></i>External registry
-                    </button>
-                  </div>
-                </div>
-
-                <!-- External registry fields -->
-                @if (getPushMode(job) === "external") {
-                  <div
-                    class="mb-3 p-2 rounded border border-primary-subtle bg-primary-subtle bg-opacity-10"
-                  >
-                    <!-- Saved registry selector -->
-                    @if (externalRegistries().length > 0) {
-                      <div class="mb-2">
-                        <label class="form-label small fw-semibold"
-                          >Saved registry</label
-                        >
-                        <select
-                          class="form-select form-select-sm"
-                          [value]="getExtRegistryId(job)"
-                          (change)="
-                            setExtRegistryId(job, $any($event.target).value)
-                          "
-                        >
-                          <option value="">— Enter manually —</option>
-                          @for (reg of externalRegistries(); track reg.id) {
-                            <option [value]="reg.id">
-                              {{ reg.name }} ({{ reg.host }})
-                            </option>
-                          }
-                        </select>
-                      </div>
-                    }
-                    <!-- Ad-hoc fields shown when no saved registry selected -->
-                    @if (!getExtRegistryId(job)) {
-                      <div class="row g-2">
-                        <div class="col-12">
-                          <input
-                            type="text"
-                            class="form-control form-control-sm"
-                            placeholder="Registry host (e.g. registry.mycompany.com)"
-                            [value]="getPushTarget(job, 'ext_host')"
-                            (input)="
-                              updatePushTarget(
-                                job,
-                                'ext_host',
-                                $any($event.target).value
-                              )
-                            "
-                          />
-                        </div>
-                        <div class="col-6">
-                          <input
-                            type="text"
-                            class="form-control form-control-sm"
-                            placeholder="Username (optional)"
-                            [value]="getPushTarget(job, 'ext_user')"
-                            (input)="
-                              updatePushTarget(
-                                job,
-                                'ext_user',
-                                $any($event.target).value
-                              )
-                            "
-                          />
-                        </div>
-                        <div class="col-6">
-                          <input
-                            type="password"
-                            class="form-control form-control-sm"
-                            placeholder="Password (optional)"
-                            [value]="getPushTarget(job, 'ext_pass')"
-                            (input)="
-                              updatePushTarget(
-                                job,
-                                'ext_pass',
-                                $any($event.target).value
-                              )
-                            "
-                          />
-                        </div>
-                      </div>
-                    }
-                  </div>
-                }
-
-                <!-- Image path row: folder / image : tag -->
-                <div class="row g-2 mb-2 align-items-end">
-                  <div class="col">
-                    <label
-                      class="form-label small text-muted"
-                      style="font-size: 0.7rem"
-                    >
-                      Folder
-                      <span class="text-muted opacity-50">(optional)</span>
-                    </label>
-                    <input
-                      type="text"
-                      class="form-control form-control-sm font-monospace"
-                      placeholder="e.g. infra or app/backend"
-                      [value]="getPushTarget(job, 'folder')"
-                      (input)="
-                        updatePushTarget(
-                          job,
-                          'folder',
-                          $any($event.target).value
+                      class="progress-bar"
+                      [class.bg-danger]="
+                        ['scan_vulnerable', 'scan_infected', 'failed'].includes(
+                          job.status
                         )
                       "
-                    />
-                  </div>
-                  <div class="col-auto align-self-end pb-1 text-muted">/</div>
-                  <div class="col">
-                    <label
-                      class="form-label small text-muted"
-                      style="font-size: 0.7rem"
-                      >Image name</label
-                    >
-                    <input
-                      type="text"
-                      class="form-control form-control-sm font-monospace"
-                      [placeholder]="job.image.split('/').pop() ?? job.image"
-                      [value]="getPushTarget(job, 'img')"
-                      (input)="
-                        updatePushTarget(job, 'img', $any($event.target).value)
+                      [class.bg-success]="
+                        ['done', 'scan_clean'].includes(job.status)
                       "
-                    />
-                  </div>
-                  <div class="col-auto align-self-end pb-1 text-muted">:</div>
-                  <div class="col-auto" style="min-width: 100px">
-                    <label
-                      class="form-label small text-muted"
-                      style="font-size: 0.7rem"
-                      >Tag</label
-                    >
-                    <input
-                      type="text"
-                      class="form-control form-control-sm font-monospace"
-                      [placeholder]="job.tag"
-                      [value]="getPushTarget(job, 'tag')"
-                      (input)="
-                        updatePushTarget(job, 'tag', $any($event.target).value)
+                      [class.progress-bar-striped]="
+                        [
+                          'pending',
+                          'pulling',
+                          'scanning',
+                          'vuln_scanning',
+                          'pushing',
+                        ].includes(job.status)
                       "
-                    />
+                      [class.progress-bar-animated]="
+                        [
+                          'pending',
+                          'pulling',
+                          'scanning',
+                          'vuln_scanning',
+                          'pushing',
+                        ].includes(job.status)
+                      "
+                      [style.width.%]="job.progress"
+                    ></div>
                   </div>
-                </div>
 
-                <!-- Preview -->
-                <div
-                  class="rounded bg-dark text-success font-monospace p-2 mb-3 small text-break"
-                >
-                  <span class="text-muted me-2" style="font-size: 0.65rem"
-                    >→</span
-                  >{{ pushPreview(job) }}
-                </div>
-
-                <!-- Push button -->
-                <button
-                  class="btn btn-sm w-100"
-                  [class.btn-success]="getPushMode(job) === 'local'"
-                  [class.btn-primary]="getPushMode(job) === 'external'"
-                  (click)="pushImage(job)"
-                  [disabled]="pushing() === job.job_id"
-                >
-                  @if (pushing() === job.job_id) {
-                    <span class="spinner-border spinner-border-sm me-2"></span
-                    >Pushing…
-                  } @else if (getPushMode(job) === "local") {
-                    <i class="bi bi-hdd-network me-2"></i>Push to local registry
-                  } @else {
-                    <i class="bi bi-globe me-2"></i>Push to external registry
+                  <!-- CVE summary (when scan found vulnerabilities) -->
+                  @if (job.vuln_result && job.vuln_result.counts) {
+                    <div class="d-flex gap-1 flex-wrap mb-2">
+                      @for (
+                        sev of ["CRITICAL", "HIGH", "MEDIUM", "LOW", "UNKNOWN"];
+                        track sev
+                      ) {
+                        @if (getVulnCount(job, sev) > 0) {
+                          <span
+                            [class]="getSeverityBadge(sev)"
+                            style="font-size: 0.7rem"
+                          >
+                            {{ sev }}: {{ getVulnCount(job, sev) }}
+                          </span>
+                        }
+                      }
+                    </div>
                   }
-                </button>
-              </div>
-            }
 
-            <!-- Error display -->
-            @if (job.error) {
-              <div class="alert alert-danger small py-2 mb-0 mt-2">
-                <i class="bi bi-exclamation-triangle me-1"></i>{{ job.error }}
-              </div>
-            }
-          </div>
-          <!-- /card-body -->
+                  <!-- Push panel — shown only when job is done or scan_clean -->
+                  @if (job.status === "done" || job.status === "scan_clean") {
+                    <div class="mt-2 pt-2 border-top">
+                      <!-- Destination toggle -->
+                      <div class="d-flex gap-2 mb-2">
+                        <button
+                          class="btn btn-sm flex-fill"
+                          [class.btn-primary]="getPushMode(job) === 'local'"
+                          [class.btn-outline-secondary]="
+                            getPushMode(job) !== 'local'
+                          "
+                          (click)="setPushMode(job, 'local')"
+                          type="button"
+                        >
+                          <i class="bi bi-hdd-network me-1"></i>Local
+                        </button>
+                        <button
+                          class="btn btn-sm flex-fill"
+                          [class.btn-primary]="getPushMode(job) === 'external'"
+                          [class.btn-outline-secondary]="
+                            getPushMode(job) !== 'external'
+                          "
+                          (click)="setPushMode(job, 'external')"
+                          type="button"
+                        >
+                          <i class="bi bi-globe me-1"></i>External
+                        </button>
+                      </div>
+
+                      <!-- External registry fields -->
+                      @if (getPushMode(job) === "external") {
+                        <div
+                          class="mb-2 p-2 rounded border border-primary-subtle bg-primary-subtle bg-opacity-10"
+                        >
+                          <!-- Saved registry selector -->
+                          @if (externalRegistries().length > 0) {
+                            <div class="mb-2">
+                              <label class="form-label small fw-semibold"
+                                >Saved registry</label
+                              >
+                              <select
+                                class="form-select form-select-sm"
+                                [value]="getExtRegistryId(job)"
+                                (change)="
+                                  setExtRegistryId(
+                                    job,
+                                    $any($event.target).value
+                                  )
+                                "
+                              >
+                                <option value="">— Enter manually —</option>
+                                @for (
+                                  reg of externalRegistries();
+                                  track reg.id
+                                ) {
+                                  <option [value]="reg.id">
+                                    {{ reg.name }} ({{ reg.host }})
+                                  </option>
+                                }
+                              </select>
+                            </div>
+                          }
+
+                          <!-- Ad-hoc fields shown when no saved registry is selected -->
+                          @if (!getExtRegistryId(job)) {
+                            <div class="row g-2">
+                              <div class="col-12">
+                                <input
+                                  type="text"
+                                  class="form-control form-control-sm"
+                                  placeholder="Registry host (e.g. registry.mycompany.com)"
+                                  [value]="getPushTarget(job, 'ext_host')"
+                                  (input)="
+                                    updatePushTarget(
+                                      job,
+                                      'ext_host',
+                                      $any($event.target).value
+                                    )
+                                  "
+                                />
+                              </div>
+                              <div class="col-6">
+                                <input
+                                  type="text"
+                                  class="form-control form-control-sm"
+                                  placeholder="Username (optional)"
+                                  [value]="getPushTarget(job, 'ext_user')"
+                                  (input)="
+                                    updatePushTarget(
+                                      job,
+                                      'ext_user',
+                                      $any($event.target).value
+                                    )
+                                  "
+                                />
+                              </div>
+                              <div class="col-6">
+                                <input
+                                  type="password"
+                                  class="form-control form-control-sm"
+                                  placeholder="Password (optional)"
+                                  [value]="getPushTarget(job, 'ext_pass')"
+                                  (input)="
+                                    updatePushTarget(
+                                      job,
+                                      'ext_pass',
+                                      $any($event.target).value
+                                    )
+                                  "
+                                />
+                              </div>
+                            </div>
+                          }
+                        </div>
+                      }
+
+                      <!-- Folder / image name / tag fields -->
+                      <div class="row g-2 mb-2 align-items-end">
+                        <div class="col">
+                          <label
+                            class="form-label small text-muted"
+                            style="font-size: 0.7rem"
+                          >
+                            Folder <span class="opacity-50">(optional)</span>
+                          </label>
+                          <input
+                            type="text"
+                            class="form-control form-control-sm font-monospace"
+                            placeholder="e.g. infra"
+                            [value]="getPushTarget(job, 'folder')"
+                            (input)="
+                              updatePushTarget(
+                                job,
+                                'folder',
+                                $any($event.target).value
+                              )
+                            "
+                          />
+                        </div>
+                        <div class="col">
+                          <label
+                            class="form-label small text-muted"
+                            style="font-size: 0.7rem"
+                            >Image name</label
+                          >
+                          <input
+                            type="text"
+                            class="form-control form-control-sm font-monospace"
+                            [placeholder]="
+                              job.image.split('/').pop() || job.image
+                            "
+                            [value]="getPushTarget(job, 'img')"
+                            (input)="
+                              updatePushTarget(
+                                job,
+                                'img',
+                                $any($event.target).value
+                              )
+                            "
+                          />
+                        </div>
+                        <div class="col-auto" style="min-width: 90px">
+                          <label
+                            class="form-label small text-muted"
+                            style="font-size: 0.7rem"
+                            >Tag</label
+                          >
+                          <input
+                            type="text"
+                            class="form-control form-control-sm font-monospace"
+                            [placeholder]="job.tag"
+                            [value]="getPushTarget(job, 'tag')"
+                            (input)="
+                              updatePushTarget(
+                                job,
+                                'tag',
+                                $any($event.target).value
+                              )
+                            "
+                          />
+                        </div>
+                      </div>
+
+                      <!-- Preview + push button -->
+                      <div
+                        class="d-flex align-items-center justify-content-between gap-2"
+                      >
+                        <code class="small text-muted text-truncate">{{
+                          pushPreview(job)
+                        }}</code>
+                        <button
+                          class="btn btn-sm btn-success text-nowrap"
+                          (click)="pushImage(job)"
+                          [disabled]="pushing() === job.job_id"
+                          type="button"
+                        >
+                          @if (pushing() === job.job_id) {
+                            <span
+                              class="spinner-border spinner-border-sm me-1"
+                            ></span>
+                          } @else {
+                            <i class="bi bi-upload me-1"></i>
+                          }
+                          Push
+                        </button>
+                      </div>
+                    </div>
+                  }
+
+                  <!-- Push confirmation message (when done after push) -->
+                  @if (job.status === "done" && job.target_image) {
+                    <div class="mt-2 small text-success">
+                      <i class="bi bi-check-circle me-1"></i>
+                      Pushed as
+                      <code>{{ job.target_image }}:{{ job.target_tag }}</code>
+                    </div>
+                  }
+
+                  <!-- Error message -->
+                  @if (job.error) {
+                    <div class="mt-2 small text-danger">
+                      <i class="bi bi-exclamation-triangle me-1"></i
+                      >{{ job.error }}
+                    </div>
+                  }
+                </div>
+              }
+            </div>
+          }
         </div>
-        <!-- /card -->
-      }
+      </div>
     </div>
-  }
+    <!-- ── End right column ─────────────────────────────────────────────── -->
+  </div>
 </div>

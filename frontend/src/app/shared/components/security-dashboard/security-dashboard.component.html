@@ -19,12 +19,12 @@
         <div class="d-flex align-items-center gap-3 flex-wrap">
           <div>
             <div class="small text-muted">Schema version</div>
-            <div class="fw-semibold">{{ trivyDb()!.schema_version }}</div>
+            <div class="fw-semibold">{{ trivyDb()!.version }}</div>
           </div>
           <div>
             <div class="small text-muted">Updated at</div>
             <div class="fw-semibold">
-              {{ trivyDb()!.updated_at ?? "Unknown" }}
+              {{ trivyDb()!.last_update ?? "Unknown" }}
             </div>
           </div>
           <div>

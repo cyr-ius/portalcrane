@@ -1,7 +1,7 @@
 /**
  * Portalcrane - Staging Service
  * HTTP client for /api/staging endpoints.
- * Updated to support folder prefix and external registry push.
+ * Supports: pull pipeline, push (local + external registry), Docker Hub search and tags.
  */
 import { HttpClient } from "@angular/common/http";
 import { inject, Injectable } from "@angular/core";
@@ -77,7 +77,7 @@ export interface PullOptions {
 
 /**
  * Push options sent to /api/staging/push.
- * When external_registry_id or external_registry_host is set
+ * When external_registry_id or external_registry_host is provided,
  * the backend routes the push to the external registry.
  */
 export interface PushOptions {
@@ -119,9 +119,13 @@ export class StagingService {
   private readonly BASE = "/api/staging";
   private http = inject(HttpClient);
 
+  // ── Pull ──────────────────────────────────────────────────────────────────
+
   pullImage(options: PullOptions): Observable<StagingJob> {
     return this.http.post<StagingJob>(`${this.BASE}/pull`, options);
   }
+
+  // ── Jobs ──────────────────────────────────────────────────────────────────
 
   getJob(jobId: string): Observable<StagingJob> {
     return this.http.get<StagingJob>(`${this.BASE}/jobs/${jobId}`);
@@ -131,8 +135,10 @@ export class StagingService {
     return this.http.get<StagingJob[]>(`${this.BASE}/jobs`);
   }
 
+  // ── Push ──────────────────────────────────────────────────────────────────
+
   /**
-   * Push a staged image.
+   * Push a staged image to the local or an external registry.
    * Supports folder prefix and external registry routing.
    */
   pushImage(
@@ -148,6 +154,12 @@ export class StagingService {
     return this.http.delete<{ message: string }>(`${this.BASE}/jobs/${jobId}`);
   }
 
+  // ── Docker Hub search ─────────────────────────────────────────────────────
+
+  /**
+   * Search Docker Hub for images matching the given query.
+   * Calls GET /api/staging/search/dockerhub?q=<query>&page=<page>
+   */
   searchDockerHub(
     query: string,
     page = 1,
@@ -158,6 +170,10 @@ export class StagingService {
     );
   }
 
+  /**
+   * Fetch available tags for a Docker Hub image.
+   * Calls GET /api/staging/dockerhub/tags/<image>
+   */
   getDockerHubTags(
     image: string,
   ): Observable<{ image: string; tags: string[] }> {
@@ -166,11 +182,27 @@ export class StagingService {
     );
   }
 
+  // ── Orphan cleanup ────────────────────────────────────────────────────────
+
   getOrphanTarballs(): Observable<OrphanTarballsResult> {
     return this.http.get<OrphanTarballsResult>(`${this.BASE}/orphan-tarballs`);
   }
 
-  // ── Quick Actions: Dangling Images ────────────────────────────────────────
+  purgeOrphanTarballs(): Observable<{
+    message: string;
+    deleted: string[];
+    freed_bytes: number;
+    freed_human: string;
+    errors: { file: string; error: string }[];
+  }> {
+    return this.http.post<{
+      message: string;
+      deleted: string[];
+      freed_bytes: number;
+      freed_human: string;
+      errors: { file: string; error: string }[];
+    }>(`${this.BASE}/orphan-tarballs/purge`, {});
+  }
 
   getDanglingImages(): Observable<{
     images: {
@@ -201,23 +233,9 @@ export class StagingService {
     );
   }
 
-  purgeOrphanTarballs(): Observable<{
-    message: string;
-    deleted: string[];
-    freed_bytes: number;
-    freed_human: string;
-    errors: { file: string; error: string }[];
-  }> {
-    return this.http.post<{
-      message: string;
-      deleted: string[];
-      freed_bytes: number;
-      freed_human: string;
-      errors: { file: string; error: string }[];
-    }>(`${this.BASE}/orphan-tarballs/purge`, {});
-  }
+  // ── Utilities ─────────────────────────────────────────────────────────────
 
-  /** Sort jobs so active ones appear at the top. */
+  /** Sort jobs so active ones appear at the top, then by insertion order. */
   static sortJobs(jobs: StagingJob[]): StagingJob[] {
     return [...jobs].sort((a, b) => {
       const aActive = ACTIVE_STATUSES.includes(a.status) ? 0 : 1;
