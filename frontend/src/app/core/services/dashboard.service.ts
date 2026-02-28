@@ -18,7 +18,6 @@ export interface DashboardStats {
   disk_free_bytes: number;
   disk_usage_percent: number;
   registry_status: string;
-  advanced_mode: boolean;
 }
 
 @Injectable({ providedIn: "root" })

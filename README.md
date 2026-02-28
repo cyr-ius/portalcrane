@@ -36,7 +36,6 @@ with a staging pipeline including antivirus scanning.
 | `DOCKERHUB_USERNAME`   | Docker Hub username (optional)                 | -                       |
 | `DOCKERHUB_PASSWORD`   | Docker Hub password (optional)                 | -                       |
 | `STAGING_DIR`          | Staging directory for pulled images            | `/tmp/staging`          |
-| `ADVANCED_MODE`        | Enable advanced mode by default                | `false`                 |
 | `VULN_SCAN_ENABLED`    | Enable complementary Trivy CVE scan in staging | `false`                 |
 | `VULN_SCAN_SEVERITIES` | Blocking severities (comma-separated)          | `CRITICAL,HIGH`         |
 | `VULN_IGNORE_UNFIXED`  | Ignore unfixed CVEs in policy                  | `false`                 |

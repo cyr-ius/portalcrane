@@ -42,8 +42,7 @@ async def get_public_config(
 ):
     """
     Return the non-sensitive subset of the server configuration.
-    Used by the frontend to initialise defaults for scan toggles
-    and to determine whether advanced mode is enabled server-side.
+    Used by the frontend to initialise defaults for scan toggles.
     """
     return PublicConfig(
         vuln_scan_enabled=settings.vuln_scan_enabled,
