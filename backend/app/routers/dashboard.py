@@ -29,7 +29,6 @@ class DashboardStats(BaseModel):
     disk_free_bytes: int
     disk_usage_percent: float
     registry_status: str
-    advanced_mode: bool
 
 
 def bytes_to_human(size: int) -> str:
@@ -86,5 +85,4 @@ async def get_dashboard_stats(
         disk_free_bytes=disk_free,
         disk_usage_percent=round(disk_percent, 1),
         registry_status=registry_status,
-        advanced_mode=settings.advanced_mode,
     )
