@@ -4,7 +4,6 @@ import {
   computed,
   DestroyRef,
   inject,
-  OnDestroy,
   OnInit,
   signal,
 } from "@angular/core";
@@ -60,11 +59,11 @@ export class DashboardComponent implements OnInit {
   purgingDangling = signal(false);
 
   // Orphan .tar files in staging directory
-  orphanTarballs = signal<string[]>([]);
-  readonly orphanTarballsCount = computed(() => this.orphanTarballs().length);
-  orphanTarballsSize = signal("");
-  orphanTarballsChecked = signal(false);
-  purgingOrphanTarballs = signal(false);
+  orphanOciDirs = signal<string[]>([]);
+  readonly orphanOciCount = computed(() => this.orphanOciDirs().length);
+  orphanOciSize = signal("");
+  orphanOciChecked = signal(false);
+  purgingOrphanOci = signal(false);
 
   private gcPollTrigger$ = new Subject<void>();
 
@@ -107,7 +106,7 @@ export class DashboardComponent implements OnInit {
     });
     this.checkGhostRepos();
     this.checkDanglingImages();
-    this.checkOrphanTarballs();
+    this.checkOrphanOci();
   }
 
   loadStats() {
@@ -180,26 +179,26 @@ export class DashboardComponent implements OnInit {
 
   // ── Orphan tarballs ───────────────────────────────────────────────────────
 
-  checkOrphanTarballs() {
-    this.stagingService.getOrphanTarballs().subscribe({
+  checkOrphanOci() {
+    this.stagingService.getOrphanOci().subscribe({
       next: (res) => {
-        this.orphanTarballs.set(res.files);
-        this.orphanTarballsSize.set(res.total_size_human);
-        this.orphanTarballsChecked.set(true);
+        this.orphanOciDirs.set(res.dirs);
+        this.orphanOciSize.set(res.total_size_human);
+        this.orphanOciChecked.set(true);
       },
-      error: () => this.orphanTarballsChecked.set(true),
+      error: () => this.orphanOciChecked.set(true),
     });
   }
 
-  purgeOrphanTarballs() {
-    if (this.purgingOrphanTarballs()) return;
-    this.purgingOrphanTarballs.set(true);
-    this.stagingService.purgeOrphanTarballs().subscribe({
+  purgeOrphanOci() {
+    if (this.purgingOrphanOci()) return;
+    this.purgingOrphanOci.set(true);
+    this.stagingService.purgeOrphanOci().subscribe({
       next: () => {
-        this.purgingOrphanTarballs.set(false);
-        this.checkOrphanTarballs();
+        this.purgingOrphanOci.set(false);
+        this.checkOrphanOci();
       },
-      error: () => this.purgingOrphanTarballs.set(false),
+      error: () => this.purgingOrphanOci.set(false),
     });
   }
 

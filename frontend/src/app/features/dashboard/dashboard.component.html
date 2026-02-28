@@ -219,50 +219,48 @@
           class="stat-card card border-0 h-100"
           style="border-left: 3px solid transparent !important"
           [style.border-left-color]="
-            orphanTarballsCount() > 0
-              ? 'var(--bs-warning)'
-              : 'var(--bs-success)'
+            orphanOciCount() > 0 ? 'var(--bs-warning)' : 'var(--bs-success)'
           "
         >
           <div class="card-body">
             <div class="d-flex align-items-center justify-content-between mb-2">
-              <span class="text-muted small">Orphan Tarballs</span>
+              <span class="text-muted small">Orphan OCI Directories</span>
               <div
                 [class]="
-                  !orphanTarballsChecked()
+                  !orphanOciChecked()
                     ? 'stat-icon bg-secondary-subtle text-secondary'
-                    : orphanTarballsCount() > 0
+                    : orphanOciCount() > 0
                       ? 'stat-icon bg-warning-subtle text-warning'
                       : 'stat-icon bg-success-subtle text-success'
                 "
               >
-                <i class="bi bi-file-earmark-zip"></i>
+                <i class="bi bi-folder-x"></i>
               </div>
             </div>
 
-            @if (!orphanTarballsChecked()) {
+            @if (!orphanOciChecked()) {
               <div class="stat-value text-muted">
                 <span class="spinner-border spinner-border-sm"></span>
               </div>
             } @else {
               <div
                 [class]="
-                  orphanTarballsCount() > 0
+                  orphanOciCount() > 0
                     ? 'stat-value text-warning'
                     : 'stat-value text-success'
                 "
               >
-                {{ orphanTarballsCount() }}
+                {{ orphanOciCount() }}
               </div>
             }
 
             <div class="text-muted small">
-              @if (!orphanTarballsChecked()) {
+              @if (!orphanOciChecked()) {
                 Checking…
-              } @else if (orphanTarballsCount() > 0) {
-                Leftover .tar files —
-                @if (orphanTarballsSize()) {
-                  {{ orphanTarballsSize() }} wasted
+              } @else if (orphanOciCount() > 0) {
+                Leftover OCI directories —
+                @if (orphanOciSize()) {
+                  {{ orphanOciSize() }} wasted
                 }
               } @else {
                 Staging directory clean
@@ -283,10 +281,6 @@
           <div class="card-body">
             <table class="table table-sm table-borderless mb-0">
               <tbody>
-                <tr>
-                  <td class="text-muted small" style="width: 40%">URL</td>
-                  <td class="small fw-mono">{{ s.registry_url }}</td>
-                </tr>
                 <tr>
                   <td class="text-muted small">Status</td>
                   <td>
@@ -556,44 +550,40 @@
               }
             </div>
 
-            <!-- ── Orphan tarballs cleanup ── -->
+            <!-- ── Orphan OCI layouts cleanup ── -->
             <div class="gc-panel rounded p-3">
               <div class="d-flex align-items-center justify-content-between">
                 <div>
                   <div
                     class="fw-semibold small d-flex align-items-center gap-2"
                   >
-                    <i class="bi bi-file-earmark-zip text-warning"></i>
-                    Orphan Tarballs in Staging
-                    @if (orphanTarballsCount() > 0) {
+                    <i class="bi bi-folder-x text-warning"></i>
+                    Orphan OCI Directories in Staging
+                    @if (orphanOciCount() > 0) {
                       <span class="badge bg-warning-subtle text-warning">{{
-                        orphanTarballsCount()
+                        orphanOciCount()
                       }}</span>
                     }
                   </div>
                   <div class="text-muted" style="font-size: 0.72rem">
-                    Leftover .tar files in /tmp/staging with no active job
-                    @if (orphanTarballsSize()) {
-                      — {{ orphanTarballsSize() }}
-                    }
+                    Leftover OCI layout directories in /tmp/staging with no
+                    active job
                   </div>
                 </div>
                 <div class="d-flex gap-1">
                   <button
                     class="btn btn-sm btn-outline-secondary"
-                    (click)="checkOrphanTarballs()"
+                    (click)="checkOrphanOci()"
                     title="Refresh"
                   >
                     <i class="bi bi-arrow-clockwise"></i>
                   </button>
                   <button
                     class="btn btn-sm btn-outline-warning"
-                    (click)="purgeOrphanTarballs()"
-                    [disabled]="
-                      purgingOrphanTarballs() || orphanTarballsCount() === 0
-                    "
+                    (click)="purgeOrphanOci()"
+                    [disabled]="purgingOrphanOci() || orphanOciCount() === 0"
                   >
-                    @if (purgingOrphanTarballs()) {
+                    @if (purgingOrphanOci()) {
                       <span
                         class="spinner-border spinner-border-sm me-1"
                       ></span>
@@ -604,21 +594,22 @@
                   </button>
                 </div>
               </div>
-              @if (orphanTarballs().length > 0) {
+              @if (orphanOciDirs().length > 0) {
                 <div class="d-flex flex-wrap gap-1 mt-2">
-                  @for (f of orphanTarballs(); track f) {
+                  @for (f of orphanOciDirs(); track f) {
                     <span
                       class="badge bg-warning-subtle text-warning font-monospace"
                       style="font-size: 0.68rem"
                     >
-                      <i class="bi bi-file-earmark-zip me-1"></i
-                      >{{ f | slice: 0 : 20 }}{{ f.length > 20 ? "…" : "" }}
+                      <i class="bi bi-folder-x me-1"></i>{{ f | slice: 0 : 20
+                      }}{{ f.length > 20 ? "…" : "" }}
                     </span>
                   }
                 </div>
-              } @else if (orphanTarballsChecked()) {
+              } @else if (orphanOciChecked()) {
                 <div class="text-success small mt-1">
-                  <i class="bi bi-check-circle me-1"></i>No orphan tarballs
+                  <i class="bi bi-check-circle me-1"></i>No orphan OCI
+                  directories
                 </div>
               }
             </div>
