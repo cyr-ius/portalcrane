@@ -1,3 +1,213 @@
+<!-- ── Trivy DB status ──────────────────────────────────────────────────── -->
+<div class="card border-0 mb-3">
+  <div class="card-header border-0">
+    <h6 class="fw-semibold mb-0">
+      <i class="bi bi-database me-2"></i>Trivy Vulnerability Database
+    </h6>
+  </div>
+  <div class="card-body">
+    @if (trivyDb()) {
+      <div class="d-flex align-items-center gap-3 flex-wrap">
+        <div>
+          <div class="small text-muted">Schema version</div>
+          <div class="fw-semibold">{{ trivyDb()!.version }}</div>
+        </div>
+        <div>
+          <div class="small text-muted">Updated at</div>
+          <div class="fw-semibold">
+            {{ trivyDb()!.last_update ?? "Unknown" }}
+          </div>
+        </div>
+        <div>
+          <div class="small text-muted">Next update</div>
+          <div class="fw-semibold">
+            {{ trivyDb()!.next_update ?? "Unknown" }}
+          </div>
+        </div>
+        <div class="ms-auto">
+          <button
+            class="btn btn-sm btn-outline-primary"
+            (click)="updateTrivyDb()"
+            [disabled]="updatingDb()"
+          >
+            @if (updatingDb()) {
+              <span class="spinner-border spinner-border-sm me-1"></span>
+              Updating…
+            } @else {
+              <i class="bi bi-arrow-clockwise me-1"></i>Update DB
+            }
+          </button>
+        </div>
+      </div>
+    } @else {
+      <div class="d-flex justify-content-center py-3">
+        <span class="spinner-border text-primary spinner-border-sm"></span>
+      </div>
+    }
+  </div>
+</div>
+
+<!-- ── Manual scan ──────────────────────────────────────────────────────── -->
+<div class="card border-0 mb-3">
+  <div class="card-header border-0">
+    <h6 class="fw-semibold mb-0">
+      <i class="bi bi-shield-check me-2"></i>Manual Image Scan
+    </h6>
+  </div>
+  <div class="card-body">
+    <div class="row g-3 mb-3">
+      <!-- Image selector -->
+      <div class="col-sm-6">
+        <label class="form-label small fw-semibold">Image to scan</label>
+        @if (loadingImages()) {
+          <div class="form-control form-control-sm placeholder-glow">
+            <span class="placeholder w-75"></span>
+          </div>
+        } @else if (registryImages().length > 0) {
+          <select
+            class="form-select form-select-sm"
+            [value]="imageToScan()"
+            (change)="imageToScan.set($any($event.target).value)"
+          >
+            @for (img of registryImages(); track img) {
+              <option [value]="img">{{ img }}</option>
+            }
+          </select>
+        } @else {
+          <!-- Fallback: no images in registry yet, plain text input -->
+          <input
+            type="text"
+            class="form-control form-control-sm"
+            placeholder="localhost:5000/myimage:latest"
+            [value]="imageToScan()"
+            (input)="imageToScan.set($any($event.target).value)"
+          />
+          <div class="text-muted mt-1" style="font-size: 0.72rem">
+            <i class="bi bi-exclamation-circle me-1"></i>No images found in
+            registry.
+          </div>
+        }
+      </div>
+
+      <!-- Severity toggles -->
+      <div class="col-sm-4">
+        <label class="form-label small fw-semibold">Severities</label>
+        <div class="d-flex flex-wrap gap-1">
+          @for (sev of severities; track sev) {
+            <button
+              type="button"
+              class="btn btn-xs"
+              [class]="severityBadgeClass(sev)"
+              [class.opacity-50]="!severityFilter().includes(sev)"
+              style="font-size: 0.7rem; padding: 2px 8px"
+              (click)="toggleSeverity(sev)"
+            >
+              {{ sev }}
+            </button>
+          }
+        </div>
+      </div>
+
+      <!-- Ignore unfixed -->
+      <div class="col-sm-2 d-flex align-items-end gap-2">
+        <div class="form-check form-switch mb-0">
+          <input
+            class="form-check-input"
+            type="checkbox"
+            id="ignoreUnfixed"
+            [checked]="ignoreUnfixed()"
+            (change)="ignoreUnfixed.set($any($event.target).checked)"
+          />
+          <label class="form-check-label small" for="ignoreUnfixed">
+            Ignore unfixed
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <button
+      class="btn btn-primary btn-sm"
+      (click)="runScan()"
+      [disabled]="!imageToScan() || scanning()"
+    >
+      @if (scanning()) {
+        <span class="spinner-border spinner-border-sm me-1"></span>Scanning...
+      } @else {
+        <i class="bi bi-search me-1"></i>Scan Image
+      }
+    </button>
+
+    @if (scanResult()) {
+      <div class="mt-3">
+        <!-- Summary badges — getSeverityCount() avoids the TS2769 ?? warning -->
+        <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
+          <span class="small fw-semibold">
+            Results for {{ scanResult()!.image }}:
+          </span>
+          @for (sev of severities; track sev) {
+            @if (getSeverityCount(sev) > 0) {
+              <span [class]="severityBadgeClass(sev)">
+                {{ sev }}: {{ getSeverityCount(sev) }}
+              </span>
+            }
+          }
+          @if (scanResult()!.total === 0) {
+            <span class="badge bg-success">✅ No vulnerabilities found</span>
+          }
+        </div>
+
+        <!-- Vulnerability table -->
+        @if (scanResult()!.vulnerabilities.length > 0) {
+          <div
+            class="table-responsive"
+            style="max-height: 350px; overflow-y: auto"
+          >
+            <table
+              class="table table-sm table-hover mb-0"
+              style="font-size: 0.78rem"
+            >
+              <thead class="sticky-top table-light">
+                <tr>
+                  <th>CVE ID</th>
+                  <th>Severity</th>
+                  <th>Package</th>
+                  <th>Installed</th>
+                  <th>Fixed</th>
+                  <th>CVSS</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (vuln of scanResult()!.vulnerabilities; track vuln.id) {
+                  <tr>
+                    <td>
+                      <a
+                        [href]="'https://nvd.nist.gov/vuln/detail/' + vuln.id"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="text-decoration-none"
+                        >{{ vuln.id }}</a
+                      >
+                    </td>
+                    <td>
+                      <span [class]="severityBadgeClass(vuln.severity)">
+                        {{ vuln.severity }}
+                      </span>
+                    </td>
+                    <td>{{ vuln.package }}</td>
+                    <td>{{ vuln.installed_version }}</td>
+                    <td>{{ vuln.fixed_version ?? "—" }}</td>
+                    <td>{{ vuln.cvss_score ?? "—" }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </div>
+    }
+  </div>
+</div>
+
 <div class="card border-0 mb-3">
   <div
     class="card-header border-0 d-flex align-items-center justify-content-between"
@@ -5,7 +215,25 @@
     <h6 class="fw-semibold mb-0">
       <i class="bi bi-shield-exclamation me-2"></i>Vulnerability Scanner (Trivy)
     </h6>
-    @if (configService.vulnEnabled()) {
+
+    <span
+      class="badge bg-info-subtle text-info d-flex align-items-center gap-1 ms-auto me-3"
+    >
+      <i class="bi bi-lock-fill" style="font-size: 0.6rem"></i>
+      Vulnerability override
+    </span>
+    <div class="form-check form-switch mb-0">
+      <input
+        class="form-check-input"
+        type="checkbox"
+        role="switch"
+        id="vulnOverride"
+        [checked]="configService.vulnOverride()"
+        (change)="configService.setVulnOverride($any($event.target).checked)"
+      />
+    </div>
+
+    @if (configService.vulnOverride()) {
       <span
         class="badge bg-warning-subtle text-warning d-flex align-items-center gap-1"
       >
@@ -27,59 +255,13 @@
       a push to the registry.
     </p>
 
-    <!-- Enable / Disable toggle -->
-    <div class="d-flex align-items-center justify-content-between mb-3">
-      <div>
-        <div class="fw-semibold small">Enable Trivy scan</div>
-        <div class="text-muted" style="font-size: 0.75rem">
-          Run CVE scan before allowing push
-        </div>
-      </div>
-      <div class="form-check form-switch mb-0">
-        <input
-          class="form-check-input"
-          type="checkbox"
-          role="switch"
-          id="vulnEnabled"
-          [checked]="configService.vulnEnabled()"
-          (change)="configService.setVulnEnabled($any($event.target).checked)"
-        />
-      </div>
-    </div>
-
-    @if (configService.vulnEnabled()) {
-      <!-- Severities blocking policy -->
-      <div class="mb-3">
-        <label class="form-label small fw-semibold">
-          Blocking severities
-          <span class="text-muted fw-normal ms-1">(at least one required)</span>
-        </label>
-        <div class="d-flex flex-wrap gap-2">
-          @for (sev of allSeverities; track sev) {
-            <button
-              class="btn btn-sm sev-btn"
-              [class]="getSevBtnClass(sev)"
-              (click)="configService.toggleVulnSeverity(sev)"
-              [title]="'Toggle ' + sev"
-            >
-              {{ sev }}
-            </button>
-          }
-        </div>
-        @if (configService.vulnSeverities().length === 0) {
-          <div class="text-danger small mt-1">
-            <i class="bi bi-exclamation-triangle me-1"></i>
-            Select at least one severity
-          </div>
-        }
-      </div>
-
-      <!-- Ignore unfixed -->
+    @if (configService.vulnOverride()) {
+      <!-- Enable / Disable toggle -->
       <div class="d-flex align-items-center justify-content-between mb-3">
         <div>
-          <div class="fw-semibold small">Ignore unfixed CVEs</div>
+          <div class="fw-semibold small">Enable Trivy scan</div>
           <div class="text-muted" style="font-size: 0.75rem">
-            Do not block on CVEs with no available fix
+            Run CVE scan before allowing push
           </div>
         </div>
         <div class="form-check form-switch mb-0">
@@ -87,31 +269,83 @@
             class="form-check-input"
             type="checkbox"
             role="switch"
-            id="vulnIgnoreUnfixed"
-            [checked]="configService.vulnIgnoreUnfixed()"
-            (change)="
-              configService.setVulnIgnoreUnfixed($any($event.target).checked)
-            "
+            id="vulnEnabled"
+            [checked]="configService.vulnEnabled()"
+            (change)="configService.setVulnEnabled($any($event.target).checked)"
           />
         </div>
       </div>
 
-      <!-- Timeout -->
-      <div class="mb-3">
-        <label class="form-label small fw-semibold">Scan timeout</label>
-        <div class="d-flex gap-2">
-          @for (t of timeoutOptions; track t) {
-            <button
-              class="btn btn-sm"
-              [class.btn-primary]="configService.vulnTimeout() === t"
-              [class.btn-outline-secondary]="configService.vulnTimeout() !== t"
-              (click)="configService.setVulnTimeout(t)"
+      @if (configService.vulnEnabled()) {
+        <!-- Severities blocking policy -->
+        <div class="mb-3">
+          <label class="form-label small fw-semibold">
+            Blocking severities
+            <span class="text-muted fw-normal ms-1"
+              >(at least one required)</span
             >
-              {{ t }}
-            </button>
+          </label>
+          <div class="d-flex flex-wrap gap-2">
+            @for (sev of allSeverities; track sev) {
+              <button
+                class="btn btn-sm sev-btn"
+                [class]="getSevBtnClass(sev)"
+                (click)="configService.toggleVulnSeverity(sev)"
+                [title]="'Toggle ' + sev"
+              >
+                {{ sev }}
+              </button>
+            }
+          </div>
+          @if (configService.vulnSeverities().length === 0) {
+            <div class="text-danger small mt-1">
+              <i class="bi bi-exclamation-triangle me-1"></i>
+              Select at least one severity
+            </div>
           }
         </div>
-      </div>
+
+        <!-- Ignore unfixed -->
+        <div class="d-flex align-items-center justify-content-between mb-3">
+          <div>
+            <div class="fw-semibold small">Ignore unfixed CVEs</div>
+            <div class="text-muted" style="font-size: 0.75rem">
+              Do not block on CVEs with no available fix
+            </div>
+          </div>
+          <div class="form-check form-switch mb-0">
+            <input
+              class="form-check-input"
+              type="checkbox"
+              role="switch"
+              id="vulnIgnoreUnfixed"
+              [checked]="configService.vulnIgnoreUnfixed()"
+              (change)="
+                configService.setVulnIgnoreUnfixed($any($event.target).checked)
+              "
+            />
+          </div>
+        </div>
+
+        <!-- Timeout -->
+        <div class="mb-3">
+          <label class="form-label small fw-semibold">Scan timeout</label>
+          <div class="d-flex gap-2">
+            @for (t of timeoutOptions; track t) {
+              <button
+                class="btn btn-sm"
+                [class.btn-primary]="configService.vulnTimeout() === t"
+                [class.btn-outline-secondary]="
+                  configService.vulnTimeout() !== t
+                "
+                (click)="configService.setVulnTimeout(t)"
+              >
+                {{ t }}
+              </button>
+            }
+          </div>
+        </div>
+      }
     }
 
     <!-- Server defaults comparison -->
