@@ -62,10 +62,30 @@ _HOP_BY_HOP = frozenset(
 
 _PULL_METHODS = frozenset(["GET", "HEAD"])
 _PUSH_METHODS = frozenset(["POST", "PUT", "PATCH", "DELETE"])
+_OCI_ACCEPT_TYPES = (
+    "application/vnd.oci.image.manifest.v1+json",
+    "application/vnd.oci.image.index.v1+json",
+)
 
 
 def _filter_headers(headers: dict) -> dict:
     return {k: v for k, v in headers.items() if k.lower() not in _HOP_BY_HOP}
+
+
+def _ensure_oci_accept_for_manifests(v2_path: str, method: str, headers: dict) -> None:
+    """Ensure manifest requests advertise OCI media types to upstream registry."""
+    if method not in _PULL_METHODS or "/manifests/" not in v2_path:
+        return
+
+    accept_value = headers.get("accept")
+    if not accept_value:
+        headers["accept"] = ", ".join(_OCI_ACCEPT_TYPES)
+        return
+
+    lower_accept = accept_value.lower()
+    missing = [media for media in _OCI_ACCEPT_TYPES if media not in lower_accept]
+    if missing:
+        headers["accept"] = f"{accept_value}, {', '.join(missing)}"
 
 
 def _client_ip(request: Request) -> str:
@@ -88,6 +108,9 @@ async def _proxy(request: Request, v2_path: str) -> Response:
     # validation to succeed on blob upload sessions (PATCH after POST).
     req_headers = _filter_headers(dict(request.headers))
     req_headers.pop("host", None)  # httpx will set the correct Host automatically
+    _ensure_oci_accept_for_manifests(
+        v2_path=v2_path, method=method, headers=req_headers
+    )
 
     body = await request.body()
 
