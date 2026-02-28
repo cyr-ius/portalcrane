@@ -50,6 +50,17 @@ export interface GcResult {
   return_code: number | null;
 }
 
+export interface AuditEvent {
+  event: string;
+  timestamp: string;
+  path: string;
+  method: string;
+  http_status: number;
+  bytes: number;
+  elapsed_s: number;
+  client_ip: string;
+}
+
 @Injectable({ providedIn: "root" })
 export class SystemService {
   private http = inject(HttpClient);
@@ -75,6 +86,19 @@ export class SystemService {
         {},
       ),
     );
+  }
+
+  /** Returns the latest audit events emitted by the Audit Service. */
+  async getAuditLogs(limit: number = 200): Promise<AuditEvent[]> {
+    const params = new URLSearchParams();
+    params.set("limit", String(limit));
+
+    const response = await firstValueFrom(
+      this.http.get<{ events: AuditEvent[] }>(
+        `${this.BASE}/audit/logs?${params.toString()}`,
+      ),
+    );
+    return response.events;
   }
 
   /**

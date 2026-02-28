@@ -20,6 +20,7 @@ import {
   SyncJob,
 } from "../../core/services/external-registry.service";
 import { RegistryService } from "../../core/services/registry.service";
+import { AuditEvent, SystemService } from "../../core/services/system.service";
 import { ThemeService } from "../../core/services/theme.service";
 import { AboutConfigPanel } from "../../shared/components/about-config-panel/about-config-panel";
 import { AccountsConfigPanel } from "../../shared/components/accounts-config-panel/accounts-config-panel";
@@ -31,6 +32,7 @@ type SettingsTab =
   | "appearance"
   | "registries"
   | "sync"
+  | "audit"
   | "vulnerabilities"
   | "oidc"
   | "accounts"
@@ -88,6 +90,7 @@ export class SettingsComponent implements OnInit {
   aboutService = inject(AboutService);
   private extRegSvc = inject(ExternalRegistryService);
   private registrySvc = inject(RegistryService);
+  private systemService = inject(SystemService);
 
   readonly severities = TRIVY_SEVERITIES;
 
@@ -125,6 +128,11 @@ export class SettingsComponent implements OnInit {
   startingSync = signal(false);
   loadingSyncJobs = signal(false);
 
+  // ── Audit logs ─────────────────────────────────────────────────────────────
+  auditLogs = signal<AuditEvent[]>([]);
+  loadingAuditLogs = signal(false);
+  auditLogError = signal<string | null>(null);
+
   ngOnInit(): void {
     if (!this.configService.serverConfig()) {
       this.configService.loadConfig().subscribe();
@@ -137,6 +145,9 @@ export class SettingsComponent implements OnInit {
     this.activeTab.set(tab);
     if (tab === "sync") {
       this.loadSyncData();
+    }
+    if (tab === "audit") {
+      this.loadAuditLogs();
     }
   }
 
@@ -318,6 +329,29 @@ export class SettingsComponent implements OnInit {
       error: "bi-x-circle",
     };
     return map[status] ?? "bi-circle";
+  }
+
+  async loadAuditLogs() {
+    this.loadingAuditLogs.set(true);
+    this.auditLogError.set(null);
+    try {
+      const logs = await this.systemService.getAuditLogs(200);
+      this.auditLogs.set(logs);
+    } catch {
+      this.auditLogError.set("Unable to load audit logs.");
+    } finally {
+      this.loadingAuditLogs.set(false);
+    }
+  }
+
+  formatAuditTimestamp(timestamp: string): string {
+    const date = new Date(timestamp);
+    if (Number.isNaN(date.getTime())) return timestamp;
+    return date.toLocaleString();
+  }
+
+  prettyAuditPayload(entry: AuditEvent): string {
+    return JSON.stringify(entry, null, 2);
   }
 
   // ── Theme / severity helpers ───────────────────────────────────────────────
