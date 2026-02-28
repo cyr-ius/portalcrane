@@ -41,6 +41,9 @@ _USERS_FILE = Path("/var/lib/portalcrane/local_users.json")
 # Persistent storage for OIDC configuration overrides
 _OIDC_CONFIG_FILE = Path("/var/lib/portalcrane/oidc_config.json")
 
+# Per-user account settings (e.g. Docker Hub credentials)
+_ACCOUNT_SETTINGS_FILE = Path("/var/lib/portalcrane/account_settings.json")
+
 
 # ─── Models ──────────────────────────────────────────────────────────────────
 
@@ -148,6 +151,23 @@ class UpdateUserRequest(BaseModel):
     can_push_images: bool | None = None
 
 
+# ── Local account settings models ──────────────────────────────────────────────
+
+
+class DockerHubAccountSettings(BaseModel):
+    """Docker Hub credentials bound to the current Portalcrane account."""
+
+    username: str = ""
+    has_password: bool = False
+
+
+class UpdateDockerHubAccountSettingsRequest(BaseModel):
+    """Payload to update Docker Hub credentials for the current account."""
+
+    username: str
+    password: str
+
+
 # ── OIDC settings models ──────────────────────────────────────────────────────
 
 
@@ -200,6 +220,37 @@ def _save_oidc_config(data: dict) -> None:
     """Persist OIDC config to disk."""
     _OIDC_CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
     _OIDC_CONFIG_FILE.write_text(json.dumps(data, indent=2))
+
+
+# ─── Local account settings helpers ──────────────────────────────────────────
+
+
+def _load_account_settings() -> dict:
+    """Load per-user account settings from disk."""
+    try:
+        if _ACCOUNT_SETTINGS_FILE.exists():
+            return json.loads(_ACCOUNT_SETTINGS_FILE.read_text())
+    except Exception:
+        pass
+    return {}
+
+
+def _save_account_settings(data: dict) -> None:
+    """Persist per-user account settings to disk."""
+    _ACCOUNT_SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    _ACCOUNT_SETTINGS_FILE.write_text(json.dumps(data, indent=2))
+
+
+def get_user_dockerhub_credentials(username: str) -> tuple[str, str] | None:
+    """Return Docker Hub credentials for a username, or None when absent."""
+    data = _load_account_settings()
+    account = data.get(username) or {}
+    hub = account.get("dockerhub") or {}
+    hub_username = (hub.get("username") or "").strip()
+    hub_password = hub.get("password") or ""
+    if hub_username and hub_password:
+        return hub_username, hub_password
+    return None
 
 
 # ─── JWT helpers ─────────────────────────────────────────────────────────────
@@ -378,6 +429,51 @@ async def login(
 async def read_users_me(current_user: UserInfo = Depends(get_current_user)):
     """Return current authenticated user information."""
     return current_user
+
+
+@router.get("/account/dockerhub", response_model=DockerHubAccountSettings)
+async def get_dockerhub_account_settings(
+    current_user: UserInfo = Depends(get_current_user),
+):
+    """Return Docker Hub account settings for the authenticated user."""
+    creds = get_user_dockerhub_credentials(current_user.username)
+    if not creds:
+        return DockerHubAccountSettings(username="", has_password=False)
+    return DockerHubAccountSettings(username=creds[0], has_password=True)
+
+
+@router.put("/account/dockerhub", response_model=DockerHubAccountSettings)
+async def update_dockerhub_account_settings(
+    payload: UpdateDockerHubAccountSettingsRequest,
+    current_user: UserInfo = Depends(get_current_user),
+):
+    """Create/update Docker Hub credentials for the authenticated user."""
+    username = payload.username.strip()
+    password = payload.password
+
+    data = _load_account_settings()
+    user_cfg = data.get(current_user.username, {})
+
+    if not username and not password:
+        user_cfg.pop("dockerhub", None)
+    else:
+        if not username or not password:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Docker Hub username and password are both required",
+            )
+        user_cfg["dockerhub"] = {"username": username, "password": password}
+
+    if user_cfg:
+        data[current_user.username] = user_cfg
+    else:
+        data.pop(current_user.username, None)
+    _save_account_settings(data)
+
+    creds = get_user_dockerhub_credentials(current_user.username)
+    if not creds:
+        return DockerHubAccountSettings(username="", has_password=False)
+    return DockerHubAccountSettings(username=creds[0], has_password=True)
 
 
 @router.get("/oidc-config", response_model=OIDCConfig)

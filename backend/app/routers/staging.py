@@ -18,6 +18,7 @@ from pydantic import BaseModel
 from ..config import Settings, get_settings
 from .auth import (
     UserInfo,
+    get_user_dockerhub_credentials,
     require_admin,
     require_pull_access,
     require_push_access,
@@ -131,16 +132,14 @@ def _human_size(size_bytes: float) -> str:
     return f"{size_bytes:.1f} PB"
 
 
-def _build_skopeo_src_creds(settings: Settings) -> list[str]:
+def _build_skopeo_src_creds(current_user: UserInfo) -> list[str]:
     """
-    Return skopeo --src-creds argument list when Docker Hub credentials are set.
-    Returns an empty list when no credentials are configured.
+    Return skopeo --src-creds argument list using the authenticated user's
+    Docker Hub credentials. Returns an empty list when no credentials exist.
     """
-    if settings.dockerhub_username and settings.dockerhub_password:
-        return [
-            "--src-creds",
-            f"{settings.dockerhub_username}:{settings.dockerhub_password}",
-        ]
+    creds = get_user_dockerhub_credentials(current_user.username)
+    if creds:
+        return ["--src-creds", f"{creds[0]}:{creds[1]}"]
     return []
 
 
@@ -177,6 +176,7 @@ async def run_pull_pipeline(
     image: str,
     tag: str,
     settings: Settings,
+    current_user: UserInfo,
     vuln_scan_enabled_override: bool | None = None,
     vuln_severities_override: str | None = None,
 ) -> None:
@@ -209,7 +209,7 @@ async def run_pull_pipeline(
             "copy",
             "--override-os",
             "linux",  # ensure a linux image is pulled
-            *_build_skopeo_src_creds(settings),
+            *_build_skopeo_src_creds(current_user),
             # Destination is an OCI layout directory (no daemon needed)
             f"docker://{image}:{tag}",
             f"oci:{oci_dir}:latest",
@@ -440,6 +440,7 @@ async def pull_image(
         request.image,
         request.tag,
         settings,
+        _,
         request.vuln_scan_enabled_override,
         request.vuln_severities_override,
     )

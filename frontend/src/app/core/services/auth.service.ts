@@ -24,6 +24,16 @@ export interface OidcConfig {
   authorization_endpoint: string;
 }
 
+export interface DockerHubAccountSettings {
+  username: string;
+  has_password: boolean;
+}
+
+export interface UpdateDockerHubAccountSettingsRequest {
+  username: string;
+  password: string;
+}
+
 @Injectable({ providedIn: "root" })
 export class AuthService {
   private http = inject(HttpClient);
@@ -66,6 +76,21 @@ export class AuthService {
 
   getOidcConfig() {
     return this.http.get<OidcConfig>("/api/auth/oidc-config");
+  }
+
+  getDockerHubAccountSettings() {
+    return this.http.get<DockerHubAccountSettings>(
+      "/api/auth/account/dockerhub",
+    );
+  }
+
+  updateDockerHubAccountSettings(
+    payload: UpdateDockerHubAccountSettingsRequest,
+  ) {
+    return this.http.put<DockerHubAccountSettings>(
+      "/api/auth/account/dockerhub",
+      payload,
+    );
   }
 
   handleOidcCallback(code: string) {
