@@ -117,9 +117,9 @@ button.avatar-circle:hover {
 
 /* Dropdown thème en mode replié */
 .theme-dropdown-collapsed {
-  position: absolute;
-  left: 44px;
-  bottom: 0;
+  position: fixed;
+  left: 48px;
+  bottom: 12px;
   background: var(--pc-card-bg);
   border: 1px solid var(--pc-border);
   border-radius: 10px;
