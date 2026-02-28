@@ -272,7 +272,7 @@ async def run_pull_pipeline(
             if vuln_result.get("blocked"):
                 _jobs[job_id]["status"] = JobStatus.SCAN_VULNERABLE
                 _jobs[job_id]["message"] = (
-                    f"Vulnerabilities found: {vuln_result.get('counts', {})}"
+                    f"Vulnerabilities found: {vuln_result['counts']}. "
                 )
             else:
                 _jobs[job_id]["status"] = JobStatus.SCAN_CLEAN
