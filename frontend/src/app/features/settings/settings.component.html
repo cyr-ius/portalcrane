@@ -35,10 +35,10 @@
     <li class="nav-item">
       <button
         class="nav-link"
-        [class.active]="activeTab() === 'advanced'"
-        (click)="setTab('advanced')"
+        [class.active]="activeTab() === 'vulnerabilities'"
+        (click)="setTab('vulnerabilities')"
       >
-        <i class="bi bi-sliders me-1"></i>Advanced
+        <i class="bi bi-sliders me-1"></i>Vulnerabilities
       </button>
     </li>
     <li class="nav-item">
@@ -505,43 +505,10 @@
   }
 
   <!-- ═══════════════════════════════════════════════════════════════════════ -->
-  <!-- TAB: Advanced                                                          -->
+  <!-- TAB: Vulnerabilities                                                  -->
   <!-- ═══════════════════════════════════════════════════════════════════════ -->
-  @if (activeTab() === "advanced") {
-    <div class="card border-0 mb-3">
-      <div class="card-header border-0">
-        <h6 class="fw-semibold mb-0">
-          <i class="bi bi-sliders me-2"></i>Advanced Mode
-        </h6>
-      </div>
-      <div class="card-body">
-        <div class="d-flex align-items-center justify-content-between">
-          <div>
-            <div class="small fw-semibold">Enable Advanced Mode</div>
-            <div class="text-muted" style="font-size: 0.8rem">
-              Shows scan detail badges on pipeline jobs and other power-user
-              features.
-            </div>
-          </div>
-          <div class="form-check form-switch ms-4 flex-shrink-0">
-            <input
-              class="form-check-input"
-              type="checkbox"
-              id="advancedModeToggle"
-              style="width: 2.5em; height: 1.3em"
-              [checked]="configService.advancedMode()"
-              (change)="
-                configService.setAdvancedMode($any($event.target).checked)
-              "
-            />
-          </div>
-        </div>
-      </div>
-    </div>
-
-    @if (configService.advancedMode()) {
-      <app-vuln-config-panel />
-    }
+  @if (activeTab() === "vulnerabilities") {
+    <app-vuln-config-panel />
   }
 
   <!-- ═══════════════════════════════════════════════════════════════════════ -->
