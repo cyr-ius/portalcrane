@@ -10,6 +10,16 @@ export interface PublicConfig {
   vuln_scan_timeout: string;
 }
 
+export interface OidcConfig {
+  authority: string;
+  clientId: string;
+  clientSecret: string;
+  redirectUri: string;
+  postLogoutRedirectUri: string;
+  responseType: string;
+  scope: string;
+}
+
 /** All severity levels supported by Trivy, in display order */
 export const TRIVY_SEVERITIES = [
   "CRITICAL",
@@ -49,10 +59,14 @@ function readStr(key: string, fallback: string): string {
 
 @Injectable({ providedIn: "root" })
 export class AppConfigService {
+  private http = inject(HttpClient);
+
   /** Server-side defaults loaded at startup (read-only reference). */
   private _serverConfig = signal<PublicConfig | null>(null);
   readonly serverConfig = this._serverConfig.asReadonly();
-  private http = inject(HttpClient);
+
+  private _oidcConfig = signal<OidcConfig | null>(null);
+  readonly oidcConfig = this._oidcConfig.asReadonly();
 
   // ── User preferences (persisted in localStorage) ──────────────────────────
 
