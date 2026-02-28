@@ -3,7 +3,7 @@ import { computed, inject, Injectable, signal } from "@angular/core";
 import { tap } from "rxjs";
 
 export interface PublicConfig {
-  advanced_mode: boolean;
+  vuln_scan_override: boolean; // whether the server-side config can be overridden by the user
   vuln_scan_enabled: boolean;
   vuln_scan_severities: string;
   vuln_ignore_unfixed: boolean;
@@ -31,7 +31,7 @@ export const TRIVY_TIMEOUT_OPTIONS = [
 export type TrivyTimeoutOption = (typeof TRIVY_TIMEOUT_OPTIONS)[number];
 
 const KEYS = {
-  ADVANCED_MODE: "pc_advanced_mode",
+  VULN_OVERRIDE: "pc_vuln_override",
   VULN_ENABLED: "pc_vuln_enabled",
   VULN_SEVERITIES: "pc_vuln_severities",
   VULN_IGNORE_UNFIXED: "pc_vuln_ignore_unfixed",
@@ -56,14 +56,10 @@ export class AppConfigService {
 
   // ── User preferences (persisted in localStorage) ──────────────────────────
 
-  private _advancedMode = signal<boolean>(
-    localStorage.getItem(KEYS.ADVANCED_MODE) !== null
-      ? localStorage.getItem(KEYS.ADVANCED_MODE) === "true"
-      : false,
-  );
-  readonly advancedMode = this._advancedMode.asReadonly();
-
   /** Whether the user has enabled Trivy CVE scanning (local override). */
+  private _vulnOverride = signal<boolean>(readBool(KEYS.VULN_OVERRIDE, false));
+  readonly vulnOverride = this._vulnOverride.asReadonly();
+
   private _vulnEnabled = signal<boolean>(readBool(KEYS.VULN_ENABLED, false));
   readonly vulnEnabled = this._vulnEnabled.asReadonly();
 
@@ -100,8 +96,8 @@ export class AppConfigService {
       tap((cfg) => {
         this._serverConfig.set(cfg);
         // Apply server defaults only when no local override exists yet
-        if (localStorage.getItem(KEYS.ADVANCED_MODE) === null)
-          this._advancedMode.set(cfg.advanced_mode);
+        if (localStorage.getItem(KEYS.VULN_OVERRIDE) === null)
+          this._vulnOverride.set(cfg.vuln_scan_override);
         if (localStorage.getItem(KEYS.VULN_ENABLED) === null)
           this._vulnEnabled.set(cfg.vuln_scan_enabled);
         if (localStorage.getItem(KEYS.VULN_SEVERITIES) === null) {
@@ -123,9 +119,26 @@ export class AppConfigService {
 
   // ── Setters ───────────────────────────────────────────────────────────────
 
-  setAdvancedMode(value: boolean) {
-    this._advancedMode.set(value);
-    localStorage.setItem(KEYS.ADVANCED_MODE, String(value));
+  setVulnOverride(value: boolean) {
+    this._vulnOverride.set(value);
+    localStorage.setItem(KEYS.VULN_OVERRIDE, String(value));
+    if (!value) {
+      // If disabling override, also reset related settings to server defaults
+      const server = this._serverConfig();
+      if (server) {
+        this.setVulnEnabled(server.vuln_scan_enabled);
+        this._vulnSeverities.set(
+          server.vuln_scan_severities
+            .split(",")
+            .map((s) => s.trim().toUpperCase())
+            .filter((s): s is TrivySeverity =>
+              (TRIVY_SEVERITIES as readonly string[]).includes(s),
+            ),
+        );
+        this.setVulnIgnoreUnfixed(server.vuln_ignore_unfixed);
+        this.setVulnTimeout(server.vuln_scan_timeout);
+      }
+    }
   }
 
   setVulnEnabled(value: boolean) {
