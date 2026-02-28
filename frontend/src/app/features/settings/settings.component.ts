@@ -30,13 +30,12 @@ import { VulnConfigPanelComponent } from "../../shared/components/vuln-config-pa
 
 /** Tabs available in the Settings page. */
 type SettingsTab =
-  | "appearance"
+  | "vulnerabilities"
+  | "accounts"
   | "registries"
   | "sync"
   | "audit"
-  | "vulnerabilities"
   | "oidc"
-  | "accounts"
   | "account"
   | "about";
 
@@ -97,7 +96,7 @@ export class SettingsComponent implements OnInit {
   readonly severities = TRIVY_SEVERITIES;
 
   // ── Tab state ──────────────────────────────────────────────────────────────
-  activeTab = signal<SettingsTab>("appearance");
+  activeTab = signal<SettingsTab>("vulnerabilities");
 
   // ── External registries ────────────────────────────────────────────────────
   registries = signal<ExternalRegistry[]>([]);
@@ -420,6 +419,28 @@ export class SettingsComponent implements OnInit {
           this.savingDockerHub.set(false);
           this.dockerHubMessage.set(
             err?.error?.detail || "Unable to save Docker Hub account.",
+          );
+        },
+      });
+  }
+
+  deleteDockerHubAccount() {
+    this.savingDockerHub.set(true);
+    this.dockerHubMessage.set(null);
+    this.authService
+      .updateDockerHubAccountSettings({ username: "", password: "" })
+      .subscribe({
+        next: () => {
+          this.savingDockerHub.set(false);
+          this.dockerHubUsername.set("");
+          this.dockerHubPassword.set("");
+          this.dockerHubHasPassword.set(false);
+          this.dockerHubMessage.set("Docker Hub account removed.");
+        },
+        error: (err) => {
+          this.savingDockerHub.set(false);
+          this.dockerHubMessage.set(
+            err?.error?.detail || "Unable to remove Docker Hub account.",
           );
         },
       });
