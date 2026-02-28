@@ -8,10 +8,19 @@
     <li class="nav-item">
       <button
         class="nav-link"
-        [class.active]="activeTab() === 'appearance'"
-        (click)="setTab('appearance')"
+        [class.active]="activeTab() === 'vulnerabilities'"
+        (click)="setTab('vulnerabilities')"
       >
-        <i class="bi bi-palette me-1"></i>Appearance
+        <i class="bi bi-sliders me-1"></i>Vulnerabilities
+      </button>
+    </li>
+    <li class="nav-item">
+      <button
+        class="nav-link"
+        [class.active]="activeTab() === 'accounts'"
+        (click)="setTab('accounts')"
+      >
+        <i class="bi bi-shield-lock me-1"></i>Accounts
       </button>
     </li>
     <li class="nav-item">
@@ -35,28 +44,10 @@
     <li class="nav-item">
       <button
         class="nav-link"
-        [class.active]="activeTab() === 'vulnerabilities'"
-        (click)="setTab('vulnerabilities')"
-      >
-        <i class="bi bi-sliders me-1"></i>Vulnerabilities
-      </button>
-    </li>
-    <li class="nav-item">
-      <button
-        class="nav-link"
         [class.active]="activeTab() === 'oidc'"
         (click)="setTab('oidc')"
       >
         <i class="bi bi-shield-lock me-1"></i>OIDC
-      </button>
-    </li>
-    <li class="nav-item">
-      <button
-        class="nav-link"
-        [class.active]="activeTab() === 'accounts'"
-        (click)="setTab('accounts')"
-      >
-        <i class="bi bi-shield-lock me-1"></i>Accounts
       </button>
     </li>
     <li class="nav-item">
@@ -78,50 +69,6 @@
       </button>
     </li>
   </ul>
-
-  <!-- ═══════════════════════════════════════════════════════════════════════ -->
-  <!-- TAB: Appearance                                                        -->
-  <!-- ═══════════════════════════════════════════════════════════════════════ -->
-  @if (activeTab() === "appearance") {
-    <div class="card border-0 mb-3">
-      <div class="card-header border-0">
-        <h6 class="fw-semibold mb-0">
-          <i class="bi bi-palette me-2"></i>Color Theme
-        </h6>
-      </div>
-      <div class="card-body">
-        <div class="d-flex gap-2">
-          <button
-            class="btn d-flex flex-column align-items-center gap-1 p-3"
-            [class.btn-primary]="themeService.theme() === 'light'"
-            [class.btn-outline-secondary]="themeService.theme() !== 'light'"
-            (click)="themeService.setTheme('light')"
-          >
-            <i class="bi bi-sun-fill fs-4"></i>
-            <span class="small">Light</span>
-          </button>
-          <button
-            class="btn d-flex flex-column align-items-center gap-1 p-3"
-            [class.btn-primary]="themeService.theme() === 'dark'"
-            [class.btn-outline-secondary]="themeService.theme() !== 'dark'"
-            (click)="themeService.setTheme('dark')"
-          >
-            <i class="bi bi-moon-fill fs-4"></i>
-            <span class="small">Dark</span>
-          </button>
-          <button
-            class="btn d-flex flex-column align-items-center gap-1 p-3"
-            [class.btn-primary]="themeService.theme() === 'auto'"
-            [class.btn-outline-secondary]="themeService.theme() !== 'auto'"
-            (click)="themeService.setTheme('auto')"
-          >
-            <i class="bi bi-circle-half fs-4"></i>
-            <span class="small">Auto</span>
-          </button>
-        </div>
-      </div>
-    </div>
-  }
 
   <!-- ═══════════════════════════════════════════════════════════════════════ -->
   <!-- TAB: External Registries                                               -->
@@ -575,6 +522,44 @@
             (click)="authService.logout()"
           >
             <i class="bi bi-box-arrow-right me-1"></i>Logout
+          </button>
+        </div>
+      </div>
+    </div>
+    <div class="card border-0 mb-3">
+      <div class="card-header border-0">
+        <h6 class="fw-semibold mb-0">
+          <i class="bi bi-palette me-2"></i>Color Theme
+        </h6>
+      </div>
+      <div class="card-body">
+        <div class="d-flex gap-2">
+          <button
+            class="btn d-flex flex-column align-items-center gap-1 p-3"
+            [class.btn-primary]="themeService.theme() === 'light'"
+            [class.btn-outline-secondary]="themeService.theme() !== 'light'"
+            (click)="themeService.setTheme('light')"
+          >
+            <i class="bi bi-sun-fill fs-4"></i>
+            <span class="small">Light</span>
+          </button>
+          <button
+            class="btn d-flex flex-column align-items-center gap-1 p-3"
+            [class.btn-primary]="themeService.theme() === 'dark'"
+            [class.btn-outline-secondary]="themeService.theme() !== 'dark'"
+            (click)="themeService.setTheme('dark')"
+          >
+            <i class="bi bi-moon-fill fs-4"></i>
+            <span class="small">Dark</span>
+          </button>
+          <button
+            class="btn d-flex flex-column align-items-center gap-1 p-3"
+            [class.btn-primary]="themeService.theme() === 'auto'"
+            [class.btn-outline-secondary]="themeService.theme() !== 'auto'"
+            (click)="themeService.setTheme('auto')"
+          >
+            <i class="bi bi-circle-half fs-4"></i>
+            <span class="small">Auto</span>
           </button>
         </div>
       </div>
