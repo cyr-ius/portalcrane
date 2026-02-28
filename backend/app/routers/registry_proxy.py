@@ -34,12 +34,15 @@ pipeline uses the same address automatically.
 import json
 import logging
 import time
+import base64
 
 import httpx
 from fastapi import APIRouter, Request, Response, status
+from jose import JWTError, jwt
 
 from ..config import get_settings
 from ..services.audit_service import AuditService
+from .auth import _can_pull_images, _can_push_images, _verify_user
 
 logger = logging.getLogger(__name__)
 
@@ -88,6 +91,80 @@ def _ensure_oci_accept_for_manifests(v2_path: str, method: str, headers: dict) -
         headers["accept"] = f"{accept_value}, {', '.join(missing)}"
 
 
+def _unauthorized_response(detail: str = "Authentication required") -> Response:
+    return Response(
+        content=json.dumps({"detail": detail}),
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        media_type="application/json",
+        headers={"WWW-Authenticate": "Basic realm=portalcrane-registry"},
+    )
+
+
+def _forbidden_response(detail: str) -> Response:
+    return Response(
+        content=json.dumps({"detail": detail}),
+        status_code=status.HTTP_403_FORBIDDEN,
+        media_type="application/json",
+    )
+
+
+def _decode_basic_auth(auth_header: str) -> tuple[str, str] | None:
+    if not auth_header.lower().startswith("basic "):
+        return None
+    encoded = auth_header.split(" ", 1)[1].strip()
+    try:
+        raw = base64.b64decode(encoded).decode("utf-8")
+        username, password = raw.split(":", 1)
+        return username, password
+    except Exception:
+        return None
+
+
+def _decode_bearer_username(auth_header: str) -> str | None:
+    if not auth_header.lower().startswith("bearer "):
+        return None
+    token = auth_header.split(" ", 1)[1].strip()
+    settings = get_settings()
+    try:
+        payload = jwt.decode(
+            token, settings.secret_key, algorithms=[settings.algorithm]
+        )
+    except JWTError:
+        return None
+    return payload.get("sub")
+
+
+def _authorize_registry_proxy(request: Request, method: str) -> Response | None:
+    settings = get_settings()
+    if not settings.registry_proxy_auth_enabled:
+        return None
+
+    auth_header = request.headers.get("authorization", "")
+    if not auth_header:
+        return _unauthorized_response()
+
+    username: str | None = None
+
+    basic = _decode_basic_auth(auth_header)
+    if basic is not None:
+        user, pwd = basic
+        if not _verify_user(user, pwd, settings):
+            return _unauthorized_response("Invalid credentials")
+        username = user
+    else:
+        username = _decode_bearer_username(auth_header)
+        if not username:
+            return _unauthorized_response("Invalid bearer token")
+
+    if method in _PULL_METHODS and not _can_pull_images(username, settings):
+        return _forbidden_response("Pull permission required")
+
+    if method in _PUSH_METHODS and not _can_push_images(username, settings):
+        return _forbidden_response("Push permission required")
+
+    return None
+
+
 def _client_ip(request: Request) -> str:
     forwarded = request.headers.get("x-forwarded-for")
     if forwarded:
@@ -102,6 +179,10 @@ async def _proxy(request: Request, v2_path: str) -> Response:
 
     upstream_url = f"{settings.registry_url.rstrip('/')}/v2/{v2_path}"
     method = request.method
+
+    authz_error = _authorize_registry_proxy(request, method)
+    if authz_error is not None:
+        return authz_error
 
     # Filter hop-by-hop headers AND remove the original Host header.
     # The Host header MUST match the registry's own address for _state JWT

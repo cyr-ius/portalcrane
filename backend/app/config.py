@@ -36,6 +36,7 @@ class Settings(BaseSettings):
     registry_url: str = "http://localhost:5000"
     registry_username: str = ""
     registry_password: str = ""
+    registry_proxy_auth_enabled: bool = False
     # Address used by the Docker daemon (on the HOST) to push images.
     # Needed when REGISTRY_URL uses a Docker-internal hostname (e.g. "registry")
     # that the host Docker daemon cannot resolve.

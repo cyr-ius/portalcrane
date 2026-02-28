@@ -13,7 +13,12 @@ from pydantic import BaseModel
 
 from ..config import Settings, get_settings
 from ..services.registry_service import RegistryService
-from .auth import UserInfo, get_current_user
+from .auth import (
+    UserInfo,
+    require_admin,
+    require_pull_access,
+    require_push_access,
+)
 
 router = APIRouter()
 
@@ -116,7 +121,7 @@ async def list_images(
     page_size: int = Query(20, ge=5, le=100),
     search: str | None = Query(None),
     registry: RegistryService = Depends(get_registry),
-    _: UserInfo = Depends(get_current_user),
+    _: UserInfo = Depends(require_pull_access),
 ):
     """List all images with pagination and optional search filter."""
     repositories = await registry.list_repositories()
@@ -151,7 +156,7 @@ async def list_images(
 async def get_image_tags(
     repository: str,
     registry: RegistryService = Depends(get_registry),
-    _: UserInfo = Depends(get_current_user),
+    _: UserInfo = Depends(require_pull_access),
 ):
     """Get all tags for a specific image repository."""
     tags = await registry.list_tags(repository)
@@ -163,7 +168,7 @@ async def get_tag_detail(
     repository: str,
     tag: str,
     registry: RegistryService = Depends(get_registry),
-    _: UserInfo = Depends(get_current_user),
+    _: UserInfo = Depends(require_pull_access),
 ):
     """Get detailed information about a specific image tag (advanced mode)."""
     manifest = await registry.get_manifest(repository, tag)
@@ -209,7 +214,7 @@ async def delete_tag(
     repository: str,
     tag: str,
     registry: RegistryService = Depends(get_registry),
-    _: UserInfo = Depends(get_current_user),
+    _: UserInfo = Depends(require_push_access),
 ):
     """Delete a specific tag from an image repository."""
     success = await registry.delete_tag(repository, tag)
@@ -225,7 +230,7 @@ async def delete_tag(
 async def delete_image(
     repository: str,
     registry: RegistryService = Depends(get_registry),
-    _: UserInfo = Depends(get_current_user),
+    _: UserInfo = Depends(require_push_access),
 ):
     """Delete all tags (and the image) from a repository."""
     tags = await registry.list_tags(repository)
@@ -255,7 +260,7 @@ async def add_tag(
     repository: str,
     request: AddTagRequest,
     registry: RegistryService = Depends(get_registry),
-    _: UserInfo = Depends(get_current_user),
+    _: UserInfo = Depends(require_push_access),
 ):
     """Add a new tag to an existing image (retag)."""
     # Get the source manifest
@@ -290,7 +295,7 @@ async def add_tag(
 @router.get("/ping")
 async def ping_registry(
     registry: RegistryService = Depends(get_registry),
-    _: UserInfo = Depends(get_current_user),
+    _: UserInfo = Depends(require_pull_access),
 ):
     """Check registry connectivity."""
     is_up = await registry.ping()
@@ -302,7 +307,7 @@ async def rename_image(
     repository: str,
     request: RenameImageRequest,
     settings: Settings = Depends(get_settings),
-    _: UserInfo = Depends(get_current_user),
+    _: UserInfo = Depends(require_push_access),
 ):
     """
     Retag an image to a new repository/name using skopeo copy.
@@ -461,7 +466,7 @@ async def _run_gc(settings: Settings):
 async def start_garbage_collect(
     background_tasks: BackgroundTasks,
     settings: Settings = Depends(get_settings),
-    _: UserInfo = Depends(get_current_user),
+    _: UserInfo = Depends(require_admin),
 ):
     """
     Trigger a registry garbage-collect run.
@@ -488,7 +493,7 @@ async def start_garbage_collect(
 
 
 @router.get("/gc", response_model=GCStatus)
-async def get_gc_status(_: UserInfo = Depends(get_current_user)):
+async def get_gc_status(_: UserInfo = Depends(require_admin)):
     """Get the current or last garbage-collect job status."""
     return GCStatus(
         status=_gc_state["status"],
@@ -507,7 +512,7 @@ async def get_gc_status(_: UserInfo = Depends(get_current_user)):
 @router.get("/empty-repositories")
 async def list_empty_repositories(
     registry: RegistryService = Depends(get_registry),
-    _: UserInfo = Depends(get_current_user),
+    _: UserInfo = Depends(require_admin),
 ):
     """
     List repositories that have no tags.
@@ -524,7 +529,7 @@ async def list_empty_repositories(
 async def purge_empty_repositories(
     registry: RegistryService = Depends(get_registry),
     settings: Settings = Depends(get_settings),
-    _: UserInfo = Depends(get_current_user),
+    _: UserInfo = Depends(require_admin),
 ):
     """
     Purge ghost repositories directly from the local filesystem.

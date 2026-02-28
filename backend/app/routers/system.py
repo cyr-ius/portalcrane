@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from pydantic import BaseModel
 
 from ..services.process_manager import (
@@ -7,6 +7,7 @@ from ..services.process_manager import (
 )
 from ..services.trivy_service import get_trivy_db_info, scan_image, update_trivy_db
 from ..services.audit_service import get_recent_audit_events
+from .auth import UserInfo, require_admin
 
 router = APIRouter(prefix="/api/system", tags=["system"])
 
@@ -23,19 +24,19 @@ class GCResult(BaseModel):
 
 
 @router.get("/processes")
-async def list_processes():
+async def list_processes(_: UserInfo = Depends(require_admin)):
     """Returns runtime status of all supervised processes."""
     return await get_all_process_statuses()
 
 
 @router.get("/trivy/db")
-async def trivy_db_status():
+async def trivy_db_status(_: UserInfo = Depends(require_admin)):
     """Returns Trivy vulnerability database info and freshness status."""
     return await get_trivy_db_info()
 
 
 @router.post("/trivy/db/update")
-async def force_trivy_update():
+async def force_trivy_update(_: UserInfo = Depends(require_admin)):
     """Forces an immediate Trivy DB update."""
     result = await update_trivy_db()
     if not result["success"]:
@@ -50,6 +51,7 @@ async def scan(
     ),
     severity: list[str] = Query(default=["HIGH", "CRITICAL"]),
     ignore_unfixed: bool = Query(default=False),
+    _: UserInfo = Depends(require_admin),
 ):
     """
     Scans a specific image from the local registry with Trivy.
@@ -64,13 +66,14 @@ async def scan(
 @router.get("/audit/logs", response_model=AuditEventsResponse)
 async def get_audit_logs(
     limit: int = Query(default=200, ge=1, le=500, description="Max number of events"),
+    _: UserInfo = Depends(require_admin),
 ):
     """Returns the most recent in-memory audit log events (newest first)."""
     return {"events": get_recent_audit_events(limit=limit)}
 
 
 @router.post("/gc", response_model=GCResult)
-async def garbage_collect(dry_run: bool = False):
+async def garbage_collect(dry_run: bool = False, _: UserInfo = Depends(require_admin)):
     """
     Triggers registry garbage collection.
     Stops the registry, runs GC, restarts it.

@@ -64,6 +64,8 @@ class UserInfo(BaseModel):
 
     username: str
     is_admin: bool = True
+    can_pull_images: bool = True
+    can_push_images: bool = True
 
 
 class OIDCConfig(BaseModel):
@@ -93,6 +95,8 @@ class LocalUser(BaseModel):
     username: str
     is_admin: bool = False
     created_at: str
+    can_pull_images: bool = False
+    can_push_images: bool = False
 
 
 class LocalUserPublic(BaseModel):
@@ -102,6 +106,8 @@ class LocalUserPublic(BaseModel):
     username: str
     is_admin: bool
     created_at: str
+    can_pull_images: bool
+    can_push_images: bool
 
 
 class CreateUserRequest(BaseModel):
@@ -110,6 +116,8 @@ class CreateUserRequest(BaseModel):
     username: str
     password: str
     is_admin: bool = False
+    can_pull_images: bool = False
+    can_push_images: bool = False
 
     @field_validator("username")
     @classmethod
@@ -136,6 +144,8 @@ class UpdateUserRequest(BaseModel):
 
     password: str | None = None
     is_admin: bool | None = None
+    can_pull_images: bool | None = None
+    can_push_images: bool | None = None
 
 
 # ── OIDC settings models ──────────────────────────────────────────────────────
@@ -226,7 +236,17 @@ async def get_current_user(
     except JWTError:
         raise credentials_exception
 
-    return UserInfo(username=token_data.username, is_admin=True)
+    username = token_data.username or ""
+    is_admin = _is_admin_user(username, settings)
+    can_pull_images = _can_pull_images(username, settings)
+    can_push_images = _can_push_images(username, settings)
+
+    return UserInfo(
+        username=username,
+        is_admin=is_admin,
+        can_pull_images=can_pull_images,
+        can_push_images=can_push_images,
+    )
 
 
 def _verify_user(username: str, password: str, settings: Settings) -> bool:
@@ -252,6 +272,64 @@ def _is_admin_user(username: str, settings: Settings) -> bool:
         if user["username"] == username:
             return user.get("is_admin", False)
     return False
+
+
+def _can_pull_images(username: str, settings: Settings) -> bool:
+    """Return True if the user can pull images."""
+    if username == settings.admin_username:
+        return True
+    for user in _load_users():
+        if user["username"] == username:
+            if user.get("is_admin", False):
+                return True
+            return user.get("can_pull_images", False)
+    return False
+
+
+def _can_push_images(username: str, settings: Settings) -> bool:
+    """Return True if the user can push images."""
+    if username == settings.admin_username:
+        return True
+    for user in _load_users():
+        if user["username"] == username:
+            if user.get("is_admin", False):
+                return True
+            return user.get("can_push_images", False)
+    return False
+
+
+def require_admin(current_user: UserInfo = Depends(get_current_user)) -> UserInfo:
+    """Ensure current user is admin."""
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin privileges required",
+        )
+    return current_user
+
+
+def require_pull_access(
+    current_user: UserInfo = Depends(get_current_user),
+) -> UserInfo:
+    """Ensure current user can pull images."""
+    if not current_user.can_pull_images:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Pull permission required",
+        )
+    return current_user
+
+
+def require_push_access(
+    current_user: UserInfo = Depends(get_current_user),
+) -> UserInfo:
+    """Ensure current user can push images."""
+    if not current_user.can_push_images:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Push permission required",
+        )
+    return current_user
 
 
 # ─── Auth endpoints ───────────────────────────────────────────────────────────
@@ -432,7 +510,7 @@ async def get_oidc_settings(
 @router.put("/oidc-settings", response_model=OidcSettings)
 async def save_oidc_settings(
     payload: OidcSettings,
-    _: UserInfo = Depends(get_current_user),
+    _: UserInfo = Depends(require_admin),
 ):
     """
     Persist OIDC settings to the JSON file.
@@ -449,7 +527,7 @@ async def save_oidc_settings(
 @router.get("/users", response_model=list[LocalUserPublic])
 async def list_local_users(
     settings: Settings = Depends(get_settings),
-    current_user: UserInfo = Depends(get_current_user),
+    _: UserInfo = Depends(require_admin),
 ):
     """
     List all local users.
@@ -464,6 +542,8 @@ async def list_local_users(
             id="env-admin",
             username=settings.admin_username,
             is_admin=True,
+            can_pull_images=True,
+            can_push_images=True,
             created_at="",
         )
     )
@@ -474,6 +554,16 @@ async def list_local_users(
                 id=u["id"],
                 username=u["username"],
                 is_admin=u.get("is_admin", False),
+                can_pull_images=(
+                    True
+                    if u.get("is_admin", False)
+                    else u.get("can_pull_images", False)
+                ),
+                can_push_images=(
+                    True
+                    if u.get("is_admin", False)
+                    else u.get("can_push_images", False)
+                ),
                 created_at=u.get("created_at", ""),
             )
         )
@@ -486,7 +576,7 @@ async def list_local_users(
 async def create_local_user(
     payload: CreateUserRequest,
     settings: Settings = Depends(get_settings),
-    _: UserInfo = Depends(get_current_user),
+    _: UserInfo = Depends(require_admin),
 ):
     """Create a new local user. The password is stored as a bcrypt hash."""
     users = _load_users()
@@ -508,6 +598,8 @@ async def create_local_user(
         "username": payload.username,
         "password_hash": _hash_password(payload.password),
         "is_admin": payload.is_admin,
+        "can_pull_images": True if payload.is_admin else payload.can_pull_images,
+        "can_push_images": True if payload.is_admin else payload.can_push_images,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     users.append(entry)
@@ -517,6 +609,8 @@ async def create_local_user(
         id=entry["id"],
         username=entry["username"],
         is_admin=entry["is_admin"],
+        can_pull_images=entry["can_pull_images"],
+        can_push_images=entry["can_push_images"],
         created_at=entry["created_at"],
     )
 
@@ -525,7 +619,7 @@ async def create_local_user(
 async def update_local_user(
     user_id: str,
     payload: UpdateUserRequest,
-    _: UserInfo = Depends(get_current_user),
+    _: UserInfo = Depends(require_admin),
 ):
     """Update a local user's password and/or admin flag."""
     if user_id == "env-admin":
@@ -546,11 +640,24 @@ async def update_local_user(
                 user["password_hash"] = _hash_password(payload.password)
             if payload.is_admin is not None:
                 user["is_admin"] = payload.is_admin
+                if payload.is_admin:
+                    user["can_pull_images"] = True
+                    user["can_push_images"] = True
+            if payload.can_pull_images is not None and not user.get("is_admin", False):
+                user["can_pull_images"] = payload.can_pull_images
+            if payload.can_push_images is not None and not user.get("is_admin", False):
+                user["can_push_images"] = payload.can_push_images
             _save_users(users)
             return LocalUserPublic(
                 id=user["id"],
                 username=user["username"],
                 is_admin=user["is_admin"],
+                can_pull_images=(
+                    True if user["is_admin"] else user.get("can_pull_images", False)
+                ),
+                can_push_images=(
+                    True if user["is_admin"] else user.get("can_push_images", False)
+                ),
                 created_at=user.get("created_at", ""),
             )
 
@@ -563,7 +670,7 @@ async def update_local_user(
 @router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_local_user(
     user_id: str,
-    _: UserInfo = Depends(get_current_user),
+    _: UserInfo = Depends(require_admin),
 ):
     """Delete a local user. The env-based admin cannot be deleted."""
     if user_id == "env-admin":

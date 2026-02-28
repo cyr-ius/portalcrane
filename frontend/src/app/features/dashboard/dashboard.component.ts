@@ -20,6 +20,7 @@ import {
   RegistryService,
 } from "../../core/services/registry.service";
 import { StagingService } from "../../core/services/staging.service";
+import { AuthService } from "../../core/services/auth.service";
 
 @Component({
   selector: "app-dashboard",
@@ -33,6 +34,7 @@ export class DashboardComponent implements OnInit {
   private stagingService = inject(StagingService);
   private destroyRef = inject(DestroyRef);
   readonly configService = inject(AppConfigService);
+  readonly authService = inject(AuthService);
 
   stats = signal<DashboardStats | null>(null);
   loading = signal(false);
@@ -101,6 +103,9 @@ export class DashboardComponent implements OnInit {
 
   refresh() {
     this.loadStats();
+    if (!this.authService.currentUser()?.is_admin) {
+      return;
+    }
     this.registryService.getGCStatus().subscribe({
       next: (s) => this.gcStatus.set(s),
     });
@@ -137,6 +142,7 @@ export class DashboardComponent implements OnInit {
         this.ghostRepos.set(res.empty_repositories);
         this.ghostsChecked.set(true);
       },
+      error: () => this.ghostsChecked.set(true),
     });
   }
 

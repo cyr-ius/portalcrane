@@ -20,7 +20,7 @@ from ..services.external_registry_service import (
     update_registry,
     validate_folder_path,
 )
-from .auth import UserInfo, get_current_user
+from .auth import UserInfo, require_admin, require_push_access
 
 router = APIRouter()
 
@@ -83,7 +83,7 @@ class SyncRequest(BaseModel):
 
 @router.get("/registries")
 async def list_registries(
-    _: UserInfo = Depends(get_current_user),
+    _: UserInfo = Depends(require_admin),
 ):
     """List all configured external registries (passwords redacted)."""
     return get_registries()
@@ -92,7 +92,7 @@ async def list_registries(
 @router.post("/registries", status_code=status.HTTP_201_CREATED)
 async def add_registry(
     payload: CreateRegistryRequest,
-    _: UserInfo = Depends(get_current_user),
+    _: UserInfo = Depends(require_admin),
 ):
     """Create a new external registry entry."""
     return create_registry(
@@ -107,7 +107,7 @@ async def add_registry(
 async def edit_registry(
     registry_id: str,
     payload: UpdateRegistryRequest,
-    _: UserInfo = Depends(get_current_user),
+    _: UserInfo = Depends(require_admin),
 ):
     """Update an existing external registry entry."""
     updated = update_registry(
@@ -128,7 +128,7 @@ async def edit_registry(
 @router.delete("/registries/{registry_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def remove_registry(
     registry_id: str,
-    _: UserInfo = Depends(get_current_user),
+    _: UserInfo = Depends(require_admin),
 ):
     """Delete an external registry entry."""
     if not delete_registry(registry_id):
@@ -141,7 +141,7 @@ async def remove_registry(
 @router.post("/registries/test")
 async def test_registry(
     payload: TestConnectionRequest,
-    _: UserInfo = Depends(get_current_user),
+    _: UserInfo = Depends(require_admin),
 ):
     """Test connectivity to a registry (without saving it)."""
     result = await test_registry_connection(
@@ -155,7 +155,7 @@ async def test_registry(
 @router.post("/registries/{registry_id}/test")
 async def test_saved_registry(
     registry_id: str,
-    _: UserInfo = Depends(get_current_user),
+    _: UserInfo = Depends(require_admin),
 ):
     """Test connectivity to a saved registry."""
     registry = get_registry_by_id(registry_id)
@@ -179,7 +179,7 @@ async def test_saved_registry(
 async def push_to_external(
     payload: ExternalPushRequest,
     settings: Settings = Depends(get_settings),
-    _: UserInfo = Depends(get_current_user),
+    _: UserInfo = Depends(require_push_access),
 ):
     """
     Push a staged OCI layout directory to an external registry via skopeo.
@@ -262,7 +262,7 @@ async def push_to_external(
 
 @router.get("/sync/jobs")
 async def get_sync_jobs(
-    _: UserInfo = Depends(get_current_user),
+    _: UserInfo = Depends(require_admin),
 ):
     """List all sync jobs (most recent first)."""
     return list_sync_jobs()
@@ -272,7 +272,7 @@ async def get_sync_jobs(
 async def start_sync(
     payload: SyncRequest,
     settings: Settings = Depends(get_settings),
-    _: UserInfo = Depends(get_current_user),
+    _: UserInfo = Depends(require_admin),
 ):
     """
     Start an asynchronous sync job: copies images from the local registry

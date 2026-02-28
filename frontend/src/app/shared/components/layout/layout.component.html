@@ -1097,20 +1097,22 @@
 
     <!-- Footer : Settings + separator + User -->
     <div class="sidebar-footer d-flex flex-column">
-      <!-- Settings -->
-      <div class="px-2 pb-2">
-        <a
-          routerLink="/settings"
-          routerLinkActive="active"
-          class="nav-link d-flex align-items-center gap-2"
-          [title]="sidebarCollapsed() ? 'Settings' : ''"
-        >
-          <i class="bi bi-gear nav-icon"></i>
-          @if (!sidebarCollapsed()) {
-            <span>Settings</span>
-          }
-        </a>
-      </div>
+      @if (auth.currentUser()?.is_admin) {
+        <!-- Settings -->
+        <div class="px-2 pb-2">
+          <a
+            routerLink="/settings"
+            routerLinkActive="active"
+            class="nav-link d-flex align-items-center gap-2"
+            [title]="sidebarCollapsed() ? 'Settings' : ''"
+          >
+            <i class="bi bi-gear nav-icon"></i>
+            @if (!sidebarCollapsed()) {
+              <span>Settings</span>
+            }
+          </a>
+        </div>
+      }
 
       <!-- separator -->
       <div class="border-top mx-3"></div>

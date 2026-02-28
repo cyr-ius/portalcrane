@@ -16,7 +16,12 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from pydantic import BaseModel
 
 from ..config import Settings, get_settings
-from .auth import UserInfo, get_current_user
+from .auth import (
+    UserInfo,
+    require_admin,
+    require_pull_access,
+    require_push_access,
+)
 
 router = APIRouter()
 
@@ -410,7 +415,7 @@ async def pull_image(
     request: PullRequest,
     background_tasks: BackgroundTasks,
     settings: Settings = Depends(get_settings),
-    _: UserInfo = Depends(get_current_user),
+    _: UserInfo = Depends(require_pull_access),
 ):
     """Start a pull+scan pipeline for a Docker Hub image using skopeo."""
     job_id = str(uuid.uuid4())
@@ -446,7 +451,7 @@ async def push_image(
     request: PushRequest,
     background_tasks: BackgroundTasks,
     settings: Settings = Depends(get_settings),
-    _: UserInfo = Depends(get_current_user),
+    _: UserInfo = Depends(require_push_access),
 ):
     """
     Push a scanned image to the local registry or to an external registry.
@@ -564,7 +569,7 @@ async def push_image(
 @router.get("/jobs/{job_id}", response_model=StagingJob)
 async def get_job_status(
     job_id: str,
-    _: UserInfo = Depends(get_current_user),
+    _: UserInfo = Depends(require_pull_access),
 ):
     """Get the current status of a staging job."""
     if job_id not in _jobs:
@@ -575,7 +580,7 @@ async def get_job_status(
 
 
 @router.get("/jobs", response_model=list[StagingJob])
-async def list_jobs(_: UserInfo = Depends(get_current_user)):
+async def list_jobs(_: UserInfo = Depends(require_pull_access)):
     """List all staging jobs sorted: active first, then most recent."""
     active = {"pending", "pulling", "vuln_scanning", "pushing"}
     jobs = list(_jobs.values())
@@ -587,7 +592,7 @@ async def list_jobs(_: UserInfo = Depends(get_current_user)):
 async def delete_job(
     job_id: str,
     settings: Settings = Depends(get_settings),
-    _: UserInfo = Depends(get_current_user),
+    _: UserInfo = Depends(require_admin),
 ):
     """Delete a staging job and its associated OCI layout directory."""
     if job_id not in _jobs:
@@ -608,7 +613,7 @@ async def search_dockerhub(
     q: str,
     page: int = 1,
     settings: Settings = Depends(get_settings),
-    _: UserInfo = Depends(get_current_user),
+    _: UserInfo = Depends(require_pull_access),
 ):
     """
     Search Docker Hub for images matching the query string.
@@ -649,7 +654,7 @@ async def search_dockerhub(
 async def get_dockerhub_tags(
     image: str,
     settings: Settings = Depends(get_settings),
-    _: UserInfo = Depends(get_current_user),
+    _: UserInfo = Depends(require_pull_access),
 ):
     """
     Return available tags for a Docker Hub image, sorted by last update date.
@@ -696,7 +701,7 @@ async def get_dockerhub_tags(
 @router.get("/orphan-oci", response_model=OrphanOCIResult)
 async def list_orphan_oci(
     settings: Settings = Depends(get_settings),
-    _: UserInfo = Depends(get_current_user),
+    _: UserInfo = Depends(require_admin),
 ):
     """
     List orphan OCI layout directories in the staging directory.
@@ -730,7 +735,7 @@ async def list_orphan_oci(
 @router.delete("/orphan-oci")
 async def purge_orphan_oci(
     settings: Settings = Depends(get_settings),
-    _: UserInfo = Depends(get_current_user),
+    _: UserInfo = Depends(require_admin),
 ):
     """Purge orphan OCI layout directories from the staging directory."""
     staging_dir = settings.staging_dir
