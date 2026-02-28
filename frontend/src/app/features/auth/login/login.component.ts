@@ -59,10 +59,10 @@ export class LoginComponent implements OnInit {
     if (!config?.authorization_endpoint) return;
 
     const params = new URLSearchParams({
-      response_type: "code",
+      response_type: config.response_type,
       client_id: config.client_id,
       redirect_uri: config.redirect_uri,
-      scope: "openid profile email",
+      scope: config.scope,
     });
 
     window.location.href = `${config.authorization_endpoint}?${params}`;

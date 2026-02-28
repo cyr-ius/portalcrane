@@ -79,6 +79,8 @@ class OIDCConfig(BaseModel):
     issuer: str
     redirect_uri: str
     authorization_endpoint: str = ""
+    response_type: str = "code"
+    scope: str = "openid profile email"
 
 
 class LoginRequest(BaseModel):
@@ -476,6 +478,47 @@ async def update_dockerhub_account_settings(
     return DockerHubAccountSettings(username=creds[0], has_password=True)
 
 
+# ─── OIDC settings endpoints ──────────────────────────────────────────────────
+
+
+@router.get("/oidc-settings", response_model=OidcSettings)
+async def get_oidc_settings(
+    settings: Settings = Depends(get_settings),
+    _: UserInfo = Depends(get_current_user),
+):
+    """
+    Return the full OIDC settings (env defaults merged with persisted overrides).
+    Only accessible to authenticated users — used by the Settings page.
+    """
+    persisted = _load_oidc_config()
+    return OidcSettings(
+        enabled=persisted.get("enabled", settings.oidc_enabled),
+        issuer=persisted.get("issuer", settings.oidc_issuer),
+        client_id=persisted.get("client_id", settings.oidc_client_id),
+        client_secret=persisted.get("client_secret", settings.oidc_client_secret),
+        redirect_uri=persisted.get("redirect_uri", settings.oidc_redirect_uri),
+        post_logout_redirect_uri=persisted.get(
+            "post_logout_redirect_uri", settings.oidc_post_logout_redirect_uri
+        ),
+        response_type=persisted.get("response_type", settings.oidc_response_type),
+        scope=persisted.get("scope", settings.oidc_scope),
+    )
+
+
+@router.put("/oidc-settings", response_model=OidcSettings)
+async def save_oidc_settings(
+    payload: OidcSettings,
+    _: UserInfo = Depends(require_admin),
+):
+    """
+    Persist OIDC settings to the JSON file.
+    These values override env vars at runtime without requiring a restart.
+    """
+    data = payload.model_dump()
+    _save_oidc_config(data)
+    return payload
+
+
 @router.get("/oidc-config", response_model=OIDCConfig)
 async def get_oidc_config(settings: Settings = Depends(get_settings)):
     """Return OIDC configuration for the frontend login page."""
@@ -486,6 +529,8 @@ async def get_oidc_config(settings: Settings = Depends(get_settings)):
     issuer = persisted.get("issuer", settings.oidc_issuer)
     client_id = persisted.get("client_id", settings.oidc_client_id)
     redirect_uri = persisted.get("redirect_uri", settings.oidc_redirect_uri)
+    response_type = persisted.get("response_type", settings.oidc_response_type)
+    scope = persisted.get("scope", settings.oidc_scope)
 
     if not enabled:
         return OIDCConfig(
@@ -516,6 +561,8 @@ async def get_oidc_config(settings: Settings = Depends(get_settings)):
         issuer=issuer,
         redirect_uri=redirect_uri,
         authorization_endpoint=authorization_endpoint,
+        response_type=response_type,
+        scope=scope,
     )
 
 
@@ -574,47 +621,6 @@ async def oidc_callback(
         token_type="bearer",
         expires_in=settings.access_token_expire_minutes * 60,
     )
-
-
-# ─── OIDC settings endpoints ──────────────────────────────────────────────────
-
-
-@router.get("/oidc-settings", response_model=OidcSettings)
-async def get_oidc_settings(
-    settings: Settings = Depends(get_settings),
-    _: UserInfo = Depends(get_current_user),
-):
-    """
-    Return the full OIDC settings (env defaults merged with persisted overrides).
-    Only accessible to authenticated users — used by the Settings page.
-    """
-    persisted = _load_oidc_config()
-    return OidcSettings(
-        enabled=persisted.get("enabled", settings.oidc_enabled),
-        issuer=persisted.get("issuer", settings.oidc_issuer),
-        client_id=persisted.get("client_id", settings.oidc_client_id),
-        client_secret=persisted.get("client_secret", settings.oidc_client_secret),
-        redirect_uri=persisted.get("redirect_uri", settings.oidc_redirect_uri),
-        post_logout_redirect_uri=persisted.get(
-            "post_logout_redirect_uri", settings.oidc_post_logout_redirect_uri
-        ),
-        response_type=persisted.get("response_type", settings.oidc_response_type),
-        scope=persisted.get("scope", settings.oidc_scope),
-    )
-
-
-@router.put("/oidc-settings", response_model=OidcSettings)
-async def save_oidc_settings(
-    payload: OidcSettings,
-    _: UserInfo = Depends(require_admin),
-):
-    """
-    Persist OIDC settings to the JSON file.
-    These values override env vars at runtime without requiring a restart.
-    """
-    data = payload.model_dump()
-    _save_oidc_config(data)
-    return payload
 
 
 # ─── Local users endpoints ────────────────────────────────────────────────────
