@@ -121,8 +121,8 @@ export class DashboardComponent implements OnInit {
     });
   }
 
-  startGC() {
-    this.registryService.startGarbageCollect().subscribe({
+  startGC(dryRun: boolean) {
+    this.registryService.startGarbageCollect(dryRun).subscribe({
       next: (s) => {
         this.gcStatus.set(s);
         this.gcPollTrigger$.next();

@@ -1,5 +1,5 @@
-import { inject, Injectable } from "@angular/core";
 import { HttpClient, HttpParams } from "@angular/common/http";
+import { inject, Injectable } from "@angular/core";
 import { Observable } from "rxjs";
 
 export interface PaginatedImages {
@@ -101,8 +101,12 @@ export class RegistryService {
     return this.http.get<{ status: string; url: string }>(`${this.BASE}/ping`);
   }
 
-  startGarbageCollect(): Observable<GCStatus> {
-    return this.http.post<GCStatus>(`${this.BASE}/gc`, {});
+  /**
+   * Triggers registry garbage collection.
+   * @param dryRun Preview what would be deleted without actually deleting
+   */
+  startGarbageCollect(dryRun: boolean): Observable<GCStatus> {
+    return this.http.post<GCStatus>(`${this.BASE}/gc?dry_run=${dryRun}`, {});
   }
 
   getGCStatus(): Observable<GCStatus> {
