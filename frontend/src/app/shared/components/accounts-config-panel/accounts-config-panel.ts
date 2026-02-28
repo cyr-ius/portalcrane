@@ -13,6 +13,8 @@ export interface LocalUser {
   id: string;
   username: string;
   is_admin: boolean;
+  can_pull_images: boolean;
+  can_push_images: boolean;
   created_at: string;
 }
 
@@ -36,6 +38,8 @@ export class AccountsConfigPanel implements OnInit {
   readonly newUsername = signal("");
   readonly newPassword = signal("");
   readonly newIsAdmin = signal(false);
+  readonly newCanPullImages = signal(false);
+  readonly newCanPushImages = signal(false);
   readonly showNewPassword = signal(false);
   readonly creating = signal(false);
   readonly createError = signal<string | null>(null);
@@ -45,6 +49,8 @@ export class AccountsConfigPanel implements OnInit {
   readonly editingId = signal<string | null>(null);
   readonly editPassword = signal("");
   readonly editIsAdmin = signal(false);
+  readonly editCanPullImages = signal(false);
+  readonly editCanPushImages = signal(false);
   readonly showEditPassword = signal(false);
   readonly saving = signal(false);
   readonly saveError = signal<string | null>(null);
@@ -83,6 +89,8 @@ export class AccountsConfigPanel implements OnInit {
     this.newUsername.set("");
     this.newPassword.set("");
     this.newIsAdmin.set(false);
+    this.newCanPullImages.set(false);
+    this.newCanPushImages.set(false);
     this.showNewPassword.set(false);
     this.createError.set(null);
     this.showCreateForm.set(true);
@@ -103,6 +111,8 @@ export class AccountsConfigPanel implements OnInit {
         username: this.newUsername().trim(),
         password: this.newPassword(),
         is_admin: this.newIsAdmin(),
+        can_pull_images: this.newIsAdmin() ? true : this.newCanPullImages(),
+        can_push_images: this.newIsAdmin() ? true : this.newCanPushImages(),
       })
       .subscribe({
         next: (user) => {
@@ -122,6 +132,8 @@ export class AccountsConfigPanel implements OnInit {
     this.editingId.set(user.id);
     this.editPassword.set("");
     this.editIsAdmin.set(user.is_admin);
+    this.editCanPullImages.set(user.can_pull_images);
+    this.editCanPushImages.set(user.can_push_images);
     this.showEditPassword.set(false);
     this.saveError.set(null);
   }
@@ -174,6 +186,22 @@ export class AccountsConfigPanel implements OnInit {
         this.deletingId.set(null);
       },
     });
+  }
+
+  onNewAdminChanged(value: boolean): void {
+    this.newIsAdmin.set(value);
+    if (value) {
+      this.newCanPullImages.set(true);
+      this.newCanPushImages.set(true);
+    }
+  }
+
+  onEditAdminChanged(value: boolean): void {
+    this.editIsAdmin.set(value);
+    if (value) {
+      this.editCanPullImages.set(true);
+      this.editCanPushImages.set(true);
+    }
   }
 
   /** Format ISO date string to a short readable form. */

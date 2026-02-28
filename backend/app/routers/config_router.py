@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from ..config import Settings, get_settings
-from .auth import UserInfo, get_current_user
+from .auth import UserInfo, require_admin
 
 router = APIRouter()
 
@@ -38,7 +38,7 @@ class OidcConfig(BaseModel):
 @router.get("/public", response_model=PublicConfig)
 async def get_public_config(
     settings: Settings = Depends(get_settings),
-    _: UserInfo = Depends(get_current_user),
+    _: UserInfo = Depends(require_admin),
 ):
     """
     Return the non-sensitive subset of the server configuration.
@@ -55,7 +55,7 @@ async def get_public_config(
 @router.get("/oidc", response_model=OidcConfig)
 async def get_oidc_config(
     settings: Settings = Depends(get_settings),
-    _: UserInfo = Depends(get_current_user),
+    _: UserInfo = Depends(require_admin),
 ):
     """
     Return the OIDC configuration relevant to the frontend.

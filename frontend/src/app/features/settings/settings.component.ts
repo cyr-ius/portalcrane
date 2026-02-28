@@ -26,6 +26,7 @@ import { AboutConfigPanel } from "../../shared/components/about-config-panel/abo
 import { AccountsConfigPanel } from "../../shared/components/accounts-config-panel/accounts-config-panel";
 import { OidcConfigPanel } from "../../shared/components/oidc-config-panel/oidc-config-panel";
 import { VulnConfigPanelComponent } from "../../shared/components/vuln-config-panel/vuln-config-panel.component";
+import { Router } from "@angular/router";
 
 /** Tabs available in the Settings page. */
 type SettingsTab =
@@ -91,6 +92,7 @@ export class SettingsComponent implements OnInit {
   private extRegSvc = inject(ExternalRegistryService);
   private registrySvc = inject(RegistryService);
   private systemService = inject(SystemService);
+  private router = inject(Router);
 
   readonly severities = TRIVY_SEVERITIES;
 
@@ -134,6 +136,10 @@ export class SettingsComponent implements OnInit {
   auditLogError = signal<string | null>(null);
 
   ngOnInit(): void {
+    if (!this.authService.currentUser()?.is_admin) {
+      this.router.navigate(["/dashboard"]);
+      return;
+    }
     if (!this.configService.serverConfig()) {
       this.configService.loadConfig().subscribe();
     }

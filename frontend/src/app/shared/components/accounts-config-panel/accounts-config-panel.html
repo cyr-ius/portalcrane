@@ -106,7 +106,7 @@
                 id="newIsAdmin"
                 role="switch"
                 [checked]="newIsAdmin()"
-                (change)="newIsAdmin.set($any($event.target).checked)"
+                (change)="onNewAdminChanged($any($event.target).checked)"
               />
               <label
                 class="form-check-label small fw-semibold"
@@ -114,6 +114,36 @@
               >
                 Admin
               </label>
+            </div>
+          </div>
+          <div class="col-12">
+            <div class="d-flex flex-wrap gap-3">
+              <div class="form-check form-switch">
+                <input
+                  class="form-check-input"
+                  type="checkbox"
+                  id="newCanPull"
+                  [checked]="newCanPullImages()"
+                  [disabled]="newIsAdmin()"
+                  (change)="newCanPullImages.set($any($event.target).checked)"
+                />
+                <label class="form-check-label small" for="newCanPull">
+                  Can pull images
+                </label>
+              </div>
+              <div class="form-check form-switch">
+                <input
+                  class="form-check-input"
+                  type="checkbox"
+                  id="newCanPush"
+                  [checked]="newCanPushImages()"
+                  [disabled]="newIsAdmin()"
+                  (change)="newCanPushImages.set($any($event.target).checked)"
+                />
+                <label class="form-check-label small" for="newCanPush">
+                  Can push images
+                </label>
+              </div>
             </div>
           </div>
         </div>
@@ -156,6 +186,7 @@
           <tr class="text-muted" style="font-size: 0.78rem">
             <th>Username</th>
             <th>Role</th>
+            <th>Permissions</th>
             <th>Created</th>
             <th class="text-end">Actions</th>
           </tr>
@@ -193,6 +224,19 @@
               </span>
               }
             </td>
+            <td>
+              <div class="d-flex flex-wrap gap-1">
+                @if (user.can_pull_images) {
+                <span class="badge bg-info-subtle text-info">Pull</span>
+                } @if (user.can_push_images) {
+                <span class="badge bg-success-subtle text-success">Push</span>
+                } @if (!user.can_pull_images && !user.can_push_images) {
+                <span class="badge bg-body-secondary text-muted"
+                  >No image access</span
+                >
+                }
+              </div>
+            </td>
             <td class="text-muted small">{{ formatDate(user.created_at) }}</td>
             <td class="text-end">
               @if (user.id !== 'env-admin') {
@@ -229,7 +273,7 @@
           <!-- Inline edit row -->
           @if (editingId() === user.id) {
           <tr class="table-active">
-            <td colspan="4">
+            <td colspan="5">
               <div class="p-2">
                 <div class="fw-semibold small mb-2">
                   <i class="bi bi-pencil-fill me-1 text-primary"></i>
@@ -280,7 +324,7 @@
                         [id]="'editAdmin_' + user.id"
                         role="switch"
                         [checked]="editIsAdmin()"
-                        (change)="editIsAdmin.set($any($event.target).checked)"
+                        (change)="onEditAdminChanged($any($event.target).checked)"
                       />
                       <label
                         class="form-check-label small"
@@ -290,9 +334,42 @@
                       </label>
                     </div>
                   </div>
-
+                  <div class="col-md-4">
+                    <div class="d-flex flex-column gap-1">
+                      <div class="form-check form-switch">
+                        <input
+                          class="form-check-input"
+                          type="checkbox"
+                          [id]="'editPull_' + user.id"
+                          [checked]="editCanPullImages()"
+                          [disabled]="editIsAdmin()"
+                          (change)="editCanPullImages.set($any($event.target).checked)"
+                        />
+                        <label
+                          class="form-check-label small"
+                          [for]="'editPull_' + user.id"
+                          >Can pull images</label
+                        >
+                      </div>
+                      <div class="form-check form-switch">
+                        <input
+                          class="form-check-input"
+                          type="checkbox"
+                          [id]="'editPush_' + user.id"
+                          [checked]="editCanPushImages()"
+                          [disabled]="editIsAdmin()"
+                          (change)="editCanPushImages.set($any($event.target).checked)"
+                        />
+                        <label
+                          class="form-check-label small"
+                          [for]="'editPush_' + user.id"
+                          >Can push images</label
+                        >
+                      </div>
+                    </div>
+                  </div>
                   <!-- Buttons -->
-                  <div class="col-md-4 d-flex gap-2 justify-content-end">
+                  <div class="col-md-12 d-flex gap-2 justify-content-end">
                     <button
                       class="btn btn-primary btn-sm d-flex align-items-center gap-1"
                       (click)="saveEdit(user.id)"

@@ -12,6 +12,8 @@ export interface LoginResponse {
 export interface UserInfo {
   username: string;
   is_admin: boolean;
+  can_pull_images: boolean;
+  can_push_images: boolean;
 }
 
 export interface OidcConfig {
