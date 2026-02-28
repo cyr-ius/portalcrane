@@ -15,13 +15,27 @@
         <div>
           <div class="small text-muted">Updated at</div>
           <div class="fw-semibold">
-            {{ trivyDb()!.last_update ?? "Unknown" }}
+            {{ formatUtcDate(trivyDb()!.last_update) }}
           </div>
         </div>
         <div>
           <div class="small text-muted">Next update</div>
           <div class="fw-semibold">
-            {{ trivyDb()!.next_update ?? "Unknown" }}
+            {{ formatUtcDate(trivyDb()!.next_update) }}
+          </div>
+        </div>
+        <div>
+          <div class="small text-muted">Status</div>
+          <div>
+            @if (trivyDb()!.up_to_date) {
+              <span class="badge bg-success-subtle text-success"
+                >Up to date</span
+              >
+            } @else {
+              <span class="badge bg-warning-subtle text-warning"
+                >Refresh recommended</span
+              >
+            }
           </div>
         </div>
         <div class="ms-auto">
@@ -42,6 +56,11 @@
     } @else {
       <div class="d-flex justify-content-center py-3">
         <span class="spinner-border text-primary spinner-border-sm"></span>
+      </div>
+    }
+    @if (trivyDb()?.error) {
+      <div class="alert alert-warning py-2 small mt-3 mb-0">
+        {{ trivyDb()!.error }}
       </div>
     }
   </div>
