@@ -97,14 +97,4 @@ export class SystemService {
       this.http.get<ScanResult>(`${this.BASE}/trivy/scan?${params.toString()}`),
     );
   }
-
-  /**
-   * Triggers registry garbage collection.
-   * @param dryRun Preview what would be deleted without actually deleting
-   */
-  async runGc(dryRun: boolean = false): Promise<GcResult> {
-    return firstValueFrom(
-      this.http.post<GcResult>(`${this.BASE}/gc?dry_run=${dryRun}`, {}),
-    );
-  }
 }
