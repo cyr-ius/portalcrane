@@ -597,6 +597,96 @@ async def delete_job(
     return {"message": "Job deleted"}
 
 
+@router.get("/search/dockerhub")
+async def search_dockerhub(
+    q: str,
+    page: int = 1,
+    settings: Settings = Depends(get_settings),
+    _: UserInfo = Depends(get_current_user),
+):
+    """
+    Search Docker Hub for images matching the query string.
+
+    Query params:
+      q    -- search term (e.g. "nginx", "postgres")
+      page -- pagination index, 1-based (default: 1)
+
+    Returns:
+      { results: [...], count: <total> }
+    """
+    url = (
+        f"{settings.dockerhub_api_url}/search/repositories/"
+        f"?query={q}&page={page}&page_size=10"
+    )
+    async with httpx.AsyncClient(
+        proxy=settings.httpx_proxy, timeout=settings.httpx_timeout
+    ) as client:
+        resp = await client.get(url)
+        resp.raise_for_status()
+        data = resp.json()
+
+    results = [
+        {
+            "name": r.get("repo_name", ""),
+            "description": r.get("short_description", ""),
+            "star_count": r.get("star_count", 0),
+            "pull_count": r.get("pull_count", 0),
+            "is_official": r.get("is_official", False),
+            "is_automated": r.get("is_automated", False),
+        }
+        for r in data.get("results", [])
+    ]
+    return {"results": results, "count": data.get("count", 0)}
+
+
+@router.get("/dockerhub/tags/{image:path}")
+async def get_dockerhub_tags(
+    image: str,
+    settings: Settings = Depends(get_settings),
+    _: UserInfo = Depends(get_current_user),
+):
+    """
+    Return available tags for a Docker Hub image, sorted by last update date.
+
+    Path param:
+      image -- image name, e.g. "nginx" or "library/nginx" or "myorg/myimage"
+
+    Returns:
+      { image: "<image>", tags: ["latest", "1.25", ...] }
+
+    Falls back to ["latest"] on any Hub API error (image may not exist yet,
+    or Hub may be temporarily unavailable).
+    """
+    # Official images are stored under the "library" namespace on Docker Hub
+    if "/" not in image:
+        hub_image = f"library/{image}"
+    else:
+        hub_image = image
+
+    url = (
+        f"{settings.dockerhub_api_url}/repositories/{hub_image}/tags"
+        f"?page_size=50&ordering=last_updated"
+    )
+
+    try:
+        async with httpx.AsyncClient(
+            proxy=settings.httpx_proxy, timeout=settings.httpx_timeout
+        ) as client:
+            resp = await client.get(url)
+            if resp.status_code == 404:
+                # Image not found on Docker Hub — return empty tag list
+                return {"image": image, "tags": []}
+            resp.raise_for_status()
+            data = resp.json()
+
+        tags = [t["name"] for t in data.get("results", []) if t.get("name")]
+    except Exception:
+        # Graceful degradation: always give the user something to work with
+        tags = ["latest"]
+
+    return {"image": image, "tags": tags}
+
+
 @router.get("/orphan-oci", response_model=OrphanOCIResult)
 async def list_orphan_oci(
     settings: Settings = Depends(get_settings),
@@ -647,57 +737,3 @@ async def purge_orphan_oci(
                 purged.append(entry.name)
 
     return {"message": f"Purged {len(purged)} orphan OCI directories", "purged": purged}
-
-
-@router.get("/search-dockerhub")
-async def search_dockerhub(
-    q: str,
-    settings: Settings = Depends(get_settings),
-    _: UserInfo = Depends(get_current_user),
-):
-    """Search Docker Hub images via the Hub API."""
-    async with httpx.AsyncClient(
-        proxy=settings.httpx_proxy, timeout=settings.httpx_timeout
-    ) as client:
-        response = await client.get(
-            f"{settings.dockerhub_api_url}/search/repositories/",
-            params={"query": q, "page_size": 25},
-        )
-        response.raise_for_status()
-        data = response.json()
-
-    results = [
-        DockerHubSearchResult(
-            name=r.get("repo_name", ""),
-            description=r.get("short_description", ""),
-            star_count=r.get("star_count", 0),
-            pull_count=r.get("pull_count", 0),
-            is_official=r.get("is_official", False),
-            is_automated=r.get("is_automated", False),
-        )
-        for r in data.get("results", [])
-    ]
-    return {"results": results, "count": len(results)}
-
-
-@router.get("/dockerhub-tags/{image:path}")
-async def get_dockerhub_tags(
-    image: str,
-    settings: Settings = Depends(get_settings),
-    _: UserInfo = Depends(get_current_user),
-):
-    """Fetch available tags for a Docker Hub image via the Hub API."""
-    async with httpx.AsyncClient(
-        proxy=settings.httpx_proxy, timeout=settings.httpx_timeout
-    ) as client:
-        response = await client.get(
-            f"{settings.dockerhub_api_url}/repositories/{image}/tags",
-            params={"page_size": 50, "ordering": "last_updated"},
-        )
-        if response.status_code == 404:
-            return {"tags": []}
-        response.raise_for_status()
-        data = response.json()
-
-    tags = [r["name"] for r in data.get("results", []) if r.get("name")]
-    return {"tags": tags}
