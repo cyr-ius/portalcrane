@@ -237,11 +237,7 @@ export class StagingComponent implements OnInit {
   pushPreview(job: StagingJob): string {
     const mode = this.getPushMode(job);
     const folder = this.getPushTarget(job, "folder").trim();
-    const img = (
-      this.getPushTarget(job, "img") ||
-      job.image.split("/").pop() ||
-      job.image
-    ).trim();
+    const img = (this.getPushTarget(job, "img") || job.image).trim();
     const tag = (this.getPushTarget(job, "tag") || job.tag).trim();
     const path = folder ? `${folder}/${img}` : img;
 
@@ -303,6 +299,41 @@ export class StagingComponent implements OnInit {
   }
 
   // ── Template helpers ───────────────────────────────────────────────────────
+
+  /**
+   * Return the display progress for a job.
+   * scan_clean / scan_skipped are terminal "ready" states — force 100 %
+   * regardless of what the backend reported (which may be 80 % due to the
+   * pipeline emitting progress before the final status update).
+   */
+  displayProgress(job: StagingJob): number {
+    if (
+      [
+        "scan_clean",
+        "scan_skipped",
+        "done",
+        "scan_vulnerable",
+        "scan_infected",
+        "failed",
+      ].includes(job.status)
+    ) {
+      return 100;
+    }
+    return job.progress;
+  }
+
+  /**
+   * Allow re-pushing a completed job by resetting its local status to
+   * scan_clean so the push form becomes visible again.
+   * This is a client-side only change — the backend job stays at "done".
+   */
+  allowRePush(job: StagingJob): void {
+    this.jobs.update((jobs) =>
+      jobs.map((j) =>
+        j.job_id === job.job_id ? { ...j, status: "scan_clean" as const } : j,
+      ),
+    );
+  }
 
   getStatusBadgeClass(status: string): string {
     const map: Record<string, string> = {
