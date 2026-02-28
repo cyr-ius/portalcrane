@@ -17,9 +17,11 @@ export class OidcCallbackComponent implements OnInit {
   ngOnInit() {
     const code = this.route.snapshot.queryParamMap.get("code");
     const errorParam = this.route.snapshot.queryParamMap.get("error");
+    const errorDesc =
+      this.route.snapshot.queryParamMap.get("error_description");
 
     if (errorParam) {
-      this.error.set(errorParam);
+      this.error.set(errorDesc || errorParam);
       return;
     }
 

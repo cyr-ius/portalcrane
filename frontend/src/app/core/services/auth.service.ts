@@ -22,6 +22,8 @@ export interface OidcConfig {
   issuer: string;
   redirect_uri: string;
   authorization_endpoint: string;
+  response_type: string;
+  scope: string;
 }
 
 export interface DockerHubAccountSettings {
