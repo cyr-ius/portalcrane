@@ -13,6 +13,7 @@ import { ThemeService } from "../../../core/services/theme.service";
   styleUrl: "./login.component.css",
 })
 export class LoginComponent implements OnInit {
+  private readonly OIDC_STATE_KEY = "pc_oidc_state";
   private auth = inject(AuthService);
   private router = inject(Router);
   themeService = inject(ThemeService);
@@ -58,11 +59,15 @@ export class LoginComponent implements OnInit {
     const config = this.oidcConfig();
     if (!config?.authorization_endpoint) return;
 
+    const state = crypto.randomUUID();
+    sessionStorage.setItem(this.OIDC_STATE_KEY, state);
+
     const params = new URLSearchParams({
       response_type: config.response_type,
       client_id: config.client_id,
       redirect_uri: config.redirect_uri,
       scope: config.scope,
+      state,
     });
 
     window.location.href = `${config.authorization_endpoint}?${params}`;
