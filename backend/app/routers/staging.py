@@ -270,7 +270,7 @@ async def run_pull_pipeline(
             _jobs[job_id]["status"] = JobStatus.SCAN_SKIPPED
             _jobs[job_id]["message"] = "Vulnerability scan disabled. Ready to push."
 
-        _jobs[job_id]["progress"] = 80
+        _jobs[job_id]["progress"] = 100
 
     except Exception as exc:
         # Cleanup the OCI directory on failure
@@ -478,7 +478,7 @@ async def push_image(
             detail=str(exc),
         )
 
-    target_image = request.target_image or job["image"].split("/")[-1]
+    target_image = request.target_image or job["image"]
     target_tag = request.target_tag or job["tag"]
 
     is_external = bool(request.external_registry_id or request.external_registry_host)

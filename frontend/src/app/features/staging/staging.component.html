@@ -237,6 +237,10 @@
                   </div>
 
                   <!-- Progress bar -->
+                  <!-- scan_clean / scan_skipped = 100% green: image is ready to push -->
+                  <!-- done = 100% green: push completed -->
+                  <!-- scan_vulnerable / scan_infected / failed = 100% red -->
+                  <!-- active statuses = animated striped -->
                   <div class="progress mb-2" style="height: 4px">
                     <div
                       class="progress-bar"
@@ -246,7 +250,9 @@
                         )
                       "
                       [class.bg-success]="
-                        ['done', 'scan_clean'].includes(job.status)
+                        ['scan_clean', 'scan_skipped', 'done'].includes(
+                          job.status
+                        )
                       "
                       [class.progress-bar-striped]="
                         [
@@ -266,7 +272,7 @@
                           'pushing',
                         ].includes(job.status)
                       "
-                      [style.width.%]="job.progress"
+                      [style.width.%]="displayProgress(job)"
                     ></div>
                   </div>
 
@@ -289,221 +295,242 @@
                     </div>
                   }
 
-                  <!-- Push panel — shown only when job is done or scan_clean -->
-                  @if (job.status === "done" || job.status === "scan_clean") {
+                  <!-- ── Push panel ──────────────────────────────────────── -->
+                  <!-- Visible for: scan_clean, scan_skipped (ready to push)  -->
+                  <!--              done (push completed — show summary)       -->
+                  @if (
+                    ["scan_clean", "scan_skipped", "done"].includes(job.status)
+                  ) {
                     <div class="mt-2 pt-2 border-top">
-                      <!-- Destination toggle -->
-                      <div class="d-flex gap-2 mb-2">
-                        <button
-                          class="btn btn-sm flex-fill"
-                          [class.btn-primary]="getPushMode(job) === 'local'"
-                          [class.btn-outline-secondary]="
-                            getPushMode(job) !== 'local'
-                          "
-                          (click)="setPushMode(job, 'local')"
-                          type="button"
-                        >
-                          <i class="bi bi-hdd-network me-1"></i>Local
-                        </button>
-                        <button
-                          class="btn btn-sm flex-fill"
-                          [class.btn-primary]="getPushMode(job) === 'external'"
-                          [class.btn-outline-secondary]="
-                            getPushMode(job) !== 'external'
-                          "
-                          (click)="setPushMode(job, 'external')"
-                          type="button"
-                        >
-                          <i class="bi bi-globe me-1"></i>External
-                        </button>
-                      </div>
-
-                      <!-- External registry fields -->
-                      @if (getPushMode(job) === "external") {
+                      @if (job.status === "done") {
+                        <!-- ── Push completed summary ─────────────────────── -->
                         <div
-                          class="mb-2 p-2 rounded border border-primary-subtle bg-primary-subtle bg-opacity-10"
+                          class="d-flex align-items-center justify-content-between gap-2"
                         >
-                          <!-- Saved registry selector -->
-                          @if (externalRegistries().length > 0) {
-                            <div class="mb-2">
-                              <label class="form-label small fw-semibold"
-                                >Saved registry</label
-                              >
-                              <select
-                                class="form-select form-select-sm"
-                                [value]="getExtRegistryId(job)"
-                                (change)="
-                                  setExtRegistryId(
-                                    job,
-                                    $any($event.target).value
-                                  )
-                                "
-                              >
-                                <option value="">— Enter manually —</option>
-                                @for (
-                                  reg of externalRegistries();
-                                  track reg.id
-                                ) {
-                                  <option [value]="reg.id">
-                                    {{ reg.name }} ({{ reg.host }})
-                                  </option>
-                                }
-                              </select>
-                            </div>
-                          }
+                          <div class="text-success small">
+                            <i class="bi bi-check-circle-fill me-1"></i>
+                            Pushed as
+                            <code class="text-success"
+                              >{{ job.target_image }}:{{ job.target_tag }}</code
+                            >
+                          </div>
+                          <!-- Re-push button: resets job status client-side to scan_clean -->
+                          <button
+                            class="btn btn-sm btn-outline-secondary text-nowrap"
+                            (click)="allowRePush(job)"
+                            type="button"
+                            title="Push again to a different destination"
+                          >
+                            <i class="bi bi-arrow-repeat me-1"></i>Re-push
+                          </button>
+                        </div>
+                      } @else {
+                        <!-- ── Push form (scan_clean / scan_skipped) ──────── -->
 
-                          <!-- Ad-hoc fields shown when no saved registry is selected -->
-                          @if (!getExtRegistryId(job)) {
-                            <div class="row g-2">
-                              <div class="col-12">
-                                <input
-                                  type="text"
-                                  class="form-control form-control-sm"
-                                  placeholder="Registry host (e.g. registry.mycompany.com)"
-                                  [value]="getPushTarget(job, 'ext_host')"
-                                  (input)="
-                                    updatePushTarget(
+                        <!-- Destination toggle -->
+                        <div class="d-flex gap-2 mb-2">
+                          <button
+                            class="btn btn-sm flex-fill"
+                            [class.btn-primary]="getPushMode(job) === 'local'"
+                            [class.btn-outline-secondary]="
+                              getPushMode(job) !== 'local'
+                            "
+                            (click)="setPushMode(job, 'local')"
+                            type="button"
+                          >
+                            <i class="bi bi-hdd-network me-1"></i>Local
+                          </button>
+                          <button
+                            class="btn btn-sm flex-fill"
+                            [class.btn-primary]="
+                              getPushMode(job) === 'external'
+                            "
+                            [class.btn-outline-secondary]="
+                              getPushMode(job) !== 'external'
+                            "
+                            (click)="setPushMode(job, 'external')"
+                            type="button"
+                          >
+                            <i class="bi bi-globe me-1"></i>External
+                          </button>
+                        </div>
+
+                        <!-- External registry fields -->
+                        @if (getPushMode(job) === "external") {
+                          <div
+                            class="mb-2 p-2 rounded border border-primary-subtle bg-primary-subtle bg-opacity-10"
+                          >
+                            <!-- Saved registry selector -->
+                            @if (externalRegistries().length > 0) {
+                              <div class="mb-2">
+                                <label class="form-label small fw-semibold"
+                                  >Saved registry</label
+                                >
+                                <select
+                                  class="form-select form-select-sm"
+                                  [value]="getExtRegistryId(job)"
+                                  (change)="
+                                    setExtRegistryId(
                                       job,
-                                      'ext_host',
                                       $any($event.target).value
                                     )
                                   "
-                                />
+                                >
+                                  <option value="">— Enter manually —</option>
+                                  @for (
+                                    reg of externalRegistries();
+                                    track reg.id
+                                  ) {
+                                    <option [value]="reg.id">
+                                      {{ reg.name }} ({{ reg.host }})
+                                    </option>
+                                  }
+                                </select>
                               </div>
-                              <div class="col-6">
-                                <input
-                                  type="text"
-                                  class="form-control form-control-sm"
-                                  placeholder="Username (optional)"
-                                  [value]="getPushTarget(job, 'ext_user')"
-                                  (input)="
-                                    updatePushTarget(
-                                      job,
-                                      'ext_user',
-                                      $any($event.target).value
-                                    )
-                                  "
-                                />
+                            }
+
+                            <!-- Ad-hoc fields shown when no saved registry is selected -->
+                            @if (!getExtRegistryId(job)) {
+                              <div class="row g-2">
+                                <div class="col-12">
+                                  <input
+                                    type="text"
+                                    class="form-control form-control-sm"
+                                    placeholder="Registry host (e.g. registry.mycompany.com)"
+                                    [value]="getPushTarget(job, 'ext_host')"
+                                    (input)="
+                                      updatePushTarget(
+                                        job,
+                                        'ext_host',
+                                        $any($event.target).value
+                                      )
+                                    "
+                                  />
+                                </div>
+                                <div class="col-6">
+                                  <input
+                                    type="text"
+                                    class="form-control form-control-sm"
+                                    placeholder="Username (optional)"
+                                    [value]="getPushTarget(job, 'ext_user')"
+                                    (input)="
+                                      updatePushTarget(
+                                        job,
+                                        'ext_user',
+                                        $any($event.target).value
+                                      )
+                                    "
+                                  />
+                                </div>
+                                <div class="col-6">
+                                  <input
+                                    type="password"
+                                    class="form-control form-control-sm"
+                                    placeholder="Password (optional)"
+                                    [value]="getPushTarget(job, 'ext_pass')"
+                                    (input)="
+                                      updatePushTarget(
+                                        job,
+                                        'ext_pass',
+                                        $any($event.target).value
+                                      )
+                                    "
+                                  />
+                                </div>
                               </div>
-                              <div class="col-6">
-                                <input
-                                  type="password"
-                                  class="form-control form-control-sm"
-                                  placeholder="Password (optional)"
-                                  [value]="getPushTarget(job, 'ext_pass')"
-                                  (input)="
-                                    updatePushTarget(
-                                      job,
-                                      'ext_pass',
-                                      $any($event.target).value
-                                    )
-                                  "
-                                />
-                              </div>
-                            </div>
-                          }
+                            }
+                          </div>
+                        }
+
+                        <!-- Folder / image name / tag fields -->
+                        <div class="row g-2 mb-2 align-items-end">
+                          <div class="col">
+                            <label
+                              class="form-label small text-muted"
+                              style="font-size: 0.7rem"
+                            >
+                              Folder <span class="opacity-50">(optional)</span>
+                            </label>
+                            <input
+                              type="text"
+                              class="form-control form-control-sm font-monospace"
+                              placeholder="e.g. infra"
+                              [value]="getPushTarget(job, 'folder')"
+                              (input)="
+                                updatePushTarget(
+                                  job,
+                                  'folder',
+                                  $any($event.target).value
+                                )
+                              "
+                            />
+                          </div>
+                          <div class="col">
+                            <label
+                              class="form-label small text-muted"
+                              style="font-size: 0.7rem"
+                              >Image name</label
+                            >
+                            <input
+                              type="text"
+                              class="form-control form-control-sm font-monospace"
+                              [placeholder]="job.image"
+                              [value]="getPushTarget(job, 'img')"
+                              (input)="
+                                updatePushTarget(
+                                  job,
+                                  'img',
+                                  $any($event.target).value
+                                )
+                              "
+                            />
+                          </div>
+                          <div class="col-auto" style="min-width: 90px">
+                            <label
+                              class="form-label small text-muted"
+                              style="font-size: 0.7rem"
+                              >Tag</label
+                            >
+                            <input
+                              type="text"
+                              class="form-control form-control-sm font-monospace"
+                              [placeholder]="job.tag"
+                              [value]="getPushTarget(job, 'tag')"
+                              (input)="
+                                updatePushTarget(
+                                  job,
+                                  'tag',
+                                  $any($event.target).value
+                                )
+                              "
+                            />
+                          </div>
+                        </div>
+
+                        <!-- Preview + push button -->
+                        <div
+                          class="d-flex align-items-center justify-content-between gap-2"
+                        >
+                          <code class="small text-muted text-truncate">{{
+                            pushPreview(job)
+                          }}</code>
+                          <button
+                            class="btn btn-sm btn-success text-nowrap"
+                            (click)="pushImage(job)"
+                            [disabled]="pushing() === job.job_id"
+                            type="button"
+                          >
+                            @if (pushing() === job.job_id) {
+                              <span
+                                class="spinner-border spinner-border-sm me-1"
+                              ></span>
+                            } @else {
+                              <i class="bi bi-upload me-1"></i>
+                            }
+                            Push
+                          </button>
                         </div>
                       }
-
-                      <!-- Folder / image name / tag fields -->
-                      <div class="row g-2 mb-2 align-items-end">
-                        <div class="col">
-                          <label
-                            class="form-label small text-muted"
-                            style="font-size: 0.7rem"
-                          >
-                            Folder <span class="opacity-50">(optional)</span>
-                          </label>
-                          <input
-                            type="text"
-                            class="form-control form-control-sm font-monospace"
-                            placeholder="e.g. infra"
-                            [value]="getPushTarget(job, 'folder')"
-                            (input)="
-                              updatePushTarget(
-                                job,
-                                'folder',
-                                $any($event.target).value
-                              )
-                            "
-                          />
-                        </div>
-                        <div class="col">
-                          <label
-                            class="form-label small text-muted"
-                            style="font-size: 0.7rem"
-                            >Image name</label
-                          >
-                          <input
-                            type="text"
-                            class="form-control form-control-sm font-monospace"
-                            [placeholder]="
-                              job.image.split('/').pop() || job.image
-                            "
-                            [value]="getPushTarget(job, 'img')"
-                            (input)="
-                              updatePushTarget(
-                                job,
-                                'img',
-                                $any($event.target).value
-                              )
-                            "
-                          />
-                        </div>
-                        <div class="col-auto" style="min-width: 90px">
-                          <label
-                            class="form-label small text-muted"
-                            style="font-size: 0.7rem"
-                            >Tag</label
-                          >
-                          <input
-                            type="text"
-                            class="form-control form-control-sm font-monospace"
-                            [placeholder]="job.tag"
-                            [value]="getPushTarget(job, 'tag')"
-                            (input)="
-                              updatePushTarget(
-                                job,
-                                'tag',
-                                $any($event.target).value
-                              )
-                            "
-                          />
-                        </div>
-                      </div>
-
-                      <!-- Preview + push button -->
-                      <div
-                        class="d-flex align-items-center justify-content-between gap-2"
-                      >
-                        <code class="small text-muted text-truncate">{{
-                          pushPreview(job)
-                        }}</code>
-                        <button
-                          class="btn btn-sm btn-success text-nowrap"
-                          (click)="pushImage(job)"
-                          [disabled]="pushing() === job.job_id"
-                          type="button"
-                        >
-                          @if (pushing() === job.job_id) {
-                            <span
-                              class="spinner-border spinner-border-sm me-1"
-                            ></span>
-                          } @else {
-                            <i class="bi bi-upload me-1"></i>
-                          }
-                          Push
-                        </button>
-                      </div>
-                    </div>
-                  }
-
-                  <!-- Push confirmation message (when done after push) -->
-                  @if (job.status === "done" && job.target_image) {
-                    <div class="mt-2 small text-success">
-                      <i class="bi bi-check-circle me-1"></i>
-                      Pushed as
-                      <code>{{ job.target_image }}:{{ job.target_tag }}</code>
                     </div>
                   }
 
