@@ -64,13 +64,6 @@ export const routes: Routes = [
             (m) => m.SettingsComponent,
           ),
       },
-      {
-        path: "system",
-        loadComponent: () =>
-          import(
-            "./shared/components/security-dashboard/security-dashboard.component"
-          ).then((m) => m.SecurityDashboardComponent),
-      },
     ],
   },
   {
