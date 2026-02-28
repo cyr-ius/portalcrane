@@ -613,6 +613,64 @@
     <div class="card border-0 mb-3">
       <div class="card-header border-0">
         <h6 class="fw-semibold mb-0">
+          <i class="bi bi-box-seam me-2"></i>Docker Hub Account
+        </h6>
+      </div>
+      <div class="card-body">
+        <p class="text-muted small mb-3">
+          Used by <strong>Search Docker Hub</strong> and staging pulls for this
+          user account.
+        </p>
+        <div class="row g-2 mb-3">
+          <div class="col-md-6">
+            <label class="form-label small fw-semibold"
+              >Docker Hub username</label
+            >
+            <input
+              type="text"
+              class="form-control form-control-sm"
+              [value]="dockerHubUsername()"
+              (input)="dockerHubUsername.set($any($event.target).value)"
+            />
+          </div>
+          <div class="col-md-6">
+            <label class="form-label small fw-semibold"
+              >Password / access token</label
+            >
+            <input
+              type="password"
+              class="form-control form-control-sm"
+              [value]="dockerHubPassword()"
+              (input)="dockerHubPassword.set($any($event.target).value)"
+            />
+            @if (dockerHubHasPassword()) {
+              <div class="text-muted mt-1" style="font-size: 0.72rem">
+                <i class="bi bi-check-circle me-1"></i>Credentials already
+                saved. Enter a new password/token to update them.
+              </div>
+            }
+          </div>
+        </div>
+        @if (dockerHubMessage()) {
+          <div class="alert alert-info py-2 small mb-3">
+            {{ dockerHubMessage() }}
+          </div>
+        }
+        <button
+          class="btn btn-primary btn-sm"
+          (click)="saveDockerHubAccount()"
+          [disabled]="savingDockerHub()"
+        >
+          @if (savingDockerHub()) {
+            <span class="spinner-border spinner-border-sm me-1"></span>
+          }
+          Save Docker Hub account
+        </button>
+      </div>
+    </div>
+    <div class="card border-0 mb-3">
+      <div class="card-header border-0">
+        <h6 class="fw-semibold mb-0">
           <i class="bi bi-palette me-2"></i>Color Theme
         </h6>
       </div>
