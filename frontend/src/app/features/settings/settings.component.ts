@@ -28,7 +28,7 @@ type SettingsTab =
   | "appearance"
   | "registries"
   | "sync"
-  | "advanced"
+  | "vulnerabilities"
   | "account";
 
 const SEVERITY_STYLE: Record<

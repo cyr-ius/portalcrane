@@ -162,6 +162,32 @@
               }
             </div>
 
+            <!-- Active scan config summary (read-only, driven by Settings) -->
+            <div class="scan-summary d-flex gap-2 flex-wrap mb-3">
+              <span
+                class="badge"
+                [class.bg-success-subtle]="configService.vulnEnabled()"
+                [class.text-success]="configService.vulnEnabled()"
+                [class.bg-secondary-subtle]="!configService.vulnEnabled()"
+                [class.text-secondary]="!configService.vulnEnabled()"
+              >
+                <i class="bi bi-bug me-1"></i>
+                Trivy {{ configService.vulnEnabled() ? "ON" : "OFF" }}
+                @if (configService.vulnEnabled()) {
+                  <span class="ms-1 opacity-75"
+                    >({{ configService.vulnSeveritiesString() }})</span
+                  >
+                }
+              </span>
+              <a
+                routerLink="/settings"
+                class="badge bg-body-secondary text-muted text-decoration-none"
+                title="Configure scans in Settings"
+              >
+                <i class="bi bi-gear me-1"></i>Configure
+              </a>
+            </div>
+
             <!-- Pull button -->
             <div class="col-auto">
               <button
@@ -216,31 +242,49 @@
                         <span class="fw-semibold font-monospace small">
                           {{ job.image }}:{{ job.tag }}
                         </span>
-                        <span [class]="getStatusBadgeClass(job.status)">
-                          {{ job.status }}
-                        </span>
                       </div>
-                      @if (job.message) {
-                        <div class="text-muted small mt-1">
-                          {{ job.message }}
-                        </div>
-                      }
                     </div>
-                    <button
-                      class="btn btn-sm btn-outline-secondary border-0"
-                      (click)="deleteJob(job.job_id)"
-                      title="Remove job"
-                      type="button"
-                    >
-                      <i class="bi bi-trash"></i>
-                    </button>
+                    <div class="d-flex align-items-center gap-2">
+                      <span [class]="getStatusBadgeClass(job.status)">{{
+                        job.status
+                      }}</span>
+                      <button
+                        class="btn btn-sm btn-outline-danger border-0 p-0 px-1"
+                        (click)="deleteJob(job.job_id)"
+                      >
+                        <i class="bi bi-x-lg"></i>
+                      </button>
+                    </div>
+                  </div>
+
+                  <!-- Scan badges applied on this job (advanced mode only) -->
+                  <div class="d-flex gap-1 mb-2 flex-wrap">
+                    @if (job.vuln_scan_enabled_override !== null) {
+                      <span
+                        class="badge"
+                        [class.bg-success-subtle]="
+                          job.vuln_scan_enabled_override
+                        "
+                        [class.text-success]="job.vuln_scan_enabled_override"
+                        [class.bg-secondary-subtle]="
+                          !job.vuln_scan_enabled_override
+                        "
+                        [class.text-secondary]="!job.vuln_scan_enabled_override"
+                        style="font-size: 0.65rem"
+                      >
+                        <i class="bi bi-bug me-1"></i>Trivy
+                        {{ job.vuln_scan_enabled_override ? "ON" : "OFF" }}
+                        @if (
+                          job.vuln_scan_enabled_override &&
+                          job.vuln_severities_override
+                        ) {
+                          ({{ job.vuln_severities_override }})
+                        }
+                      </span>
+                    }
                   </div>
 
                   <!-- Progress bar -->
-                  <!-- scan_clean / scan_skipped = 100% green: image is ready to push -->
-                  <!-- done = 100% green: push completed -->
-                  <!-- scan_vulnerable / scan_infected / failed = 100% red -->
-                  <!-- active statuses = animated striped -->
                   <div class="progress mb-2" style="height: 4px">
                     <div
                       class="progress-bar"
@@ -276,6 +320,10 @@
                     ></div>
                   </div>
 
+                  @if (job.message) {
+                    <div class="small text-muted">{{ job.message }}</div>
+                  }
+
                   <!-- CVE summary (when scan found vulnerabilities) -->
                   @if (job.vuln_result && job.vuln_result.counts) {
                     <div class="d-flex gap-1 flex-wrap mb-2">
@@ -283,12 +331,58 @@
                         sev of ["CRITICAL", "HIGH", "MEDIUM", "LOW", "UNKNOWN"];
                         track sev
                       ) {
-                        @if (getVulnCount(job, sev) > 0) {
+                        @if (
+                          getVulnCount(job, sev) > 0 ||
+                          job.vuln_result.severities.includes(sev)
+                        ) {
                           <span
-                            [class]="getSeverityBadge(sev)"
-                            style="font-size: 0.7rem"
+                            class="badge"
+                            [class.bg-danger]="
+                              sev === 'CRITICAL' && getVulnCount(job, sev) > 0
+                            "
+                            [class.text-white]="
+                              sev === 'CRITICAL' && getVulnCount(job, sev) > 0
+                            "
+                            [class.bg-danger-subtle]="
+                              sev === 'CRITICAL' && getVulnCount(job, sev) === 0
+                            "
+                            [class.text-danger]="
+                              sev === 'CRITICAL' && getVulnCount(job, sev) === 0
+                            "
+                            [class.bg-warning]="
+                              sev === 'HIGH' && getVulnCount(job, sev) > 0
+                            "
+                            [class.bg-warning-subtle]="
+                              sev === 'HIGH' && getVulnCount(job, sev) === 0
+                            "
+                            [class.text-warning]="
+                              sev === 'HIGH' && getVulnCount(job, sev) === 0
+                            "
+                            [class.bg-success-subtle]="
+                              ['MEDIUM', 'LOW', 'UNKNOWN'].includes(sev) &&
+                              getVulnCount(job, sev) === 0
+                            "
+                            [class.text-success]="
+                              ['MEDIUM', 'LOW', 'UNKNOWN'].includes(sev) &&
+                              getVulnCount(job, sev) === 0
+                            "
+                            [class.bg-secondary-subtle]="
+                              ['MEDIUM', 'LOW', 'UNKNOWN'].includes(sev) &&
+                              getVulnCount(job, sev) > 0
+                            "
+                            [class.text-secondary]="
+                              ['MEDIUM', 'LOW', 'UNKNOWN'].includes(sev) &&
+                              getVulnCount(job, sev) > 0
+                            "
+                            style="font-size: 0.65rem"
+                            [title]="
+                              sev +
+                              ': ' +
+                              getVulnCount(job, sev) +
+                              ' CVE(s) found'
+                            "
                           >
-                            {{ sev }}: {{ getVulnCount(job, sev) }}
+                            {{ sev[0] }}: {{ getVulnCount(job, sev) }}
                           </span>
                         }
                       }
@@ -531,14 +625,6 @@
                           </button>
                         </div>
                       }
-                    </div>
-                  }
-
-                  <!-- Error message -->
-                  @if (job.error) {
-                    <div class="mt-2 small text-danger">
-                      <i class="bi bi-exclamation-triangle me-1"></i
-                      >{{ job.error }}
                     </div>
                   }
                 </div>
