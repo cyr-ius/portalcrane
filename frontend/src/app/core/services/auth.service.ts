@@ -95,9 +95,10 @@ export class AuthService {
     );
   }
 
-  handleOidcCallback(code: string) {
+  handleOidcCallback(code: string, state: string) {
+    const params = new URLSearchParams({ code, state });
     return this.http
-      .post<LoginResponse>(`/api/auth/oidc/callback?code=${code}`, {})
+      .post<LoginResponse>(`/api/auth/oidc/callback?${params.toString()}`, {})
       .pipe(
         tap((response) => {
           this.setToken(response.access_token);
