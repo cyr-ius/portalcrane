@@ -21,6 +21,9 @@ import {
 } from "../../core/services/external-registry.service";
 import { RegistryService } from "../../core/services/registry.service";
 import { ThemeService } from "../../core/services/theme.service";
+import { AboutConfigPanel } from "../../shared/components/about-config-panel/about-config-panel";
+import { AccountsConfigPanel } from "../../shared/components/accounts-config-panel/accounts-config-panel";
+import { OidcConfigPanel } from "../../shared/components/oidc-config-panel/oidc-config-panel";
 import { VulnConfigPanelComponent } from "../../shared/components/vuln-config-panel/vuln-config-panel.component";
 
 /** Tabs available in the Settings page. */
@@ -29,7 +32,10 @@ type SettingsTab =
   | "registries"
   | "sync"
   | "vulnerabilities"
-  | "account";
+  | "oidc"
+  | "accounts"
+  | "account"
+  | "about";
 
 const SEVERITY_STYLE: Record<
   TrivySeverity,
@@ -64,7 +70,14 @@ const SEVERITY_STYLE: Record<
 
 @Component({
   selector: "app-settings",
-  imports: [FormsModule, VulnConfigPanelComponent, SlicePipe],
+  imports: [
+    FormsModule,
+    VulnConfigPanelComponent,
+    SlicePipe,
+    OidcConfigPanel,
+    AccountsConfigPanel,
+    AboutConfigPanel,
+  ],
   templateUrl: "./settings.component.html",
   styleUrl: "./settings.component.css",
 })

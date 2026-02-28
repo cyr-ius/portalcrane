@@ -44,10 +44,37 @@
     <li class="nav-item">
       <button
         class="nav-link"
+        [class.active]="activeTab() === 'oidc'"
+        (click)="setTab('oidc')"
+      >
+        <i class="bi bi-shield-lock me-1"></i>OIDC
+      </button>
+    </li>
+    <li class="nav-item">
+      <button
+        class="nav-link"
+        [class.active]="activeTab() === 'accounts'"
+        (click)="setTab('accounts')"
+      >
+        <i class="bi bi-shield-lock me-1"></i>Accounts
+      </button>
+    </li>
+    <li class="nav-item">
+      <button
+        class="nav-link"
         [class.active]="activeTab() === 'account'"
         (click)="setTab('account')"
       >
         <i class="bi bi-person me-1"></i>Account
+      </button>
+    </li>
+    <li class="nav-item">
+      <button
+        class="nav-link"
+        [class.active]="activeTab() === 'about'"
+        (click)="setTab('about')"
+      >
+        <i class="bi bi-info-circle me-1"></i>About
       </button>
     </li>
   </ul>
@@ -512,6 +539,20 @@
   }
 
   <!-- ═══════════════════════════════════════════════════════════════════════ -->
+  <!-- TAB: OIDC                                                  -->
+  <!-- ═══════════════════════════════════════════════════════════════════════ -->
+  @if (activeTab() === "oidc") {
+    <app-oidc-config-panel />
+  }
+
+  <!-- ═══════════════════════════════════════════════════════════════════════ -->
+  <!-- TAB: Accounts                                                           -->
+  <!-- ═══════════════════════════════════════════════════════════════════════ -->
+  @if (activeTab() === "accounts") {
+    <app-accounts-config-panel />
+  }
+
+  <!-- ═══════════════════════════════════════════════════════════════════════ -->
   <!-- TAB: Account                                                           -->
   <!-- ═══════════════════════════════════════════════════════════════════════ -->
   @if (activeTab() === "account") {
@@ -538,5 +579,12 @@
         </div>
       </div>
     </div>
+  }
+
+  <!-- ═══════════════════════════════════════════════════════════════════════ -->
+  <!-- TAB: About                                                           -->
+  <!-- ═══════════════════════════════════════════════════════════════════════ -->
+  @if (activeTab() === "about") {
+    <app-about-config-panel />
   }
 </div>

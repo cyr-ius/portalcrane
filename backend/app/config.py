@@ -57,6 +57,9 @@ class Settings(BaseSettings):
     oidc_client_id: str = ""
     oidc_client_secret: str = ""
     oidc_redirect_uri: str = ""
+    oidc_post_logout_redirect_uri: str = ""
+    oidc_response_type: str = "code"
+    oidc_scope: str = "openid profile email"
 
     # Docker Hub configuration
     dockerhub_username: str = ""
