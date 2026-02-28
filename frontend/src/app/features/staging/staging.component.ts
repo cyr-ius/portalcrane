@@ -19,6 +19,7 @@ import {
   StagingJob,
   StagingService,
 } from "../../core/services/staging.service";
+import { RouterLink } from "@angular/router";
 
 /** Job statuses that indicate an active pipeline step. */
 const ACTIVE_STATUSES = new Set([
@@ -34,8 +35,7 @@ export type PushMode = "local" | "external";
 
 @Component({
   selector: "app-staging",
-  // No FormsModule import: all inputs use [value]/(input) signal bindings.
-  imports: [],
+  imports: [RouterLink],
   templateUrl: "./staging.component.html",
   styleUrl: "./staging.component.css",
 })
@@ -176,15 +176,14 @@ export class StagingComponent implements OnInit {
     if (!this.pullImage()) return;
     this.pulling.set(true);
 
-    const advanced = this.configService.advancedMode();
     this.staging
       .pullImage({
         image: this.pullImage(),
         tag: this.pullTag() || "latest",
-        vuln_scan_enabled_override: advanced
+        vuln_scan_enabled_override: this.configService.vulnOverride()
           ? this.configService.vulnEnabled()
           : null,
-        vuln_severities_override: advanced
+        vuln_severities_override: this.configService.vulnOverride()
           ? this.configService.vulnSeveritiesString()
           : null,
       })
@@ -192,7 +191,6 @@ export class StagingComponent implements OnInit {
         next: (job) => {
           this.jobs.update((jobs) => [job, ...jobs]);
           this.pulling.set(false);
-          // Reset pull form
           this.pullImage.set("");
           this.pullTag.set("latest");
           this.availableTags.set([]);
