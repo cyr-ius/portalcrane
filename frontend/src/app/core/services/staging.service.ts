@@ -96,8 +96,8 @@ export interface PushOptions {
   external_registry_password?: string | null;
 }
 
-export interface OrphanTarballsResult {
-  files: string[];
+export interface OrphanOCIResult {
+  dirs: string[];
   count: number;
   total_size_bytes: number;
   total_size_human: string;
@@ -184,24 +184,14 @@ export class StagingService {
 
   // ── Orphan cleanup ────────────────────────────────────────────────────────
 
-  getOrphanTarballs(): Observable<OrphanTarballsResult> {
-    return this.http.get<OrphanTarballsResult>(`${this.BASE}/orphan-tarballs`);
+  getOrphanOci(): Observable<OrphanOCIResult> {
+    return this.http.get<OrphanOCIResult>(`${this.BASE}/orphan-oci`);
   }
 
-  purgeOrphanTarballs(): Observable<{
-    message: string;
-    deleted: string[];
-    freed_bytes: number;
-    freed_human: string;
-    errors: { file: string; error: string }[];
-  }> {
-    return this.http.post<{
-      message: string;
-      deleted: string[];
-      freed_bytes: number;
-      freed_human: string;
-      errors: { file: string; error: string }[];
-    }>(`${this.BASE}/orphan-tarballs/purge`, {});
+  purgeOrphanOci(): Observable<{ message: string; purged: string[] }> {
+    return this.http.delete<{ message: string; purged: string[] }>(
+      `${this.BASE}/orphan-oci`,
+    );
   }
 
   getDanglingImages(): Observable<{
