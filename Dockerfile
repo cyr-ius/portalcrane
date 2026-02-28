@@ -84,7 +84,7 @@ COPY docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh
 
 # For staging pipeline (if needed)
-EXPOSE 8000 5000
+EXPOSE 8000
 
 # Start application
 CMD ["/docker-entrypoint.sh"]
