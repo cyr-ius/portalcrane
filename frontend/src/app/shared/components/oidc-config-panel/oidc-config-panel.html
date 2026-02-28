@@ -1,0 +1,19 @@
+<div class="card border-0 mb-3">
+  <div class="card-header d-flex align-items-center gap-2">
+    <h5 class="mb-0">OIDC Configuration</h5>
+    <!-- <button
+        class="btn btn-sm btn-outline-primary ms-auto"
+        (click)="configService.refreshOidcConfig()"
+        [disabled]="configService.loadingOidcConfig()"
+        >
+        Refresh
+        </button> -->
+  </div>
+  <div class="card-body">
+    @if (configService.oidcConfig()) {
+    <pre>{{ configService.oidcConfig() | json }}</pre>
+    } @else {
+    <p>No OIDC configuration found.</p>
+    }
+  </div>
+</div>
