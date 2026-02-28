@@ -1,4 +1,4 @@
-fastapi[standard]==0.129.1
+fastapi[standard]==0.134.0
 httpx==0.28.1
 python-jose[cryptography]==3.5.0
 passlib[bcrypt]==1.7.4
