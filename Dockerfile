@@ -13,7 +13,7 @@ RUN npm run build:prod
 
 
 # ─── Stage 2: Final container ─────────────────────────────────────────────
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 LABEL maintainer="cyr-ius <https://github.com/cyr-ius>"
 LABEL org.opencontainers.image.title="Portalcrane"
@@ -35,7 +35,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     ca-certificates \
     lsb-release \
-    && curl -LsSf https://get.docker.com | sh \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -50,7 +49,10 @@ RUN curl -L https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VER
 # Create Trivy cache directory
 RUN mkdir -p /var/cache/trivy
 
+# Create staging directory
+RUN mkdir -p /tmp/staging
 
+# Set working directory for application
 WORKDIR /app
 
 # Copy Python backend
@@ -65,12 +67,6 @@ RUN uv pip install --no-cache-dir -r requirements.txt
 # Copy built frontend
 COPY --from=frontend-builder /build/frontend/dist/portalcrane/browser ./frontend/dist/portalcrane/browser
 
-# Create staging directory
-RUN mkdir -p /tmp/staging
-
-# Expose port
-EXPOSE 8080
-
 # Pass application version from build ARG to runtime ENV for about endpoint
 ARG VERSION
 ENV APP_VERSION=${VERSION}
@@ -78,7 +74,6 @@ ENV APP_VERSION=${VERSION}
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
     CMD curl -f http://localhost:8080/api/health || exit 1
-
 
 # Copy Supervisor configuration and registry config template
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
