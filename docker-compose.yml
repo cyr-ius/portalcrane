@@ -42,10 +42,6 @@ services:
       - DOCKERHUB_USERNAME=${DOCKERHUB_USERNAME:-}
       - DOCKERHUB_PASSWORD=${DOCKERHUB_PASSWORD:-}
 
-      # ── Staging ───────────────────────────────────────────────────────────
-      - STAGING_DIR=/tmp/staging
-      - ADVANCED_MODE=${ADVANCED_MODE:-false}
-
       # ── Vulnerability scanning (Trivy) ────────────────────────────────────
       - VULN_SCAN_ENABLED=${VULN_SCAN_ENABLED:-true}
       - VULN_SCAN_SEVERITIES=${VULN_SCAN_SEVERITIES:-CRITICAL,HIGH}
@@ -53,8 +49,6 @@ services:
       - VULN_SCAN_TIMEOUT=${VULN_SCAN_TIMEOUT:-5m}
 
       # ── HTTP Proxy (optional) ─────────────────────────────────────────────
-      # Applies to Portalcrane outbound calls (Docker Hub API, OIDC, docker pull/push).
-      # Does NOT affect the Docker daemon itself.
       # - HTTP_PROXY=http://proxy.corp:3128
       # - HTTPS_PROXY=http://proxy.corp:3128
       # - NO_PROXY=localhost,127.0.0.1
