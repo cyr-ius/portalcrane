@@ -1,1 +1,338 @@
-<p>accounts-config-panel works!</p>
+<!-- Portalcrane - Local Accounts Management Panel -->
+<div class="card border-0 mb-3">
+  <div class="card-header border-0 d-flex align-items-center gap-2">
+    <i class="bi bi-people-fill text-primary"></i>
+    <h5 class="mb-0 fw-semibold">Local Accounts</h5>
+    <button
+      class="btn btn-sm btn-primary ms-auto d-flex align-items-center gap-1"
+      (click)="openCreateForm()"
+      [disabled]="showCreateForm()"
+    >
+      <i class="bi bi-person-plus-fill"></i>
+      Add User
+    </button>
+  </div>
+
+  <div class="card-body">
+    <!-- Global error -->
+    @if (error()) {
+    <div class="alert alert-danger d-flex align-items-center gap-2 py-2 mb-3">
+      <i class="bi bi-exclamation-triangle-fill"></i>
+      {{ error() }}
+    </div>
+    }
+
+    <!-- Loading -->
+    @if (loading()) {
+    <div class="d-flex align-items-center gap-2 text-muted">
+      <span class="spinner-border spinner-border-sm"></span>
+      Loading users…
+    </div>
+    } @if (!loading()) {
+
+    <!-- ── Create form ───────────────────────────────────────────────── -->
+    @if (showCreateForm()) {
+    <div
+      class="card border border-primary-subtle bg-primary-subtle bg-opacity-10 mb-4"
+    >
+      <div class="card-body">
+        <h6 class="fw-semibold mb-3">
+          <i class="bi bi-person-plus-fill me-2 text-primary"></i>New User
+        </h6>
+
+        @if (createError()) {
+        <div class="alert alert-danger py-2 small mb-3">
+          <i class="bi bi-exclamation-circle me-1"></i>{{ createError() }}
+        </div>
+        }
+
+        <div class="row g-3">
+          <!-- Username -->
+          <div class="col-md-5">
+            <label class="form-label fw-semibold small">
+              Username <span class="text-danger">*</span>
+            </label>
+            <div class="input-group">
+              <span class="input-group-text"><i class="bi bi-person"></i></span>
+              <input
+                type="text"
+                class="form-control"
+                placeholder="john.doe"
+                autocomplete="off"
+                [value]="newUsername()"
+                (input)="newUsername.set($any($event.target).value)"
+              />
+            </div>
+          </div>
+
+          <!-- Password -->
+          <div class="col-md-5">
+            <label class="form-label fw-semibold small">
+              Password <span class="text-danger">*</span>
+            </label>
+            <div class="input-group">
+              <span class="input-group-text"><i class="bi bi-lock"></i></span>
+              <input
+                [type]="showNewPassword() ? 'text' : 'password'"
+                class="form-control"
+                placeholder="Min. 8 characters"
+                autocomplete="new-password"
+                [value]="newPassword()"
+                (input)="newPassword.set($any($event.target).value)"
+              />
+              <button
+                type="button"
+                class="btn btn-outline-secondary"
+                (click)="showNewPassword.set(!showNewPassword())"
+              >
+                <i
+                  [class]="showNewPassword() ? 'bi bi-eye-slash' : 'bi bi-eye'"
+                ></i>
+              </button>
+            </div>
+            @if (newPassword().length > 0 && newPassword().length < 8) {
+            <div class="text-danger" style="font-size: 0.75rem">
+              <i class="bi bi-x-circle me-1"></i>At least 8 characters required
+            </div>
+            }
+          </div>
+
+          <!-- Admin toggle -->
+          <div class="col-md-2 d-flex align-items-end">
+            <div class="form-check form-switch mb-2">
+              <input
+                class="form-check-input"
+                type="checkbox"
+                id="newIsAdmin"
+                role="switch"
+                [checked]="newIsAdmin()"
+                (change)="newIsAdmin.set($any($event.target).checked)"
+              />
+              <label
+                class="form-check-label small fw-semibold"
+                for="newIsAdmin"
+              >
+                Admin
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="d-flex gap-2 mt-3">
+          <button
+            class="btn btn-primary btn-sm d-flex align-items-center gap-1"
+            (click)="createUser()"
+            [disabled]="!canCreate() || creating()"
+          >
+            @if (creating()) {
+            <span class="spinner-border spinner-border-sm"></span>
+            Creating… } @else {
+            <i class="bi bi-check-lg"></i>
+            Create }
+          </button>
+          <button
+            class="btn btn-outline-secondary btn-sm"
+            (click)="cancelCreate()"
+            [disabled]="creating()"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+    }
+
+    <!-- ── Users table ────────────────────────────────────────────────── -->
+    @if (users().length === 0) {
+    <div class="text-center text-muted py-4">
+      <i class="bi bi-people display-6 d-block mb-2"></i>
+      No local users configured.
+    </div>
+    } @else {
+    <div class="table-responsive">
+      <table class="table table-sm align-middle mb-0">
+        <thead>
+          <tr class="text-muted" style="font-size: 0.78rem">
+            <th>Username</th>
+            <th>Role</th>
+            <th>Created</th>
+            <th class="text-end">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (user of users(); track user.id) {
+          <!-- Normal row -->
+          @if (editingId() !== user.id) {
+          <tr>
+            <td>
+              <div class="d-flex align-items-center gap-2">
+                <div class="avatar-sm">
+                  <i class="bi bi-person-fill"></i>
+                </div>
+                <span class="fw-semibold font-monospace small"
+                  >{{ user.username }}</span
+                >
+                @if (user.id === 'env-admin') {
+                <span
+                  class="badge bg-secondary-subtle text-secondary"
+                  style="font-size: 0.65rem"
+                  >ENV</span
+                >
+                }
+              </div>
+            </td>
+            <td>
+              @if (user.is_admin) {
+              <span class="badge bg-warning-subtle text-warning">
+                <i class="bi bi-shield-fill me-1"></i>Admin
+              </span>
+              } @else {
+              <span class="badge bg-body-secondary text-muted">
+                <i class="bi bi-person me-1"></i>User
+              </span>
+              }
+            </td>
+            <td class="text-muted small">{{ formatDate(user.created_at) }}</td>
+            <td class="text-end">
+              @if (user.id !== 'env-admin') {
+              <div class="d-flex gap-1 justify-content-end">
+                <button
+                  class="btn btn-sm btn-outline-secondary"
+                  (click)="openEdit(user)"
+                  title="Edit user"
+                >
+                  <i class="bi bi-pencil"></i>
+                </button>
+                <button
+                  class="btn btn-sm btn-outline-danger"
+                  (click)="deleteUser(user.id)"
+                  [disabled]="deletingId() === user.id"
+                  title="Delete user"
+                >
+                  @if (deletingId() === user.id) {
+                  <span class="spinner-border spinner-border-sm"></span>
+                  } @else {
+                  <i class="bi bi-trash3"></i>
+                  }
+                </button>
+              </div>
+              } @else {
+              <span class="text-muted small">
+                <i class="bi bi-lock me-1"></i>Read-only
+              </span>
+              }
+            </td>
+          </tr>
+          }
+
+          <!-- Inline edit row -->
+          @if (editingId() === user.id) {
+          <tr class="table-active">
+            <td colspan="4">
+              <div class="p-2">
+                <div class="fw-semibold small mb-2">
+                  <i class="bi bi-pencil-fill me-1 text-primary"></i>
+                  Editing:
+                  <span class="font-monospace">{{ user.username }}</span>
+                </div>
+
+                @if (saveError()) {
+                <div class="alert alert-danger py-1 small mb-2">
+                  <i class="bi bi-exclamation-circle me-1"></i>{{ saveError() }}
+                </div>
+                }
+
+                <div class="row g-2 align-items-end">
+                  <!-- New password -->
+                  <div class="col-md-5">
+                    <label class="form-label small mb-1">New Password</label>
+                    <div class="input-group input-group-sm">
+                      <span class="input-group-text"
+                        ><i class="bi bi-lock"></i
+                      ></span>
+                      <input
+                        [type]="showEditPassword() ? 'text' : 'password'"
+                        class="form-control"
+                        placeholder="Leave empty to keep current"
+                        autocomplete="new-password"
+                        [value]="editPassword()"
+                        (input)="editPassword.set($any($event.target).value)"
+                      />
+                      <button
+                        type="button"
+                        class="btn btn-outline-secondary btn-sm"
+                        (click)="showEditPassword.set(!showEditPassword())"
+                      >
+                        <i
+                          [class]="showEditPassword() ? 'bi bi-eye-slash' : 'bi bi-eye'"
+                        ></i>
+                      </button>
+                    </div>
+                  </div>
+
+                  <!-- Admin toggle -->
+                  <div class="col-md-3">
+                    <div class="form-check form-switch">
+                      <input
+                        class="form-check-input"
+                        type="checkbox"
+                        [id]="'editAdmin_' + user.id"
+                        role="switch"
+                        [checked]="editIsAdmin()"
+                        (change)="editIsAdmin.set($any($event.target).checked)"
+                      />
+                      <label
+                        class="form-check-label small"
+                        [for]="'editAdmin_' + user.id"
+                      >
+                        Admin rights
+                      </label>
+                    </div>
+                  </div>
+
+                  <!-- Buttons -->
+                  <div class="col-md-4 d-flex gap-2 justify-content-end">
+                    <button
+                      class="btn btn-primary btn-sm d-flex align-items-center gap-1"
+                      (click)="saveEdit(user.id)"
+                      [disabled]="saving()"
+                    >
+                      @if (saving()) {
+                      <span class="spinner-border spinner-border-sm"></span>
+                      } @else {
+                      <i class="bi bi-floppy-fill"></i>
+                      } Save
+                    </button>
+                    <button
+                      class="btn btn-outline-secondary btn-sm"
+                      (click)="cancelEdit()"
+                      [disabled]="saving()"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </td>
+          </tr>
+          } }
+        </tbody>
+      </table>
+    </div>
+    }
+
+    <!-- Info note -->
+    <div class="alert alert-info d-flex gap-2 mt-3 py-2 small">
+      <i class="bi bi-lightbulb-fill flex-shrink-0 mt-1"></i>
+      <div>
+        The <strong>ENV</strong> account is defined via the
+        <code>ADMIN_USERNAME</code> / <code>ADMIN_PASSWORD</code> environment
+        variables and cannot be modified here. Additional users are stored in
+        <code>/var/lib/portalcrane/local_users.json</code>.
+      </div>
+    </div>
+
+    }
+  </div>
+</div>
