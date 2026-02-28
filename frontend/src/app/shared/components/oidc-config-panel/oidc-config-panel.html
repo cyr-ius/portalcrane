@@ -1,19 +1,239 @@
+<!-- Portalcrane - OIDC Configuration Panel -->
 <div class="card border-0 mb-3">
-  <div class="card-header d-flex align-items-center gap-2">
-    <h5 class="mb-0">OIDC Configuration</h5>
-    <!-- <button
-        class="btn btn-sm btn-outline-primary ms-auto"
-        (click)="configService.refreshOidcConfig()"
-        [disabled]="configService.loadingOidcConfig()"
-        >
-        Refresh
-        </button> -->
+  <div class="card-header border-0 d-flex align-items-center gap-2">
+    <i class="bi bi-shield-lock text-primary"></i>
+    <h5 class="mb-0 fw-semibold">OIDC Configuration</h5>
+    <button
+      class="btn btn-sm btn-outline-secondary ms-auto"
+      (click)="load()"
+      [disabled]="loading()"
+      title="Reload from server"
+    >
+      <i class="bi bi-arrow-clockwise" [class.spin]="loading()"></i>
+    </button>
   </div>
+
   <div class="card-body">
-    @if (configService.oidcConfig()) {
-    <pre>{{ configService.oidcConfig() | json }}</pre>
-    } @else {
-    <p>No OIDC configuration found.</p>
+    <!-- Loading skeleton -->
+    @if (loading()) {
+    <div class="d-flex align-items-center gap-2 text-muted">
+      <span class="spinner-border spinner-border-sm"></span>
+      Loading OIDC settings…
+    </div>
+    } @if (!loading()) {
+
+    <!-- Error banner -->
+    @if (error()) {
+    <div class="alert alert-danger d-flex align-items-center gap-2 py-2">
+      <i class="bi bi-exclamation-triangle-fill"></i>
+      {{ error() }}
+    </div>
+    }
+
+    <!-- Success banner -->
+    @if (saved()) {
+    <div class="alert alert-success d-flex align-items-center gap-2 py-2">
+      <i class="bi bi-check-circle-fill"></i>
+      OIDC configuration saved successfully.
+    </div>
+    }
+
+    <!-- Enable toggle -->
+    <div
+      class="mb-4 p-3 rounded border"
+      [class.border-primary]="enabled()"
+      [class.bg-primary-subtle]="enabled()"
+    >
+      <div class="form-check form-switch d-flex align-items-center gap-3 mb-0">
+        <input
+          class="form-check-input"
+          type="checkbox"
+          role="switch"
+          id="oidcEnabled"
+          style="width: 2.5em; height: 1.3em"
+          [checked]="enabled()"
+          (change)="enabled.set($any($event.target).checked)"
+        />
+        <label class="form-check-label fw-semibold" for="oidcEnabled">
+          Enable OIDC Authentication
+        </label>
+        @if (enabled()) {
+        <span class="badge bg-success ms-auto">Active</span>
+        } @else {
+        <span class="badge bg-secondary ms-auto">Disabled</span>
+        }
+      </div>
+      @if (enabled()) {
+      <div class="text-muted small mt-2">
+        <i class="bi bi-info-circle me-1"></i>
+        Users will be able to log in via your OIDC provider on the login page.
+        The env-based admin login remains available as a fallback.
+      </div>
+      }
+    </div>
+
+    <!-- OIDC fields — only shown when enabled -->
+    @if (enabled()) {
+    <div class="row g-3">
+      <!-- Issuer URL -->
+      <div class="col-12">
+        <label class="form-label fw-semibold small">
+          Issuer URL
+          <span class="text-danger">*</span>
+        </label>
+        <div class="input-group">
+          <span class="input-group-text"><i class="bi bi-globe2"></i></span>
+          <input
+            type="url"
+            class="form-control font-monospace"
+            placeholder="https://auth.example.com/realms/myrealm"
+            [value]="issuer()"
+            (input)="issuer.set($any($event.target).value)"
+          />
+        </div>
+        <div class="form-text">
+          Base URL of your OIDC provider (Keycloak, Authentik, Dex, etc.).
+          Portalcrane will append
+          <code>/.well-known/openid-configuration</code> to discover endpoints.
+        </div>
+      </div>
+
+      <!-- Client ID -->
+      <div class="col-md-6">
+        <label class="form-label fw-semibold small">
+          Client ID
+          <span class="text-danger">*</span>
+        </label>
+        <div class="input-group">
+          <span class="input-group-text"
+            ><i class="bi bi-person-badge"></i
+          ></span>
+          <input
+            type="text"
+            class="form-control font-monospace"
+            placeholder="portalcrane"
+            [value]="clientId()"
+            (input)="clientId.set($any($event.target).value)"
+          />
+        </div>
+      </div>
+
+      <!-- Client Secret -->
+      <div class="col-md-6">
+        <label class="form-label fw-semibold small">Client Secret</label>
+        <div class="input-group">
+          <span class="input-group-text"><i class="bi bi-key-fill"></i></span>
+          <input
+            [type]="showSecret() ? 'text' : 'password'"
+            class="form-control font-monospace"
+            placeholder="••••••••••••••••"
+            [value]="clientSecret()"
+            (input)="clientSecret.set($any($event.target).value)"
+          />
+          <button
+            type="button"
+            class="btn btn-outline-secondary"
+            (click)="showSecret.set(!showSecret())"
+            [title]="showSecret() ? 'Hide secret' : 'Show secret'"
+          >
+            <i [class]="showSecret() ? 'bi bi-eye-slash' : 'bi bi-eye'"></i>
+          </button>
+        </div>
+        <div class="form-text">
+          Leave empty to keep the current stored value.
+        </div>
+      </div>
+
+      <!-- Redirect URI -->
+      <div class="col-12">
+        <label class="form-label fw-semibold small">
+          Redirect URI
+          <span class="text-danger">*</span>
+        </label>
+        <div class="input-group">
+          <span class="input-group-text"
+            ><i class="bi bi-arrow-return-right"></i
+          ></span>
+          <input
+            type="url"
+            class="form-control font-monospace"
+            placeholder="http://localhost:8080/auth/callback"
+            [value]="redirectUri()"
+            (input)="redirectUri.set($any($event.target).value)"
+          />
+        </div>
+        <div class="form-text">
+          Must match exactly the redirect URI registered in your OIDC provider.
+        </div>
+      </div>
+
+      <!-- Post-logout Redirect URI -->
+      <div class="col-12">
+        <label class="form-label fw-semibold small"
+          >Post-logout Redirect URI</label
+        >
+        <div class="input-group">
+          <span class="input-group-text"
+            ><i class="bi bi-box-arrow-left"></i
+          ></span>
+          <input
+            type="url"
+            class="form-control font-monospace"
+            placeholder="http://localhost:8080"
+            [value]="postLogoutRedirectUri()"
+            (input)="postLogoutRedirectUri.set($any($event.target).value)"
+          />
+        </div>
+      </div>
+
+      <!-- Response type + Scope -->
+      <div class="col-md-4">
+        <label class="form-label fw-semibold small">Response Type</label>
+        <input
+          type="text"
+          class="form-control font-monospace"
+          [value]="responseType()"
+          (input)="responseType.set($any($event.target).value)"
+        />
+      </div>
+      <div class="col-md-8">
+        <label class="form-label fw-semibold small">Scope</label>
+        <input
+          type="text"
+          class="form-control font-monospace"
+          [value]="scope()"
+          (input)="scope.set($any($event.target).value)"
+        />
+      </div>
+    </div>
+    }
+
+    <!-- Save button -->
+    <div class="d-flex justify-content-end mt-4">
+      <button
+        class="btn btn-primary d-flex align-items-center gap-2"
+        (click)="save()"
+        [disabled]="saving()"
+      >
+        @if (saving()) {
+        <span class="spinner-border spinner-border-sm"></span>
+        Saving… } @else {
+        <i class="bi bi-floppy-fill"></i>
+        Save OIDC Settings }
+      </button>
+    </div>
+
+    <!-- Info note -->
+    <div class="alert alert-info d-flex gap-2 mt-3 py-2 small">
+      <i class="bi bi-lightbulb-fill flex-shrink-0 mt-1"></i>
+      <div>
+        Settings are saved to <code>/var/lib/portalcrane/oidc_config.json</code>
+        and take effect immediately — no restart required. Environment variables
+        (<code>OIDC_*</code>) serve as default values and are overridden by the
+        values saved here.
+      </div>
+    </div>
+
     }
   </div>
 </div>
