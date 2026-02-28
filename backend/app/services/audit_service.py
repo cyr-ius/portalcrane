@@ -30,11 +30,28 @@ your logging configuration:
 
 import json
 import logging
+from collections import deque
 from datetime import datetime, timezone
+from threading import Lock
+from typing import Any
 
 from ..config import Settings
 
 audit_logger = logging.getLogger("portalcrane.audit")
+_recent_audit_events: deque[dict[str, Any]] = deque(maxlen=500)
+_audit_events_lock = Lock()
+
+
+def _store_recent_event(event: dict[str, Any]) -> None:
+    """Store an audit event in memory for live UI access."""
+    with _audit_events_lock:
+        _recent_audit_events.append(event)
+
+
+def get_recent_audit_events(limit: int = 200) -> list[dict[str, Any]]:
+    """Return the latest audit events (newest first)."""
+    with _audit_events_lock:
+        return list(_recent_audit_events)[-limit:][::-1]
 
 
 class AuditService:
@@ -74,6 +91,7 @@ class AuditService:
             "elapsed_s": round(elapsed, 3),
             "client_ip": client_ip,
         }
+        _store_recent_event(event)
         audit_logger.info(json.dumps(event))
 
     async def log_push(
@@ -107,4 +125,5 @@ class AuditService:
             "elapsed_s": round(elapsed, 3),
             "client_ip": client_ip,
         }
+        _store_recent_event(event)
         audit_logger.info(json.dumps(event))

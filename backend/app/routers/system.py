@@ -6,8 +6,13 @@ from ..services.process_manager import (
     run_registry_garbage_collect,
 )
 from ..services.trivy_service import get_trivy_db_info, scan_image, update_trivy_db
+from ..services.audit_service import get_recent_audit_events
 
 router = APIRouter(prefix="/api/system", tags=["system"])
+
+
+class AuditEventsResponse(BaseModel):
+    events: list[dict[str, object]]
 
 
 class GCResult(BaseModel):
@@ -54,6 +59,14 @@ async def scan(
     if not result.get("success"):
         raise HTTPException(status_code=500, detail=result.get("error"))
     return result
+
+
+@router.get("/audit/logs", response_model=AuditEventsResponse)
+async def get_audit_logs(
+    limit: int = Query(default=200, ge=1, le=500, description="Max number of events"),
+):
+    """Returns the most recent in-memory audit log events (newest first)."""
+    return {"events": get_recent_audit_events(limit=limit)}
 
 
 @router.post("/gc", response_model=GCResult)

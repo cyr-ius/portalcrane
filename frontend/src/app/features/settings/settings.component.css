@@ -14,3 +14,27 @@
   color: var(--bs-secondary-color, #6c757d);
   margin-bottom: 0.25rem;
 }
+
+.audit-log-list {
+  max-height: 65vh;
+  overflow: auto;
+}
+
+.audit-log-item:last-child {
+  border-bottom: 0 !important;
+}
+
+.audit-log-summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.audit-log-summary::-webkit-details-marker {
+  display: none;
+}
+
+.audit-log-payload {
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  background: var(--pc-bg-secondary, rgba(0, 0, 0, 0.04));
+}
