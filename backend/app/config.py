@@ -97,9 +97,6 @@ class Settings(BaseSettings):
     # Staging configuration
     staging_dir: str = "/tmp/staging"
 
-    # Advanced mode
-    advanced_mode: bool = False
-
     # Logging level (DEBUG, INFO, WARNING, ERROR)
     log_level: str = "INFO"
 

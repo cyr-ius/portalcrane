@@ -105,14 +105,14 @@ class OrphanOCIResult(BaseModel):
 
 def _effective_vuln(settings: Settings, override: bool | None) -> bool:
     """Return the effective vulnerability-scan flag for a given job."""
-    if override is not None and settings.advanced_mode:
+    if override is not None:
         return override
     return settings.vuln_scan_enabled
 
 
 def _effective_severities(settings: Settings, override: str | None) -> list[str]:
     """Return the effective CVE severity list for a given job."""
-    if override is not None and settings.advanced_mode:
+    if override is not None:
         return [s.strip().upper() for s in override.split(",") if s.strip()]
     return settings.vuln_severities
 
@@ -186,7 +186,7 @@ async def run_pull_pipeline(
     oci_dir = os.path.join(staging_dir, job_id)
 
     _jobs[job_id]["status"] = JobStatus.PULLING
-    _jobs[job_id]["message"] = f"Pulling {image}:{tag} from Docker Hub via skopeo..."
+    _jobs[job_id]["message"] = f"Pulling {image}:{tag} from Docker Hub..."
     _jobs[job_id]["progress"] = 10
 
     # Build skopeo environment (proxy variables)
@@ -234,6 +234,8 @@ async def run_pull_pipeline(
                 "image",
                 "--format",
                 "json",
+                "--server",
+                settings.trivy_server_url,
                 "--severity",
                 severity_arg,
                 "--cache-dir",
@@ -241,7 +243,7 @@ async def run_pull_pipeline(
                 "--timeout",
                 settings.vuln_scan_timeout,
                 "--input",
-                oci_dir,  # Trivy accepts OCI layout directories
+                oci_dir,
             ]
             if settings.vuln_ignore_unfixed:
                 trivy_cmd.append("--ignore-unfixed")
@@ -252,6 +254,12 @@ async def run_pull_pipeline(
                 stderr=asyncio.subprocess.PIPE,
             )
             trivy_out, trivy_err = await trivy_proc.communicate()
+
+            if trivy_proc.returncode not in (0, 1):
+                raise Exception(
+                    f"Trivy scan failed (exit {trivy_proc.returncode}): "
+                    f"{trivy_err.decode() or trivy_out.decode()}"
+                )
 
             vuln_result = _parse_trivy_output(trivy_out, severities)
             _jobs[job_id]["vuln_result"] = vuln_result
@@ -333,12 +341,6 @@ async def run_push_pipeline(
         if push_proc.returncode != 0:
             raise Exception(f"skopeo copy (push) failed: {stderr.decode()}")
 
-        _jobs[job_id]["progress"] = 90
-
-        # ── Cleanup OCI layout directory after successful push ─────────────────
-        if os.path.exists(oci_dir):
-            shutil.rmtree(oci_dir, ignore_errors=True)
-
         _jobs[job_id]["status"] = JobStatus.DONE
         _jobs[job_id]["message"] = (
             f"✅ Successfully pushed to {push_host}/{target_image}:{target_tag}"
@@ -350,7 +352,7 @@ async def run_push_pipeline(
     except Exception as exc:
         _jobs[job_id]["status"] = JobStatus.FAILED
         _jobs[job_id]["error"] = str(exc)
-        _jobs[job_id]["message"] = f"Push failed: {exc}"
+        _jobs[job_id]["message"] = f"❌ Push failed: {exc}"
         _jobs[job_id]["progress"] = 100
 
 
@@ -459,7 +461,11 @@ async def push_image(
         )
 
     job = _jobs[request.job_id]
-    if job["status"] not in (JobStatus.SCAN_CLEAN, JobStatus.SCAN_SKIPPED):
+    if job["status"] not in (
+        JobStatus.SCAN_CLEAN,
+        JobStatus.SCAN_SKIPPED,
+        JobStatus.DONE,
+    ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Image must pass scanning (or have scan skipped) before pushing",
