@@ -656,16 +656,25 @@
             {{ dockerHubMessage() }}
           </div>
         }
-        <button
-          class="btn btn-primary btn-sm"
-          (click)="saveDockerHubAccount()"
-          [disabled]="savingDockerHub()"
-        >
-          @if (savingDockerHub()) {
-            <span class="spinner-border spinner-border-sm me-1"></span>
-          }
-          Save Docker Hub account
-        </button>
+        <div class="d-flex align-items-center gap-2">
+          <button
+            class="btn btn-primary btn-sm"
+            (click)="saveDockerHubAccount()"
+            [disabled]="savingDockerHub()"
+          >
+            @if (savingDockerHub()) {
+              <span class="spinner-border spinner-border-sm me-1"></span>
+            }
+            Save Docker Hub account
+          </button>
+          <button
+            class="btn btn-outline-danger btn-sm"
+            (click)="deleteDockerHubAccount()"
+            [disabled]="savingDockerHub() || !dockerHubHasPassword()"
+          >
+            <i class="bi bi-trash me-1"></i>Delete Docker Hub account
+          </button>
+        </div>
       </div>
     </div>
     <div class="card border-0 mb-3">

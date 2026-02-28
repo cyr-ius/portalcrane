@@ -389,6 +389,63 @@
                     </div>
                   }
 
+                  @if (
+                    job.status === "scan_vulnerable" &&
+                    job.vuln_result?.vulnerabilities &&
+                    job.vuln_result!.vulnerabilities!.length > 0
+                  ) {
+                    <div
+                      class="table-responsive mb-2"
+                      style="max-height: 320px"
+                    >
+                      <table
+                        class="table table-sm table-hover mb-0"
+                        style="font-size: 0.78rem"
+                      >
+                        <thead class="sticky-top table-light">
+                          <tr>
+                            <th>CVE ID</th>
+                            <th>Severity</th>
+                            <th>Package</th>
+                            <th>Installed</th>
+                            <th>Fixed</th>
+                            <th>CVSS</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          @for (
+                            vuln of job.vuln_result!.vulnerabilities;
+                            track vuln.id + vuln.package + vuln.target
+                          ) {
+                            <tr>
+                              <td>
+                                <a
+                                  [href]="
+                                    'https://nvd.nist.gov/vuln/detail/' +
+                                    vuln.id
+                                  "
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  class="text-decoration-none"
+                                  >{{ vuln.id }}</a
+                                >
+                              </td>
+                              <td>
+                                <span [class]="getSeverityBadge(vuln.severity)">
+                                  {{ vuln.severity }}
+                                </span>
+                              </td>
+                              <td>{{ vuln.package }}</td>
+                              <td>{{ vuln.installed_version }}</td>
+                              <td>{{ vuln.fixed_version ?? "—" }}</td>
+                              <td>{{ vuln.cvss_score ?? "—" }}</td>
+                            </tr>
+                          }
+                        </tbody>
+                      </table>
+                    </div>
+                  }
+
                   <!-- ── Push panel ──────────────────────────────────────── -->
                   <!-- Visible for: scan_clean, scan_skipped (ready to push)  -->
                   <!--              done (push completed — show summary)       -->
