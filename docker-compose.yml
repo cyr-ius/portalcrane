@@ -14,14 +14,8 @@ services:
     ports:
       - "8080:8080"
     environment:
-      # ── Registry — loopback because registry runs in the same container ───
-      # The Portal Crane application uses the host to pull or push images
-      # through the Docker socket. It is necessary to expose the container port
-      # so that the host can push the images to the registry
-      # REGISTRY_PUSH_HOST: the HOST Docker daemon cannot resolve "localhost"
-      # inside the container network. Use "127.0.0.1:5000" to push via the
-      # published port on the host.
-      # - REGISTRY_PUSH_HOST=${REGISTRY_PUSH_HOST:-127.0.0.1:8080}
+      # ── Registry configuration ────────────────────────────────────────────
+      - REGISTRY_PROXY_AUTH_ENABLED=${REGISTRY_PROXY_AUTH_ENABLED:-true}
 
       # ── Admin credentials ─────────────────────────────────────────────────
       - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
@@ -51,15 +45,12 @@ services:
       # - HTTP_PROXY=http://proxy.corp:3128
       # - HTTPS_PROXY=http://proxy.corp:3128
       # - NO_PROXY=localhost,127.0.0.1
-      # - DOCKER_PULL_PROXY=http://proxy.corp:3128
 
       # ── Logging ───────────────────────────────────────────────────────────
       - LOG_LEVEL=${LOG_LEVEL:-DEBUG}
 
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - registry_data:/var/lib/registry
-      - staging_data:/tmp/staging
+      - portalcrane_data:/var/lib/portalcrane
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
@@ -67,35 +58,5 @@ services:
       timeout: 10s
       retries: 3
 
-  # ── Docker Registry (CNCF Distribution v3) ───────────────────────────────
-  # registry:
-  #   image: registry:3
-  #   container_name: portalcrane-registry
-  #   ports:
-  #     - "5000:5000"
-  #   environment:
-  #     - REGISTRY_STORAGE_DELETE_ENABLED=true
-  #     - REGISTRY_HTTP_SECRET=${REGISTRY_HTTP_SECRET:-registry-secret}
-  #     - OTEL_TRACES_EXPORTER=none
-  #     - OTEL_METRICS_EXPORTER=none
-  #     - OTEL_LOGS_EXPORTER=none
-  #   volumes:
-  #     - registry_data:/var/lib/registry
-  #   restart: unless-stopped
-  #   healthcheck:
-  #     test:
-  #       [
-  #         "CMD",
-  #         "wget",
-  #         "--quiet",
-  #         "--tries=1",
-  #         "--spider",
-  #         "http://localhost:5000/v2/",
-  #       ]
-  #     interval: 10s
-  #     timeout: 5s
-  #     retries: 5
-
 volumes:
-  registry_data:
-  staging_data:
+  portalcrane_data:
