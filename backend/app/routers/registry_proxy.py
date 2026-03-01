@@ -18,17 +18,7 @@ Benefits
 - Port 5000 is never published on the host.
 - A single certificate covers both the UI and the registry.
 - Every pull AND push is logged -> full download/upload traceability.
-
-Docker daemon configuration
----------------------------
-Use the Portalcrane address as the registry:
-
-  docker tag  my-image <portalcrane-host>:8080/registry-proxy/v2/my-image:tag
-  docker push <portalcrane-host>:8080/registry-proxy/v2/my-image:tag
-  docker pull <portalcrane-host>:8080/registry-proxy/v2/my-image:tag
-
-Set REGISTRY_PUSH_HOST=<portalcrane-host>:8080/registry-proxy so the staging
-pipeline uses the same address automatically.
+- Per-user access control can be implemented based on the authenticated user.
 """
 
 import base64
