@@ -153,6 +153,12 @@ export class AccountsConfigPanel implements OnInit {
       body["password"] = this.editPassword();
     }
     body["is_admin"] = this.editIsAdmin();
+    body["can_pull_images"] = this.editIsAdmin()
+      ? true
+      : this.editCanPullImages();
+    body["can_push_images"] = this.editIsAdmin()
+      ? true
+      : this.editCanPushImages();
 
     this.saving.set(true);
     this.saveError.set(null);
