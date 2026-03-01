@@ -16,11 +16,10 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from pydantic import BaseModel, field_validator
 
-from ..config import ALGORITHM, HTTPX_TIMEOUT, Settings, get_settings
+from ..config import ALGORITHM, DATA_DIR, HTTPX_TIMEOUT, Settings, get_settings
 
 router = APIRouter()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/token")
-settings = get_settings()
 
 
 def _hash_password(password: str) -> str:
@@ -37,13 +36,13 @@ def _verify_password(plain: str, hashed: str) -> bool:
 
 
 # Persistent storage for local users (additional to the env-based admin)
-_USERS_FILE = Path(f"{settings.data_dir}/local_users.json")
+_USERS_FILE = Path(f"{DATA_DIR}/local_users.json")
 
 # Persistent storage for OIDC configuration overrides
-_OIDC_CONFIG_FILE = Path(f"{settings.data_dir}/oidc_config.json")
+_OIDC_CONFIG_FILE = Path(f"{DATA_DIR}/oidc_config.json")
 
 # Per-user account settings (e.g. Docker Hub credentials)
-_ACCOUNT_SETTINGS_FILE = Path(f"{settings.data_dir}/account_settings.json")
+_ACCOUNT_SETTINGS_FILE = Path(f"{DATA_DIR}/account_settings.json")
 
 
 # ─── Models ──────────────────────────────────────────────────────────────────

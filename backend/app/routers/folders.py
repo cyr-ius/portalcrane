@@ -21,13 +21,12 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, field_validator
 
 from .auth import UserInfo, require_admin
-from ..config import get_settings
+from ..config import DATA_DIR
 
 router = APIRouter()
-settings = get_settings()
 
 # Persistent storage for folders
-_FOLDERS_FILE = Path(f"{settings.data_dir}/folders.json")
+_FOLDERS_FILE = Path(f"{DATA_DIR}/folders.json")
 
 
 # ─── Models ──────────────────────────────────────────────────────────────────

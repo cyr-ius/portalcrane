@@ -14,13 +14,12 @@ from pathlib import Path
 
 import httpx
 
-from ..config import Settings, get_settings
+from ..config import DATA_DIR, Settings
 
 logger = logging.getLogger(__name__)
-settings = get_settings()
 
 # Persistent storage file for user-defined external registries
-_REGISTRIES_FILE = Path(f"{settings.data_dir}/external_registries.json")
+_REGISTRIES_FILE = Path(f"{DATA_DIR}/external_registries.json")
 
 # In-memory sync job store  {job_id: dict}
 _sync_jobs: dict[str, dict] = {}
