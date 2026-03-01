@@ -207,7 +207,7 @@ async def skopeo_push(
         cmd += ["--dest-creds", f"{dest_username}:{dest_password}"]
     cmd += [f"oci:{oci_dir}:latest", dest_ref]
 
-    env = {**__import__("os").environ, **settings.skopeo_env_proxy}
+    env = {**__import__("os").environ, **settings.env_proxy}
     proc = await asyncio.create_subprocess_exec(
         *cmd,
         stdout=asyncio.subprocess.PIPE,
@@ -364,7 +364,7 @@ async def _execute_sync(
             cmd += ["--dest-creds", f"{dest_user}:{dest_pass}"]
         cmd += [src_ref, dest_ref]
 
-        env = {**__import__("os").environ, **settings.skopeo_env_proxy}
+        env = {**__import__("os").environ, **settings.env_proxy}
         proc = await asyncio.create_subprocess_exec(
             *cmd,
             stdout=asyncio.subprocess.PIPE,

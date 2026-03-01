@@ -11,7 +11,7 @@ from pathlib import Path
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 
-from ..config import Settings, get_settings
+from ..config import REGISTRY_URL, Settings, get_settings
 from ..services.registry_service import RegistryService
 from .auth import (
     UserInfo,
@@ -307,27 +307,21 @@ async def rename_image(
     """
     from urllib.parse import urlparse
 
-    registry_host = urlparse(settings.registry_url).netloc
+    registry_host = urlparse(REGISTRY_URL).netloc
     source = f"docker://{registry_host}/{repository}:{request.new_tag}"
     dest = f"docker://{registry_host}/{request.new_repository}:{request.new_tag}"
 
     # Disable TLS verification for plain HTTP registries (e.g. localhost:5000)
     tls_flags = (
         ["--src-tls-verify=false", "--dest-tls-verify=false"]
-        if settings.registry_url.startswith("http://")
+        if REGISTRY_URL.startswith("http://")
         else []
     )
-
-    cred_flags: list[str] = []
-    if settings.registry_username and settings.registry_password:
-        creds = f"{settings.registry_username}:{settings.registry_password}"
-        cred_flags = ["--src-creds", creds, "--dest-creds", creds]
 
     proc = await asyncio.create_subprocess_exec(
         "skopeo",
         "copy",
         *tls_flags,
-        *cred_flags,
         source,
         dest,
         stdout=asyncio.subprocess.PIPE,
@@ -365,7 +359,15 @@ class GCStatus(BaseModel):
 
 
 # In-memory GC job state
-_gc_state = GCStatus(status="idle", freed_bytes=0).model_dump()
+_gc_state = GCStatus(
+    status="idle",
+    started_at=None,
+    finished_at=None,
+    output="",
+    freed_bytes=0,
+    freed_human="0 B",
+    error=None,
+).model_dump()
 
 
 def _bytes_to_human(size: int) -> str:

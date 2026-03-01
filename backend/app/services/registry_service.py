@@ -7,19 +7,17 @@ import asyncio
 
 import httpx
 
-from ..config import Settings
+from ..config import Settings, REGISTRY_URL, PROXY_TIMEOUT
 
 
 class RegistryService:
     """Async client for Docker Registry HTTP API v2."""
 
     def __init__(self, settings: Settings):
-        self.base_url = settings.registry_url.rstrip("/")
+        self.base_url = REGISTRY_URL.rstrip("/")
         self.auth = None
-        if settings.registry_username and settings.registry_password:
-            self.auth = (settings.registry_username, settings.registry_password)
         self._proxies = settings.httpx_proxy
-        self._timeout = settings.proxy_timeout
+        self._timeout = PROXY_TIMEOUT
 
     def _client(self) -> httpx.AsyncClient:
         """Create authenticated async HTTP client."""
