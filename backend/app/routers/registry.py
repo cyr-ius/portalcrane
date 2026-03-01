@@ -3,6 +3,7 @@ Portalcrane - Registry Router
 All endpoints for browsing and managing Docker Registry images and tags
 """
 
+import logging
 import asyncio
 import shutil
 from datetime import datetime, timezone
@@ -21,6 +22,7 @@ from .auth import (
 )
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 REGISTRY_BINARY = "/usr/local/bin/registry"
 REGISTRY_CONFIG = "/etc/registry/config.yml"
@@ -459,18 +461,13 @@ async def _run_gc(settings: Settings):
 
         _gc_state = GCStatus.model_validate(_gc_state).model_dump()
 
-    except Exception as e:
+    except Exception:
+        logger.exception("GC failed")
         _gc_state["status"] = "failed"
-        _gc_state["error"] = str(e)
+        _gc_state["error"] = "Garbage collection failed — check server logs"
         _gc_state["output"] = "\n".join(output_lines).strip()
         _gc_state["finished_at"] = datetime.now(timezone.utc).isoformat()
 
-        _gc_state = GCStatus.model_validate(_gc_state).model_dump()
-
-    except Exception as e:
-        _gc_state["status"] = "failed"
-        _gc_state["error"] = str(e)
-        _gc_state["finished_at"] = datetime.now(timezone.utc).isoformat()
         _gc_state = GCStatus.model_validate(_gc_state).model_dump()
 
 
@@ -572,8 +569,14 @@ async def purge_empty_repositories(
             else:
                 # Directory already gone — consider it purged
                 purged.append(repo)
-        except Exception as e:
-            errors.append({"repo": repo, "error": str(e)})
+        except OSError as exc:
+            # Log the real OS error (path, errno) server-side only
+            logger.error("Failed to purge repository %s: %s", repo, exc)
+            errors.append({"repo": repo, "error": "Deletion failed"})
+        except Exception:
+            # Catch-all: log with full traceback, return opaque message
+            logger.exception("Unexpected error purging repository %s", repo)
+            errors.append({"repo": repo, "error": "Unexpected error"})
 
     return {
         "message": f"Purged {len(purged)} empty repositories",

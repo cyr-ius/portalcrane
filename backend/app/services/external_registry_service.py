@@ -148,7 +148,8 @@ async def test_registry_connection(host: str, username: str, password: str) -> d
     except httpx.ConnectError:
         return {"reachable": False, "auth_ok": False, "message": "Connection refused"}
     except Exception as exc:
-        return {"reachable": False, "auth_ok": False, "message": str(exc)}
+        logger.warning("Registry connection test failed: %s", exc)
+        return {"reachable": False, "auth_ok": False, "message": "Connection failed"}
 
 
 # ── Validation helpers ────────────────────────────────────────────────────────

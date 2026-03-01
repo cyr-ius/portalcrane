@@ -245,7 +245,7 @@ async def _proxy(request: Request, v2_path: str) -> Response:
     except httpx.ConnectError as exc:
         logger.error("Registry unreachable at %s: %s", upstream_url, exc)
         return Response(
-            content=json.dumps({"detail": "Registry unreachable", "error": str(exc)}),
+            content=json.dumps({"detail": "Registry unreachable"}),
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             media_type="application/json",
         )
