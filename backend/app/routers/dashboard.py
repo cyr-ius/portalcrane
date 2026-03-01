@@ -10,7 +10,7 @@ from pydantic import BaseModel
 
 from ..config import Settings, get_settings
 from ..services.registry_service import RegistryService
-from .auth import UserInfo, get_current_user
+from .auth import UserInfo, _load_users, get_current_user  # import user helpers
 
 router = APIRouter()
 
@@ -28,6 +28,8 @@ class DashboardStats(BaseModel):
     disk_free_bytes: int
     disk_usage_percent: float
     registry_status: str
+    total_users: int  # total number of accounts (including env-admin)
+    total_admins: int  # total number of admin accounts (including env-admin)
 
 
 def bytes_to_human(size: int) -> str:
@@ -65,6 +67,11 @@ async def get_dashboard_stats(
         disk_total = disk_used = disk_free = 0
         disk_percent = 0.0
 
+    # User counts — env-admin always counts as 1 admin + 1 user
+    local_users = _load_users()
+    total_users = 1 + len(local_users)  # 1 for env-admin
+    total_admins = 1 + sum(1 for u in local_users if u.get("is_admin", False))
+
     total_size = stats["total_size_bytes"]
     largest = stats["largest_image"]
 
@@ -83,4 +90,6 @@ async def get_dashboard_stats(
         disk_free_bytes=disk_free,
         disk_usage_percent=round(disk_percent, 1),
         registry_status=registry_status,
+        total_users=total_users,
+        total_admins=total_admins,
     )
