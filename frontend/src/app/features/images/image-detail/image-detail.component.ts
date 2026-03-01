@@ -9,7 +9,7 @@ import {
 
 @Component({
   selector: "app-image-detail",
-  imports: [FormsModule, RouterLink, DatePipe],
+  imports: [RouterLink, DatePipe],
   templateUrl: "./image-detail.component.html",
   styleUrl: "./image-detail.component.css",
 })
