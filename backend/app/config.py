@@ -58,7 +58,7 @@ class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
     # Registry configuration
-    registry_proxy_auth_enabled: bool = False
+    registry_proxy_auth_enabled: bool = True
 
     # Admin credentials (local auth)
     admin_username: str = "admin"
