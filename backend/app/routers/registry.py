@@ -11,7 +11,7 @@ from pathlib import Path
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 
-from ..config import REGISTRY_URL, Settings, get_settings
+from ..config import DATA_DIR, REGISTRY_URL, Settings, get_settings
 from ..services.registry_service import RegistryService
 from .auth import (
     UserInfo,
@@ -24,7 +24,7 @@ router = APIRouter()
 
 REGISTRY_BINARY = "/usr/local/bin/registry"
 REGISTRY_CONFIG = "/etc/registry/config.yml"
-REGISTRY_DATA_DIR = "/var/lib/registry"
+REGISTRY_DATA_DIR = f"{DATA_DIR}/registry"
 REGISTRY_REPOS_DIR = f"{REGISTRY_DATA_DIR}/docker/registry/v2/repositories"
 
 SUPERVISORD_RPC_URL = "http://127.0.0.1:9001/RPC2"
