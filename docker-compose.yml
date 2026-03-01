@@ -13,7 +13,6 @@ services:
     container_name: portalcrane
     ports:
       - "8080:8080"
-      - "5000:5000"
     environment:
       # ── Registry — loopback because registry runs in the same container ───
       # The Portal Crane application uses the host to pull or push images
