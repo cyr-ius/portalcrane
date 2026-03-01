@@ -40,7 +40,7 @@ import httpx
 from fastapi import APIRouter, Request, Response, status
 from jose import JWTError, jwt
 
-from ..config import get_settings
+from ..config import get_settings, ALGORITHM, REGISTRY_URL, PROXY_TIMEOUT
 from ..services.audit_service import AuditService
 from .auth import _can_pull_images, _can_push_images, _verify_user
 
@@ -126,9 +126,7 @@ def _decode_bearer_username(auth_header: str) -> str | None:
     token = auth_header.split(" ", 1)[1].strip()
     settings = get_settings()
     try:
-        payload = jwt.decode(
-            token, settings.secret_key, algorithms=[settings.algorithm]
-        )
+        payload = jwt.decode(token, settings.secret_key, algorithms=[ALGORITHM])
     except JWTError:
         return None
     return payload.get("sub")
@@ -177,7 +175,7 @@ async def _proxy(request: Request, v2_path: str) -> Response:
     settings = get_settings()
     audit = AuditService(settings)
 
-    upstream_url = f"{settings.registry_url.rstrip('/')}/v2/{v2_path}"
+    upstream_url = f"{REGISTRY_URL.rstrip('/')}/v2/{v2_path}"
     method = request.method
 
     authz_error = _authorize_registry_proxy(request, method)
@@ -195,16 +193,11 @@ async def _proxy(request: Request, v2_path: str) -> Response:
 
     body = await request.body()
 
-    auth = None
-    if settings.registry_username and settings.registry_password:
-        auth = (settings.registry_username, settings.registry_password)
-
     t0 = time.monotonic()
 
     try:
         async with httpx.AsyncClient(
-            auth=auth,
-            timeout=settings.proxy_timeout,
+            timeout=PROXY_TIMEOUT,
             follow_redirects=False,
         ) as client:
             upstream = await client.request(

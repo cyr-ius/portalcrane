@@ -3,6 +3,7 @@ Portalcrane - About Router
 Provides application metadata: current version, latest GitHub release, author and AI credits.
 """
 
+import os
 import httpx
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
@@ -14,6 +15,7 @@ from ..config import (
     GITHUB_REPO_URL,
     Settings,
     get_settings,
+    HTTPX_TIMEOUT,
 )
 
 router = APIRouter()
@@ -54,7 +56,7 @@ async def get_about(settings: Settings = Depends(get_settings)) -> dict:
     - github_url        : link to the GitHub repository
     - github_error      : error message when the GitHub check fails (None otherwise)
     """
-    current_version = settings.app_version  # e.g. "1.2.0" from APP_VERSION env var
+    current_version = os.getenv("APP_VERSION", "1.0.0")
 
     latest_version: str | None = None
     github_error: str | None = None
@@ -63,9 +65,7 @@ async def get_about(settings: Settings = Depends(get_settings)) -> dict:
     # ── Query the GitHub Releases API ─────────────────────────────────────────
     proxy = getattr(settings, "httpx_proxy", None)
     try:
-        async with httpx.AsyncClient(
-            proxy=proxy, timeout=settings.httpx_timeout
-        ) as client:
+        async with httpx.AsyncClient(proxy=proxy, timeout=HTTPX_TIMEOUT) as client:
             resp = await client.get(
                 GITHUB_LATEST_RELEASE_URL,
                 headers={"Accept": "application/vnd.github+json"},

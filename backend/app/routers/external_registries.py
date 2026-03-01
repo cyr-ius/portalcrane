@@ -6,7 +6,7 @@ CRUD for external registries + synchronisation endpoints.
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 
-from ..config import Settings, get_settings
+from ..config import Settings, get_settings, REGISTRY_URL, STAGING_DIR
 from ..services.external_registry_service import (
     build_target_path,
     create_registry,
@@ -183,7 +183,7 @@ async def push_to_external(
 ):
     """
     Push a staged OCI layout directory to an external registry via skopeo.
-    The OCI directory is located at {staging_dir}/{job_id}.
+    The OCI directory is located at {STAGING_DIR}/{job_id}.
     """
     import os
 
@@ -218,7 +218,7 @@ async def push_to_external(
         )
 
     # Locate OCI layout directory produced by the pull pipeline
-    oci_dir = os.path.join(settings.staging_dir, payload.job_id)
+    oci_dir = os.path.join(STAGING_DIR, payload.job_id)
     if not os.path.isdir(oci_dir):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -298,9 +298,7 @@ async def start_sync(
         source_image=payload.source_image,
         dest_registry_id=payload.dest_registry_id,
         dest_folder=folder,
-        local_registry_url=settings.registry_url,
-        local_username=settings.registry_username,
-        local_password=settings.registry_password,
+        local_registry_url=REGISTRY_URL,
         settings=settings,
     )
 

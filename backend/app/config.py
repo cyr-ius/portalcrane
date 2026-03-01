@@ -3,10 +3,13 @@ Portalcrane - Application Configuration
 All settings loaded from environment variables
 """
 
+import logging
 from functools import lru_cache
 
 from pydantic import model_validator
 from pydantic_settings import BaseSettings
+
+logger = logging.getLogger(__name__)
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -26,6 +29,22 @@ GITHUB_LATEST_RELEASE_URL = (
 # GitHub repository HTML URL displayed as a clickable link in the UI
 GITHUB_REPO_URL = f"https://github.com/{GITHUB_OWNER}/{GITHUB_REPO}"
 
+ALGORITHM = "HS256"
+TRIVY_SERVER_URL: str = "http://127.0.0.1:4954"
+
+REGISTRY_PUSH_HOST: str = "127.0.0.1:8080"
+REGISTRY_URL: str = "http://localhost:5000"
+
+# Staging configuration
+STAGING_DIR: str = "/tmp/staging"
+
+# HTTP client timeout for GitHub API calls (in seconds)
+HTTPX_TIMEOUT: float = 10.0
+PROXY_TIMEOUT: float = 300.0
+
+# Docker Hub API v2 endpoint (for search/tags).
+DOCKERHUB_API_URL: str = "https://hub.docker.com/v2"
+
 # ── Settings ─────────────────────────────────────────────────────────────────
 
 
@@ -33,11 +52,7 @@ class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
     # Registry configuration
-    registry_url: str = "http://localhost:5000"
-    registry_username: str = ""
-    registry_password: str = ""
     registry_proxy_auth_enabled: bool = False
-    registry_push_host: str = "127.0.0.1:8080"
 
     # Admin credentials (local auth)
     admin_username: str = "admin"
@@ -45,7 +60,6 @@ class Settings(BaseSettings):
 
     # JWT configuration
     secret_key: str = "change-this-secret-key-in-production"
-    algorithm: str = "HS256"
     access_token_expire_minutes: int = 480  # 8 hours
 
     # OIDC configuration
@@ -63,33 +77,14 @@ class Settings(BaseSettings):
     https_proxy: str = ""
     no_proxy: str = "localhost,127.0.0.1"
 
-    # ── Docker Pull Proxy ─────────────────────────────────────────────────────
-    skopeo_proxy: str = ""
-
     # Vulnerability scanning configuration
     vuln_scan_enabled: bool = True
     vuln_scan_severities: str = "CRITICAL,HIGH"
     vuln_ignore_unfixed: bool = False
     vuln_scan_timeout: str = "5m"
 
-    # Trivy server URL for vulnerability scanning. The backend will proxy requests to this URL.
-    trivy_server_url: str = "http://127.0.0.1:4954"
-
-    # Staging configuration
-    staging_dir: str = "/tmp/staging"
-
     # Logging level (DEBUG, INFO, WARNING, ERROR)
     log_level: str = "INFO"
-
-    # HTTP client timeout for GitHub API calls (in seconds)
-    httpx_timeout: float = 10.0  # seconds
-    proxy_timeout: float = 300.0  # seconds
-
-    # Docker Hub API v2 endpoint (for search/tags).
-    dockerhub_api_url: str = "https://hub.docker.com/v2"
-
-    # Application version. Automatically set during build, can be overridden via env for testing.
-    app_version: str = "1.0.0"
 
     class Config:
         env_file = ".env"
@@ -109,17 +104,17 @@ class Settings(BaseSettings):
         return self.https_proxy or self.http_proxy or None
 
     @property
-    def skopeo_env_proxy(self) -> dict:
+    def env_proxy(self) -> dict:
         """
         Build environment variables injected into every skopeo subprocess.
         skopeo reads the standard HTTP_PROXY / HTTPS_PROXY variables.
         """
         env: dict = {}
-        proxy = self.skopeo_proxy or self.http_proxy
+        proxy = self.http_proxy
         if proxy:
             env["HTTP_PROXY"] = proxy
             env["http_proxy"] = proxy
-        proxy_s = self.skopeo_proxy or self.https_proxy or self.http_proxy
+        proxy_s = self.https_proxy or self.http_proxy
         if proxy_s:
             env["HTTPS_PROXY"] = proxy_s
             env["https_proxy"] = proxy_s
@@ -141,7 +136,11 @@ class Settings(BaseSettings):
             not self.secret_key
             or self.secret_key == "change-this-secret-key-in-production"
         ):
-            raise ValueError("SECRET_KEY environment variable must be set")
+            logger.warning(
+                "SECRET_KEY is not set or is using the default value. "
+                "This is not secure for production use. Please set a strong SECRET_KEY."
+            )
+            # raise ValueError("SECRET_KEY environment variable must be set")
         return self
 
 

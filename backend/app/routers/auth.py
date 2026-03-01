@@ -16,7 +16,7 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from pydantic import BaseModel, field_validator
 
-from ..config import Settings, get_settings
+from ..config import ALGORITHM, HTTPX_TIMEOUT, Settings, get_settings
 
 router = APIRouter()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/token")
@@ -265,7 +265,7 @@ def create_access_token(data: dict, settings: Settings) -> str:
         minutes=settings.access_token_expire_minutes
     )
     to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, settings.secret_key, algorithm=settings.algorithm)
+    return jwt.encode(to_encode, settings.secret_key, algorithm=ALGORITHM)
 
 
 async def get_current_user(
@@ -279,9 +279,7 @@ async def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
-        payload = jwt.decode(
-            token, settings.secret_key, algorithms=[settings.algorithm]
-        )
+        payload = jwt.decode(token, settings.secret_key, algorithms=[ALGORITHM])
         username: str = payload.get("sub")
         if username is None:
             raise credentials_exception
@@ -547,7 +545,7 @@ async def get_oidc_config(settings: Settings = Depends(get_settings)):
         async with httpx.AsyncClient(proxy=proxy) as client:
             response = await client.get(
                 f"{issuer}/.well-known/openid-configuration",
-                timeout=settings.httpx_timeout,
+                timeout=HTTPX_TIMEOUT,
             )
             if response.status_code == 200:
                 discovery = response.json()
@@ -583,7 +581,7 @@ async def oidc_callback(
         async with httpx.AsyncClient(proxy=proxy) as client:
             discovery_resp = await client.get(
                 f"{issuer}/.well-known/openid-configuration",
-                timeout=settings.httpx_timeout,
+                timeout=HTTPX_TIMEOUT,
             )
             discovery_resp.raise_for_status()
             token_endpoint = discovery_resp.json().get("token_endpoint", "")
@@ -594,21 +592,48 @@ async def oidc_callback(
                     "grant_type": "authorization_code",
                     "code": code,
                     "redirect_uri": redirect_uri,
-                    "client_id": client_id,
-                    "client_secret": client_secret,
                 },
-                timeout=settings.httpx_timeout,
+                auth=(client_id, client_secret),
+                timeout=HTTPX_TIMEOUT,
             )
             token_resp.raise_for_status()
-            id_token = token_resp.json().get("id_token", "")
+
+            token_data = token_resp.json()
+            id_token = token_data.get("id_token", "")
+            access_token_oidc = token_data.get("access_token", "")
+
+            userinfo_endpoint = discovery_resp.json().get("userinfo_endpoint", "")
+            username = ""
+
+            if userinfo_endpoint and access_token_oidc:
+                userinfo_resp = await client.get(
+                    userinfo_endpoint,
+                    headers={"Authorization": f"Bearer {access_token_oidc}"},
+                    timeout=HTTPX_TIMEOUT,
+                )
+
+                userinfo_resp.raise_for_status()
+                if userinfo_resp.status_code == 200:
+                    userinfo = userinfo_resp.json()
+                    username = (
+                        userinfo.get("preferred_username")
+                        or userinfo.get("name")
+                        or userinfo.get("email")
+                        or ""
+                    )
 
             # Decode id_token without verification to extract the username claim
-            from jose import jwt as jose_jwt
+            if not username:
+                from jose import jwt as jose_jwt
 
-            claims = jose_jwt.get_unverified_claims(id_token)
-            username = claims.get("preferred_username") or claims.get(
-                "sub", "oidc-user"
-            )
+                claims = jose_jwt.get_unverified_claims(id_token)
+                username = (
+                    claims.get("preferred_username")
+                    or claims.get("name")
+                    or claims.get("email")
+                    or claims.get("sub", "oidc-user")
+                )
+
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

@@ -15,7 +15,16 @@ import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from pydantic import BaseModel
 
-from ..config import Settings, get_settings
+from ..config import (
+    Settings,
+    get_settings,
+    TRIVY_SERVER_URL,
+    REGISTRY_PUSH_HOST,
+    REGISTRY_URL,
+    STAGING_DIR,
+    HTTPX_TIMEOUT,
+    DOCKERHUB_API_URL,
+)
 from .auth import (
     UserInfo,
     get_user_dockerhub_credentials,
@@ -156,16 +165,16 @@ def _build_skopeo_dest_creds(settings: Settings) -> list[str]:
     return []
 
 
-def _resolve_push_host(settings: Settings) -> str:
+def _resolve_push_host() -> str:
     """
     Resolve the registry push host.
     Prefers REGISTRY_PUSH_HOST; falls back to the host:port of REGISTRY_URL.
     """
-    if settings.registry_push_host:
-        return settings.registry_push_host
+    if REGISTRY_PUSH_HOST:
+        return REGISTRY_PUSH_HOST
     from urllib.parse import urlparse
 
-    return urlparse(settings.registry_url).netloc
+    return urlparse(REGISTRY_URL).netloc
 
 
 # ─── Background Tasks ─────────────────────────────────────────────────────────
@@ -185,17 +194,16 @@ async def run_pull_pipeline(
     optionally run a Trivy CVE scan, then wait for the user to trigger the push.
 
     Using skopeo instead of docker pull/save avoids the Docker daemon dependency.
-    The OCI layout is stored at: <staging_dir>/<job_id>/
+    The OCI layout is stored at: <STAGING_DIR>/<job_id>/
     """
-    staging_dir = settings.staging_dir
-    oci_dir = os.path.join(staging_dir, job_id)
+    oci_dir = os.path.join(STAGING_DIR, job_id)
 
     _jobs[job_id]["status"] = JobStatus.PULLING
     _jobs[job_id]["message"] = f"Pulling {image}:{tag} from Docker Hub..."
     _jobs[job_id]["progress"] = 10
 
     # Build skopeo environment (proxy variables)
-    skopeo_env = {**os.environ, **settings.skopeo_env_proxy}
+    skopeo_env = {**os.environ, **settings.env_proxy}
 
     do_vuln = _effective_vuln(settings, vuln_scan_enabled_override)
     severities = _effective_severities(settings, vuln_severities_override)
@@ -240,7 +248,7 @@ async def run_pull_pipeline(
                 "--format",
                 "json",
                 "--server",
-                settings.trivy_server_url,
+                TRIVY_SERVER_URL,
                 "--severity",
                 severity_arg,
                 "--cache-dir",
@@ -309,18 +317,16 @@ async def run_push_pipeline(
     _jobs[job_id]["message"] = f"Pushing to registry as {target_image}:{target_tag}..."
     _jobs[job_id]["progress"] = 10
 
-    staging_dir = settings.staging_dir
-    oci_dir = os.path.join(staging_dir, job_id)
+    oci_dir = os.path.join(STAGING_DIR, job_id)
     push_host = _resolve_push_host(settings)
     dest = f"docker://{push_host}/{target_image}:{target_tag}"
 
     # Build skopeo environment (proxy variables)
-    skopeo_env = {**os.environ, **settings.skopeo_env_proxy}
+    skopeo_env = {**os.environ, **settings.env_proxy}
 
     # Determine whether the registry uses plain HTTP (e.g. localhost:5000)
-    registry_url = settings.registry_url
     dest_tls_flag = (
-        ["--dest-tls-verify=false"] if registry_url.startswith("http://") else []
+        ["--dest-tls-verify=false"] if REGISTRY_URL.startswith("http://") else []
     )
 
     try:
@@ -520,7 +526,7 @@ async def push_image(
             username = request.external_registry_username or ""
             password = request.external_registry_password or ""
 
-        oci_dir = os.path.join(settings.staging_dir, request.job_id)
+        oci_dir = os.path.join(STAGING_DIR, request.job_id)
         if not os.path.isdir(oci_dir):
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -592,7 +598,6 @@ async def list_jobs(_: UserInfo = Depends(require_pull_access)):
 @router.delete("/jobs/{job_id}")
 async def delete_job(
     job_id: str,
-    settings: Settings = Depends(get_settings),
     _: UserInfo = Depends(require_admin),
 ):
     """Delete a staging job and its associated OCI layout directory."""
@@ -601,7 +606,7 @@ async def delete_job(
             status_code=status.HTTP_404_NOT_FOUND, detail="Job not found"
         )
 
-    oci_dir = os.path.join(settings.staging_dir, job_id)
+    oci_dir = os.path.join(STAGING_DIR, job_id)
     if os.path.exists(oci_dir):
         shutil.rmtree(oci_dir, ignore_errors=True)
 
@@ -626,12 +631,9 @@ async def search_dockerhub(
     Returns:
       { results: [...], count: <total> }
     """
-    url = (
-        f"{settings.dockerhub_api_url}/search/repositories/"
-        f"?query={q}&page={page}&page_size=10"
-    )
+    url = f"{DOCKERHUB_API_URL}/search/repositories/?query={q}&page={page}&page_size=10"
     async with httpx.AsyncClient(
-        proxy=settings.httpx_proxy, timeout=settings.httpx_timeout
+        proxy=settings.httpx_proxy, timeout=HTTPX_TIMEOUT
     ) as client:
         resp = await client.get(url)
         resp.raise_for_status()
@@ -676,13 +678,13 @@ async def get_dockerhub_tags(
         hub_image = image
 
     url = (
-        f"{settings.dockerhub_api_url}/repositories/{hub_image}/tags"
+        f"{DOCKERHUB_API_URL}/repositories/{hub_image}/tags"
         f"?page_size=50&ordering=last_updated"
     )
 
     try:
         async with httpx.AsyncClient(
-            proxy=settings.httpx_proxy, timeout=settings.httpx_timeout
+            proxy=settings.httpx_proxy, timeout=HTTPX_TIMEOUT
         ) as client:
             resp = await client.get(url)
             if resp.status_code == 404:
@@ -701,7 +703,6 @@ async def get_dockerhub_tags(
 
 @router.get("/orphan-oci", response_model=OrphanOCIResult)
 async def list_orphan_oci(
-    settings: Settings = Depends(get_settings),
     _: UserInfo = Depends(require_admin),
 ):
     """
@@ -709,12 +710,11 @@ async def list_orphan_oci(
     These are directories without a corresponding in-memory job
     (e.g. left behind after a restart).
     """
-    staging_dir = settings.staging_dir
     orphans: list[str] = []
     total_size = 0
 
-    if os.path.isdir(staging_dir):
-        for entry in os.scandir(staging_dir):
+    if os.path.isdir(STAGING_DIR):
+        for entry in os.scandir(STAGING_DIR):
             if entry.is_dir() and entry.name not in _jobs:
                 orphans.append(entry.name)
                 # Calculate directory size
@@ -735,15 +735,13 @@ async def list_orphan_oci(
 
 @router.delete("/orphan-oci")
 async def purge_orphan_oci(
-    settings: Settings = Depends(get_settings),
     _: UserInfo = Depends(require_admin),
 ):
     """Purge orphan OCI layout directories from the staging directory."""
-    staging_dir = settings.staging_dir
     purged: list[str] = []
 
-    if os.path.isdir(staging_dir):
-        for entry in os.scandir(staging_dir):
+    if os.path.isdir(STAGING_DIR):
+        for entry in os.scandir(STAGING_DIR):
             if entry.is_dir() and entry.name not in _jobs:
                 shutil.rmtree(entry.path, ignore_errors=True)
                 purged.append(entry.name)
