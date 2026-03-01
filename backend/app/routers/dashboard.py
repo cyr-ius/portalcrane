@@ -23,7 +23,6 @@ class DashboardStats(BaseModel):
     total_size_bytes: int
     total_size_human: str
     largest_image: dict
-    registry_url: str
     disk_total_bytes: int
     disk_used_bytes: int
     disk_free_bytes: int
@@ -79,7 +78,6 @@ async def get_dashboard_stats(
             "size": largest["size"],
             "size_human": bytes_to_human(largest["size"]),
         },
-        registry_url=settings.registry_url,
         disk_total_bytes=disk_total,
         disk_used_bytes=disk_used,
         disk_free_bytes=disk_free,
