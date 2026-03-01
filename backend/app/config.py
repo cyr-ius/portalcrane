@@ -32,7 +32,6 @@ GITHUB_REPO_URL = f"https://github.com/{GITHUB_OWNER}/{GITHUB_REPO}"
 ALGORITHM = "HS256"
 TRIVY_SERVER_URL: str = "http://127.0.0.1:4954"
 
-REGISTRY_PUSH_HOST: str = "127.0.0.1:8080"
 REGISTRY_URL: str = "http://localhost:5000"
 
 # Staging configuration

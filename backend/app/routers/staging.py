@@ -16,14 +16,13 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from pydantic import BaseModel
 
 from ..config import (
-    Settings,
-    get_settings,
-    TRIVY_SERVER_URL,
-    REGISTRY_PUSH_HOST,
+    DOCKERHUB_API_URL,
+    HTTPX_TIMEOUT,
     REGISTRY_URL,
     STAGING_DIR,
-    HTTPX_TIMEOUT,
-    DOCKERHUB_API_URL,
+    TRIVY_SERVER_URL,
+    Settings,
+    get_settings,
 )
 from .auth import (
     UserInfo,
@@ -166,12 +165,7 @@ def _build_skopeo_dest_creds(settings: Settings) -> list[str]:
 
 
 def _resolve_push_host() -> str:
-    """
-    Resolve the registry push host.
-    Prefers REGISTRY_PUSH_HOST; falls back to the host:port of REGISTRY_URL.
-    """
-    if REGISTRY_PUSH_HOST:
-        return REGISTRY_PUSH_HOST
+    """Resolve the registry push host."""
     from urllib.parse import urlparse
 
     return urlparse(REGISTRY_URL).netloc
@@ -318,7 +312,7 @@ async def run_push_pipeline(
     _jobs[job_id]["progress"] = 10
 
     oci_dir = os.path.join(STAGING_DIR, job_id)
-    push_host = _resolve_push_host(settings)
+    push_host = _resolve_push_host()
     dest = f"docker://{push_host}/{target_image}:{target_tag}"
 
     # Build skopeo environment (proxy variables)
@@ -335,8 +329,6 @@ async def run_push_pipeline(
             "skopeo",
             "copy",
             *dest_tls_flag,
-            *_build_skopeo_dest_creds(settings),
-            # Source is the OCI layout directory created during pull
             f"oci:{oci_dir}:latest",
             dest,
         ]
