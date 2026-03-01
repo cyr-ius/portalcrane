@@ -12,7 +12,6 @@ export interface DashboardStats {
     size: number;
     size_human: string;
   };
-  registry_url: string;
   disk_total_bytes: number;
   disk_used_bytes: number;
   disk_free_bytes: number;
