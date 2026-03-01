@@ -4,6 +4,7 @@ All settings loaded from environment variables
 """
 
 import logging
+import os
 from functools import lru_cache
 
 from pydantic import model_validator
@@ -13,12 +14,16 @@ logger = logging.getLogger(__name__)
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
+# Default data directory (can be overridden by DATA_DIR env variable for debugging)
+DATA_DIR = os.getenv("DATA_DIR", "/var/lib/portalcrane")
+STAGING_DIR = f"{DATA_DIR}/staging"
+
 # GitHub repository coordinates (owner/repo)
 GITHUB_OWNER = "cyr-ius"
 GITHUB_REPO = "portalcrane"
 
 # Application metadata shown in the Settings page
-APP_AUTHOR = "cyr-ius"
+APP_AUTHOR = GITHUB_OWNER
 APP_AI_GENERATOR = "Claude (Anthropic)"
 
 # GitHub API endpoint to fetch the latest published release
@@ -29,13 +34,14 @@ GITHUB_LATEST_RELEASE_URL = (
 # GitHub repository HTML URL displayed as a clickable link in the UI
 GITHUB_REPO_URL = f"https://github.com/{GITHUB_OWNER}/{GITHUB_REPO}"
 
+# JWT configuration
 ALGORITHM = "HS256"
+
+# Trivy server URL (used for vulnerability scanning)
 TRIVY_SERVER_URL: str = "http://127.0.0.1:4954"
 
+# Container registry URL (used for skopeo copy operations)
 REGISTRY_URL: str = "http://localhost:5000"
-
-# Staging configuration
-STAGING_DIR: str = "/tmp/staging"
 
 # HTTP client timeout for GitHub API calls (in seconds)
 HTTPX_TIMEOUT: float = 10.0
@@ -43,6 +49,7 @@ PROXY_TIMEOUT: float = 300.0
 
 # Docker Hub API v2 endpoint (for search/tags).
 DOCKERHUB_API_URL: str = "https://hub.docker.com/v2"
+
 
 # ── Settings ─────────────────────────────────────────────────────────────────
 
@@ -71,7 +78,7 @@ class Settings(BaseSettings):
     oidc_response_type: str = "code"
     oidc_scope: str = "openid profile email"
 
-    # ── HTTP Proxy ────────────────────────────────────────────────────────────
+    # HTTP Proxy
     http_proxy: str = ""
     https_proxy: str = ""
     no_proxy: str = "localhost,127.0.0.1"
@@ -84,9 +91,6 @@ class Settings(BaseSettings):
 
     # Logging level (DEBUG, INFO, WARNING, ERROR)
     log_level: str = "INFO"
-
-    # Folders configuration (registry path prefixes with user permissions)
-    data_dir: str = "/var/lib/portalcrane"
 
     # ── Internal helpers ─────────────────────────────────────────────────────────
 
@@ -140,11 +144,7 @@ class Settings(BaseSettings):
             not self.secret_key
             or self.secret_key == "change-this-secret-key-in-production"
         ):
-            logger.warning(
-                "SECRET_KEY is not set or is using the default value. "
-                "This is not secure for production use. Please set a strong SECRET_KEY."
-            )
-            # raise ValueError("SECRET_KEY environment variable must be set")
+            raise ValueError("SECRET_KEY environment variable must be set")
         return self
 
 
