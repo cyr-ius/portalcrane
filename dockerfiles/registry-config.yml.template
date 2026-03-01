@@ -3,12 +3,14 @@
 version: 0.1
 
 log:
-  level: info
+  accesslog:
+    disabled: true
+  level: ${LOG_LEVEL}
   formatter: text
 
 storage:
   filesystem:
-    rootdirectory: /var/lib/registry
+    rootdirectory: /var/lib/portalcrane/registry
   delete:
     enabled: true
   maintenance:
@@ -23,7 +25,7 @@ http:
   secret: ${REGISTRY_HTTP_SECRET}
   headers:
     X-Content-Type-Options: [nosniff]
-    X-Frame-Options: [SAMEORIGIN]
+    X-Frame-Options: [SAMEORIGIN]   
 
 reporting:
   enabled: false

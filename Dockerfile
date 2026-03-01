@@ -76,11 +76,11 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
     CMD curl -f http://localhost:8080/api/health || exit 1
 
 # Copy Supervisor configuration and registry config template
-COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
-COPY registry-config.yml.template /etc/registry/config.yml.template
+COPY ./dockerfiles/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+COPY ./dockerfiles/registry-config.yml.template /etc/registry/config.yml.template
 
 # Entrypoint generates registry config from env vars then starts supervisord
-COPY docker-entrypoint.sh /docker-entrypoint.sh
+COPY ./dockerfiles/docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh
 
 # For staging pipeline (if needed)

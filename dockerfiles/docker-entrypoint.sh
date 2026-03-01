@@ -8,14 +8,17 @@ if [ "${SECRET_KEY:-change-this-secret-key-in-production}" = "change-this-secret
 fi
 
 # ── Ensure required directories exist ─────────────────────────────────────────
-mkdir -p "${STAGING_DIR:-/tmp/staging}"
-mkdir -p /var/lib/registry
-mkdir -p /var/cache/trivy
+mkdir -p /var/lib/portalcrane/registry
+mkdir -p /var/lib/portalcrane/cache/trivy
+mkdir -p /var/lib/portalcrane/cache/staging
 mkdir -p /var/log
 
 # ── Generate registry config from template ────────────────────────────────────
 REGISTRY_HTTP_SECRET=${SECRET_KEY}
 export REGISTRY_HTTP_SECRET
+
+LOG_LEVEL=${LOG_LEVEL:-INFO}
+export LOG_LEVEL
 
 echo "[entrypoint] Generating /etc/registry/config.yml..."
 mkdir -p /etc/registry
