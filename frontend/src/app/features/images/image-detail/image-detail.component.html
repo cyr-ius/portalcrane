@@ -29,7 +29,8 @@
             <div class="d-flex gap-2 mb-2">
               <select
                 class="form-select form-select-sm"
-                [(ngModel)]="addTagSource"
+                [value]="addTagSource()"
+                (input)="addTagSource = $any($event.target).value"
               >
                 @for (tag of tags(); track tag) {
                   <option [value]="tag">{{ tag }}</option>
@@ -42,7 +43,8 @@
                 type="text"
                 class="form-control"
                 placeholder="New tag name"
-                [(ngModel)]="newTagName"
+                [value]="newTagName()"
+                (input)="newTagName = $any($event.target).value"
               />
               <button
                 class="btn btn-success"
