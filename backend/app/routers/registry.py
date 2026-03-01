@@ -27,16 +27,7 @@ REGISTRY_CONFIG = "/etc/registry/config.yml"
 REGISTRY_DATA_DIR = "/var/lib/registry"
 REGISTRY_REPOS_DIR = f"{REGISTRY_DATA_DIR}/docker/registry/v2/repositories"
 
-
-# In-memory GC job state
-_gc_state: dict = {
-    "status": "idle",
-    "started_at": None,
-    "finished_at": None,
-    "output": "",
-    "freed_bytes": 0,
-    "error": None,
-}
+SUPERVISORD_RPC_URL = "http://127.0.0.1:9001/RPC2"
 
 
 # ─── Models ──────────────────────────────────────────────────────────────────
@@ -373,6 +364,10 @@ class GCStatus(BaseModel):
     error: str | None
 
 
+# In-memory GC job state
+_gc_state = GCStatus(status="idle", freed_bytes=0).model_dump()
+
+
 def _bytes_to_human(size: int) -> str:
     for unit in ["B", "KB", "MB", "GB", "TB"]:
         if size < 1024:
@@ -390,11 +385,15 @@ async def _run_gc(settings: Settings):
     import xmlrpc.client
 
     global _gc_state
-    _gc_state["status"] = "running"
-    _gc_state["started_at"] = datetime.now(timezone.utc).isoformat()
-    _gc_state["output"] = ""
-    _gc_state["error"] = None
-    _gc_state["freed_bytes"] = 0
+    _gc_state = GCStatus(
+        status="running",
+        started_at=datetime.now(timezone.utc).isoformat(),
+        finished_at=None,
+        output="Garbage collection started...",
+        freed_bytes=0,
+        freed_human="0 B",
+        error=None,
+    ).model_dump()
 
     output_lines: list[str] = []
 
@@ -406,7 +405,7 @@ async def _run_gc(settings: Settings):
             size_before = 0
 
         # Stop registry via supervisord RPC
-        proxy = xmlrpc.client.ServerProxy("http://127.0.0.1:9001/RPC2")
+        proxy = xmlrpc.client.ServerProxy(SUPERVISORD_RPC_URL)
         output_lines.append("Stopping registry process via supervisord...")
         try:
             proxy.supervisor.stopProcess("registry")
@@ -451,15 +450,26 @@ async def _run_gc(settings: Settings):
             freed = 0
 
         _gc_state["freed_bytes"] = freed
+        _gc_state["freed_human"] = _bytes_to_human(freed)
         _gc_state["output"] = "\n".join(output_lines).strip()
         _gc_state["status"] = "done"
         _gc_state["finished_at"] = datetime.now(timezone.utc).isoformat()
+
+        _gc_state = GCStatus.model_validate(_gc_state).model_dump()
 
     except Exception as e:
         _gc_state["status"] = "failed"
         _gc_state["error"] = str(e)
         _gc_state["output"] = "\n".join(output_lines).strip()
         _gc_state["finished_at"] = datetime.now(timezone.utc).isoformat()
+
+        _gc_state = GCStatus.model_validate(_gc_state).model_dump()
+
+    except Exception as e:
+        _gc_state["status"] = "failed"
+        _gc_state["error"] = str(e)
+        _gc_state["finished_at"] = datetime.now(timezone.utc).isoformat()
+        _gc_state = GCStatus.model_validate(_gc_state).model_dump()
 
 
 @router.post("/gc", response_model=GCStatus)
