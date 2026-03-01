@@ -9,7 +9,6 @@ import json
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 TRIVY_BINARY = "/usr/local/bin/trivy"
 TRIVY_CACHE_DIR = "/var/cache/trivy"
@@ -220,7 +219,7 @@ def _parse_trivy_result(image_ref: str, raw: dict) -> dict:
     }
 
 
-def _extract_cvss(vuln: dict) -> Optional[float]:
+def _extract_cvss(vuln: dict) -> float | None:
     """Extracts the highest CVSS v3 score available from a vulnerability entry."""
     cvss_map = vuln.get("CVSS", {})
     scores = [
