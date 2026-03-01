@@ -25,6 +25,7 @@ import { AuditEvent, SystemService } from "../../core/services/system.service";
 import { ThemeService } from "../../core/services/theme.service";
 import { AboutConfigPanel } from "../../shared/components/about-config-panel/about-config-panel";
 import { AccountsConfigPanel } from "../../shared/components/accounts-config-panel/accounts-config-panel";
+import { FoldersConfigPanel } from "../../shared/components/folders-config-panel/folders-config-panel.component";
 import { OidcConfigPanel } from "../../shared/components/oidc-config-panel/oidc-config-panel";
 import { VulnConfigPanelComponent } from "../../shared/components/vuln-config-panel/vuln-config-panel.component";
 
@@ -32,6 +33,7 @@ import { VulnConfigPanelComponent } from "../../shared/components/vuln-config-pa
 type SettingsTab =
   | "vulnerabilities"
   | "accounts"
+  | "folders"
   | "registries"
   | "sync"
   | "audit"
@@ -78,6 +80,7 @@ const SEVERITY_STYLE: Record<
     SlicePipe,
     OidcConfigPanel,
     AccountsConfigPanel,
+    FoldersConfigPanel,
     AboutConfigPanel,
   ],
   templateUrl: "./settings.component.html",

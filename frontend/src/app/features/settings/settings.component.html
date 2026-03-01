@@ -26,6 +26,15 @@
     <li class="nav-item">
       <button
         class="nav-link"
+        [class.active]="activeTab() === 'folders'"
+        (click)="setTab('folders')"
+      >
+        <i class="bi bi-folder2-open me-1"></i>Folders
+      </button>
+    </li>
+    <li class="nav-item">
+      <button
+        class="nav-link"
         [class.active]="activeTab() === 'registries'"
         (click)="setTab('registries')"
       >
@@ -715,6 +724,13 @@
         </div>
       </div>
     </div>
+  }
+
+  <!-- ═══════════════════════════════════════════════════════════════════════ -->
+  <!-- TAB: Folders                                                            -->
+  <!-- ═══════════════════════════════════════════════════════════════════════ -->
+  @if (activeTab() === "folders") {
+    <app-folders-config-panel />
   }
 
   <!-- ═══════════════════════════════════════════════════════════════════════ -->
