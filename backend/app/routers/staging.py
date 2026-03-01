@@ -2,6 +2,7 @@
 Portalcrane - Staging Router
 Pipeline: skopeo copy (Docker Hub → OCI layout) → Trivy CVE scan (optional) → skopeo copy (OCI → Registry)
 Replacing Docker CLI with skopeo removes the need for a Docker daemon socket.
+All filesystem operations use pathlib.Path with a path-traversal guard.
 """
 
 import asyncio
@@ -10,6 +11,7 @@ import os
 import shutil
 import uuid
 from enum import Enum
+from pathlib import Path
 
 import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
@@ -114,6 +116,31 @@ class OrphanOCIResult(BaseModel):
     total_size_human: str
 
 
+# ─── Path helpers ─────────────────────────────────────────────────────────────
+
+
+def _staging_root() -> Path:
+    """Return the resolved absolute path to the staging root directory."""
+    return Path(STAGING_DIR).resolve()
+
+
+def _safe_job_path(job_id: str) -> Path:
+    """
+    Resolve the OCI layout directory for a given job_id.
+
+    Raises ValueError if the resolved path escapes the staging root directory.
+    This acts as a defence-in-depth guard against path traversal attacks even
+    though job_id is currently always a UUID generated internally.
+    """
+    root = _staging_root()
+    oci_dir = (root / job_id).resolve()
+    if not oci_dir.is_relative_to(root):
+        raise ValueError(
+            f"Path traversal detected — job_id resolves outside staging root: {job_id}"
+        )
+    return oci_dir
+
+
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 
 
@@ -132,7 +159,7 @@ def _effective_severities(settings: Settings, override: str | None) -> list[str]
 
 
 def _human_size(size_bytes: float) -> str:
-    """Convert bytes to human-readable string."""
+    """Convert bytes to a human-readable string."""
     for unit in ("B", "KB", "MB", "GB", "TB"):
         if size_bytes < 1024:
             return f"{size_bytes:.1f} {unit}"
@@ -165,10 +192,56 @@ def _build_skopeo_dest_creds(settings: Settings) -> list[str]:
 
 
 def _resolve_push_host() -> str:
-    """Resolve the registry push host."""
+    """Resolve the registry push host from the configured REGISTRY_URL."""
     from urllib.parse import urlparse
 
     return urlparse(REGISTRY_URL).netloc
+
+
+def _parse_trivy_output(raw: bytes, severities: list[str]) -> dict:
+    """Parse Trivy JSON output and return a structured vuln_result dict."""
+    try:
+        data = json.loads(raw.decode())
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return {
+            "enabled": True,
+            "blocked": False,
+            "severities": severities,
+            "counts": {},
+            "vulnerabilities": [],
+            "total": 0,
+        }
+
+    vulns: list[dict] = []
+    counts: dict[str, int] = {}
+
+    for result in data.get("Results", []):
+        for v in result.get("Vulnerabilities") or []:
+            sev = v.get("Severity", "UNKNOWN").upper()
+            counts[sev] = counts.get(sev, 0) + 1
+            vulns.append(
+                {
+                    "id": v.get("VulnerabilityID", ""),
+                    "package": v.get("PkgName", ""),
+                    "installed_version": v.get("InstalledVersion", ""),
+                    "fixed_version": v.get("FixedVersion"),
+                    "severity": sev,
+                    "title": v.get("Title"),
+                    "cvss_score": (v.get("CVSS") or {}).get("nvd", {}).get("V3Score"),
+                    "target": result.get("Target", ""),
+                }
+            )
+
+    blocked = any(counts.get(s, 0) > 0 for s in severities)
+
+    return {
+        "enabled": True,
+        "blocked": blocked,
+        "severities": severities,
+        "counts": counts,
+        "vulnerabilities": vulns,
+        "total": len(vulns),
+    }
 
 
 # ─── Background Tasks ─────────────────────────────────────────────────────────
@@ -190,7 +263,15 @@ async def run_pull_pipeline(
     Using skopeo instead of docker pull/save avoids the Docker daemon dependency.
     The OCI layout is stored at: <STAGING_DIR>/<job_id>/
     """
-    oci_dir = os.path.join(STAGING_DIR, job_id)
+    # Resolve the OCI directory with path-traversal guard
+    try:
+        oci_dir = _safe_job_path(job_id)
+    except ValueError as exc:
+        _jobs[job_id]["status"] = JobStatus.FAILED
+        _jobs[job_id]["error"] = str(exc)
+        _jobs[job_id]["message"] = f"Invalid job path: {exc}"
+        _jobs[job_id]["progress"] = 100
+        return
 
     _jobs[job_id]["status"] = JobStatus.PULLING
     _jobs[job_id]["message"] = f"Pulling {image}:{tag} from Docker Hub..."
@@ -250,7 +331,8 @@ async def run_pull_pipeline(
                 "--timeout",
                 settings.vuln_scan_timeout,
                 "--input",
-                oci_dir,
+                # Pass as string — trivy CLI does not accept Path objects
+                str(oci_dir),
             ]
             if settings.vuln_ignore_unfixed:
                 trivy_cmd.append("--ignore-unfixed")
@@ -289,7 +371,7 @@ async def run_pull_pipeline(
 
     except Exception as exc:
         # Cleanup the OCI directory on failure
-        if os.path.exists(oci_dir):
+        if oci_dir.exists():
             shutil.rmtree(oci_dir, ignore_errors=True)
         _jobs[job_id]["status"] = JobStatus.FAILED
         _jobs[job_id]["error"] = str(exc)
@@ -311,7 +393,16 @@ async def run_push_pipeline(
     _jobs[job_id]["message"] = f"Pushing to registry as {target_image}:{target_tag}..."
     _jobs[job_id]["progress"] = 10
 
-    oci_dir = os.path.join(STAGING_DIR, job_id)
+    # Resolve the OCI directory with path-traversal guard
+    try:
+        oci_dir = _safe_job_path(job_id)
+    except ValueError as exc:
+        _jobs[job_id]["status"] = JobStatus.FAILED
+        _jobs[job_id]["error"] = str(exc)
+        _jobs[job_id]["message"] = f"Invalid job path: {exc}"
+        _jobs[job_id]["progress"] = 100
+        return
+
     push_host = _resolve_push_host()
     dest = f"docker://{push_host}/{target_image}:{target_tag}"
 
@@ -329,6 +420,7 @@ async def run_push_pipeline(
             "skopeo",
             "copy",
             *dest_tls_flag,
+            # Pass as string — skopeo CLI does not accept Path objects
             f"oci:{oci_dir}:latest",
             dest,
         ]
@@ -359,52 +451,6 @@ async def run_push_pipeline(
         _jobs[job_id]["progress"] = 100
 
 
-def _parse_trivy_output(raw: bytes, severities: list[str]) -> dict:
-    """Parse Trivy JSON output and return a structured vuln_result dict."""
-    try:
-        data = json.loads(raw.decode())
-    except (json.JSONDecodeError, UnicodeDecodeError):
-        return {
-            "enabled": True,
-            "blocked": False,
-            "severities": severities,
-            "counts": {},
-            "vulnerabilities": [],
-            "total": 0,
-        }
-
-    vulns: list[dict] = []
-    counts: dict[str, int] = {}
-
-    for result in data.get("Results", []):
-        for v in result.get("Vulnerabilities") or []:
-            sev = v.get("Severity", "UNKNOWN").upper()
-            counts[sev] = counts.get(sev, 0) + 1
-            vulns.append(
-                {
-                    "id": v.get("VulnerabilityID", ""),
-                    "package": v.get("PkgName", ""),
-                    "installed_version": v.get("InstalledVersion", ""),
-                    "fixed_version": v.get("FixedVersion"),
-                    "severity": sev,
-                    "title": v.get("Title"),
-                    "cvss_score": (v.get("CVSS") or {}).get("nvd", {}).get("V3Score"),
-                    "target": result.get("Target", ""),
-                }
-            )
-
-    blocked = any(counts.get(s, 0) > 0 for s in severities)
-
-    return {
-        "enabled": True,
-        "blocked": blocked,
-        "severities": severities,
-        "counts": counts,
-        "vulnerabilities": vulns,
-        "total": len(vulns),
-    }
-
-
 # ─── Endpoints ────────────────────────────────────────────────────────────────
 
 
@@ -413,7 +459,7 @@ async def pull_image(
     request: PullRequest,
     background_tasks: BackgroundTasks,
     settings: Settings = Depends(get_settings),
-    _: UserInfo = Depends(require_pull_access),
+    current_user: UserInfo = Depends(require_pull_access),
 ):
     """Start a pull+scan pipeline for a Docker Hub image using skopeo."""
     job_id = str(uuid.uuid4())
@@ -438,7 +484,7 @@ async def pull_image(
         request.image,
         request.tag,
         settings,
-        _,
+        current_user,
         request.vuln_scan_enabled_override,
         request.vuln_severities_override,
     )
@@ -456,7 +502,7 @@ async def push_image(
     Push a scanned image to the local registry or to an external registry.
 
     When external_registry_id or external_registry_host is set the image is
-    pushed to the external destination via skopeo.  Otherwise it is pushed to
+    pushed to the external destination via skopeo. Otherwise it is pushed to
     the local registry (default behaviour).
     """
     if request.job_id not in _jobs:
@@ -488,15 +534,21 @@ async def push_image(
             detail=str(exc),
         )
 
+    # Resolve OCI directory with path-traversal guard
+    try:
+        oci_dir = _safe_job_path(request.job_id)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        )
+
     target_image = request.target_image or job["image"]
     target_tag = request.target_tag or job["tag"]
 
     is_external = bool(request.external_registry_id or request.external_registry_host)
 
     if is_external:
-        # Delegate to the external registry push endpoint logic
-        import os  # noqa: PLC0415
-
         from ..services.external_registry_service import (  # noqa: PLC0415
             build_target_path,
             get_registry_by_id,
@@ -518,8 +570,7 @@ async def push_image(
             username = request.external_registry_username or ""
             password = request.external_registry_password or ""
 
-        oci_dir = os.path.join(STAGING_DIR, request.job_id)
-        if not os.path.isdir(oci_dir):
+        if not oci_dir.is_dir():
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"OCI directory not found for job {request.job_id}",
@@ -528,12 +579,13 @@ async def push_image(
         dest_ref = build_target_path(folder, target_image, target_tag, host)
 
         # Run push in background so the endpoint returns immediately
-        async def _ext_push():
+        async def _ext_push() -> None:
             _jobs[request.job_id]["status"] = JobStatus.PUSHING
             _jobs[request.job_id]["message"] = f"Pushing to {dest_ref}…"
             _jobs[request.job_id]["progress"] = 10
             success, message = await skopeo_push(
-                oci_dir=oci_dir,
+                # Pass as string — skopeo_push expects a str, not a Path
+                oci_dir=str(oci_dir),
                 dest_ref=dest_ref,
                 dest_username=username,
                 dest_password=password,
@@ -554,10 +606,7 @@ async def push_image(
 
     # Default: push to local registry
     # Build full target path including optional folder prefix
-    if folder:
-        full_image = f"{folder}/{target_image}"
-    else:
-        full_image = target_image
+    full_image = f"{folder}/{target_image}" if folder else target_image
 
     background_tasks.add_task(
         run_push_pipeline, request.job_id, full_image, target_tag, settings
@@ -598,8 +647,16 @@ async def delete_job(
             status_code=status.HTTP_404_NOT_FOUND, detail="Job not found"
         )
 
-    oci_dir = os.path.join(STAGING_DIR, job_id)
-    if os.path.exists(oci_dir):
+    # Resolve with path-traversal guard before deletion
+    try:
+        oci_dir = _safe_job_path(job_id)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        )
+
+    if oci_dir.exists():
         shutil.rmtree(oci_dir, ignore_errors=True)
 
     del _jobs[job_id]
@@ -664,10 +721,7 @@ async def get_dockerhub_tags(
     or Hub may be temporarily unavailable).
     """
     # Official images are stored under the "library" namespace on Docker Hub
-    if "/" not in image:
-        hub_image = f"library/{image}"
-    else:
-        hub_image = image
+    hub_image = f"library/{image}" if "/" not in image else image
 
     url = (
         f"{DOCKERHUB_API_URL}/repositories/{hub_image}/tags"
@@ -705,17 +759,15 @@ async def list_orphan_oci(
     orphans: list[str] = []
     total_size = 0
 
-    if os.path.isdir(STAGING_DIR):
-        for entry in os.scandir(STAGING_DIR):
+    staging_root = _staging_root()
+    if staging_root.is_dir():
+        for entry in staging_root.iterdir():
             if entry.is_dir() and entry.name not in _jobs:
                 orphans.append(entry.name)
-                # Calculate directory size
-                for dirpath, _, filenames in os.walk(entry.path):
-                    for fname in filenames:
-                        try:
-                            total_size += os.path.getsize(os.path.join(dirpath, fname))
-                        except OSError:
-                            pass
+                # Sum up all file sizes inside the orphan directory
+                total_size += sum(
+                    f.stat().st_size for f in entry.rglob("*") if f.is_file()
+                )
 
     return OrphanOCIResult(
         dirs=orphans,
@@ -732,10 +784,11 @@ async def purge_orphan_oci(
     """Purge orphan OCI layout directories from the staging directory."""
     purged: list[str] = []
 
-    if os.path.isdir(STAGING_DIR):
-        for entry in os.scandir(STAGING_DIR):
+    staging_root = _staging_root()
+    if staging_root.is_dir():
+        for entry in staging_root.iterdir():
             if entry.is_dir() and entry.name not in _jobs:
-                shutil.rmtree(entry.path, ignore_errors=True)
+                shutil.rmtree(entry, ignore_errors=True)
                 purged.append(entry.name)
 
     return {"message": f"Purged {len(purged)} orphan OCI directories", "purged": purged}
