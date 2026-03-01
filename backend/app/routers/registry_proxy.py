@@ -31,18 +31,19 @@ Set REGISTRY_PUSH_HOST=<portalcrane-host>:8080/registry-proxy so the staging
 pipeline uses the same address automatically.
 """
 
+import base64
 import json
 import logging
 import time
-import base64
 
 import httpx
 from fastapi import APIRouter, Request, Response, status
 from jose import JWTError, jwt
 
-from ..config import get_settings, ALGORITHM, REGISTRY_URL, PROXY_TIMEOUT
+from ..config import ALGORITHM, PROXY_TIMEOUT, REGISTRY_URL, get_settings
 from ..services.audit_service import AuditService
-from .auth import _can_pull_images, _can_push_images, _verify_user
+from .auth import _can_pull_images, _is_admin_user, _verify_user
+from .folders import check_folder_access
 
 logger = logging.getLogger(__name__)
 
@@ -132,7 +133,26 @@ def _decode_bearer_username(auth_header: str) -> str | None:
     return payload.get("sub")
 
 
-def _authorize_registry_proxy(request: Request, method: str) -> Response | None:
+def _extract_image_path(v2_path: str) -> str:
+    """
+    Extract the image name (without tag/digest/endpoint suffix) from a v2 path.
+
+    Examples:
+        "production/nginx/manifests/latest" → "production/nginx"
+        "nginx/blobs/sha256:abc"            → "nginx"
+        ""                                  → ""
+    """
+    # Strip known terminal segments: manifests, blobs, tags, uploads
+    for marker in ("/manifests/", "/blobs/", "/tags/", "/uploads/", "/uploads"):
+        idx = v2_path.find(marker)
+        if idx != -1:
+            return v2_path[:idx]
+    return v2_path
+
+
+def _authorize_registry_proxy(
+    request: Request, method: str, v2_path: str = ""
+) -> Response | None:
     settings = get_settings()
     if not settings.registry_proxy_auth_enabled:
         return None
@@ -154,11 +174,35 @@ def _authorize_registry_proxy(request: Request, method: str) -> Response | None:
         if not username:
             return _unauthorized_response("Invalid bearer token")
 
-    if method in _PULL_METHODS and not _can_pull_images(username, settings):
-        return _forbidden_response("Pull permission required")
+    # Admins bypass all folder restrictions
+    if _is_admin_user(username, settings):
+        return None
 
-    if method in _PUSH_METHODS and not _can_push_images(username, settings):
-        return _forbidden_response("Push permission required")
+    is_pull = method in _PULL_METHODS
+    is_push = method in _PUSH_METHODS
+
+    image_path = _extract_image_path(v2_path)
+    folder_result = check_folder_access(username, image_path, is_pull=is_pull)
+
+    if folder_result is not None:
+        # A folder matched — its verdict is final
+        if not folder_result:
+            action = "pull" if is_pull else "push"
+            return _forbidden_response(
+                f"Folder access denied: {action} permission required"
+            )
+        return None
+
+    # No folder matched (image has no folder prefix)
+    if is_push:
+        # Only admins can push to the root namespace (already handled above)
+        return _forbidden_response(
+            "Push to root namespace is restricted to administrators"
+        )
+
+    # Pull on root namespace: fall back to global permission
+    if is_pull and not _can_pull_images(username, settings):
+        return _forbidden_response("Pull permission required")
 
     return None
 
@@ -178,15 +222,13 @@ async def _proxy(request: Request, v2_path: str) -> Response:
     upstream_url = f"{REGISTRY_URL.rstrip('/')}/v2/{v2_path}"
     method = request.method
 
-    authz_error = _authorize_registry_proxy(request, method)
+    authz_error = _authorize_registry_proxy(request, method, v2_path)
     if authz_error is not None:
         return authz_error
 
     # Filter hop-by-hop headers AND remove the original Host header.
-    # The Host header MUST match the registry's own address for _state JWT
-    # validation to succeed on blob upload sessions (PATCH after POST).
     req_headers = _filter_headers(dict(request.headers))
-    req_headers.pop("host", None)  # httpx will set the correct Host automatically
+    req_headers.pop("host", None)
     _ensure_oci_accept_for_manifests(
         v2_path=v2_path, method=method, headers=req_headers
     )
@@ -245,8 +287,6 @@ async def _proxy(request: Request, v2_path: str) -> Response:
 
     resp_headers = _filter_headers(dict(upstream.headers))
 
-    # Rewrite Location: replace internal registry URL with the proxy prefix
-    # so Docker follows the correct path on the next request.
     if "location" in resp_headers:
         loc = resp_headers["location"]
         resp_headers["location"] = loc
