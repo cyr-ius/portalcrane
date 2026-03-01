@@ -210,7 +210,11 @@ async def _proxy(request: Request, v2_path: str) -> Response:
     audit = AuditService(settings)
 
     upstream_url = f"{REGISTRY_URL.rstrip('/')}/v2/{v2_path}"
+    query_string = request.url.query
     method = request.method
+
+    if query_string:
+        upstream_url = f"{upstream_url}?{query_string}"
 
     authz_error = _authorize_registry_proxy(request, method, v2_path)
     if authz_error is not None:
@@ -279,8 +283,13 @@ async def _proxy(request: Request, v2_path: str) -> Response:
 
     if "location" in resp_headers:
         loc = resp_headers["location"]
-        resp_headers["location"] = loc
-        logger.debug("Rewrote Location: %s", loc)
+        public_base = str(request.base_url).rstrip("/")
+        internal_base = REGISTRY_URL.rstrip("/")
+        rewritten = loc.replace(internal_base, public_base)
+        resp_headers["location"] = rewritten
+        logger.debug("Rewrote Location: %s → %s", loc, rewritten)
+        # resp_headers["location"] = loc
+        # logger.debug("Rewrote Location: %s", loc)
 
     return Response(
         content=upstream.content,
