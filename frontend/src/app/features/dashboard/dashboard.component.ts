@@ -11,6 +11,7 @@ import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { RouterLink } from "@angular/router";
 import { Subject, switchMap, takeWhile } from "rxjs";
 import { AppConfigService } from "../../core/services/app-config.service";
+import { AuthService } from "../../core/services/auth.service";
 import {
   DashboardService,
   DashboardStats,
@@ -20,7 +21,6 @@ import {
   RegistryService,
 } from "../../core/services/registry.service";
 import { StagingService } from "../../core/services/staging.service";
-import { AuthService } from "../../core/services/auth.service";
 
 @Component({
   selector: "app-dashboard",
@@ -45,20 +45,6 @@ export class DashboardComponent implements OnInit {
   readonly ghostCount = computed(() => this.ghostRepos().length);
   ghostsChecked = signal(false);
   purgingGhosts = signal(false);
-
-  // Dangling images on the host Docker daemon
-  danglingImages = signal<
-    {
-      id: string;
-      repository: string;
-      tag: string;
-      size: string;
-      created: string;
-    }[]
-  >([]);
-  readonly danglingCount = computed(() => this.danglingImages().length);
-  danglingChecked = signal(false);
-  purgingDangling = signal(false);
 
   // Orphan .tar files in staging directory
   orphanOciDirs = signal<string[]>([]);
@@ -110,7 +96,6 @@ export class DashboardComponent implements OnInit {
       next: (s) => this.gcStatus.set(s),
     });
     this.checkGhostRepos();
-    this.checkDanglingImages();
     this.checkOrphanOci();
   }
 
@@ -159,31 +144,7 @@ export class DashboardComponent implements OnInit {
     });
   }
 
-  // ── Dangling images ───────────────────────────────────────────────────────
-
-  checkDanglingImages() {
-    this.stagingService.getDanglingImages().subscribe({
-      next: (res) => {
-        this.danglingImages.set(res.images);
-        this.danglingChecked.set(true);
-      },
-      error: () => this.danglingChecked.set(true),
-    });
-  }
-
-  purgeDanglingImages() {
-    if (this.purgingDangling()) return;
-    this.purgingDangling.set(true);
-    this.stagingService.purgeDanglingImages().subscribe({
-      next: () => {
-        this.purgingDangling.set(false);
-        this.checkDanglingImages();
-      },
-      error: () => this.purgingDangling.set(false),
-    });
-  }
-
-  // ── Orphan tarballs ───────────────────────────────────────────────────────
+  // ── Orphan images ───────────────────────────────────────────────────────
 
   checkOrphanOci() {
     this.stagingService.getOrphanOci().subscribe({
