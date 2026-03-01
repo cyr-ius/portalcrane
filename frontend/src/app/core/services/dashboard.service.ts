@@ -1,5 +1,5 @@
-import { inject, Injectable } from "@angular/core";
 import { HttpClient } from "@angular/common/http";
+import { inject, Injectable } from "@angular/core";
 import { Observable } from "rxjs";
 
 export interface DashboardStats {
@@ -17,6 +17,8 @@ export interface DashboardStats {
   disk_free_bytes: number;
   disk_usage_percent: number;
   registry_status: string;
+  total_users: number;
+  total_admins: number;
 }
 
 @Injectable({ providedIn: "root" })

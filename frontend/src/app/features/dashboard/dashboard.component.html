@@ -103,6 +103,38 @@
 
     <!-- Health metrics row — data already loaded by ngOnInit, no extra requests -->
     <div class="row g-3 mb-4">
+      <!-- Users & Admins card -->
+      <div class="col-sm-6 col-lg-4">
+        <div class="stat-card card border-0 h-100">
+          <div class="card-body">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+              <span class="text-muted small">Users</span>
+              <div class="stat-icon bg-info-subtle text-info">
+                <i class="bi bi-people"></i>
+              </div>
+            </div>
+            <!-- Total users count -->
+            <div class="stat-value">{{ s.total_users }}</div>
+            <!-- Admin count — turns red when admins > 5 -->
+            <div class="small mt-1">
+              <i
+                class="bi bi-shield-fill me-1"
+                [class.text-danger]="s.total_admins > 5"
+                [class.text-muted]="s.total_admins <= 5"
+              >
+              </i>
+              <span
+                [class.text-danger]="s.total_admins > 5"
+                [class.fw-bold]="s.total_admins > 5"
+                [class.text-muted]="s.total_admins <= 5"
+              >
+                {{ s.total_admins }} admin{{ s.total_admins > 1 ? "s" : "" }}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- ── Ghost Repositories health card ── -->
       <div class="col-sm-6 col-lg-4">
         <div
@@ -219,6 +251,7 @@
 
     <!-- Registry info & Quick Actions -->
     <div class="row g-3">
+      <!-- Registry information -->
       <div class="col-lg-6">
         <div class="card border-0">
           <div class="card-header border-0 pb-0">
