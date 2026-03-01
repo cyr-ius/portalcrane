@@ -8,12 +8,8 @@ import asyncio
 import json
 import logging
 from datetime import datetime
-from pathlib import Path
 
-TRIVY_BINARY = "/usr/local/bin/trivy"
-TRIVY_CACHE_DIR = "/var/cache/trivy"
-TRIVY_DB_METADATA = Path(TRIVY_CACHE_DIR) / "db" / "metadata.json"
-TRIVY_SERVER_URL = "http://127.0.0.1:4954"
+from ..config import TRIVY_BINARY, TRIVY_CACHE_DIR, TRIVY_DB_METADATA, TRIVY_SERVER_URL
 
 logger = logging.getLogger(__name__)
 
@@ -93,7 +89,7 @@ async def scan_image(
     except FileNotFoundError:
         return {
             "success": False,
-            "error": "Trivy binary not found at /usr/local/bin/trivy",
+            "error": "Trivy binary not found",
             "image": image_ref,
         }
 
@@ -157,9 +153,7 @@ async def scan_tarball(
             stderr=asyncio.subprocess.PIPE,
         )
     except FileNotFoundError as exc:
-        raise RuntimeError(
-            "Trivy binary not found. Check /usr/local/bin/trivy."
-        ) from exc
+        raise RuntimeError("Trivy binary not found.") from exc
 
     stdout, stderr = await proc.communicate()
 
