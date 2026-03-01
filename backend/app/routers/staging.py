@@ -84,10 +84,9 @@ class PushRequest(BaseModel):
     """Request to push a staged image to the local or an external registry."""
 
     job_id: str
-    target_image: str | None = None  # Optional rename (image name only)
-    target_tag: str | None = None  # Optional retag
-    folder: str | None = None  # Optional destination folder prefix
-    # External registry fields (when present, route to external registry)
+    target_image: str | None = None
+    target_tag: str | None = None
+    folder: str | None = None
     external_registry_id: str | None = None
     external_registry_host: str | None = None
     external_registry_username: str | None = None
