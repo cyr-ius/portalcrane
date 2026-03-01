@@ -6,6 +6,7 @@ All settings loaded from environment variables
 import logging
 import os
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic import model_validator
 from pydantic_settings import BaseSettings
@@ -16,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 # Default data directory (can be overridden by DATA_DIR env variable for debugging)
 DATA_DIR = os.getenv("DATA_DIR", "/var/lib/portalcrane")
-STAGING_DIR = f"{DATA_DIR}/staging"
+STAGING_DIR = f"{DATA_DIR}/cache/staging"
 
 # GitHub repository coordinates (owner/repo)
 GITHUB_OWNER = "cyr-ius"
@@ -39,6 +40,9 @@ ALGORITHM = "HS256"
 
 # Trivy server URL (used for vulnerability scanning)
 TRIVY_SERVER_URL: str = "http://127.0.0.1:4954"
+TRIVY_CACHE_DIR = f"{DATA_DIR}/cache/trivy"
+TRIVY_BINARY = "/usr/local/bin/trivy"
+TRIVY_DB_METADATA = Path(TRIVY_CACHE_DIR) / "db" / "metadata.json"
 
 # Container registry URL (used for skopeo copy operations)
 REGISTRY_URL: str = "http://localhost:5000"
