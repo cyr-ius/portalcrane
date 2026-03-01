@@ -86,6 +86,11 @@ class Settings(BaseSettings):
     # Logging level (DEBUG, INFO, WARNING, ERROR)
     log_level: str = "INFO"
 
+    # Folders configuration (registry path prefixes with user permissions)
+    data_dir: str = "/var/lib/portalcrane"
+
+    # ── Internal helpers ─────────────────────────────────────────────────────────
+
     class Config:
         env_file = ".env"
         case_sensitive = False

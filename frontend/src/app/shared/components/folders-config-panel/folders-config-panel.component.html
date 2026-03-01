@@ -1,0 +1,400 @@
+<!-- Portalcrane - Folders Configuration Panel -->
+<div class="card border-0 mb-3">
+  <div
+    class="card-header border-0 d-flex align-items-center justify-content-between"
+  >
+    <div>
+      <h6 class="fw-semibold mb-0">
+        <i class="bi bi-folder2-open me-2"></i>Registry Folders
+      </h6>
+      <div class="text-muted small mt-1">
+        Folders act as path prefixes in the registry. Permissions defined here
+        override global pull/push rights.
+      </div>
+    </div>
+    <button
+      class="btn btn-sm btn-primary"
+      (click)="openCreateForm()"
+      [disabled]="showCreateForm()"
+    >
+      <i class="bi bi-plus-lg me-1"></i>New folder
+    </button>
+  </div>
+
+  <div class="card-body pt-0">
+    <!-- Error banner -->
+    @if (error()) {
+      <div class="alert alert-danger d-flex align-items-center gap-2 py-2 mt-2">
+        <i class="bi bi-exclamation-triangle-fill"></i>
+        {{ error() }}
+      </div>
+    }
+
+    <!-- Create form -->
+    @if (showCreateForm()) {
+      <div class="border rounded p-3 mb-3 bg-body-secondary">
+        <h6 class="fw-semibold mb-3">
+          <i class="bi bi-folder-plus me-1"></i>Create folder
+        </h6>
+
+        @if (createError()) {
+          <div class="alert alert-danger py-2 small">{{ createError() }}</div>
+        }
+
+        <div class="row g-2 mb-3">
+          <div class="col-md-4">
+            <label class="form-label small fw-semibold"
+              >Folder name <span class="text-danger">*</span></label
+            >
+            <input
+              type="text"
+              class="form-control form-control-sm font-monospace"
+              placeholder="e.g. production"
+              [value]="newName()"
+              (input)="newName.set($any($event.target).value)"
+            />
+            <div class="text-muted mt-1" style="font-size: 0.72rem">
+              Lowercase, no spaces or slashes. Used as image prefix:
+              <code>{{ newName() || "folder" }}/image:tag</code>
+            </div>
+          </div>
+          <div class="col-md-8">
+            <label class="form-label small fw-semibold">Description</label>
+            <input
+              type="text"
+              class="form-control form-control-sm"
+              placeholder="Optional description"
+              [value]="newDescription()"
+              (input)="newDescription.set($any($event.target).value)"
+            />
+          </div>
+        </div>
+
+        <div class="d-flex gap-2">
+          <button
+            class="btn btn-primary btn-sm d-flex align-items-center gap-1"
+            (click)="createFolder()"
+            [disabled]="!canCreate() || creating()"
+          >
+            @if (creating()) {
+              <span class="spinner-border spinner-border-sm"></span>
+              Creating…
+            } @else {
+              <i class="bi bi-check-lg"></i>Create
+            }
+          </button>
+          <button
+            class="btn btn-outline-secondary btn-sm"
+            (click)="cancelCreate()"
+            [disabled]="creating()"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    }
+
+    <!-- Loading skeleton -->
+    @if (loading()) {
+      <div class="d-flex align-items-center gap-2 text-muted py-3">
+        <span class="spinner-border spinner-border-sm"></span>
+        Loading folders…
+      </div>
+    }
+
+    <!-- Empty state -->
+    @if (!loading() && folders().length === 0 && !showCreateForm()) {
+      <div class="text-center text-muted py-5">
+        <i class="bi bi-folder2 display-5 d-block mb-2 opacity-50"></i>
+        <div class="fw-semibold">No folders configured</div>
+        <div class="small mt-1">
+          Create a folder to restrict image access by path prefix.
+        </div>
+      </div>
+    }
+
+    <!-- Folders list -->
+    @for (folder of folders(); track folder.id) {
+      <div class="border rounded mb-2">
+        <!-- Folder header row -->
+        <div
+          class="d-flex align-items-center gap-2 p-3"
+          style="cursor: pointer"
+          (click)="toggleExpand(folder.id)"
+        >
+          <i
+            class="bi text-primary"
+            [class.bi-folder2-open]="expandedId() === folder.id"
+            [class.bi-folder2]="expandedId() !== folder.id"
+          ></i>
+
+          <div class="flex-grow-1">
+            <span class="fw-semibold font-monospace">{{ folder.name }}</span>
+            @if (folder.description) {
+              <span class="text-muted small ms-2"
+                >— {{ folder.description }}</span
+              >
+            }
+          </div>
+
+          <span class="badge bg-body-secondary text-muted me-2">
+            <i class="bi bi-people me-1"></i>{{ folder.permissions.length }}
+          </span>
+
+          <span class="text-muted small me-2">
+            {{ formatDate(folder.created_at) }}
+          </span>
+
+          <!-- Delete button -->
+          <button
+            class="btn btn-outline-danger btn-sm"
+            (click)="$event.stopPropagation(); deleteFolder(folder.id)"
+            [disabled]="deletingId() === folder.id"
+            title="Delete folder"
+          >
+            @if (deletingId() === folder.id) {
+              <span class="spinner-border spinner-border-sm"></span>
+            } @else {
+              <i class="bi bi-trash"></i>
+            }
+          </button>
+
+          <i
+            class="bi text-muted"
+            [class.bi-chevron-up]="expandedId() === folder.id"
+            [class.bi-chevron-down]="expandedId() !== folder.id"
+          ></i>
+        </div>
+
+        <!-- Expanded detail -->
+        @if (expandedId() === folder.id) {
+          <div class="border-top px-3 pb-3 pt-2">
+            <!-- Edit description -->
+            <div class="mb-3">
+              @if (editingDescId() !== folder.id) {
+                <div class="d-flex align-items-center gap-2">
+                  <span class="text-muted small">
+                    <i class="bi bi-card-text me-1"></i>
+                    {{ folder.description || "No description" }}
+                  </span>
+                  <button
+                    class="btn btn-link btn-sm p-0 text-muted"
+                    (click)="startEditDesc(folder)"
+                    title="Edit description"
+                  >
+                    <i class="bi bi-pencil"></i>
+                  </button>
+                </div>
+              } @else {
+                <div class="d-flex align-items-center gap-2">
+                  <input
+                    type="text"
+                    class="form-control form-control-sm"
+                    style="max-width: 320px"
+                    [value]="editDesc()"
+                    (input)="editDesc.set($any($event.target).value)"
+                  />
+                  <button
+                    class="btn btn-primary btn-sm"
+                    (click)="saveDesc(folder.id)"
+                    [disabled]="savingDesc()"
+                  >
+                    @if (savingDesc()) {
+                      <span class="spinner-border spinner-border-sm"></span>
+                    } @else {
+                      Save
+                    }
+                  </button>
+                  <button
+                    class="btn btn-outline-secondary btn-sm"
+                    (click)="cancelEditDesc()"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              }
+            </div>
+
+            <!-- Usage hint -->
+            <div
+              class="alert alert-info py-2 small d-flex align-items-center gap-2 mb-3"
+            >
+              <i class="bi bi-info-circle-fill"></i>
+              Push images with:
+              <code
+                >docker push &lt;host&gt;/{{
+                  folder.name
+                }}/&lt;image&gt;:tag</code
+              >
+            </div>
+
+            <!-- Permissions table -->
+            <div class="d-flex align-items-center justify-content-between mb-2">
+              <span class="fw-semibold small">
+                <i class="bi bi-key me-1"></i>User permissions
+              </span>
+              @if (addPermFolderId() !== folder.id) {
+                <button
+                  class="btn btn-outline-primary btn-sm"
+                  (click)="openAddPerm(folder.id)"
+                >
+                  <i class="bi bi-person-plus me-1"></i>Add user
+                </button>
+              }
+            </div>
+
+            <!-- Add permission form -->
+            @if (addPermFolderId() === folder.id) {
+              <div class="border rounded p-2 mb-2 bg-body-secondary">
+                @if (permError()) {
+                  <div class="alert alert-danger py-1 small mb-2">
+                    {{ permError() }}
+                  </div>
+                }
+                <div class="row g-2 align-items-end">
+                  <div class="col-md-4">
+                    <label class="form-label small fw-semibold mb-1"
+                      >Username</label
+                    >
+                    <input
+                      type="text"
+                      class="form-control form-control-sm"
+                      placeholder="username"
+                      [value]="addPermUsername()"
+                      (input)="addPermUsername.set($any($event.target).value)"
+                    />
+                  </div>
+                  <div class="col-auto">
+                    <div class="form-check mb-0">
+                      <input
+                        class="form-check-input"
+                        type="checkbox"
+                        [id]="'perm-pull-' + folder.id"
+                        [checked]="addPermCanPull()"
+                        (change)="
+                          addPermCanPull.set($any($event.target).checked)
+                        "
+                      />
+                      <label
+                        class="form-check-label small"
+                        [htmlFor]="'perm-pull-' + folder.id"
+                      >
+                        <i class="bi bi-download me-1"></i>Pull
+                      </label>
+                    </div>
+                  </div>
+                  <div class="col-auto">
+                    <div class="form-check mb-0">
+                      <input
+                        class="form-check-input"
+                        type="checkbox"
+                        [id]="'perm-push-' + folder.id"
+                        [checked]="addPermCanPush()"
+                        (change)="
+                          addPermCanPush.set($any($event.target).checked)
+                        "
+                      />
+                      <label
+                        class="form-check-label small"
+                        [htmlFor]="'perm-push-' + folder.id"
+                      >
+                        <i class="bi bi-upload me-1"></i>Push
+                      </label>
+                    </div>
+                  </div>
+                  <div class="col-auto d-flex gap-1">
+                    <button
+                      class="btn btn-primary btn-sm"
+                      (click)="savePerm(folder.id)"
+                      [disabled]="!canAddPerm() || savingPerm()"
+                    >
+                      @if (savingPerm()) {
+                        <span class="spinner-border spinner-border-sm"></span>
+                      } @else {
+                        Add
+                      }
+                    </button>
+                    <button
+                      class="btn btn-outline-secondary btn-sm"
+                      (click)="cancelAddPerm()"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </div>
+            }
+
+            <!-- Permissions list -->
+            @if (folder.permissions.length === 0) {
+              <div class="text-muted small py-2">
+                <i class="bi bi-person-slash me-1"></i>No users assigned yet.
+              </div>
+            } @else {
+              <table class="table table-sm align-middle mb-0">
+                <thead>
+                  <tr class="text-muted" style="font-size: 0.78rem">
+                    <th>User</th>
+                    <th class="text-center">Pull</th>
+                    <th class="text-center">Push</th>
+                    <th class="text-end">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (perm of folder.permissions; track perm.username) {
+                    <tr>
+                      <td>
+                        <span class="fw-semibold font-monospace small">
+                          {{ perm.username }}
+                        </span>
+                      </td>
+                      <td class="text-center">
+                        <input
+                          class="form-check-input"
+                          type="checkbox"
+                          [checked]="perm.can_pull"
+                          (change)="
+                            updatePerm(
+                              folder.id,
+                              perm.username,
+                              $any($event.target).checked,
+                              perm.can_push
+                            )
+                          "
+                        />
+                      </td>
+                      <td class="text-center">
+                        <input
+                          class="form-check-input"
+                          type="checkbox"
+                          [checked]="perm.can_push"
+                          (change)="
+                            updatePerm(
+                              folder.id,
+                              perm.username,
+                              perm.can_pull,
+                              $any($event.target).checked
+                            )
+                          "
+                        />
+                      </td>
+                      <td class="text-end">
+                        <button
+                          class="btn btn-outline-danger btn-sm"
+                          (click)="removePerm(folder.id, perm.username)"
+                          title="Remove user from folder"
+                        >
+                          <i class="bi bi-person-dash"></i>
+                        </button>
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            }
+          </div>
+        }
+      </div>
+    }
+  </div>
+</div>
