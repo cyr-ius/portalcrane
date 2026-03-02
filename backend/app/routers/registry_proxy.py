@@ -37,7 +37,7 @@ from .folders import check_folder_access
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(tags=["Registry Proxy"])
+router = APIRouter()
 settings = get_settings()
 audit = AuditService(settings)
 
