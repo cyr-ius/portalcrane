@@ -106,6 +106,13 @@
                     <code class="small">{{ tag }}</code>
                   </div>
                   <button
+                    class="btn btn-sm btn-outline-info border-0 ms-auto me-3"
+                    (click)="$event.stopPropagation(); copyToClipboard(tag)"
+                    title="Copy pull path"
+                  >
+                    <i class="bi bi-copy"></i>
+                  </button>
+                  <button
                     class="btn btn-sm btn-outline-danger border-0"
                     (click)="$event.stopPropagation(); confirmDeleteTag(tag)"
                     title="Delete tag"

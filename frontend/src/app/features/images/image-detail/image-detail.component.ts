@@ -122,6 +122,11 @@ export class ImageDetailComponent implements OnInit {
     });
   }
 
+  copyToClipboard(tag: string) {
+    const cmd = `docker pull ${window.location.host}/${this.repository()}:${tag}`;
+    navigator.clipboard.writeText(cmd);
+  }
+
   formatBytes(bytes: number): string {
     if (!bytes) return "0 B";
     const units = ["B", "KB", "MB", "GB"];
