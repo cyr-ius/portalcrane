@@ -111,7 +111,7 @@ def get_registry(settings: Settings = Depends(get_settings)) -> RegistryService:
 @router.get("/images", response_model=PaginatedImages)
 async def list_images(
     page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=5, le=100),
+    page_size: int = Query(20, ge=5, le=200),
     search: str | None = Query(None),
     registry: RegistryService = Depends(get_registry),
     _: UserInfo = Depends(require_pull_access),
