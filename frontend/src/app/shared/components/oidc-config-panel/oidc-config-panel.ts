@@ -45,7 +45,6 @@ export class OidcConfigPanel implements OnInit {
   });
 
   oidcForm = form(this.oidcModel, (p) => {
-    required(p.enabled);
     required(p.issuer);
     required(p.client_id);
     required(p.client_secret);
@@ -96,5 +95,10 @@ export class OidcConfigPanel implements OnInit {
         this.saving.set(false);
       }
     });
+  }
+
+  /** Persist OIDC enable/disable once the checkbox value has been applied. */
+  onEnabledToggle(): void {
+    queueMicrotask(() => this.save());
   }
 }

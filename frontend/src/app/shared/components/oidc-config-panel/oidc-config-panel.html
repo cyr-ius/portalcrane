@@ -50,7 +50,7 @@
           type="checkbox"
           role="switch"
           id="oidcEnabled"
-          (click)="save()"
+          (change)="onEnabledToggle()"
           style="width: 2.5em; height: 1.3em"
           [formField]="oidcForm.enabled"
         />
