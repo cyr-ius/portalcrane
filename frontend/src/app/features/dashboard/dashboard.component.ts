@@ -1,3 +1,7 @@
+/**
+ * Portalcrane - Dashboard Component
+ *
+ */
 import { DatePipe, SlicePipe } from "@angular/common";
 import {
   Component,
@@ -38,7 +42,9 @@ export class DashboardComponent implements OnInit {
 
   stats = signal<DashboardStats | null>(null);
   loading = signal(false);
+
   gcStatus = signal<GCStatus | null>(null);
+  gcDryStatus = signal(false);
 
   // Ghost repositories
   ghostRepos = signal<string[]>([]);
@@ -46,7 +52,7 @@ export class DashboardComponent implements OnInit {
   ghostsChecked = signal(false);
   purgingGhosts = signal(false);
 
-  // Orphan .tar files in staging directory
+  // Orphan OCI layout directories in staging
   orphanOciDirs = signal<string[]>([]);
   readonly orphanOciCount = computed(() => this.orphanOciDirs().length);
   orphanOciSize = signal("");
@@ -74,9 +80,8 @@ export class DashboardComponent implements OnInit {
         )
         .subscribe((s) => {
           this.gcStatus.set(s);
-          // Once GC finishes, refresh stats and ghost repos
           if (s.status === "done") {
-            this.loadStats();
+            this.loadStats(false);
             this.checkGhostRepos();
           }
         });
@@ -85,10 +90,10 @@ export class DashboardComponent implements OnInit {
 
   // ── Public methods ────────────────────────────────────────────────────────
 
-  ngOnInit_inner() {} // placeholder — remove if not needed
-
   refresh() {
-    this.loadStats();
+    // Show the full spinner only when there is no data yet
+    this.loadStats(this.stats() === null);
+
     if (!this.authService.currentUser()?.is_admin) {
       return;
     }
@@ -99,20 +104,37 @@ export class DashboardComponent implements OnInit {
     this.checkOrphanOci();
   }
 
-  loadStats() {
-    this.loading.set(true);
+  /**
+   * Load dashboard stats from the backend.
+   *
+   * @param showSpinner - When true (initial load only), the full-page loading
+   *   spinner is shown while the request is in-flight.  When false (silent
+   *   refresh triggered by GC / Purge), stats are updated in place without
+   *   affecting the loading flag, so the rest of the dashboard stays visible.
+   */
+  loadStats(showSpinner = false) {
+    if (showSpinner) {
+      this.loading.set(true);
+    }
     this.dashboardService.getStats().subscribe({
       next: (data) => {
         this.stats.set(data);
-        this.loading.set(false);
+        if (showSpinner) {
+          this.loading.set(false);
+        }
       },
-      error: () => this.loading.set(false),
+      error: () => {
+        if (showSpinner) {
+          this.loading.set(false);
+        }
+      },
     });
   }
 
   startGC(dryRun: boolean) {
     this.registryService.startGarbageCollect(dryRun).subscribe({
       next: (s) => {
+        if (dryRun) this.gcDryStatus.set(false);
         this.gcStatus.set(s);
         this.gcPollTrigger$.next();
       },
@@ -138,13 +160,14 @@ export class DashboardComponent implements OnInit {
       next: () => {
         this.purgingGhosts.set(false);
         this.checkGhostRepos();
-        this.loadStats();
+        // Silent refresh — no spinner
+        this.loadStats(false);
       },
       error: () => this.purgingGhosts.set(false),
     });
   }
 
-  // ── Orphan images ───────────────────────────────────────────────────────
+  // ── Orphan OCI layouts ───────────────────────────────────────────────────
 
   checkOrphanOci() {
     this.stagingService.getOrphanOci().subscribe({
@@ -164,6 +187,7 @@ export class DashboardComponent implements OnInit {
       next: () => {
         this.purgingOrphanOci.set(false);
         this.checkOrphanOci();
+        // No loadStats() here — purging OCI dirs does not affect registry stats
       },
       error: () => this.purgingOrphanOci.set(false),
     });

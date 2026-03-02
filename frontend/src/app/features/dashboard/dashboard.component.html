@@ -191,7 +191,7 @@
         </div>
       </div>
 
-      <!-- ── Orphan Tarballs health card ── -->
+      <!-- ── Orphan OCI health card ── -->
       <div class="col-sm-6 col-lg-4">
         <div
           class="stat-card card border-0 h-100"
@@ -353,8 +353,9 @@
                   (click)="startGC(true)"
                   [disabled]="gcStatus()?.status === 'running'"
                 >
-                  @if (gcStatus()?.status === "running") {
+                  @if (gcDryStatus() && gcStatus()?.status === "running") {
                     <span class="spinner-border spinner-border-sm me-1"></span>
+                    Dry running...
                   } @else {
                     <i class="bi bi-eye me-1"></i>
                   }
@@ -365,7 +366,7 @@
                   (click)="startGC(false)"
                   [disabled]="gcStatus()?.status === 'running'"
                 >
-                  @if (gcStatus()?.status === "running") {
+                  @if (!gcDryStatus() && gcStatus()?.status === "running") {
                     <span class="spinner-border spinner-border-sm me-1"></span>
                     Running...
                   } @else {
