@@ -34,12 +34,27 @@ from collections import deque
 from datetime import datetime, timezone
 from threading import Lock
 from typing import Any
+import time
+
+from pydantic import BaseModel
 
 from ..config import Settings
 
 audit_logger = logging.getLogger("portalcrane.audit")
 _recent_audit_events: deque[dict[str, Any]] = deque(maxlen=500)
 _audit_events_lock = Lock()
+
+
+class AuditEvent(BaseModel):
+    event: str
+    timestamp: str
+    path: str | None = None
+    method: str | None = None
+    client_ip: str | None = None
+    http_status: int
+    bytes: int
+    elapsed_s: float = time.monotonic()
+    username: str | None = None
 
 
 def _store_recent_event(event: dict[str, Any]) -> None:
@@ -60,14 +75,24 @@ class AuditService:
     def __init__(self, settings: Settings):
         self.settings = settings
 
-    async def log_pull(
+        self.path: str | None = None
+        self.method: str | None = None
+        self.http_status: int = 200
+        self.size: int = 0
+        self.elapsed: float = 0.0
+        self.client_ip: str | None = None
+        self.username: str | None = None
+
+    async def log(
         self,
-        path: str,
-        method: str,
-        status: int,
-        size: int,
-        elapsed: float,
-        client_ip: str,
+        subject: str,
+        path: str | None = None,
+        method: str | None = None,
+        status: int = 200,
+        size: int = 0,
+        elapsed: float = 0.0,
+        client_ip: str | None = None,
+        username: str | None = None,
     ) -> None:
         """
         Log a registry pull (GET/HEAD) event.
@@ -80,50 +105,20 @@ class AuditService:
         size:       Response body size in bytes
         elapsed:    Round-trip time in seconds
         client_ip:  IP address of the Docker client (or reverse-proxy forwarded IP)
+        username:   Username
         """
-        event = {
-            "event": "registry_pull",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "path": path,
-            "method": method,
-            "http_status": status,
-            "bytes": size,
-            "elapsed_s": round(elapsed, 3),
-            "client_ip": client_ip,
-        }
-        _store_recent_event(event)
-        audit_logger.info(json.dumps(event))
 
-    async def log_push(
-        self,
-        path: str,
-        method: str,
-        status: int,
-        size: int,
-        elapsed: float,
-        client_ip: str,
-    ) -> None:
-        """
-        Log a registry push (PUT/POST/PATCH) event.
+        event = AuditEvent(
+            event=subject,
+            timestamp=datetime.now(timezone.utc).isoformat(),
+            path=path or self.path,
+            method=method or self.method,
+            http_status=status or self.http_status,
+            bytes=size or self.size,
+            elapsed_s=round(elapsed, 3),
+            client_ip=client_ip or self.client_ip,
+            username=username,
+        ).model_dump()
 
-        Parameters
-        ----------
-        path:       The v2 API path
-        method:     HTTP method (PUT, POST, PATCH)
-        status:     HTTP response status code from the upstream registry
-        size:       Request body size in bytes
-        elapsed:    Round-trip time in seconds
-        client_ip:  IP address of the Docker client
-        """
-        event = {
-            "event": "registry_push",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "path": path,
-            "method": method,
-            "http_status": status,
-            "bytes": size,
-            "elapsed_s": round(elapsed, 3),
-            "client_ip": client_ip,
-        }
         _store_recent_event(event)
         audit_logger.info(json.dumps(event))
