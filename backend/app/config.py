@@ -5,7 +5,6 @@ All settings loaded from environment variables
 
 import logging
 import os
-from functools import lru_cache
 from pathlib import Path
 
 from pydantic import model_validator
@@ -155,7 +154,6 @@ class Settings(BaseSettings):
         return self
 
 
-@lru_cache()
 def get_settings() -> Settings:
     """Get cached application settings."""
     return Settings()
