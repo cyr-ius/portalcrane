@@ -8,7 +8,7 @@
  */
 import { Component, computed, inject, OnInit, signal } from "@angular/core";
 import { FormsModule } from "@angular/forms";
-import { Router, RouterLink } from "@angular/router";
+import { Router } from "@angular/router";
 import {
   ImageInfo,
   PaginatedImages,
@@ -36,7 +36,7 @@ interface FolderNode {
 
 @Component({
   selector: "app-images-list",
-  imports: [RouterLink, FormsModule],
+  imports: [FormsModule],
   templateUrl: "./images-list.component.html",
   styleUrl: "./images-list.component.css",
 })
