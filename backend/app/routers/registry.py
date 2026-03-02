@@ -1,6 +1,10 @@
 """
 Portalcrane - Registry Router
-All endpoints for browsing and managing Docker Registry images and tags
+All endpoints for browsing and managing Docker Registry images and tags.
+
+Repository names containing slashes (e.g. "biocontainers/swarm") are passed
+as query parameters (?repository=...) instead of path segments to avoid
+%2F encoding issues with reverse proxies (Traefik, HAProxy, Nginx, Caddy).
 """
 
 import logging
@@ -111,7 +115,7 @@ def get_registry(settings: Settings = Depends(get_settings)) -> RegistryService:
 @router.get("/images", response_model=PaginatedImages)
 async def list_images(
     page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=5, le=200),
+    page_size: int = Query(20, ge=5, le=500),
     search: str | None = Query(None),
     registry: RegistryService = Depends(get_registry),
     _: UserInfo = Depends(require_pull_access),
@@ -145,25 +149,36 @@ async def list_images(
     )
 
 
-@router.get("/images/{repository:path}/tags")
+@router.get("/images/tags")
 async def get_image_tags(
-    repository: str,
+    repository: str = Query(
+        ..., description="Repository name, e.g. biocontainers/swarm"
+    ),
     registry: RegistryService = Depends(get_registry),
     _: UserInfo = Depends(require_pull_access),
 ):
-    """Get all tags for a specific image repository."""
+    """
+    Get all tags for a specific image repository.
+    Repository is passed as a query parameter to avoid %2F encoding issues
+    with reverse proxies when the name contains slashes.
+    """
     tags = await registry.list_tags(repository)
     return {"repository": repository, "tags": tags}
 
 
-@router.get("/images/{repository:path}/tags/{tag}/detail", response_model=ImageDetail)
+@router.get("/images/tags/detail", response_model=ImageDetail)
 async def get_tag_detail(
-    repository: str,
-    tag: str,
+    repository: str = Query(
+        ..., description="Repository name, e.g. biocontainers/swarm"
+    ),
+    tag: str = Query(..., description="Tag name, e.g. latest"),
     registry: RegistryService = Depends(get_registry),
     _: UserInfo = Depends(require_pull_access),
 ):
-    """Get detailed information about a specific image tag (advanced mode)."""
+    """
+    Get detailed information about a specific image tag (advanced mode).
+    Repository and tag are passed as query parameters.
+    """
     manifest = await registry.get_manifest(repository, tag)
     if not manifest:
         raise HTTPException(
@@ -202,14 +217,17 @@ async def get_tag_detail(
     )
 
 
-@router.delete("/images/{repository:path}/tags/{tag}")
+@router.delete("/images/tags")
 async def delete_tag(
-    repository: str,
-    tag: str,
+    repository: str = Query(..., description="Repository name"),
+    tag: str = Query(..., description="Tag name to delete"),
     registry: RegistryService = Depends(get_registry),
     _: UserInfo = Depends(require_push_access),
 ):
-    """Delete a specific tag from an image repository."""
+    """
+    Delete a specific tag from an image repository.
+    Repository and tag are passed as query parameters.
+    """
     success = await registry.delete_tag(repository, tag)
     if not success:
         raise HTTPException(
@@ -219,13 +237,16 @@ async def delete_tag(
     return {"message": f"Tag '{tag}' deleted from '{repository}'"}
 
 
-@router.delete("/images/{repository:path}")
+@router.delete("/images")
 async def delete_image(
-    repository: str,
+    repository: str = Query(..., description="Repository name to delete entirely"),
     registry: RegistryService = Depends(get_registry),
     _: UserInfo = Depends(require_push_access),
 ):
-    """Delete all tags (and the image) from a repository."""
+    """
+    Delete all tags (and the image) from a repository.
+    Repository is passed as a query parameter.
+    """
     tags = await registry.list_tags(repository)
     if not tags:
         raise HTTPException(
@@ -248,14 +269,17 @@ async def delete_image(
     return {"message": f"Image '{repository}' and all its tags deleted"}
 
 
-@router.post("/images/{repository:path}/tags")
+@router.post("/images/tags")
 async def add_tag(
-    repository: str,
-    request: AddTagRequest,
+    repository: str = Query(..., description="Repository name"),
+    request: AddTagRequest = ...,
     registry: RegistryService = Depends(get_registry),
     _: UserInfo = Depends(require_push_access),
 ):
-    """Add a new tag to an existing image (retag)."""
+    """
+    Add a new tag to an existing image (retag).
+    Repository is passed as a query parameter.
+    """
     # Get the source manifest
     manifest = await registry.get_manifest(repository, request.source_tag)
     if not manifest:
@@ -295,10 +319,10 @@ async def ping_registry(
     return {"status": "ok" if is_up else "unreachable", "url": registry.base_url}
 
 
-@router.post("/images/{repository:path}/rename")
+@router.post("/images/rename")
 async def rename_image(
-    repository: str,
-    request: RenameImageRequest,
+    repository: str = Query(..., description="Source repository name"),
+    request: RenameImageRequest = ...,
     settings: Settings = Depends(get_settings),
     _: UserInfo = Depends(require_push_access),
 ):
@@ -306,6 +330,7 @@ async def rename_image(
     Retag an image to a new repository/name using skopeo copy.
     skopeo copies the manifest directly between two registry locations
     without pulling the full image layers to disk.
+    Repository is passed as a query parameter.
     """
     from urllib.parse import urlparse
 
@@ -525,7 +550,6 @@ async def list_empty_repositories(
 ):
     """
     List repositories that have no tags.
-
     These ghost entries appear in the catalog after all tags of a repository
     have been deleted. The Distribution Registry has no API to remove them;
     they persist until a full GC + filesystem cleanup is performed.

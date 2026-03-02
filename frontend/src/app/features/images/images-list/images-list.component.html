@@ -1,4 +1,10 @@
 <!-- Portalcrane - Images List Template (flat + folder tree view) -->
+<!--
+  Navigation to image detail uses (click)="goToDetail(image.name)" which
+  calls router.navigate(['/images/detail'], { queryParams: { repository: name } }).
+  This avoids %2F encoding issues that occur when repository names containing
+  slashes are placed in URL path segments and pass through reverse proxies.
+-->
 <div class="p-4">
   <!-- ── Page header ─────────────────────────────────────────────────────── -->
   <div class="d-flex align-items-center justify-content-between mb-4">
@@ -182,11 +188,13 @@
                       <div class="image-icon">
                         <i class="bi bi-box-seam"></i>
                       </div>
-                      <a
-                        [routerLink]="['/images', image.name]"
-                        class="fw-semibold text-decoration-none link-body-emphasis font-monospace small"
-                        >{{ image.name }}</a
+                      <!-- Use button + goToDetail() to pass repository as queryParam -->
+                      <button
+                        class="btn btn-link p-0 fw-semibold text-decoration-none link-body-emphasis font-monospace small text-start"
+                        (click)="goToDetail(image.name)"
                       >
+                        {{ image.name }}
+                      </button>
                     </div>
                   </td>
                   <td class="align-middle">
@@ -220,13 +228,14 @@
                   </td>
                   <td class="align-middle text-end">
                     <div class="d-flex gap-1 justify-content-end">
-                      <a
-                        [routerLink]="['/images', image.name]"
+                      <!-- Use button + goToDetail() instead of routerLink with path param -->
+                      <button
                         class="btn btn-sm btn-outline-primary"
+                        (click)="goToDetail(image.name)"
                         title="View details"
                       >
                         <i class="bi bi-eye"></i>
-                      </a>
+                      </button>
                       <button
                         class="btn btn-sm btn-outline-danger"
                         (click)="confirmDeleteImage(image)"
@@ -293,7 +302,7 @@
               style="cursor: pointer; user-select: none"
             >
               <i
-                class="bi bi-chevron-right text-muted transition-transform"
+                class="bi bi-chevron-right text-muted"
                 [style.transform]="
                   isFolderExpanded(folder.name) ? 'rotate(90deg)' : 'rotate(0)'
                 "
@@ -329,11 +338,13 @@
                       <i class="bi bi-box-seam"></i>
                     </div>
                     <div>
-                      <a
-                        [routerLink]="['/images', image.name]"
-                        class="fw-semibold text-decoration-none link-body-emphasis font-monospace small"
-                        >{{ imageShortName(image) }}</a
+                      <!-- Use button + goToDetail() instead of routerLink with path param -->
+                      <button
+                        class="btn btn-link p-0 fw-semibold text-decoration-none link-body-emphasis font-monospace small text-start"
+                        (click)="goToDetail(image.name)"
                       >
+                        {{ imageShortName(image) }}
+                      </button>
                       <div class="d-flex flex-wrap gap-1 mt-1">
                         @for (tag of image.tags.slice(0, 5); track tag) {
                           <span
@@ -361,13 +372,14 @@
                     <span class="badge bg-primary-subtle text-primary">{{
                       image.tag_count
                     }}</span>
-                    <a
-                      [routerLink]="['/images', image.name]"
+                    <!-- Use button + goToDetail() instead of routerLink with path param -->
+                    <button
                       class="btn btn-sm btn-outline-primary"
+                      (click)="goToDetail(image.name)"
                       title="View details"
                     >
                       <i class="bi bi-eye"></i>
-                    </a>
+                    </button>
                     <button
                       class="btn btn-sm btn-outline-danger"
                       (click)="confirmDeleteImage(image)"

@@ -1,11 +1,14 @@
 /**
  * Portalcrane - Images List Component
  * Displays registry images in flat list or hierarchical folder tree view.
- * New feature: viewMode signal toggles between "flat" and "tree".
+ *
+ * Navigation to the image detail page now uses /images/detail with a
+ * queryParam ?repository=... instead of /images/:repository path segment,
+ * to avoid %2F encoding issues with reverse proxies.
  */
 import { Component, computed, inject, OnInit, signal } from "@angular/core";
 import { FormsModule } from "@angular/forms";
-import { RouterLink } from "@angular/router";
+import { Router, RouterLink } from "@angular/router";
 import {
   ImageInfo,
   PaginatedImages,
@@ -39,6 +42,7 @@ interface FolderNode {
 })
 export class ImagesListComponent implements OnInit {
   private registry = inject(RegistryService);
+  private router = inject(Router);
 
   // ── Remote data ────────────────────────────────────────────────────────────
   data = signal<PaginatedImages | null>(null);
@@ -122,6 +126,16 @@ export class ImagesListComponent implements OnInit {
     return idx === -1 ? img.name : img.name.substring(idx + 1);
   }
 
+  /**
+   * Navigate to the image detail page using queryParams.
+   * Avoids %2F issues — repository name is safe in query string.
+   */
+  goToDetail(imageName: string): void {
+    this.router.navigate(["/images/detail"], {
+      queryParams: { repository: imageName },
+    });
+  }
+
   // ── Pagination helpers ─────────────────────────────────────────────────────
   pageStart = computed(() => {
     const d = this.data();
@@ -152,9 +166,72 @@ export class ImagesListComponent implements OnInit {
     return result;
   });
 
+  // ── Sort helpers ───────────────────────────────────────────────────────────
+  toggleSort(field: SortField): void {
+    if (this.sortField() === field) {
+      this.sortDir.set(this.sortDir() === "asc" ? "desc" : "asc");
+    } else {
+      this.sortField.set(field);
+      this.sortDir.set("asc");
+    }
+  }
+
+  sortIcon(field: SortField): string {
+    if (this.sortField() !== field) return "bi-arrow-down-up text-muted";
+    return this.sortDir() === "asc" ? "bi-sort-alpha-down" : "bi-sort-alpha-up";
+  }
+
+  sortIconNumeric(field: SortField): string {
+    if (this.sortField() !== field) return "bi-arrow-down-up text-muted";
+    return this.sortDir() === "asc"
+      ? "bi-sort-numeric-down"
+      : "bi-sort-numeric-up";
+  }
+
+  setTagFilter(filter: TagFilter): void {
+    this.tagFilter.set(filter);
+  }
+
+  setViewMode(mode: ViewMode): void {
+    this.viewMode.set(mode);
+  }
+
+  // ── Folder tree helpers ────────────────────────────────────────────────────
+  isFolderExpanded(folderName: string): boolean {
+    return this.expandedFolders().has(folderName);
+  }
+
+  toggleFolder(folderName: string): void {
+    const set = new Set(this.expandedFolders());
+    if (set.has(folderName)) {
+      set.delete(folderName);
+    } else {
+      set.add(folderName);
+    }
+    this.expandedFolders.set(set);
+  }
+
   // ── Delete modal state ─────────────────────────────────────────────────────
   deleteTarget = signal<ImageInfo | null>(null);
   deleting = signal(false);
+
+  confirmDeleteImage(image: ImageInfo): void {
+    this.deleteTarget.set(image);
+  }
+
+  deleteImage(): void {
+    const target = this.deleteTarget();
+    if (!target) return;
+    this.deleting.set(true);
+    this.registry.deleteImage(target.name).subscribe({
+      next: () => {
+        this.deleteTarget.set(null);
+        this.deleting.set(false);
+        this.loadImages();
+      },
+      error: () => this.deleting.set(false),
+    });
+  }
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
   ngOnInit() {
@@ -202,77 +279,5 @@ export class ImagesListComponent implements OnInit {
     if (page < 1 || page > total) return;
     this.currentPage.set(page);
     this.loadImages();
-  }
-
-  // ── View mode helpers ──────────────────────────────────────────────────────
-
-  setViewMode(mode: ViewMode) {
-    this.viewMode.set(mode);
-  }
-
-  toggleFolder(folderName: string) {
-    this.expandedFolders.update((s) => {
-      const next = new Set(s);
-      if (next.has(folderName)) {
-        next.delete(folderName);
-      } else {
-        next.add(folderName);
-      }
-      return next;
-    });
-  }
-
-  isFolderExpanded(folderName: string): boolean {
-    return this.expandedFolders().has(folderName);
-  }
-
-  // ── Sort helpers ───────────────────────────────────────────────────────────
-  toggleSort(field: SortField) {
-    if (this.sortField() === field) {
-      this.sortDir.set(this.sortDir() === "asc" ? "desc" : "asc");
-    } else {
-      this.sortField.set(field);
-      this.sortDir.set("asc");
-    }
-  }
-
-  sortIcon(field: SortField): string {
-    if (this.sortField() !== field)
-      return "bi-arrow-down-up text-muted opacity-50";
-    return this.sortDir() === "asc"
-      ? "bi-sort-alpha-down"
-      : "bi-sort-alpha-up-alt";
-  }
-
-  sortIconNumeric(field: SortField): string {
-    if (this.sortField() !== field)
-      return "bi-arrow-down-up text-muted opacity-50";
-    return this.sortDir() === "asc"
-      ? "bi-sort-numeric-down"
-      : "bi-sort-numeric-up-alt";
-  }
-
-  // ── Filter helpers ─────────────────────────────────────────────────────────
-  setTagFilter(f: TagFilter) {
-    this.tagFilter.set(f);
-  }
-
-  // ── Delete ─────────────────────────────────────────────────────────────────
-  confirmDeleteImage(image: ImageInfo) {
-    this.deleteTarget.set(image);
-  }
-
-  deleteImage() {
-    const target = this.deleteTarget();
-    if (!target) return;
-    this.deleting.set(true);
-    this.registry.deleteImage(target.name).subscribe({
-      next: () => {
-        this.deleteTarget.set(null);
-        this.deleting.set(false);
-        this.loadImages();
-      },
-      error: () => this.deleting.set(false),
-    });
   }
 }

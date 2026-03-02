@@ -1,3 +1,11 @@
+/**
+ * Portalcrane - Registry Service
+ *
+ * All endpoints that target a specific repository pass the repository name
+ * as a query parameter (?repository=...) instead of a URL path segment.
+ * This avoids %2F encoding issues with reverse proxies (Traefik, HAProxy,
+ * Nginx, Caddy) that normalize encoded slashes before forwarding requests.
+ */
 import { HttpClient, HttpParams } from "@angular/common/http";
 import { inject, Injectable } from "@angular/core";
 import { Observable } from "rxjs";
@@ -60,40 +68,88 @@ export class RegistryService {
     return this.http.get<PaginatedImages>(`${this.BASE}/images`, { params });
   }
 
+  /**
+   * Get all tags for a repository.
+   * Repository is passed as a query param to survive reverse-proxy URI normalization.
+   */
   getImageTags(
     repository: string,
   ): Observable<{ repository: string; tags: string[] }> {
+    const params = new HttpParams().set("repository", repository);
     return this.http.get<{ repository: string; tags: string[] }>(
-      `${this.BASE}/images/${encodeURIComponent(repository)}/tags`,
+      `${this.BASE}/images/tags`,
+      { params },
     );
   }
 
+  /**
+   * Get detailed metadata for a specific tag.
+   * Both repository and tag are passed as query params.
+   */
   getTagDetail(repository: string, tag: string): Observable<ImageDetail> {
-    return this.http.get<ImageDetail>(
-      `${this.BASE}/images/${encodeURIComponent(repository)}/tags/${tag}/detail`,
-    );
+    const params = new HttpParams()
+      .set("repository", repository)
+      .set("tag", tag);
+    return this.http.get<ImageDetail>(`${this.BASE}/images/tags/detail`, {
+      params,
+    });
   }
 
+  /**
+   * Delete a specific tag from a repository.
+   * Both repository and tag are passed as query params.
+   */
   deleteTag(repository: string, tag: string): Observable<{ message: string }> {
-    return this.http.delete<{ message: string }>(
-      `${this.BASE}/images/${encodeURIComponent(repository)}/tags/${tag}`,
-    );
+    const params = new HttpParams()
+      .set("repository", repository)
+      .set("tag", tag);
+    return this.http.delete<{ message: string }>(`${this.BASE}/images/tags`, {
+      params,
+    });
   }
 
+  /**
+   * Delete all tags (and the image) from a repository.
+   * Repository is passed as a query param.
+   */
   deleteImage(repository: string): Observable<{ message: string }> {
-    return this.http.delete<{ message: string }>(
-      `${this.BASE}/images/${encodeURIComponent(repository)}`,
-    );
+    const params = new HttpParams().set("repository", repository);
+    return this.http.delete<{ message: string }>(`${this.BASE}/images`, {
+      params,
+    });
   }
 
+  /**
+   * Add a new tag to an existing image (retag).
+   * Repository is passed as a query param; source/new tag in the request body.
+   */
   addTag(
     repository: string,
     sourceTag: string,
     newTag: string,
   ): Observable<{ message: string }> {
+    const params = new HttpParams().set("repository", repository);
     return this.http.post<{ message: string }>(
-      `${this.BASE}/images/${encodeURIComponent(repository)}/tags`,
+      `${this.BASE}/images/tags`,
       { source_tag: sourceTag, new_tag: newTag },
+      { params },
+    );
+  }
+
+  /**
+   * Rename (retag) an image to a new repository/name via skopeo copy.
+   * Source repository is passed as a query param; target in the request body.
+   */
+  renameImage(
+    repository: string,
+    newRepository: string,
+    newTag: string,
+  ): Observable<{ message: string }> {
+    const params = new HttpParams().set("repository", repository);
+    return this.http.post<{ message: string }>(
+      `${this.BASE}/images/rename`,
+      { new_repository: newRepository, new_tag: newTag },
+      { params },
     );
   }
 

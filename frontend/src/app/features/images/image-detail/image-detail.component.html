@@ -27,10 +27,15 @@
         @if (showAddTag()) {
           <div class="card-body border-bottom py-2">
             <div class="d-flex gap-2 mb-2">
+              <!--
+                FIX: use (change)="addTagSource.set(...)" instead of
+                     (input)="addTagSource = ..." which overwrites the signal
+                     reference with a plain string, breaking subsequent calls.
+              -->
               <select
                 class="form-select form-select-sm"
                 [value]="addTagSource()"
-                (input)="addTagSource = $any($event.target).value"
+                (change)="addTagSource.set($any($event.target).value)"
               >
                 @for (tag of tags(); track tag) {
                   <option [value]="tag">{{ tag }}</option>
@@ -39,17 +44,26 @@
             </div>
             <div class="input-group input-group-sm">
               <span class="input-group-text"><i class="bi bi-tag"></i></span>
+              <!--
+                FIX: use (input)="newTagName.set(...)" instead of
+                     (input)="newTagName = ..." which overwrites the signal
+                     reference with a plain string, breaking subsequent calls.
+              -->
               <input
                 type="text"
                 class="form-control"
                 placeholder="New tag name"
                 [value]="newTagName()"
-                (input)="newTagName = $any($event.target).value"
+                (input)="newTagName.set($any($event.target).value)"
               />
+              <!--
+                FIX: [disabled]="!newTagName()" tests the signal value.
+                     The original !newTagName was always false (signal is truthy).
+              -->
               <button
                 class="btn btn-success"
                 (click)="addTag()"
-                [disabled]="!newTagName || addingTag()"
+                [disabled]="!newTagName() || addingTag()"
               >
                 @if (addingTag()) {
                   <span class="spinner-border spinner-border-sm"></span>
@@ -206,8 +220,8 @@
                 </div>
               }
 
-              <!-- Env vars (advanced) -->
-              @if (tagDetail()?.env?.length ?? 0 > 0) {
+              <!-- Env vars -->
+              @if ((tagDetail()?.env?.length ?? 0) > 0) {
                 <div class="mb-3">
                   <label class="text-muted small d-block mb-1"
                     >Environment Variables</label
