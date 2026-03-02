@@ -8,10 +8,56 @@ import asyncio
 import json
 import logging
 from datetime import datetime
+from urllib.parse import urlparse
 
-from ..config import TRIVY_BINARY, TRIVY_CACHE_DIR, TRIVY_DB_METADATA, TRIVY_SERVER_URL
+from ..config import (
+    REGISTRY_URL,
+    TRIVY_BINARY,
+    TRIVY_CACHE_DIR,
+    TRIVY_DB_METADATA,
+    TRIVY_SERVER_URL,
+)
 
 logger = logging.getLogger(__name__)
+
+
+def _normalize_image_ref(image_ref: str) -> str:
+    """
+    Ensure the image reference always points unambiguously to the local registry.
+
+    Problem: Trivy parses the first path segment of a bare reference as a
+    registry hostname when it contains a dot or a colon+port.  For names that
+    do NOT match this heuristic (e.g. "production/traefik/whoami") Trivy
+    silently treats "production" as an unknown host, connects nowhere, and
+    returns 0 results — while "traefik/whoami" happens to resolve against
+    Docker Hub and returns CVEs.
+
+    Fix: if the reference already starts with a known host (contains ":" or ".")
+    in its first segment, leave it unchanged.  Otherwise, prepend the local
+    registry host extracted from REGISTRY_URL so Trivy always talks to the
+    internal registry.
+
+    Examples
+    --------
+    "traefik/whoami"                 → "localhost:5000/traefik/whoami"
+    "traefik/whoami:latest"          → "localhost:5000/traefik/whoami:latest"
+    "production/traefik/whoami"      → "localhost:5000/production/traefik/whoami"
+    "production/traefik/whoami:1.0"  → "localhost:5000/production/traefik/whoami:1.0"
+    "localhost:5000/traefik/whoami"  → "localhost:5000/traefik/whoami"  (unchanged)
+    "myregistry.example.com/img:v1"  → "myregistry.example.com/img:v1"   (unchanged)
+    """
+    # Extract the first path segment (before the first "/")
+    first_segment = image_ref.split("/")[0]
+
+    # A segment that contains ":" (port) or "." (domain) is already a hostname
+    has_host = ":" in first_segment or "." in first_segment
+
+    if has_host:
+        return image_ref
+
+    # Derive local registry host from REGISTRY_URL (e.g. "http://localhost:5000")
+    registry_host = urlparse(REGISTRY_URL).netloc or "localhost:5000"
+    return f"{registry_host}/{image_ref}"
 
 
 async def get_trivy_db_info() -> dict:
@@ -55,12 +101,23 @@ async def scan_image(
     Connects to the local Trivy server for cached DB access.
 
     Args:
-        image_ref: Full image reference, e.g. localhost:5000/myimage:latest
+        image_ref: Image reference — may be bare ("repo/img:tag") or fully
+                   qualified ("localhost:5000/repo/img:tag").  Bare references
+                   are automatically prefixed with the local registry host so
+                   that images stored under namespace prefixes (e.g.
+                   "production/traefik/whoami") are always scanned from the
+                   internal registry rather than being misrouted to Docker Hub.
         severity: Filter by severity levels, e.g. ["HIGH", "CRITICAL"]
         ignore_unfixed: Skip vulnerabilities without a known fix
     """
     if severity is None:
         severity = ["UNKNOWN", "LOW", "MEDIUM", "HIGH", "CRITICAL"]
+
+    # Always resolve to a fully-qualified reference before calling Trivy
+    resolved_ref = _normalize_image_ref(image_ref)
+
+    if resolved_ref != image_ref:
+        logger.debug("scan_image: normalized '%s' → '%s'", image_ref, resolved_ref)
 
     cmd = [
         TRIVY_BINARY,
@@ -78,7 +135,7 @@ async def scan_image(
     if ignore_unfixed:
         cmd.append("--ignore-unfixed")
 
-    cmd.append(image_ref)
+    cmd.append(resolved_ref)
 
     try:
         proc = await asyncio.create_subprocess_exec(
@@ -163,7 +220,9 @@ async def scan_tarball(
     try:
         raw = json.loads(stdout.decode() or "{}")
         logger.debug(
-            f"Trivy scan completed for {tarball_path} with {len(raw.get('Results', []))} results"
+            "Trivy scan completed for %s with %d results",
+            tarball_path,
+            len(raw.get("Results", [])),
         )
     except json.JSONDecodeError as exc:
         raise RuntimeError(f"Unable to parse Trivy output: {exc}") from exc
