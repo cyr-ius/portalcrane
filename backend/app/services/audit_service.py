@@ -42,10 +42,32 @@ from pydantic import BaseModel
 from ..config import DATA_DIR, Settings
 
 audit_logger = logging.getLogger("portalcrane.audit")
-_recent_audit_events: deque[dict[str, Any]] = deque(maxlen=500)
+_audit_max_events = 100
+_recent_audit_events: deque[dict[str, Any]] = deque(maxlen=_audit_max_events)
 _audit_events_lock = Lock()
 _AUDIT_FILE_PATH = Path(DATA_DIR) / "audit-events.jsonl"
 _AUDIT_FILE_PATH.parent.mkdir(parents=True, exist_ok=True)
+
+
+def _set_audit_max_events(max_events: int) -> None:
+    global _audit_max_events, _recent_audit_events
+
+    normalized_max = max(1, int(max_events))
+    with _audit_events_lock:
+        _audit_max_events = normalized_max
+        _recent_audit_events = deque(_recent_audit_events, maxlen=_audit_max_events)
+
+
+def _trim_audit_file(max_events: int) -> None:
+    events = _read_recent_events_from_disk(limit=max_events)
+    if not events:
+        if _AUDIT_FILE_PATH.exists():
+            _AUDIT_FILE_PATH.write_text("", encoding="utf-8")
+        return
+
+    with _AUDIT_FILE_PATH.open("w", encoding="utf-8") as file_obj:
+        for event in events:
+            file_obj.write(f"{json.dumps(event)}\n")
 
 
 class AuditEvent(BaseModel):
@@ -64,6 +86,31 @@ def _store_recent_event(event: dict[str, Any]) -> None:
     """Store an audit event in memory for live UI access."""
     with _audit_events_lock:
         _recent_audit_events.append(event)
+        max_events = _audit_max_events
+
+    with _AUDIT_FILE_PATH.open("a", encoding="utf-8") as file_obj:
+        file_obj.write(f"{json.dumps(event)}\n")
+
+    _trim_audit_file(max_events=max_events)
+
+
+def _read_recent_events_from_disk(limit: int) -> list[dict[str, Any]]:
+    if not _AUDIT_FILE_PATH.exists():
+        return []
+
+    events: deque[dict[str, Any]] = deque(maxlen=limit)
+    with _AUDIT_FILE_PATH.open("r", encoding="utf-8") as file_obj:
+        for line in file_obj:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                payload = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(payload, dict):
+                events.append(payload)
+    return list(events)
 
     with _AUDIT_FILE_PATH.open("a", encoding="utf-8") as file_obj:
         file_obj.write(f"{json.dumps(event)}\n")
@@ -106,6 +153,7 @@ class AuditService:
 
     def __init__(self, settings: Settings):
         self.settings = settings
+        _set_audit_max_events(settings.audit_max_events)
 
         self.path: str | None = None
         self.method: str | None = None
