@@ -38,7 +38,6 @@ export interface Folder {
   imports: [],
   templateUrl: "./folders-config-panel.component.html",
   styleUrl: "./folders-config-panel.component.css",
-  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class FoldersConfigPanel implements OnInit {
   private http = inject(HttpClient);

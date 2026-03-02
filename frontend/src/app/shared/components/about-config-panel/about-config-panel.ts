@@ -6,7 +6,6 @@ import { AboutService } from "../../../core/services/about.service";
   imports: [],
   templateUrl: "./about-config-panel.html",
   styleUrl: "./about-config-panel.css",
-  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class AboutConfigPanel {
   aboutService = inject(AboutService);
