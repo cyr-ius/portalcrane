@@ -171,6 +171,8 @@ async def _authorize_registry_proxy(
         if not username:
             return await _unauthorized_response("Invalid bearer token")
 
+    await audit.log(subject="registry_authorize", status=status.HTTP_200_OK)
+
     if _is_admin_user(username, settings):
         return None
 
@@ -195,8 +197,6 @@ async def _authorize_registry_proxy(
 
     if is_pull and not _can_pull_images(username, settings):
         return await _forbidden_response("Pull permission required")
-
-    await audit.log(subject="registry_authorize", status=status.HTTP_200_OK)
 
     return None
 
