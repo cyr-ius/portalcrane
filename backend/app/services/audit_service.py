@@ -35,7 +35,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from threading import Lock
 from typing import Any
-import time
 
 from pydantic import BaseModel
 
@@ -78,7 +77,7 @@ class AuditEvent(BaseModel):
     client_ip: str | None = None
     http_status: int
     bytes: int
-    elapsed_s: float = time.monotonic()
+    elapsed_s: float = 0.0
     username: str | None = None
 
 
@@ -92,28 +91,6 @@ def _store_recent_event(event: dict[str, Any]) -> None:
         file_obj.write(f"{json.dumps(event)}\n")
 
     _trim_audit_file(max_events=max_events)
-
-
-def _read_recent_events_from_disk(limit: int) -> list[dict[str, Any]]:
-    if not _AUDIT_FILE_PATH.exists():
-        return []
-
-    events: deque[dict[str, Any]] = deque(maxlen=limit)
-    with _AUDIT_FILE_PATH.open("r", encoding="utf-8") as file_obj:
-        for line in file_obj:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                payload = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(payload, dict):
-                events.append(payload)
-    return list(events)
-
-    with _AUDIT_FILE_PATH.open("a", encoding="utf-8") as file_obj:
-        file_obj.write(f"{json.dumps(event)}\n")
 
 
 def _read_recent_events_from_disk(limit: int) -> list[dict[str, Any]]:
