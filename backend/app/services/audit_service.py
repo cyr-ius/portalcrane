@@ -112,6 +112,28 @@ def _read_recent_events_from_disk(limit: int) -> list[dict[str, Any]]:
                 events.append(payload)
     return list(events)
 
+    with _AUDIT_FILE_PATH.open("a", encoding="utf-8") as file_obj:
+        file_obj.write(f"{json.dumps(event)}\n")
+
+
+def _read_recent_events_from_disk(limit: int) -> list[dict[str, Any]]:
+    if not _AUDIT_FILE_PATH.exists():
+        return []
+
+    events: deque[dict[str, Any]] = deque(maxlen=limit)
+    with _AUDIT_FILE_PATH.open("r", encoding="utf-8") as file_obj:
+        for line in file_obj:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                payload = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(payload, dict):
+                events.append(payload)
+    return list(events)
+
 
 def get_recent_audit_events(limit: int = 200) -> list[dict[str, Any]]:
     """Return the latest audit events (newest first)."""

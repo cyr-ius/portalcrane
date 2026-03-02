@@ -237,8 +237,6 @@ async def run_sync_job(
     dest_registry_id: str,
     dest_folder: str | None,
     local_registry_url: str,
-    local_username: str,
-    local_password: str,
     settings: Settings,
 ) -> str:
     """
@@ -268,8 +266,6 @@ async def run_sync_job(
             dest_registry_id,
             dest_folder,
             local_registry_url,
-            local_username,
-            local_password,
             settings,
         )
     )
@@ -282,8 +278,6 @@ async def _execute_sync(
     dest_registry_id: str,
     dest_folder: str | None,
     local_registry_url: str,
-    local_username: str,
-    local_password: str,
     settings: Settings,
 ) -> None:
     """
@@ -359,8 +353,6 @@ async def _execute_sync(
             "--dest-tls-verify=false",
             "--src-tls-verify=false",
         ]
-        if local_username and local_password:
-            cmd += ["--src-creds", f"{local_username}:{local_password}"]
         if dest_user and dest_pass:
             cmd += ["--dest-creds", f"{dest_user}:{dest_pass}"]
         cmd += [src_ref, dest_ref]

@@ -161,15 +161,15 @@ async def _authorize_registry_proxy(
     basic = _decode_basic_auth(auth_header)
     if basic is not None:
         user, pwd = basic
+        audit.username = user
         if not _verify_user(user, pwd, settings):
             return await _unauthorized_response("Invalid credentials")
         username = user
     else:
         username = _decode_bearer_username(auth_header)
+        audit.username = username
         if not username:
             return await _unauthorized_response("Invalid bearer token")
-
-    audit.username = username
 
     if _is_admin_user(username, settings):
         return None
