@@ -1,5 +1,6 @@
 import { Component, OnInit, inject, signal } from "@angular/core";
 import { ActivatedRoute, Router } from "@angular/router";
+import { OIDC_STATE_KEY } from "../../../core/constants/auth.constants";
 import { AuthService } from "../../../core/services/auth.service";
 
 @Component({
@@ -8,7 +9,6 @@ import { AuthService } from "../../../core/services/auth.service";
   templateUrl: "./oidc-callback.component.html",
 })
 export class OidcCallbackComponent implements OnInit {
-  private readonly OIDC_STATE_KEY = "pc_oidc_state";
   private route = inject(ActivatedRoute);
   private router = inject(Router);
   private auth = inject(AuthService);
@@ -21,7 +21,7 @@ export class OidcCallbackComponent implements OnInit {
     const errorDesc =
       this.route.snapshot.queryParamMap.get("error_description");
     const state = this.route.snapshot.queryParamMap.get("state");
-    const expectedState = sessionStorage.getItem(this.OIDC_STATE_KEY);
+    const expectedState = sessionStorage.getItem(OIDC_STATE_KEY);
 
     if (errorParam) {
       this.error.set(errorDesc || errorParam);
@@ -35,11 +35,11 @@ export class OidcCallbackComponent implements OnInit {
 
     if (!state || !expectedState || state !== expectedState) {
       this.error.set("Invalid OIDC state");
-      sessionStorage.removeItem(this.OIDC_STATE_KEY);
+      sessionStorage.removeItem(OIDC_STATE_KEY);
       return;
     }
 
-    sessionStorage.removeItem(this.OIDC_STATE_KEY);
+    sessionStorage.removeItem(OIDC_STATE_KEY);
 
     this.auth.handleOidcCallback(code, state).subscribe({
       next: () => this.router.navigate(["/"]),

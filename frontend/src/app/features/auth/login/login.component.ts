@@ -5,6 +5,7 @@ import { Router } from "@angular/router";
 import { firstValueFrom } from "rxjs";
 import { AuthService, OidcConfig } from "../../../core/services/auth.service";
 import { ThemeService } from "../../../core/services/theme.service";
+import { OIDC_STATE_KEY } from "../../../core/constants/auth.constants";
 
 @Component({
   selector: "app-login",
@@ -13,7 +14,6 @@ import { ThemeService } from "../../../core/services/theme.service";
   styleUrl: "./login.component.css",
 })
 export class LoginComponent implements OnInit {
-  private readonly OIDC_STATE_KEY = "pc_oidc_state";
   private auth = inject(AuthService);
   private router = inject(Router);
   themeService = inject(ThemeService);
@@ -60,7 +60,7 @@ export class LoginComponent implements OnInit {
     if (!config?.authorization_endpoint) return;
 
     const state = crypto.randomUUID();
-    sessionStorage.setItem(this.OIDC_STATE_KEY, state);
+    sessionStorage.setItem(OIDC_STATE_KEY, state);
 
     const params = new URLSearchParams({
       response_type: config.response_type,
