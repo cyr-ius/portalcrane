@@ -96,6 +96,9 @@ class Settings(BaseSettings):
     # Logging level (DEBUG, INFO, WARNING, ERROR)
     log_level: str = "INFO"
 
+    # Audit retention
+    audit_max_events: int = 100
+
     # ── Internal helpers ─────────────────────────────────────────────────────────
 
     class Config:
