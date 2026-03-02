@@ -21,7 +21,9 @@ export interface OidcConfig {
   client_id: string;
   issuer: string;
   redirect_uri: string;
+  post_logout_redirect_uri: string;
   authorization_endpoint: string;
+  end_session_endpoint: string;
   response_type: string;
   scope: string;
 }
@@ -116,7 +118,27 @@ export class AuthService {
 
   logout() {
     this.clearSession();
-    this.router.navigate(["/auth"]);
+
+    this.getOidcConfig().subscribe({
+      next: (config) => {
+        if (config.enabled && config.end_session_endpoint) {
+          const endSessionUrl = new URL(config.end_session_endpoint);
+          if (config.post_logout_redirect_uri) {
+            endSessionUrl.searchParams.set(
+              "post_logout_redirect_uri",
+              config.post_logout_redirect_uri,
+            );
+          }
+          window.location.href = endSessionUrl.toString();
+          return;
+        }
+
+        this.router.navigate(["/auth"]);
+      },
+      error: () => {
+        this.router.navigate(["/auth"]);
+      },
+    });
   }
 
   getToken(): string | null {

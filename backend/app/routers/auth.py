@@ -78,7 +78,9 @@ class OIDCConfig(BaseModel):
     client_id: str
     issuer: str
     redirect_uri: str
+    post_logout_redirect_uri: str = ""
     authorization_endpoint: str = ""
+    end_session_endpoint: str = ""
     response_type: str = "code"
     scope: str = "openid profile email"
 
@@ -529,6 +531,9 @@ async def get_oidc_config(settings: Settings = Depends(get_settings)):
     redirect_uri = persisted.get("redirect_uri", settings.oidc_redirect_uri)
     response_type = persisted.get("response_type", settings.oidc_response_type)
     scope = persisted.get("scope", settings.oidc_scope)
+    post_logout_redirect_uri = persisted.get(
+        "post_logout_redirect_uri", settings.oidc_post_logout_redirect_uri
+    )
 
     if not enabled:
         return OIDCConfig(
@@ -536,10 +541,12 @@ async def get_oidc_config(settings: Settings = Depends(get_settings)):
             client_id="",
             issuer="",
             redirect_uri="",
+            post_logout_redirect_uri="",
         )
 
     # Fetch OIDC discovery document to resolve the authorization endpoint
     authorization_endpoint = ""
+    end_session_endpoint = ""
     try:
         proxy = settings.httpx_proxy
         async with httpx.AsyncClient(proxy=proxy) as client:
@@ -550,6 +557,7 @@ async def get_oidc_config(settings: Settings = Depends(get_settings)):
             if response.status_code == 200:
                 discovery = response.json()
                 authorization_endpoint = discovery.get("authorization_endpoint", "")
+                end_session_endpoint = discovery.get("end_session_endpoint", "")
     except Exception:
         pass
 
@@ -558,7 +566,9 @@ async def get_oidc_config(settings: Settings = Depends(get_settings)):
         client_id=client_id,
         issuer=issuer,
         redirect_uri=redirect_uri,
+        post_logout_redirect_uri=post_logout_redirect_uri,
         authorization_endpoint=authorization_endpoint,
+        end_session_endpoint=end_session_endpoint,
         response_type=response_type,
         scope=scope,
     )
