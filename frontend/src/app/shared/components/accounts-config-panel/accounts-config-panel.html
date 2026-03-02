@@ -59,8 +59,7 @@
                 class="form-control"
                 placeholder="john.doe"
                 autocomplete="off"
-                [value]="newUsername()"
-                (input)="newUsername.set($any($event.target).value)"
+                [formField]="createForm.username"
               />
             </div>
           </div>
@@ -77,8 +76,7 @@
                 class="form-control"
                 placeholder="Min. 8 characters"
                 autocomplete="new-password"
-                [value]="newPassword()"
-                (input)="newPassword.set($any($event.target).value)"
+                [formField]="createForm.password"
               />
               <button
                 type="button"
@@ -90,7 +88,8 @@
                 ></i>
               </button>
             </div>
-            @if (newPassword().length > 0 && newPassword().length < 8) {
+            @if (createModel().password.length > 0 &&
+            createModel().password.length < 8) {
             <div class="text-danger" style="font-size: 0.75rem">
               <i class="bi bi-x-circle me-1"></i>At least 8 characters required
             </div>
@@ -105,8 +104,7 @@
                 type="checkbox"
                 id="newIsAdmin"
                 role="switch"
-                [checked]="newIsAdmin()"
-                (change)="onNewAdminChanged($any($event.target).checked)"
+                [formField]="createForm.isAdmin"
               />
               <label
                 class="form-check-label small fw-semibold"
@@ -123,9 +121,7 @@
                   class="form-check-input"
                   type="checkbox"
                   id="newCanPull"
-                  [checked]="newCanPullImages()"
-                  [disabled]="newIsAdmin()"
-                  (change)="newCanPullImages.set($any($event.target).checked)"
+                  [formField]="createForm.canPullImages"
                 />
                 <label class="form-check-label small" for="newCanPull">
                   Can pull images
@@ -136,9 +132,7 @@
                   class="form-check-input"
                   type="checkbox"
                   id="newCanPush"
-                  [checked]="newCanPushImages()"
-                  [disabled]="newIsAdmin()"
-                  (change)="newCanPushImages.set($any($event.target).checked)"
+                  [formField]="createForm.canPushImages"
                 />
                 <label class="form-check-label small" for="newCanPush">
                   Can push images
@@ -153,7 +147,7 @@
           <button
             class="btn btn-primary btn-sm d-flex align-items-center gap-1"
             (click)="createUser()"
-            [disabled]="!canCreate() || creating()"
+            [disabled]="!createForm().valid() || createForm().submitting()"
           >
             @if (creating()) {
             <span class="spinner-border spinner-border-sm"></span>
@@ -300,8 +294,7 @@
                         class="form-control"
                         placeholder="Leave empty to keep current"
                         autocomplete="new-password"
-                        [value]="editPassword()"
-                        (input)="editPassword.set($any($event.target).value)"
+                        [formField]="updateForm.password"
                       />
                       <button
                         type="button"
@@ -323,8 +316,7 @@
                         type="checkbox"
                         [id]="'editAdmin_' + user.id"
                         role="switch"
-                        [checked]="editIsAdmin()"
-                        (change)="onEditAdminChanged($any($event.target).checked)"
+                        [formField]="updateForm.isAdmin"
                       />
                       <label
                         class="form-check-label small"
@@ -341,9 +333,7 @@
                           class="form-check-input"
                           type="checkbox"
                           [id]="'editPull_' + user.id"
-                          [checked]="editCanPullImages()"
-                          [disabled]="editIsAdmin()"
-                          (change)="editCanPullImages.set($any($event.target).checked)"
+                          [formField]="updateForm.canPullImages"
                         />
                         <label
                           class="form-check-label small"
@@ -356,9 +346,7 @@
                           class="form-check-input"
                           type="checkbox"
                           [id]="'editPush_' + user.id"
-                          [checked]="editCanPushImages()"
-                          [disabled]="editIsAdmin()"
-                          (change)="editCanPushImages.set($any($event.target).checked)"
+                          [formField]="updateForm.canPushImages"
                         />
                         <label
                           class="form-check-label small"
@@ -373,9 +361,9 @@
                     <button
                       class="btn btn-primary btn-sm d-flex align-items-center gap-1"
                       (click)="saveEdit(user.id)"
-                      [disabled]="saving()"
+                      [disabled]="!updateForm().valid()"
                     >
-                      @if (saving()) {
+                      @if (updateForm().submitting()) {
                       <span class="spinner-border spinner-border-sm"></span>
                       } @else {
                       <i class="bi bi-floppy-fill"></i>
@@ -384,7 +372,7 @@
                     <button
                       class="btn btn-outline-secondary btn-sm"
                       (click)="cancelEdit()"
-                      [disabled]="saving()"
+                      [disabled]="!updateForm().valid()"
                     >
                       Cancel
                     </button>

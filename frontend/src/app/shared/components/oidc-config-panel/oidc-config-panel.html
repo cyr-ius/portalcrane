@@ -41,8 +41,8 @@
     <!-- Enable toggle -->
     <div
       class="mb-4 p-3 rounded border"
-      [class.border-primary]="enabled()"
-      [class.bg-primary-subtle]="enabled()"
+      [class.border-primary]="oidcForm.enabled().value()"
+      [class.bg-primary-subtle]="oidcForm.enabled().value()"
     >
       <div class="form-check form-switch d-flex align-items-center gap-3 mb-0">
         <input
@@ -50,20 +50,20 @@
           type="checkbox"
           role="switch"
           id="oidcEnabled"
+          (click)="save()"
           style="width: 2.5em; height: 1.3em"
-          [checked]="enabled()"
-          (change)="enabled.set($any($event.target).checked)"
+          [formField]="oidcForm.enabled"
         />
         <label class="form-check-label fw-semibold" for="oidcEnabled">
           Enable OIDC Authentication
         </label>
-        @if (enabled()) {
+        @if (oidcForm.enabled().value()) {
         <span class="badge bg-success ms-auto">Active</span>
         } @else {
         <span class="badge bg-secondary ms-auto">Disabled</span>
         }
       </div>
-      @if (enabled()) {
+      @if (oidcForm.enabled().value()) {
       <div class="text-muted small mt-2">
         <i class="bi bi-info-circle me-1"></i>
         Users will be able to log in via your OIDC provider on the login page.
@@ -73,7 +73,7 @@
     </div>
 
     <!-- OIDC fields — only shown when enabled -->
-    @if (enabled()) {
+    @if (oidcForm.enabled().value()) {
     <div class="row g-3">
       <!-- Issuer URL -->
       <div class="col-12">
@@ -87,8 +87,7 @@
             type="url"
             class="form-control font-monospace"
             placeholder="https://auth.example.com/realms/myrealm"
-            [value]="issuer()"
-            (input)="issuer.set($any($event.target).value)"
+            [formField]="oidcForm.issuer"
           />
         </div>
         <div class="form-text">
@@ -112,8 +111,7 @@
             type="text"
             class="form-control font-monospace"
             placeholder="portalcrane"
-            [value]="clientId()"
-            (input)="clientId.set($any($event.target).value)"
+            [formField]="oidcForm.client_id"
           />
         </div>
       </div>
@@ -127,8 +125,7 @@
             [type]="showSecret() ? 'text' : 'password'"
             class="form-control font-monospace"
             placeholder="••••••••••••••••"
-            [value]="clientSecret()"
-            (input)="clientSecret.set($any($event.target).value)"
+            [formField]="oidcForm.client_secret"
           />
           <button
             type="button"
@@ -158,8 +155,7 @@
             type="url"
             class="form-control font-monospace"
             placeholder="http://localhost:8080/auth/callback"
-            [value]="redirectUri()"
-            (input)="redirectUri.set($any($event.target).value)"
+            [formField]="oidcForm.redirect_uri"
           />
         </div>
         <div class="form-text">
@@ -180,8 +176,7 @@
             type="url"
             class="form-control font-monospace"
             placeholder="http://localhost:8080"
-            [value]="postLogoutRedirectUri()"
-            (input)="postLogoutRedirectUri.set($any($event.target).value)"
+            [formField]="oidcForm.post_logout_redirect_uri"
           />
         </div>
       </div>
@@ -192,8 +187,7 @@
         <input
           type="text"
           class="form-control font-monospace"
-          [value]="responseType()"
-          (input)="responseType.set($any($event.target).value)"
+          [formField]="oidcForm.response_type"
         />
       </div>
       <div class="col-md-8">
@@ -201,8 +195,7 @@
         <input
           type="text"
           class="form-control font-monospace"
-          [value]="scope()"
-          (input)="scope.set($any($event.target).value)"
+          [formField]="oidcForm.scope"
         />
       </div>
     </div>
@@ -213,9 +206,9 @@
       <button
         class="btn btn-primary d-flex align-items-center gap-2"
         (click)="save()"
-        [disabled]="saving()"
+        [disabled]="!oidcForm().valid()"
       >
-        @if (saving()) {
+        @if (oidcForm().submitting()) {
         <span class="spinner-border spinner-border-sm"></span>
         Saving… } @else {
         <i class="bi bi-floppy-fill"></i>

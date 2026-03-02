@@ -1,11 +1,7 @@
 import { HttpClient } from "@angular/common/http";
-import {
-  ChangeDetectionStrategy,
-  Component,
-  inject,
-  OnInit,
-  signal,
-} from "@angular/core";
+import { Component, inject, OnInit, signal } from "@angular/core";
+import { form, FormField, required, submit } from "@angular/forms/signals";
+import { firstValueFrom } from "rxjs";
 
 /** OIDC settings shape returned and accepted by /api/auth/oidc-settings. */
 export interface OidcSettings {
@@ -21,10 +17,9 @@ export interface OidcSettings {
 
 @Component({
   selector: "app-oidc-config-panel",
-  imports: [],
+  imports: [FormField],
   templateUrl: "./oidc-config-panel.html",
   styleUrl: "./oidc-config-panel.css",
-  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class OidcConfigPanel implements OnInit {
   private http = inject(HttpClient);
@@ -35,18 +30,28 @@ export class OidcConfigPanel implements OnInit {
   readonly saved = signal(false);
   readonly error = signal<string | null>(null);
 
-  // ── Form signals (each field is its own signal) ────────────────────────────
-  readonly enabled = signal(false);
-  readonly issuer = signal("");
-  readonly clientId = signal("");
-  readonly clientSecret = signal("");
-  readonly redirectUri = signal("");
-  readonly postLogoutRedirectUri = signal("");
-  readonly responseType = signal("code");
-  readonly scope = signal("openid profile email");
-
   /** Whether the client secret field is revealed in plaintext. */
   readonly showSecret = signal(false);
+
+  oidcModel = signal<OidcSettings>({
+    enabled: false,
+    issuer: "",
+    client_id: "",
+    client_secret: "",
+    redirect_uri: "",
+    post_logout_redirect_uri: "",
+    response_type: "code",
+    scope: "openid profile email",
+  });
+
+  oidcForm = form(this.oidcModel, (p) => {
+    required(p.enabled);
+    required(p.issuer);
+    required(p.client_id);
+    required(p.client_secret);
+    required(p.redirect_uri);
+    required(p.scope);
+  });
 
   ngOnInit(): void {
     this.load();
@@ -58,14 +63,7 @@ export class OidcConfigPanel implements OnInit {
     this.error.set(null);
     this.http.get<OidcSettings>("/api/auth/oidc-settings").subscribe({
       next: (s) => {
-        this.enabled.set(s.enabled);
-        this.issuer.set(s.issuer);
-        this.clientId.set(s.client_id);
-        this.clientSecret.set(s.client_secret);
-        this.redirectUri.set(s.redirect_uri);
-        this.postLogoutRedirectUri.set(s.post_logout_redirect_uri);
-        this.responseType.set(s.response_type || "code");
-        this.scope.set(s.scope || "openid profile email");
+        this.oidcModel.set(s);
         this.loading.set(false);
       },
       error: (err) => {
@@ -82,31 +80,21 @@ export class OidcConfigPanel implements OnInit {
     this.saving.set(true);
     this.saved.set(false);
     this.error.set(null);
-
-    const payload: OidcSettings = {
-      enabled: this.enabled(),
-      issuer: this.issuer().trim(),
-      client_id: this.clientId().trim(),
-      client_secret: this.clientSecret(),
-      redirect_uri: this.redirectUri().trim(),
-      post_logout_redirect_uri: this.postLogoutRedirectUri().trim(),
-      response_type: this.responseType().trim() || "code",
-      scope: this.scope().trim() || "openid profile email",
-    };
-
-    this.http.put<OidcSettings>("/api/auth/oidc-settings", payload).subscribe({
-      next: () => {
+    submit(this.oidcForm, async (form) => {
+      const formData = form().value();
+      try {
+        await firstValueFrom(
+          this.http.put<OidcSettings>("/api/auth/oidc-settings", formData),
+        );
         this.saving.set(false);
         this.saved.set(true);
-        // Clear the success banner after 3 seconds
         setTimeout(() => this.saved.set(false), 3000);
-      },
-      error: (err) => {
+      } catch (err: any) {
         this.error.set(
           err?.error?.detail ?? "Failed to save OIDC configuration",
         );
         this.saving.set(false);
-      },
+      }
     });
   }
 }

@@ -2,11 +2,18 @@ import { HttpClient } from "@angular/common/http";
 import {
   ChangeDetectionStrategy,
   Component,
-  computed,
   inject,
   OnInit,
   signal,
 } from "@angular/core";
+import {
+  form,
+  FormField,
+  minLength,
+  required,
+  submit,
+} from "@angular/forms/signals";
+import { firstValueFrom } from "rxjs";
 
 /** Local user as returned by the API. */
 export interface LocalUser {
@@ -20,10 +27,9 @@ export interface LocalUser {
 
 @Component({
   selector: "app-accounts-config-panel",
-  imports: [],
+  imports: [FormField],
   templateUrl: "./accounts-config-panel.html",
   styleUrl: "./accounts-config-panel.css",
-  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class AccountsConfigPanel implements OnInit {
   private http = inject(HttpClient);
@@ -35,11 +41,6 @@ export class AccountsConfigPanel implements OnInit {
 
   // ── Create form ────────────────────────────────────────────────────────────
   readonly showCreateForm = signal(false);
-  readonly newUsername = signal("");
-  readonly newPassword = signal("");
-  readonly newIsAdmin = signal(false);
-  readonly newCanPullImages = signal(false);
-  readonly newCanPushImages = signal(false);
   readonly showNewPassword = signal(false);
   readonly creating = signal(false);
   readonly createError = signal<string | null>(null);
@@ -47,10 +48,6 @@ export class AccountsConfigPanel implements OnInit {
   // ── Edit state ─────────────────────────────────────────────────────────────
   /** ID of the user currently being edited (null = none). */
   readonly editingId = signal<string | null>(null);
-  readonly editPassword = signal("");
-  readonly editIsAdmin = signal(false);
-  readonly editCanPullImages = signal(false);
-  readonly editCanPushImages = signal(false);
   readonly showEditPassword = signal(false);
   readonly saving = signal(false);
   readonly saveError = signal<string | null>(null);
@@ -58,11 +55,34 @@ export class AccountsConfigPanel implements OnInit {
   // ── Delete state ───────────────────────────────────────────────────────────
   readonly deletingId = signal<string | null>(null);
 
-  /** True when the create form has valid inputs. */
-  readonly canCreate = computed(
-    () =>
-      this.newUsername().trim().length > 0 && this.newPassword().length >= 8,
-  );
+  createModel = signal({
+    username: "",
+    password: "",
+    isAdmin: false,
+    canPullImages: false,
+    canPushImages: false,
+  });
+  createModelOrig = structuredClone(this.createModel());
+  createForm = form(this.createModel, (p) => {
+    required(p.username);
+    required(p.password);
+    minLength(p.password, 8, {
+      message: "Password must be at least 8 characters",
+    });
+  });
+
+  updateModel = signal({
+    password: "",
+    isAdmin: false,
+    canPullImages: false,
+    canPushImages: false,
+  });
+  updateModelOrig = structuredClone(this.updateModel());
+  updateForm = form(this.updateModel, (p) => {
+    minLength(p.password, 8, {
+      message: "Password must be at least 8 characters",
+    });
+  });
 
   ngOnInit(): void {
     this.loadUsers();
@@ -86,54 +106,54 @@ export class AccountsConfigPanel implements OnInit {
 
   /** Open the create form. */
   openCreateForm(): void {
-    this.newUsername.set("");
-    this.newPassword.set("");
-    this.newIsAdmin.set(false);
-    this.newCanPullImages.set(false);
-    this.newCanPushImages.set(false);
-    this.showNewPassword.set(false);
+    this.createModel.set(this.createModelOrig);
+    this.createForm().reset();
     this.createError.set(null);
     this.showCreateForm.set(true);
   }
 
   cancelCreate(): void {
+    this.createModel.set(this.createModelOrig);
+    this.createForm().reset();
     this.showCreateForm.set(false);
   }
 
   /** Submit the new user form. */
   createUser(): void {
-    if (!this.canCreate()) return;
     this.creating.set(true);
     this.createError.set(null);
 
-    this.http
-      .post<LocalUser>("/api/auth/users", {
-        username: this.newUsername().trim(),
-        password: this.newPassword(),
-        is_admin: this.newIsAdmin(),
-        can_pull_images: this.newIsAdmin() ? true : this.newCanPullImages(),
-        can_push_images: this.newIsAdmin() ? true : this.newCanPushImages(),
-      })
-      .subscribe({
-        next: (user) => {
-          this.users.update((list) => [...list, user]);
-          this.showCreateForm.set(false);
-          this.creating.set(false);
-        },
-        error: (err) => {
-          this.createError.set(err?.error?.detail ?? "Failed to create user");
-          this.creating.set(false);
-        },
-      });
+    submit(this.createForm, async (form) => {
+      const formData = form().value();
+      try {
+        const user = await firstValueFrom(
+          this.http.post<LocalUser>("/api/auth/users", {
+            username: formData.username.trim(),
+            password: formData.password,
+            is_admin: formData.isAdmin,
+            can_pull_images: formData.canPullImages,
+            can_push_images: formData.canPushImages,
+          }),
+        );
+        this.users.update((list) => [...list, user]);
+        this.showCreateForm.set(false);
+        this.creating.set(false);
+      } catch (err: any) {
+        this.createError.set(err?.error?.detail ?? "Failed to create user");
+        this.creating.set(false);
+      }
+    });
   }
 
   /** Open the inline edit row for a given user. */
   openEdit(user: LocalUser): void {
+    this.updateModel.set({
+      password: "",
+      isAdmin: user.is_admin,
+      canPullImages: user.can_pull_images,
+      canPushImages: user.can_push_images,
+    });
     this.editingId.set(user.id);
-    this.editPassword.set("");
-    this.editIsAdmin.set(user.is_admin);
-    this.editCanPullImages.set(user.can_pull_images);
-    this.editCanPushImages.set(user.can_push_images);
     this.showEditPassword.set(false);
     this.saveError.set(null);
   }
@@ -144,37 +164,39 @@ export class AccountsConfigPanel implements OnInit {
 
   /** Save the edited user. */
   saveEdit(userId: string): void {
-    const body: Record<string, unknown> = {};
-    if (this.editPassword().length > 0) {
-      if (this.editPassword().length < 8) {
-        this.saveError.set("Password must be at least 8 characters");
-        return;
-      }
-      body["password"] = this.editPassword();
-    }
-    body["is_admin"] = this.editIsAdmin();
-    body["can_pull_images"] = this.editIsAdmin()
-      ? true
-      : this.editCanPullImages();
-    body["can_push_images"] = this.editIsAdmin()
-      ? true
-      : this.editCanPushImages();
-
     this.saving.set(true);
     this.saveError.set(null);
 
-    this.http.patch<LocalUser>(`/api/auth/users/${userId}`, body).subscribe({
-      next: (updated) => {
+    submit(this.updateForm, async (form) => {
+      const formData = form().value();
+
+      if (formData.password.length > 0) {
+        if (formData.password.length < 8) {
+          this.saveError.set("Password must be at least 8 characters");
+          return;
+        }
+      }
+
+      const body = {
+        password: formData.password ? formData.password : null,
+        is_admin: formData.isAdmin,
+        can_pull_images: formData.canPullImages,
+        can_push_images: formData.canPushImages,
+      };
+
+      try {
+        const updated = await firstValueFrom(
+          this.http.patch<LocalUser>(`/api/auth/users/${userId}`, body),
+        );
         this.users.update((list) =>
           list.map((u) => (u.id === userId ? updated : u)),
         );
         this.editingId.set(null);
         this.saving.set(false);
-      },
-      error: (err) => {
+      } catch (err: any) {
         this.saveError.set(err?.error?.detail ?? "Failed to save user");
         this.saving.set(false);
-      },
+      }
     });
   }
 
@@ -192,22 +214,6 @@ export class AccountsConfigPanel implements OnInit {
         this.deletingId.set(null);
       },
     });
-  }
-
-  onNewAdminChanged(value: boolean): void {
-    this.newIsAdmin.set(value);
-    if (value) {
-      this.newCanPullImages.set(true);
-      this.newCanPushImages.set(true);
-    }
-  }
-
-  onEditAdminChanged(value: boolean): void {
-    this.editIsAdmin.set(value);
-    if (value) {
-      this.editCanPullImages.set(true);
-      this.editCanPushImages.set(true);
-    }
   }
 
   /** Format ISO date string to a short readable form. */
