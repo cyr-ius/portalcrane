@@ -73,9 +73,6 @@ app.include_router(staging.router, prefix="/api/staging", tags=["Staging"])
 app.include_router(dashboard.router, prefix="/api/dashboard", tags=["Dashboard"])
 app.include_router(config_router.router, prefix="/api/config", tags=["Configuration"])
 app.include_router(about.router, prefix="/api", tags=["About"])
-app.include_router(
-    registry_proxy.router, prefix="/registry-proxy", tags=["Registry Proxy"]
-)
 app.include_router(registry_proxy.router, prefix="", tags=["Registry Proxy (root v2)"])
 app.include_router(folders.router, prefix="/api/folders", tags=["Folders"])
 app.include_router(system.router)
