@@ -26,7 +26,7 @@ LABEL org.opencontainers.image.licenses="MIT"
 ARG REGISTRY_VERSION=3.0.0
 
 # Trivy version — update this ARG to upgrade
-ARG TRIVY_VERSION=0.69.1
+ARG TRIVY_VERSION=0.69.2
 
 # Install system dependencies (Docker CLI for staging pipeline)
 RUN apt-get update && apt-get install -y --no-install-recommends \
