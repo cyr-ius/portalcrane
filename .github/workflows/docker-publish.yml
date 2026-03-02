@@ -90,7 +90,7 @@ jobs:
           context: .
           file: ./Dockerfile
           # Build for both amd64 and arm64 (Raspberry Pi, Apple Silicon, etc.)
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           # Only push on non-PR events
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
