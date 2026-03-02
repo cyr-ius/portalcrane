@@ -7,6 +7,7 @@ import os
 import httpx
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
+from packaging.version import Version, InvalidVersion
 
 from ..config import (
     APP_AI_GENERATOR,
@@ -90,6 +91,11 @@ async def get_about(settings: Settings = Depends(get_settings)) -> dict:
         except ValueError:
             # Fall back to string comparison if parsing fails
             update_available = latest_version != current_version
+
+        try:
+            update_available = Version(latest_version) > Version(current_version)
+        except InvalidVersion:
+            update_available = False
 
     return {
         "current_version": current_version,
