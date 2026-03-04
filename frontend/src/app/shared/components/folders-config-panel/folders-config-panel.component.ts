@@ -1,19 +1,8 @@
 /**
  * Portalcrane - Folders Configuration Panel
- *
- * Manages registry folders (path prefixes) and their per-user pull/push permissions.
- * Admin users can create, rename (description), delete folders and manage user access.
- *
  */
 import { HttpClient } from "@angular/common/http";
-import {
-  ChangeDetectionStrategy,
-  Component,
-  computed,
-  inject,
-  OnInit,
-  signal,
-} from "@angular/core";
+import { Component, computed, inject, OnInit, signal } from "@angular/core";
 
 // ── Models ────────────────────────────────────────────────────────────────────
 
@@ -29,6 +18,11 @@ export interface Folder {
   description: string;
   created_at: string;
   permissions: FolderPermission[];
+}
+
+export interface UserSummary {
+  id: string;
+  username: string;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -47,6 +41,9 @@ export class FoldersConfigPanel implements OnInit {
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
 
+  // ── User list (for datalist dropdown in the permission form) ───────────────
+  readonly users = signal<UserSummary[]>([]);
+
   // ── Create form ────────────────────────────────────────────────────────────
   readonly showCreateForm = signal(false);
   readonly newName = signal("");
@@ -54,10 +51,9 @@ export class FoldersConfigPanel implements OnInit {
   readonly creating = signal(false);
   readonly createError = signal<string | null>(null);
 
-  /** True when the create form has valid inputs. */
   readonly canCreate = computed(() => this.newName().trim().length > 0);
 
-  // ── Expanded folder (shows permissions detail) ─────────────────────────────
+  // ── Expanded folder ────────────────────────────────────────────────────────
   readonly expandedId = signal<string | null>(null);
 
   // ── Edit description ───────────────────────────────────────────────────────
@@ -76,13 +72,13 @@ export class FoldersConfigPanel implements OnInit {
   readonly savingPerm = signal(false);
   readonly permError = signal<string | null>(null);
 
-  /** True when add-permission form has valid inputs. */
   readonly canAddPerm = computed(
     () => this.addPermUsername().trim().length > 0,
   );
 
   ngOnInit(): void {
     this.loadFolders();
+    this.loadUsers();
   }
 
   /** Fetch the folder list from the backend. */
@@ -98,6 +94,14 @@ export class FoldersConfigPanel implements OnInit {
         this.error.set(err?.error?.detail ?? "Failed to load folders");
         this.loading.set(false);
       },
+    });
+  }
+
+  /** Fetch the user list so the permission form can offer a dropdown. */
+  loadUsers(): void {
+    this.http.get<UserSummary[]>("/api/auth/users").subscribe({
+      next: (users) => this.users.set(users),
+      error: () => this.users.set([]), // Silently ignore if not admin
     });
   }
 
@@ -140,7 +144,6 @@ export class FoldersConfigPanel implements OnInit {
 
   toggleExpand(folderId: string): void {
     this.expandedId.update((id) => (id === folderId ? null : folderId));
-    // Reset add-permission form when collapsing
     if (this.expandedId() !== folderId) {
       this.addPermFolderId.set(null);
     }
