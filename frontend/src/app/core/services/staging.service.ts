@@ -2,6 +2,9 @@
  * Portalcrane - Staging Service
  * HTTP client for /api/staging endpoints.
  * Supports: pull pipeline, push (local + external registry), Docker Hub search and tags.
+ *
+ * Changes vs original:
+ *  - StagingJob interface now includes the optional `owner` field returned by the backend.
  */
 import { HttpClient } from "@angular/common/http";
 import { inject, Injectable } from "@angular/core";
@@ -57,6 +60,7 @@ export interface StagingJob {
   error: string | null;
   vuln_scan_enabled_override: boolean | null;
   vuln_severities_override: string | null;
+  owner?: string;
 }
 
 export interface DockerHubResult {
@@ -158,6 +162,7 @@ export class StagingService {
 
   /**
    * Search Docker Hub for images matching the given query.
+   * The backend uses the authenticated user's Hub credentials when configured.
    * Calls GET /api/staging/search/dockerhub?q=<query>&page=<page>
    */
   searchDockerHub(
@@ -172,6 +177,7 @@ export class StagingService {
 
   /**
    * Fetch available tags for a Docker Hub image.
+   * The backend uses the authenticated user's Hub credentials when configured.
    * Calls GET /api/staging/dockerhub/tags/<image>
    */
   getDockerHubTags(
@@ -225,7 +231,7 @@ export class StagingService {
 
   // ── Utilities ─────────────────────────────────────────────────────────────
 
-  /** Sort jobs so active ones appear at the top, then by insertion order. */
+  /** Sort jobs so active ones appear at the top, then preserve backend order. */
   static sortJobs(jobs: StagingJob[]): StagingJob[] {
     return [...jobs].sort((a, b) => {
       const aActive = ACTIVE_STATUSES.includes(a.status) ? 0 : 1;

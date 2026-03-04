@@ -3,13 +3,13 @@
  * Pull pipeline: Docker Hub search → tag selection → pull → CVE scan → push
  * (local or external registry with optional folder prefix).
  *
- * Angular 21 zoneless — uses Signals exclusively, no Zone.js change detection.
- * Deprecated directives (*ngIf, *ngFor) are replaced by @if / @for control flow.
  */
 import { Component, DestroyRef, inject, OnInit, signal } from "@angular/core";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
-import { filter, switchMap, timer } from "rxjs";
+import { RouterLink } from "@angular/router";
+import { switchMap, timer } from "rxjs";
 import { AppConfigService } from "../../core/services/app-config.service";
+import { AuthService } from "../../core/services/auth.service";
 import {
   ExternalRegistry,
   ExternalRegistryService,
@@ -19,7 +19,6 @@ import {
   StagingJob,
   StagingService,
 } from "../../core/services/staging.service";
-import { RouterLink } from "@angular/router";
 
 /** Job statuses that indicate an active pipeline step. */
 const ACTIVE_STATUSES = new Set([
@@ -44,6 +43,7 @@ export class StagingComponent implements OnInit {
   private externalRegistryService = inject(ExternalRegistryService);
   private destroyRef = inject(DestroyRef);
   readonly configService = inject(AppConfigService);
+  readonly authService = inject(AuthService);
 
   // ── Job list ───────────────────────────────────────────────────────────────
   jobs = signal<StagingJob[]>([]);
@@ -86,21 +86,35 @@ export class StagingComponent implements OnInit {
   // ── Lifecycle ──────────────────────────────────────────────────────────────
 
   ngOnInit(): void {
-    this.loadJobs();
-    this.loadExternalRegistries();
+    // Single unified polling loop — no separate loadJobs() call to avoid
+    // the race condition where two concurrent responses could overwrite each other.
     this.startJobsAutoRefresh();
+    this.loadExternalRegistries();
   }
 
   // ── Auto-refresh ───────────────────────────────────────────────────────────
 
   /**
-   * Poll the job list every 3 s while at least one job is active.
-   * takeUntilDestroyed removes the subscription when the component is destroyed.
+   * Unified polling loop that replaces the former loadJobs() + filtered timer combo.
+   *
+   * Strategy:
+   *  - timer(0, ...) emits immediately so the first load happens without delay.
+   *  - The interval adapts: 2 s when at least one job is active, 10 s otherwise.
+   *    This avoids hammering the API when nothing is happening while still
+   *    reacting quickly during an ongoing pipeline.
+   *  - The filter() gate that blocked polling until a job was already known to
+   *    be active has been intentionally removed — it caused newly created jobs
+   *    to be invisible until the next poll cycle triggered by an unrelated event.
+   *  - takeUntilDestroyed automatically cancels the subscription on component destroy.
    */
   private startJobsAutoRefresh(): void {
+    // Poll every 3 s unconditionally — no filter() gate, no adaptive interval.
+    // timer(0, 3000) emits immediately (t=0) so the first load is instant,
+    // then every 3 s regardless of current job state.
+    // switchMap cancels any in-flight request before issuing the next one,
+    // so concurrent responses can never overwrite each other.
     timer(0, 3000)
       .pipe(
-        filter(() => this.jobs().some((j) => ACTIVE_STATUSES.has(j.status))),
         switchMap(() => this.staging.listJobs()),
         takeUntilDestroyed(this.destroyRef),
       )
@@ -109,6 +123,7 @@ export class StagingComponent implements OnInit {
 
   // ── Data loading ───────────────────────────────────────────────────────────
 
+  /** Manual refresh — keeps the unified loop as the single source of truth. */
   loadJobs(): void {
     this.staging.listJobs().subscribe({
       next: (jobs) => this.jobs.set(StagingService.sortJobs(jobs)),
@@ -189,7 +204,8 @@ export class StagingComponent implements OnInit {
       })
       .subscribe({
         next: (job) => {
-          this.jobs.update((jobs) => [job, ...jobs]);
+          // Prepend the new job immediately — the polling loop will keep it updated
+          this.jobs.update((jobs) => StagingService.sortJobs([job, ...jobs]));
           this.pulling.set(false);
           this.pullImage.set("");
           this.pullTag.set("latest");
@@ -282,6 +298,7 @@ export class StagingComponent implements OnInit {
       .subscribe({
         next: () => {
           this.pushing.set(null);
+          // Trigger an immediate refresh so the PUSHING status appears without delay
           this.loadJobs();
         },
         error: () => this.pushing.set(null),
@@ -301,8 +318,7 @@ export class StagingComponent implements OnInit {
   /**
    * Return the display progress for a job.
    * scan_clean / scan_skipped are terminal "ready" states — force 100 %
-   * regardless of what the backend reported (which may be 80 % due to the
-   * pipeline emitting progress before the final status update).
+   * regardless of what the backend reported.
    */
   displayProgress(job: StagingJob): number {
     if (
@@ -333,6 +349,7 @@ export class StagingComponent implements OnInit {
     );
   }
 
+  /** Return the Bootstrap badge CSS classes for a given job status. */
   getStatusBadgeClass(status: string): string {
     const map: Record<string, string> = {
       pending: "badge bg-secondary-subtle text-secondary",
@@ -357,10 +374,12 @@ export class StagingComponent implements OnInit {
     return `${n}`;
   }
 
+  /** Return the CVE count for a given severity level on a job. */
   getVulnCount(job: StagingJob, severity: string): number {
     return job.vuln_result?.counts[severity] ?? 0;
   }
 
+  /** Return the Bootstrap badge CSS classes for a CVE severity level. */
   getSeverityBadge(sev: string): string {
     const map: Record<string, string> = {
       CRITICAL: "badge bg-danger text-white",
@@ -372,6 +391,7 @@ export class StagingComponent implements OnInit {
     return map[sev] ?? "badge bg-secondary";
   }
 
+  /** Return the Bootstrap table row CSS class for a CVE severity level. */
   getCveRowClass(job: StagingJob, sev: string): string {
     const blocking = job.vuln_result?.severities ?? [];
     if (blocking.includes(sev)) {
@@ -382,5 +402,13 @@ export class StagingComponent implements OnInit {
           : "";
     }
     return "";
+  }
+
+  /**
+   * Return true when the current user is an admin.
+   * Used in the template to conditionally show the owner badge on each job.
+   */
+  get isAdmin(): boolean {
+    return this.authService.currentUser()?.is_admin ?? false;
   }
 }
