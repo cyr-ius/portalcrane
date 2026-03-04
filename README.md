@@ -6,7 +6,6 @@ with a staging pipeline including vulnerability scanning.
 
 <img width="1432" height="942" alt="image" src="https://github.com/user-attachments/assets/a6fa3b39-e603-4562-b784-2fb5483b795c" />
 
-
 ---
 
 ## Features
@@ -248,8 +247,6 @@ Image tags follow semantic versioning: `latest`, `edge`, `X`, `X.Y`, `X.Y.Z`, `s
 <img width="1435" height="942" alt="image" src="https://github.com/user-attachments/assets/ebf83322-14ba-4331-a9d3-72d04737d9a5" />
 
 <img width="1435" height="942" alt="image" src="https://github.com/user-attachments/assets/7ba30cdf-ee0f-4693-a796-bec6a17f692e" />
-
-
 
 ---
 
