@@ -141,10 +141,10 @@ volumes:
 
 ### Logging
 
-| Variable    | Description                                     | Default |
-| ----------- | ----------------------------------------------- | ------- |
-| `LOG_LEVEL` | Log level (`DEBUG`, `INFO`, `WARNING`, `ERROR`) | `INFO`  |
-| `AUDIT_MAX_EVENTS` | Maximum number of audit events retained on disk | `100`  |
+| Variable           | Description                                     | Default |
+| ------------------ | ----------------------------------------------- | ------- |
+| `LOG_LEVEL`        | Log level (`DEBUG`, `INFO`, `WARNING`, `ERROR`) | `INFO`  |
+| `AUDIT_MAX_EVENTS` | Maximum number of audit events retained on disk | `100`   |
 
 ---
 
