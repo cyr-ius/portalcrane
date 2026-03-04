@@ -391,6 +391,16 @@
                       <i class="bi bi-eye"></i>
                     </button>
                     <button
+                      class="btn btn-sm btn-outline-secondary"
+                      (click)="
+                        openCopyModal(image, image.tags[0] ?? 'latest');
+                        $event.stopPropagation()
+                      "
+                      title="Copy to another folder"
+                    >
+                      <i class="bi bi-copy"></i>
+                    </button>
+                    <button
                       class="btn btn-sm btn-outline-danger"
                       (click)="confirmDeleteImage(image)"
                       [title]="'Delete ' + image.name"

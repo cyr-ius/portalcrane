@@ -66,48 +66,42 @@ export class ImagesListComponent implements OnInit {
   sortDir = signal<SortDir>("asc");
   tagFilter = signal<TagFilter>("all");
 
-  // ── Derived: flat list ─────────────────────────────────────────────────────
-  filteredItems = computed(() => {
+  // ── Accessible items (folder access filter applied once) ──────────────────
+  accessibleItems = computed(() => {
     const items = this.data()?.items ?? [];
     const allowed = this.allowedFolders();
     const isAdmin = this.authService.currentUser()?.is_admin ?? false;
 
-    // Apply folder restriction for non-admins
-    const accessible =
-      isAdmin || allowed.length === 0
-        ? items
-        : items.filter((img) => {
-            const folder = img.name.includes("/")
-              ? img.name.split("/")[0]
-              : "(root)";
-            return allowed.includes(folder);
-          });
+    // Empty allowedFolders means admin or no folders configured → no filter
+    if (isAdmin || allowed.length === 0) return items;
 
+    return items.filter((img) => {
+      const folder = img.name.includes("/") ? img.name.split("/")[0] : "(root)";
+      return allowed.includes(folder);
+    });
+  });
+
+  // ── Derived: flat list (uses accessibleItems) ─────────────────────────────
+  filteredItems = computed(() => {
+    const items = this.accessibleItems(); // ← était data()?.items
     const tagF = this.tagFilter();
     const filtered =
       tagF === "single"
-        ? accessible.filter((i) => i.tag_count === 1)
+        ? items.filter((i) => i.tag_count === 1)
         : tagF === "multi"
-          ? accessible.filter((i) => i.tag_count >= 2)
-          : accessible;
-
+          ? items.filter((i) => i.tag_count >= 2)
+          : items;
     const field = this.sortField();
     const dir = this.sortDir() === "asc" ? 1 : -1;
-    return [...filtered].sort((a, b) =>
-      field === "tag_count"
-        ? (a.tag_count - b.tag_count) * dir
-        : a.name.localeCompare(b.name) * dir,
-    );
+    return [...filtered].sort((a, b) => {
+      if (field === "tag_count") return (a.tag_count - b.tag_count) * dir;
+      return a.name.localeCompare(b.name) * dir;
+    });
   });
 
-  // ── Derived: folder tree ───────────────────────────────────────────────────
-  /**
-   * Builds a folder tree from the flat image list.
-   * Images without a "/" in their name go to "(root)".
-   * Images like "app/backend/api" are grouped under "app/backend".
-   */
+  // ── Derived: folder tree (uses accessibleItems) ───────────────────────────
   folderTree = computed<FolderNode[]>(() => {
-    const items = this.data()?.items ?? [];
+    const items = this.accessibleItems(); // ← était data()?.items
     const map = new Map<string, ImageInfo[]>();
 
     for (const img of items) {
@@ -118,7 +112,6 @@ export class ImagesListComponent implements OnInit {
       map.get(folder)!.push(img);
     }
 
-    // Sort: root first, then alphabetical
     const nodes: FolderNode[] = [];
     const sortedKeys = [...map.keys()].sort((a, b) => {
       if (a === "(root)") return -1;
