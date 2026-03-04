@@ -151,12 +151,10 @@ export class StagingComponent implements OnInit {
    */
   selectImage(name: string): void {
     this.pullImage.set(name);
-    // Search results stay visible so the user can compare or pick another image.
     this.staging.getDockerHubTags(name).subscribe({
       next: ({ tags }) => {
         this.availableTags.set(tags);
-        // Keep "latest" if it exists, otherwise pre-select the first available tag.
-        if (tags.length > 0 && !tags.includes(this.pullTag())) {
+        if (tags.length > 0) {
           this.pullTag.set(tags[0]);
         }
       },

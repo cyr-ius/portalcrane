@@ -148,7 +148,9 @@
                   (change)="pullTag.set($any($event.target).value)"
                 >
                   @for (t of availableTags(); track t) {
-                    <option [value]="t">{{ t }}</option>
+                    <option [value]="t" [selected]="t === pullTag()">
+                      {{ t }}
+                    </option>
                   }
                 </select>
               } @else {
@@ -164,6 +166,18 @@
 
             <!-- Active scan config summary (read-only, driven by Settings) -->
             <div class="scan-summary d-flex gap-2 flex-wrap mb-3">
+              @let vulnOn =
+                configService.vulnOverride()
+                  ? configService.vulnEnabled()
+                  : (configService.serverConfig()?.vuln_scan_enabled ?? true);
+              @let severities =
+                configService.vulnOverride()
+                  ? configService.vulnSeverities()
+                  : (
+                      configService.serverConfig()?.vuln_scan_severities ??
+                      "CRITICAL,HIGH"
+                    ).split(",");
+
               <span
                 class="badge"
                 [class.bg-success-subtle]="configService.vulnEnabled()"
@@ -172,11 +186,9 @@
                 [class.text-secondary]="!configService.vulnEnabled()"
               >
                 <i class="bi bi-bug me-1"></i>
-                Trivy {{ configService.vulnEnabled() ? "ON" : "OFF" }}
-                @if (configService.vulnEnabled()) {
-                  <span class="ms-1 opacity-75"
-                    >({{ configService.vulnSeveritiesString() }})</span
-                  >
+                Trivy {{ vulnOn ? "ON" : "OFF" }}
+                @if (vulnOn) {
+                  <span class="ms-1 opacity-75">({{ severities }})</span>
                 }
               </span>
               <a
