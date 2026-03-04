@@ -558,6 +558,12 @@ async def push_image(
                 detail=f"OCI directory not found for job {request.job_id}",
             )
 
+        if not host:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Host registry empty {request.job_id}",
+            )
+
         dest_ref = build_target_path(folder, target_image, target_tag, host)
 
         # Run push in background so the endpoint returns immediately
