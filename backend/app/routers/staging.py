@@ -135,7 +135,11 @@ def _safe_job_path(job_id: str) -> Path:
     """
     root = _staging_root()
     oci_dir = (root / job_id).resolve()
-    if not oci_dir.is_relative_to(root):
+    # Ensure the resolved path is within the staging root, guarding against
+    # path traversal even if a malicious job_id is supplied.
+    root_str = str(root)
+    oci_dir_str = str(oci_dir)
+    if os.path.commonpath([root_str, oci_dir_str]) != root_str:
         raise ValueError(
             f"Path traversal detected — job_id resolves outside staging root: {job_id}"
         )
