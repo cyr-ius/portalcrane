@@ -93,7 +93,7 @@ export class StagingComponent implements OnInit {
   // ── Auto-refresh ───────────────────────────────────────────────────────────
 
   private startJobsAutoRefresh(): void {
-    timer(0, 3000)
+    timer(200, 3000)
       .pipe(
         switchMap(() => this.staging.listJobs()),
         takeUntilDestroyed(this.destroyRef),
