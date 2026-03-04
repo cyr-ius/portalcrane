@@ -573,7 +573,7 @@ async def push_image(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
-    target_image = request.target_image or job["image"].split("/")[-1]
+    target_image = request.target_image or job["image"]
     target_tag = request.target_tag or job["tag"]
     folder = request.folder or ""
 
