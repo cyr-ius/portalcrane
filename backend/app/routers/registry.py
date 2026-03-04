@@ -7,23 +7,26 @@ as query parameters (?repository=...) instead of path segments to avoid
 %2F encoding issues with reverse proxies (Traefik, HAProxy, Nginx, Caddy).
 """
 
-import logging
 import asyncio
+import logging
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Body,
+    Depends,
+    HTTPException,
+    Query,
+    status,
+)
 from pydantic import BaseModel
 
 from ..config import DATA_DIR, REGISTRY_URL, Settings, get_settings
+from ..core.jwt import UserInfo, require_admin, require_pull_access, require_push_access
 from ..services.registry_service import RegistryService
-from .auth import (
-    UserInfo,
-    require_admin,
-    require_pull_access,
-    require_push_access,
-)
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -32,11 +35,10 @@ REGISTRY_BINARY = "/usr/local/bin/registry"
 REGISTRY_CONFIG = "/etc/registry/config.yml"
 REGISTRY_DATA_DIR = f"{DATA_DIR}/registry"
 REGISTRY_REPOS_DIR = f"{REGISTRY_DATA_DIR}/docker/registry/v2/repositories"
-
 SUPERVISORD_RPC_URL = "http://127.0.0.1:9001/RPC2"
 
 
-# ─── Models ──────────────────────────────────────────────────────────────────
+# ─── Models ───────────────────────────────────────────────────────────────────
 
 
 class TagInfo(BaseModel):
@@ -101,12 +103,46 @@ class RenameImageRequest(BaseModel):
     new_tag: str
 
 
-# ─── Dependency ──────────────────────────────────────────────────────────────
+class GCStatus(BaseModel):
+    """Garbage collection job status."""
+
+    status: str
+    started_at: str | None
+    finished_at: str | None
+    output: str
+    freed_bytes: int
+    freed_human: str
+    error: str | None
+
+
+# ─── Dependency ───────────────────────────────────────────────────────────────
 
 
 def get_registry(settings: Settings = Depends(get_settings)) -> RegistryService:
-    """Dependency to get registry service instance."""
+    """Dependency: return an authenticated RegistryService instance."""
     return RegistryService(settings)
+
+
+# ─── In-memory GC state ───────────────────────────────────────────────────────
+
+_gc_state: dict = GCStatus(
+    status="idle",
+    started_at=None,
+    finished_at=None,
+    output="",
+    freed_bytes=0,
+    freed_human="0 B",
+    error=None,
+).model_dump()
+
+
+def _bytes_to_human(size: int) -> str:
+    """Convert a byte count to a human-readable string."""
+    for unit in ["B", "KB", "MB", "GB", "TB"]:
+        if size < 1024:
+            return f"{size:.2f} {unit}"
+        size //= 1024
+    return f"{size:.2f} PB"
 
 
 # ─── Endpoints ────────────────────────────────────────────────────────────────
@@ -118,26 +154,25 @@ async def list_images(
     page_size: int = Query(20, ge=5, le=500),
     search: str | None = Query(None),
     registry: RegistryService = Depends(get_registry),
-    _: UserInfo = Depends(require_pull_access),
+    _user: UserInfo = Depends(require_pull_access),
 ):
     """List all images with pagination and optional search filter."""
     repositories = await registry.list_repositories()
 
-    # Filter by search term
     if search:
         repositories = [r for r in repositories if search.lower() in r.lower()]
 
     total = len(repositories)
-    total_pages = max(1, (total + page_size - 1) // page_size)
+    total_pages: int = max(1, (total + page_size - 1) // page_size)
     start = (page - 1) * page_size
-    end = start + page_size
-    page_repos = repositories[start:end]
+    page_repos = repositories[start : start + page_size]
 
-    # Fetch tag info for current page
-    tags_list = await asyncio.gather(*[registry.list_tags(r) for r in page_repos])
-    items = [
+    tags_results: list[list[str]] = await asyncio.gather(
+        *[registry.list_tags(r) for r in page_repos]
+    )
+    items: list[ImageInfo] = [
         ImageInfo(name=repo, tags=tags, tag_count=len(tags), total_size=0)
-        for repo, tags in zip(page_repos, tags_list)
+        for repo, tags in zip(page_repos, tags_results)
     ]
 
     return PaginatedImages(
@@ -157,11 +192,7 @@ async def get_image_tags(
     registry: RegistryService = Depends(get_registry),
     _: UserInfo = Depends(require_pull_access),
 ):
-    """
-    Get all tags for a specific image repository.
-    Repository is passed as a query parameter to avoid %2F encoding issues
-    with reverse proxies when the name contains slashes.
-    """
+    """Get all tags for a specific image repository."""
     tags = await registry.list_tags(repository)
     return {"repository": repository, "tags": tags}
 
@@ -175,39 +206,30 @@ async def get_tag_detail(
     registry: RegistryService = Depends(get_registry),
     _: UserInfo = Depends(require_pull_access),
 ):
-    """
-    Get detailed information about a specific image tag (advanced mode).
-    Repository and tag are passed as query parameters.
-    """
+    """Get detailed information about a specific image tag."""
     manifest = await registry.get_manifest(repository, tag)
     if not manifest:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Tag not found"
         )
 
-    config_digest = manifest.get("config", {}).get("digest", "")
-    config = {}
+    config_digest: str = manifest.get("config", {}).get("digest", "")
+    config: dict = {}
     if config_digest:
         config = await registry.get_image_config(repository, config_digest)
 
-    container_config = config.get("config", config.get("container_config", {}))
-
-    # Extract architecture and OS from platform or config
-    architecture = config.get("architecture", "")
-    os_name = config.get("os", "")
-
-    # Calculate total size
-    layers = manifest.get("layers", [])
-    total_size = sum(layer.get("size", 0) for layer in layers)
+    container_config: dict = config.get("config", config.get("container_config", {}))
+    layers: list[dict] = manifest.get("layers", [])
+    total_size: int = sum(int(layer.get("size", 0)) for layer in layers)
 
     return ImageDetail(
         name=repository,
         tag=tag,
-        digest=manifest.get("_digest", ""),
+        digest=str(manifest.get("_digest", "")),
         size=total_size,
-        created=config.get("created", ""),
-        architecture=architecture,
-        os=os_name,
+        created=str(config.get("created", "")),
+        architecture=str(config.get("architecture", "")),
+        os=str(config.get("os", "")),
         layers=layers,
         labels=container_config.get("Labels", {}) or {},
         env=container_config.get("Env", []) or [],
@@ -224,10 +246,7 @@ async def delete_tag(
     registry: RegistryService = Depends(get_registry),
     _: UserInfo = Depends(require_push_access),
 ):
-    """
-    Delete a specific tag from an image repository.
-    Repository and tag are passed as query parameters.
-    """
+    """Delete a specific tag from an image repository."""
     success = await registry.delete_tag(repository, tag)
     if not success:
         raise HTTPException(
@@ -243,10 +262,7 @@ async def delete_image(
     registry: RegistryService = Depends(get_registry),
     _: UserInfo = Depends(require_push_access),
 ):
-    """
-    Delete all tags (and the image) from a repository.
-    Repository is passed as a query parameter.
-    """
+    """Delete all tags (and the image) from a repository."""
     tags = await registry.list_tags(repository)
     if not tags:
         raise HTTPException(
@@ -254,10 +270,9 @@ async def delete_image(
             detail="Repository not found or has no tags",
         )
 
-    errors = []
+    errors: list[str] = []
     for tag in tags:
-        success = await registry.delete_tag(repository, tag)
-        if not success:
+        if not await registry.delete_tag(repository, tag):
             errors.append(tag)
 
     if errors:
@@ -265,22 +280,17 @@ async def delete_image(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to delete tags: {errors}",
         )
-
     return {"message": f"Image '{repository}' and all its tags deleted"}
 
 
 @router.post("/images/tags")
 async def add_tag(
     repository: str = Query(..., description="Repository name"),
-    request: AddTagRequest = ...,
+    request: AddTagRequest = Body(...),
     registry: RegistryService = Depends(get_registry),
     _: UserInfo = Depends(require_push_access),
 ):
-    """
-    Add a new tag to an existing image (retag).
-    Repository is passed as a query parameter.
-    """
-    # Get the source manifest
+    """Add a new tag to an existing image (retag via manifest copy)."""
     manifest = await registry.get_manifest(repository, request.source_tag)
     if not manifest:
         raise HTTPException(
@@ -288,11 +298,9 @@ async def add_tag(
             detail=f"Source tag '{request.source_tag}' not found",
         )
 
-    content_type = manifest.get(
+    content_type: str = manifest.get(
         "mediaType", "application/vnd.docker.distribution.manifest.v2+json"
     )
-
-    # Remove internal fields before re-pushing
     clean_manifest = {k: v for k, v in manifest.items() if not k.startswith("_")}
 
     success = await registry.put_manifest(
@@ -305,7 +313,10 @@ async def add_tag(
         )
 
     return {
-        "message": f"Tag '{request.new_tag}' created from '{request.source_tag}' in '{repository}'"
+        "message": (
+            f"Tag '{request.new_tag}' created from '{request.source_tag}' "
+            f"in '{repository}'"
+        )
     }
 
 
@@ -322,23 +333,17 @@ async def ping_registry(
 @router.post("/images/rename")
 async def rename_image(
     repository: str = Query(..., description="Source repository name"),
-    request: RenameImageRequest = ...,
+    request: RenameImageRequest = Body(...),
     settings: Settings = Depends(get_settings),
     _: UserInfo = Depends(require_push_access),
 ):
-    """
-    Retag an image to a new repository/name using skopeo copy.
-    skopeo copies the manifest directly between two registry locations
-    without pulling the full image layers to disk.
-    Repository is passed as a query parameter.
-    """
+    """Retag an image to a new repository/name using skopeo copy."""
     from urllib.parse import urlparse
 
     registry_host = urlparse(REGISTRY_URL).netloc
     source = f"docker://{registry_host}/{repository}:{request.new_tag}"
     dest = f"docker://{registry_host}/{request.new_repository}:{request.new_tag}"
 
-    # Disable TLS verification for plain HTTP registries (e.g. localhost:5000)
     tls_flags = (
         ["--src-tls-verify=false", "--dest-tls-verify=false"]
         if REGISTRY_URL.startswith("http://")
@@ -354,7 +359,7 @@ async def rename_image(
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
-    _, stderr = await proc.communicate()
+    _, stderr = await proc.communicate()  # pyright: ignore[reportAssignmentType]
 
     if proc.returncode != 0:
         raise HTTPException(
@@ -373,44 +378,8 @@ async def rename_image(
 # ─── Garbage Collection ───────────────────────────────────────────────────────
 
 
-class GCStatus(BaseModel):
-    """Garbage collection job status."""
-
-    status: str
-    started_at: str | None
-    finished_at: str | None
-    output: str
-    freed_bytes: int
-    freed_human: str
-    error: str | None
-
-
-# In-memory GC job state
-_gc_state = GCStatus(
-    status="idle",
-    started_at=None,
-    finished_at=None,
-    output="",
-    freed_bytes=0,
-    freed_human="0 B",
-    error=None,
-).model_dump()
-
-
-def _bytes_to_human(size: int) -> str:
-    for unit in ["B", "KB", "MB", "GB", "TB"]:
-        if size < 1024:
-            return f"{size:.2f} {unit}"
-        size /= 1024
-    return f"{size:.2f} PB"
-
-
-async def _run_gc(settings: Settings):
-    """
-    Run registry garbage-collect directly inside the container.
-    Uses supervisord XML-RPC to stop/start the registry process,
-    then runs the registry binary directly (no docker exec needed).
-    """
+async def _run_gc(settings: Settings) -> None:
+    """Run registry garbage-collect inside the container via supervisord."""
     import xmlrpc.client
 
     global _gc_state
@@ -427,24 +396,21 @@ async def _run_gc(settings: Settings):
     output_lines: list[str] = []
 
     try:
-        # Measure disk usage before GC
         try:
-            size_before = shutil.disk_usage(REGISTRY_DATA_DIR).used
+            size_before: int = shutil.disk_usage(REGISTRY_DATA_DIR).used
         except Exception:
             size_before = 0
 
-        # Stop registry via supervisord RPC
         proxy = xmlrpc.client.ServerProxy(SUPERVISORD_RPC_URL)
         output_lines.append("Stopping registry process via supervisord...")
         try:
             proxy.supervisor.stopProcess("registry")
             await asyncio.sleep(2)
             output_lines.append("Registry stopped.")
-        except Exception as e:
-            output_lines.append(f"Warning: could not stop registry cleanly: {e}")
+        except Exception as exc:
+            output_lines.append(f"Warning: could not stop registry cleanly: {exc}")
 
         try:
-            # Run garbage-collect directly with the local binary
             cmd = [REGISTRY_BINARY, "garbage-collect", REGISTRY_CONFIG]
             output_lines.append(f"Running: {' '.join(cmd)}")
 
@@ -459,22 +425,21 @@ async def _run_gc(settings: Settings):
                 output_lines.append(gc_err.decode())
 
             if proc.returncode != 0:
-                raise Exception(f"garbage-collect exited with code {proc.returncode}")
-
+                raise RuntimeError(
+                    f"garbage-collect exited with code {proc.returncode}"
+                )
             output_lines.append("Garbage collection completed.")
 
         finally:
-            # Always restart registry
             try:
                 proxy.supervisor.startProcess("registry")
                 output_lines.append("Registry restarted.")
-            except Exception as e:
-                output_lines.append(f"Warning: could not restart registry: {e}")
+            except Exception as exc:
+                output_lines.append(f"Warning: could not restart registry: {exc}")
 
-        # Measure after
         try:
-            size_after = shutil.disk_usage(REGISTRY_DATA_DIR).used
-            freed = max(0, size_before - size_after)
+            size_after: int = shutil.disk_usage(REGISTRY_DATA_DIR).used
+            freed: int = max(0, size_before - size_after)
         except Exception:
             freed = 0
 
@@ -483,7 +448,6 @@ async def _run_gc(settings: Settings):
         _gc_state["output"] = "\n".join(output_lines).strip()
         _gc_state["status"] = "done"
         _gc_state["finished_at"] = datetime.now(timezone.utc).isoformat()
-
         _gc_state = GCStatus.model_validate(_gc_state).model_dump()
 
     except Exception:
@@ -492,7 +456,6 @@ async def _run_gc(settings: Settings):
         _gc_state["error"] = "Garbage collection failed — check server logs"
         _gc_state["output"] = "\n".join(output_lines).strip()
         _gc_state["finished_at"] = datetime.now(timezone.utc).isoformat()
-
         _gc_state = GCStatus.model_validate(_gc_state).model_dump()
 
 
@@ -502,11 +465,7 @@ async def start_garbage_collect(
     settings: Settings = Depends(get_settings),
     _: UserInfo = Depends(require_admin),
 ):
-    """
-    Trigger a registry garbage-collect run.
-    Removes unreferenced layers and blobs to reclaim disk space.
-    Only one GC job can run at a time.
-    """
+    """Trigger a registry garbage-collect run (one job at a time)."""
     if _gc_state["status"] == "running":
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -514,7 +473,6 @@ async def start_garbage_collect(
         )
 
     background_tasks.add_task(_run_gc, settings)
-
     return GCStatus(
         status="running",
         started_at=datetime.now(timezone.utc).isoformat(),
@@ -534,8 +492,8 @@ async def get_gc_status(_: UserInfo = Depends(require_admin)):
         started_at=_gc_state["started_at"],
         finished_at=_gc_state["finished_at"],
         output=_gc_state["output"],
-        freed_bytes=_gc_state["freed_bytes"],
-        freed_human=_bytes_to_human(_gc_state["freed_bytes"]),
+        freed_bytes=int(_gc_state["freed_bytes"]),
+        freed_human=_bytes_to_human(int(_gc_state["freed_bytes"])),
         error=_gc_state["error"],
     )
 
@@ -548,12 +506,7 @@ async def list_empty_repositories(
     registry: RegistryService = Depends(get_registry),
     _: UserInfo = Depends(require_admin),
 ):
-    """
-    List repositories that have no tags.
-    These ghost entries appear in the catalog after all tags of a repository
-    have been deleted. The Distribution Registry has no API to remove them;
-    they persist until a full GC + filesystem cleanup is performed.
-    """
+    """List repositories that have no tags (ghost entries)."""
     empty = await registry.list_empty_repositories()
     return {"empty_repositories": empty, "count": len(empty)}
 
@@ -564,41 +517,29 @@ async def purge_empty_repositories(
     settings: Settings = Depends(get_settings),
     _: UserInfo = Depends(require_admin),
 ):
-    """
-    Purge ghost repositories directly from the local filesystem.
-    In registry_inside mode, the registry data is at /var/lib/registry
-    inside the same container — no docker exec needed.
-    """
+    """Purge ghost repositories directly from the local filesystem."""
     empty = await registry.list_empty_repositories()
     if not empty:
         return {"message": "No empty repositories found", "purged": []}
 
-    purged = []
-    errors = []
+    purged: list[str] = []
+    errors: list[dict] = []
 
     for repo in empty:
-        # Safely resolve path to prevent directory traversal
         repo_path = Path(REGISTRY_REPOS_DIR) / repo
         try:
-            # Ensure the resolved path stays within the repositories directory
             resolved = repo_path.resolve()
             base = Path(REGISTRY_REPOS_DIR).resolve()
             if not str(resolved).startswith(str(base)):
                 errors.append({"repo": repo, "error": "Path traversal attempt blocked"})
                 continue
-
             if resolved.exists():
                 shutil.rmtree(resolved)
-                purged.append(repo)
-            else:
-                # Directory already gone — consider it purged
-                purged.append(repo)
+            purged.append(repo)
         except OSError as exc:
-            # Log the real OS error (path, errno) server-side only
             logger.error("Failed to purge repository %s: %s", repo, exc)
             errors.append({"repo": repo, "error": "Deletion failed"})
         except Exception:
-            # Catch-all: log with full traceback, return opaque message
             logger.exception("Unexpected error purging repository %s", repo)
             errors.append({"repo": repo, "error": "Unexpected error"})
 

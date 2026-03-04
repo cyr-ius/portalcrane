@@ -1,6 +1,13 @@
+/**
+ * Portalcrane - Auth Interceptor
+ * Attaches the Bearer token to every /api/ request and handles 401 responses
+ * by clearing the session and showing the session-expired modal.
+ */
+
 import { HttpErrorResponse, HttpInterceptorFn } from "@angular/common/http";
 import { inject } from "@angular/core";
 import { catchError, throwError } from "rxjs";
+
 import { AuthService } from "../services/auth.service";
 import { SessionExpiredService } from "../services/session-expired.service";
 
@@ -9,6 +16,7 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const sessionExpired = inject(SessionExpiredService);
   const token = auth.getToken();
 
+  // Attach Authorization header to all API requests when a token is available
   const authReq =
     token && req.url.includes("/api/")
       ? req.clone({ setHeaders: { Authorization: `Bearer ${token}` } })

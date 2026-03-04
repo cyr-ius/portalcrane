@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from ..config import Settings, get_settings
-from .auth import UserInfo, require_admin
+from ..core.jwt import UserInfo, require_admin
 
 router = APIRouter()
 

@@ -29,7 +29,6 @@ type ViewMode = "flat" | "tree";
 
 /** A folder node in the tree view. */
 interface FolderNode {
-  /** Folder name, e.g. "app/backend" or "(root)". */
   name: string;
   images: ImageInfo[];
 }
@@ -93,7 +92,7 @@ export class ImagesListComponent implements OnInit {
     const map = new Map<string, ImageInfo[]>();
 
     for (const img of items) {
-      const slashIdx = img.name.lastIndexOf("/");
+      const slashIdx = img.name.indexOf("/");
       const folder =
         slashIdx === -1 ? "(root)" : img.name.substring(0, slashIdx);
       if (!map.has(folder)) map.set(folder, []);
@@ -122,7 +121,7 @@ export class ImagesListComponent implements OnInit {
    * Used in tree view to show only "api" under "app/backend" folder.
    */
   imageShortName(img: ImageInfo): string {
-    const idx = img.name.lastIndexOf("/");
+    const idx = img.name.indexOf("/");
     return idx === -1 ? img.name : img.name.substring(idx + 1);
   }
 

@@ -1,11 +1,19 @@
+/**
+ * Portalcrane - LoginComponent
+ * Handles both local credential login and the initial OIDC redirect.
+ * OIDC callback handling is done in OidcCallbackComponent.
+ */
+
 import { SlicePipe } from "@angular/common";
 import { Component, inject, OnInit, signal } from "@angular/core";
 import { form, FormField, required, submit } from "@angular/forms/signals";
 import { Router } from "@angular/router";
 import { firstValueFrom } from "rxjs";
-import { AuthService, OidcConfig } from "../../../core/services/auth.service";
+
+import { OidcPublicConfig } from "../../../core/models/auth.models";
+import { AuthService } from "../../../core/services/auth.service";
+import { OidcService } from "../../../core/services/oidc.service";
 import { ThemeService } from "../../../core/services/theme.service";
-import { OIDC_STATE_KEY } from "../../../core/constants/auth.constants";
 
 @Component({
   selector: "app-login",
@@ -14,35 +22,43 @@ import { OIDC_STATE_KEY } from "../../../core/constants/auth.constants";
   styleUrl: "./login.component.css",
 })
 export class LoginComponent implements OnInit {
-  private auth = inject(AuthService);
-  private router = inject(Router);
-  themeService = inject(ThemeService);
+  private readonly auth = inject(AuthService);
+  private readonly oidc = inject(OidcService);
+  private readonly router = inject(Router);
+  readonly themeService = inject(ThemeService);
 
-  loginModel = signal({ username: "", password: "" });
-  loginForm = form(this.loginModel, (p) => ({
+  // ── Local login form ──────────────────────────────────────────────────────
+
+  readonly loginModel = signal({ username: "", password: "" });
+  readonly loginForm = form(this.loginModel, (p) => ({
     username: [required(p.username)],
     password: [required(p.password)],
   }));
 
-  loading = signal(false);
-  error = signal("");
-  showPassword = signal(false);
-  oidcConfig = signal<OidcConfig | null>(null);
+  readonly loading = signal(false);
+  readonly error = signal("");
+  readonly showPassword = signal(false);
 
-  ngOnInit() {
-    this.auth.getOidcConfig().subscribe({
+  // ── OIDC ──────────────────────────────────────────────────────────────────
+
+  readonly oidcConfig = signal<OidcPublicConfig | null>(null);
+
+  ngOnInit(): void {
+    // Load the OIDC public config to show/hide the SSO button
+    this.oidc.getPublicConfig().subscribe({
       next: (config) => this.oidcConfig.set(config),
     });
   }
 
-  onSubmit(event: Event) {
-    event.preventDefault();
+  // ── Handlers ──────────────────────────────────────────────────────────────
 
+  onSubmit(event: Event): void {
+    event.preventDefault();
     this.loading.set(true);
     this.error.set("");
 
-    submit(this.loginForm, async (form) => {
-      const { username, password } = form().value();
+    submit(this.loginForm, async (f) => {
+      const { username, password } = f().value();
       try {
         await firstValueFrom(this.auth.login(username!, password!));
         this.router.navigate(["/"]);
@@ -55,21 +71,11 @@ export class LoginComponent implements OnInit {
     });
   }
 
-  loginWithOidc() {
+  /** Delegate the OIDC authorization redirect to OidcService. */
+  loginWithOidc(): void {
     const config = this.oidcConfig();
-    if (!config?.authorization_endpoint) return;
-
-    const state = crypto.randomUUID();
-    sessionStorage.setItem(OIDC_STATE_KEY, state);
-
-    const params = new URLSearchParams({
-      response_type: config.response_type,
-      client_id: config.client_id,
-      redirect_uri: config.redirect_uri,
-      scope: config.scope,
-      state,
-    });
-
-    window.location.href = `${config.authorization_endpoint}?${params}`;
+    if (config) {
+      this.oidc.redirectToProvider(config);
+    }
   }
 }

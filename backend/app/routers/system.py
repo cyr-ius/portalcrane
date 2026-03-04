@@ -7,7 +7,7 @@ from ..services.process_manager import (
 )
 from ..services.trivy_service import get_trivy_db_info, scan_image, update_trivy_db
 from ..services.audit_service import get_recent_audit_events
-from .auth import UserInfo, require_admin
+from ..core.jwt import UserInfo, require_admin
 
 router = APIRouter(prefix="/api/system", tags=["system"])
 

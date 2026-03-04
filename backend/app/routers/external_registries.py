@@ -20,7 +20,7 @@ from ..services.external_registry_service import (
     update_registry,
     validate_folder_path,
 )
-from .auth import UserInfo, require_admin, require_push_access
+from ..core.jwt import UserInfo, require_admin, require_push_access
 
 router = APIRouter()
 

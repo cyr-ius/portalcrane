@@ -1,75 +1,68 @@
+/**
+ * Portalcrane - AuthService
+ * Manages the local authentication session:
+ *   - login() / logout() with local credentials
+ *   - JWT token storage (localStorage)
+ *   - reactive user and authentication state (signals)
+ *   - Docker Hub account settings
+ *
+ * OIDC-specific logic (config fetch, redirect, callback) lives in OidcService.
+ */
+
 import { HttpClient } from "@angular/common/http";
 import { computed, inject, Injectable, signal } from "@angular/core";
 import { Router } from "@angular/router";
 import { tap } from "rxjs";
 
-export interface LoginResponse {
-  access_token: string;
-  token_type: string;
-  expires_in: number;
-}
-
-export interface UserInfo {
-  username: string;
-  is_admin: boolean;
-  can_pull_images: boolean;
-  can_push_images: boolean;
-}
-
-export interface OidcConfig {
-  enabled: boolean;
-  client_id: string;
-  issuer: string;
-  redirect_uri: string;
-  post_logout_redirect_uri: string;
-  authorization_endpoint: string;
-  end_session_endpoint: string;
-  response_type: string;
-  scope: string;
-}
-
-export interface DockerHubAccountSettings {
-  username: string;
-  has_password: boolean;
-}
-
-export interface UpdateDockerHubAccountSettingsRequest {
-  username: string;
-  password: string;
-}
+import {
+  DockerHubAccountSettings,
+  LoginResponse,
+  UpdateDockerHubAccountSettingsRequest,
+  UserInfo,
+} from "../models/auth.models";
+import { OidcService } from "./oidc.service";
 
 @Injectable({ providedIn: "root" })
 export class AuthService {
-  private http = inject(HttpClient);
-  private router = inject(Router);
+  private readonly http = inject(HttpClient);
+  private readonly router = inject(Router);
+  private readonly oidcService = inject(OidcService);
 
   private readonly TOKEN_KEY = "pc_token";
   private readonly USER_KEY = "pc_user";
 
-  // Signals
-  private _token = signal<string | null>(
+  // ── Reactive state ────────────────────────────────────────────────────────
+
+  private readonly _token = signal<string | null>(
     typeof window !== "undefined" ? localStorage.getItem(this.TOKEN_KEY) : null,
   );
 
-  private _user = signal<UserInfo | null>(
-    JSON.parse(localStorage.getItem(this.USER_KEY) || "null"),
+  private readonly _user = signal<UserInfo | null>(
+    JSON.parse(localStorage.getItem(this.USER_KEY) ?? "null"),
   );
 
+  /** True when a valid token is present in memory. */
   readonly isAuthenticated = computed(() => !!this._token());
+
+  /** Currently authenticated user (null before first load). */
   readonly currentUser = this._user.asReadonly();
 
+  // ── Local authentication ──────────────────────────────────────────────────
+
+  /** Authenticate with username and password, store the token, load user info. */
   login(username: string, password: string) {
     return this.http
       .post<LoginResponse>("/api/auth/login", { username, password })
       .pipe(
         tap((response) => {
-          this.setToken(response.access_token);
+          this._setToken(response.access_token);
           this.loadUserInfo();
         }),
       );
   }
 
-  loadUserInfo() {
+  /** Fetch /api/auth/me and refresh the user signal. */
+  loadUserInfo(): void {
     this.http.get<UserInfo>("/api/auth/me").subscribe({
       next: (user) => {
         this._user.set(user);
@@ -78,16 +71,56 @@ export class AuthService {
     });
   }
 
-  getOidcConfig() {
-    return this.http.get<OidcConfig>("/api/auth/oidc-config");
+  /**
+   * Clear the local session then redirect to the login page.
+   * When OIDC is active and an end-session endpoint is configured the browser
+   * is redirected to the provider's logout URL instead.
+   */
+  logout(): void {
+    this.clearSession();
+
+    this.oidcService.getPublicConfig().subscribe({
+      next: (config) => {
+        if (config.enabled && config.end_session_endpoint) {
+          const url = new URL(config.end_session_endpoint);
+          if (config.post_logout_redirect_uri) {
+            url.searchParams.set(
+              "post_logout_redirect_uri",
+              config.post_logout_redirect_uri,
+            );
+          }
+          window.location.href = url.toString();
+          return;
+        }
+        this.router.navigate(["/auth"]);
+      },
+      error: () => this.router.navigate(["/auth"]),
+    });
   }
 
+  /** Remove token and user from memory and localStorage. */
+  clearSession(): void {
+    this._token.set(null);
+    this._user.set(null);
+    localStorage.removeItem(this.TOKEN_KEY);
+    localStorage.removeItem(this.USER_KEY);
+  }
+
+  /** Return the current JWT token string (or null when not authenticated). */
+  getToken(): string | null {
+    return this._token();
+  }
+
+  // ── Docker Hub account settings ───────────────────────────────────────────
+
+  /** Fetch Docker Hub credentials for the authenticated user. */
   getDockerHubAccountSettings() {
     return this.http.get<DockerHubAccountSettings>(
       "/api/auth/account/dockerhub",
     );
   }
 
+  /** Create or update Docker Hub credentials for the authenticated user. */
   updateDockerHubAccountSettings(
     payload: UpdateDockerHubAccountSettingsRequest,
   ) {
@@ -97,56 +130,18 @@ export class AuthService {
     );
   }
 
-  handleOidcCallback(code: string, state: string) {
-    const params = new URLSearchParams({ code, state });
-    return this.http
-      .post<LoginResponse>(`/api/auth/oidc/callback?${params.toString()}`, {})
-      .pipe(
-        tap((response) => {
-          this.setToken(response.access_token);
-          this.loadUserInfo();
-        }),
-      );
-  }
-
-  clearSession() {
-    this._token.set(null);
-    this._user.set(null);
-    localStorage.removeItem(this.TOKEN_KEY);
-    localStorage.removeItem(this.USER_KEY);
-  }
-
-  logout() {
-    this.clearSession();
-
-    this.getOidcConfig().subscribe({
-      next: (config) => {
-        if (config.enabled && config.end_session_endpoint) {
-          const endSessionUrl = new URL(config.end_session_endpoint);
-          if (config.post_logout_redirect_uri) {
-            endSessionUrl.searchParams.set(
-              "post_logout_redirect_uri",
-              config.post_logout_redirect_uri,
-            );
-          }
-          window.location.href = endSessionUrl.toString();
-          return;
-        }
-
-        this.router.navigate(["/auth"]);
-      },
-      error: () => {
-        this.router.navigate(["/auth"]);
-      },
-    });
-  }
-
-  getToken(): string | null {
-    return this._token();
-  }
-
-  private setToken(token: string) {
+  /**
+   * Store a JWT access token in memory and localStorage.
+   * Called by OidcCallbackComponent after a successful code exchange.
+   */
+  storeToken(token: string): void {
     this._token.set(token);
     localStorage.setItem(this.TOKEN_KEY, token);
+  }
+
+  // ── Private helpers ───────────────────────────────────────────────────────
+
+  private _setToken(token: string): void {
+    this.storeToken(token);
   }
 }

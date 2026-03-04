@@ -27,13 +27,8 @@ from ..config import (
     Settings,
     get_settings,
 )
-from .auth import (
-    UserInfo,
-    get_user_dockerhub_credentials,
-    require_admin,
-    require_pull_access,
-    require_push_access,
-)
+from .auth import get_user_dockerhub_credentials, require_admin
+from ..core.jwt import UserInfo, require_pull_access, require_push_access
 
 router = APIRouter()
 
@@ -87,11 +82,11 @@ class PushRequest(BaseModel):
     """Request to push a staged image to the local or an external registry."""
 
     job_id: str
+    external_registry_host: str | None = None
     target_image: str | None = None
     target_tag: str | None = None
     folder: str | None = None
     external_registry_id: str | None = None
-    external_registry_host: str | None = None
     external_registry_username: str | None = None
     external_registry_password: str | None = None
 
@@ -175,19 +170,6 @@ def _build_skopeo_src_creds(current_user: UserInfo) -> list[str]:
     creds = get_user_dockerhub_credentials(current_user.username)
     if creds:
         return ["--src-creds", f"{creds[0]}:{creds[1]}"]
-    return []
-
-
-def _build_skopeo_dest_creds(settings: Settings) -> list[str]:
-    """
-    Return skopeo --dest-creds argument list when registry credentials are set.
-    Returns an empty list when no credentials are configured.
-    """
-    if settings.registry_username and settings.registry_password:
-        return [
-            "--dest-creds",
-            f"{settings.registry_username}:{settings.registry_password}",
-        ]
     return []
 
 
