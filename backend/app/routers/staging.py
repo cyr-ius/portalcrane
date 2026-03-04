@@ -316,6 +316,7 @@ async def _run_pull_pipeline_inner(
 
     # Resolve user Docker Hub credentials for authenticated pulls
     src_creds = _build_skopeo_src_creds(current_user)
+
     _logger.info("Starting pull pipeline for job %s: %s:%s", job_id, image, tag)
     _logger.debug("skopeo src_creds present: %s", bool(src_creds))
 
@@ -324,12 +325,15 @@ async def _run_pull_pipeline_inner(
         skopeo_pull_cmd = [
             "skopeo",
             "copy",
-            *src_creds,
-            f"docker://docker.io/{image}:{tag}",
+            "--override-os",
+            "linux",
+            *_build_skopeo_src_creds(current_user),
+            f"docker://{image}:{tag}",
             f"oci:{oci_dir}:latest",
         ]
 
         _logger.info("Executing skopeo: %s", " ".join(skopeo_pull_cmd))
+
         pull_proc = await asyncio.create_subprocess_exec(
             *skopeo_pull_cmd,
             stdout=asyncio.subprocess.PIPE,
@@ -359,39 +363,42 @@ async def _run_pull_pipeline_inner(
             _jobs[job_id]["message"] = "Running Trivy vulnerability scan..."
             _jobs[job_id]["progress"] = 60
 
+            severity_arg = ",".join(severities)
             trivy_cmd = [
                 "trivy",
                 "image",
                 "--format",
                 "json",
-                "--exit-code",
-                "0",
+                "--server",
+                TRIVY_SERVER_URL,
                 "--severity",
-                ",".join(severities),
+                severity_arg,
                 "--cache-dir",
-                str(TRIVY_CACHE_DIR),
+                TRIVY_CACHE_DIR,
+                "--timeout",
+                settings.vuln_scan_timeout,
+                "--input",
+                # Pass as string — trivy CLI does not accept Path objects
+                str(oci_dir),
             ]
-
-            if TRIVY_SERVER_URL:
-                trivy_cmd += ["--server", TRIVY_SERVER_URL]
 
             if settings.vuln_ignore_unfixed:
                 trivy_cmd.append("--ignore-unfixed")
-
-            trivy_cmd += [
-                "--timeout",
-                settings.vuln_scan_timeout,
-                f"oci:{oci_dir}",
-            ]
 
             trivy_proc = await asyncio.create_subprocess_exec(
                 *trivy_cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-            stdout, _ = await trivy_proc.communicate()
+            trivy_out, trivy_err = await trivy_proc.communicate()
 
-            vuln_result = _parse_trivy_output(stdout, severities)
+            if trivy_proc.returncode not in (0, 1):
+                raise Exception(
+                    f"Trivy scan failed (exit {trivy_proc.returncode}): "
+                    f"{trivy_err.decode() or trivy_out.decode()}"
+                )
+
+            vuln_result = _parse_trivy_output(trivy_out, severities)
             _jobs[job_id]["vuln_result"] = vuln_result
 
             if vuln_result["blocked"]:
