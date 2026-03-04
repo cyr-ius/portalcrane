@@ -11,9 +11,14 @@
   --pc-accent: #1d72bf;
   --pc-accent-2: #d4891a;
   --pc-accent-3: #145299;
-  --pc-accent-soft: rgba(29, 114, 191, 0.10);
+  --pc-accent-soft: rgba(29, 114, 191, 0.1);
 
-  --pc-bg-gradient: linear-gradient(135deg, #cddaeb 0%, #d8e6f3 50%, #e8e0d0 100%);
+  --pc-bg-gradient: linear-gradient(
+    135deg,
+    #cddaeb 0%,
+    #d8e6f3 50%,
+    #e8e0d0 100%
+  );
   --pc-sidebar-bg: #cddaeb;
   --pc-main-bg: #dbe5f0;
   --pc-card-bg: #eef4fb;
@@ -25,7 +30,7 @@
   --pc-shadow: rgba(14, 28, 42, 0.12);
 
   --pc-nav-hover: rgba(29, 114, 191, 0.13);
-  --pc-nav-active-bg: rgba(29, 114, 191, 0.20);
+  --pc-nav-active-bg: rgba(29, 114, 191, 0.2);
 }
 
 [data-pc-theme="dark"] {
