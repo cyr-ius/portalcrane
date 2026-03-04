@@ -42,6 +42,7 @@ interface FolderNode {
 export class ImagesListComponent implements OnInit {
   private registry = inject(RegistryService);
   private router = inject(Router);
+  private readonly VIEW_MODE_KEY = "pc_images_view_mode";
 
   // ── Remote data ────────────────────────────────────────────────────────────
   data = signal<PaginatedImages | null>(null);
@@ -53,7 +54,9 @@ export class ImagesListComponent implements OnInit {
 
   // ── View mode ──────────────────────────────────────────────────────────────
   /** Toggle between flat list and hierarchical folder tree. */
-  viewMode = signal<ViewMode>("flat");
+  viewMode = signal<ViewMode>(
+    (localStorage.getItem(this.VIEW_MODE_KEY) as ViewMode) ?? "flat",
+  );
 
   /** Set of expanded folder names in tree mode. */
   expandedFolders = signal<Set<string>>(new Set());
@@ -193,6 +196,7 @@ export class ImagesListComponent implements OnInit {
 
   setViewMode(mode: ViewMode): void {
     this.viewMode.set(mode);
+    localStorage.setItem(this.VIEW_MODE_KEY, mode);
   }
 
   // ── Folder tree helpers ────────────────────────────────────────────────────

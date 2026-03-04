@@ -23,8 +23,11 @@ const COLLAPSE_BREAKPOINT = 992;
 export class LayoutComponent implements OnInit, OnDestroy {
   auth = inject(AuthService);
   themeService = inject(ThemeService);
+  private readonly SIDEBAR_KEY = "pc_sidebar_collapsed";
 
-  sidebarCollapsed = signal(false);
+  sidebarCollapsed = signal<boolean>(
+    localStorage.getItem(this.SIDEBAR_KEY) === "true",
+  );
   themePickerOpen = signal(false);
   accountModalOpen = signal(false);
 
@@ -62,7 +65,8 @@ export class LayoutComponent implements OnInit, OnDestroy {
       this.userHasToggled.set(false);
     } else if (!this.userHasToggled()) {
       // Wide screen and user hasn't toggled: expand automatically
-      this.sidebarCollapsed.set(false);
+      const saved = localStorage.getItem(this.SIDEBAR_KEY);
+      this.sidebarCollapsed.set(saved === "true" ? true : false);
     }
     // Wide screen + user has toggled: leave sidebarCollapsed as-is
   }
@@ -70,6 +74,7 @@ export class LayoutComponent implements OnInit, OnDestroy {
   toggleSidebar(): void {
     this.userHasToggled.set(true);
     this.sidebarCollapsed.set(!this.sidebarCollapsed());
+    localStorage.setItem(this.SIDEBAR_KEY, String(this.sidebarCollapsed()));
     if (!this.sidebarCollapsed()) {
       this.themePickerOpen.set(false);
     }
