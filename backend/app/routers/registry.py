@@ -25,7 +25,13 @@ from fastapi import (
 from pydantic import BaseModel
 
 from ..config import DATA_DIR, REGISTRY_URL, Settings, get_settings
-from ..core.jwt import UserInfo, require_admin, require_pull_access, require_push_access
+from ..core.jwt import (
+    UserInfo,
+    require_admin,
+    require_pull_access,
+    require_push_access,
+    get_current_user,
+)
 from ..services.registry_service import RegistryService
 
 router = APIRouter()
@@ -113,6 +119,15 @@ class GCStatus(BaseModel):
     freed_bytes: int
     freed_human: str
     error: str | None
+
+
+class CopyImageRequest(BaseModel):
+    """Copy an image to a new repository path (with optional tag rename)."""
+
+    source_repository: str
+    source_tag: str
+    dest_repository: str  # Full path e.g. "infra/nginx" or "prod/nginx"
+    dest_tag: str | None = None  # Defaults to source_tag
 
 
 # ─── Dependency ───────────────────────────────────────────────────────────────
@@ -547,4 +562,63 @@ async def purge_empty_repositories(
         "message": f"Purged {len(purged)} empty repositories",
         "purged": purged,
         "errors": errors,
+    }
+
+
+@router.post("/images/copy")
+async def copy_image(
+    request: CopyImageRequest,
+    settings: Settings = Depends(get_settings),
+    current_user: UserInfo = Depends(get_current_user),
+):
+    """
+    Copy an image to a new repository path via skopeo.
+    Non-admins must have push access on the destination folder.
+    """
+    from urllib.parse import urlparse
+    from .folders import check_folder_access
+
+    # Check push access on destination
+    if not current_user.is_admin:
+        access = check_folder_access(
+            current_user.username, request.dest_repository, is_pull=False
+        )
+        if not access:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="No push access on destination folder",
+            )
+
+    registry_host = urlparse(REGISTRY_URL).netloc
+    dest_tag = request.dest_tag or request.source_tag
+    source = (
+        f"docker://{registry_host}/{request.source_repository}:{request.source_tag}"
+    )
+    dest = f"docker://{registry_host}/{request.dest_repository}:{dest_tag}"
+
+    tls_flags = (
+        ["--src-tls-verify=false", "--dest-tls-verify=false"]
+        if REGISTRY_URL.startswith("http://")
+        else []
+    )
+
+    proc = await asyncio.create_subprocess_exec(
+        "skopeo",
+        "copy",
+        *tls_flags,
+        source,
+        dest,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    _, stderr = await proc.communicate()
+
+    if proc.returncode != 0:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Copy failed: {stderr.decode()}",
+        )
+
+    return {
+        "message": f"Copied {request.source_repository}:{request.source_tag} → {request.dest_repository}:{dest_tag}"
     }

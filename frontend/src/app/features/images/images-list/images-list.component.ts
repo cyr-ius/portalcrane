@@ -9,6 +9,7 @@
 import { Component, computed, inject, OnInit, signal } from "@angular/core";
 import { FormsModule } from "@angular/forms";
 import { Router } from "@angular/router";
+import { AuthService } from "../../../core/services/auth.service";
 import {
   ImageInfo,
   PaginatedImages,
@@ -42,6 +43,7 @@ interface FolderNode {
 export class ImagesListComponent implements OnInit {
   private registry = inject(RegistryService);
   private router = inject(Router);
+  private readonly authService = inject(AuthService);
   private readonly VIEW_MODE_KEY = "pc_images_view_mode";
 
   // ── Remote data ────────────────────────────────────────────────────────────
@@ -53,12 +55,10 @@ export class ImagesListComponent implements OnInit {
   private searchTimeout: ReturnType<typeof setTimeout> | null = null;
 
   // ── View mode ──────────────────────────────────────────────────────────────
-  /** Toggle between flat list and hierarchical folder tree. */
   viewMode = signal<ViewMode>(
     (localStorage.getItem(this.VIEW_MODE_KEY) as ViewMode) ?? "flat",
   );
-
-  /** Set of expanded folder names in tree mode. */
+  allowedFolders = signal<string[]>([]);
   expandedFolders = signal<Set<string>>(new Set());
 
   // ── Client-side sort & filter state ────────────────────────────────────────
@@ -69,19 +69,35 @@ export class ImagesListComponent implements OnInit {
   // ── Derived: flat list ─────────────────────────────────────────────────────
   filteredItems = computed(() => {
     const items = this.data()?.items ?? [];
+    const allowed = this.allowedFolders();
+    const isAdmin = this.authService.currentUser()?.is_admin ?? false;
+
+    // Apply folder restriction for non-admins
+    const accessible =
+      isAdmin || allowed.length === 0
+        ? items
+        : items.filter((img) => {
+            const folder = img.name.includes("/")
+              ? img.name.split("/")[0]
+              : "(root)";
+            return allowed.includes(folder);
+          });
+
     const tagF = this.tagFilter();
     const filtered =
       tagF === "single"
-        ? items.filter((i) => i.tag_count === 1)
+        ? accessible.filter((i) => i.tag_count === 1)
         : tagF === "multi"
-          ? items.filter((i) => i.tag_count >= 2)
-          : items;
+          ? accessible.filter((i) => i.tag_count >= 2)
+          : accessible;
+
     const field = this.sortField();
     const dir = this.sortDir() === "asc" ? 1 : -1;
-    return [...filtered].sort((a, b) => {
-      if (field === "tag_count") return (a.tag_count - b.tag_count) * dir;
-      return a.name.localeCompare(b.name) * dir;
-    });
+    return [...filtered].sort((a, b) =>
+      field === "tag_count"
+        ? (a.tag_count - b.tag_count) * dir
+        : a.name.localeCompare(b.name) * dir,
+    );
   });
 
   // ── Derived: folder tree ───────────────────────────────────────────────────
@@ -168,6 +184,17 @@ export class ImagesListComponent implements OnInit {
     return result;
   });
 
+  // ── Copy modal state ───────────────────────────────────────────────────────
+  copySource = signal<{ image: ImageInfo; tag: string } | null>(null);
+  pushableFolders = signal<string[]>([]);
+  copyDestFolder = signal("");
+  copyDestName = signal("");
+  copyDestTag = signal("");
+  copying = signal(false);
+  copyMessage = signal<string | null>(null);
+  isAdmin = computed(() => this.authService.currentUser()?.is_admin ?? false);
+  sourceTagOptions = signal<string[]>([]);
+
   // ── Sort helpers ───────────────────────────────────────────────────────────
   toggleSort(field: SortField): void {
     if (this.sortField() === field) {
@@ -238,7 +265,14 @@ export class ImagesListComponent implements OnInit {
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
   ngOnInit() {
-    this.loadImages();
+    // Load allowed folders first, then images
+    this.registry.getMyFolders().subscribe({
+      next: (folders) => {
+        this.allowedFolders.set(folders);
+        this.loadImages();
+      },
+      error: () => this.loadImages(), // fallback
+    });
   }
 
   // ── Data loading ───────────────────────────────────────────────────────────
@@ -282,5 +316,67 @@ export class ImagesListComponent implements OnInit {
     if (page < 1 || page > total) return;
     this.currentPage.set(page);
     this.loadImages();
+  }
+
+  // ── Copy modal state ───────────────────────────────────────────────────────
+  openCopyModal(image: ImageInfo, tag: string): void {
+    this.copySource.set({ image, tag });
+    this.sourceTagOptions.set(image.tags);
+    // Pre-fill with current name (without folder prefix)
+    const shortName = image.name.includes("/")
+      ? image.name.split("/").slice(1).join("/")
+      : image.name;
+    this.copyDestName.set(shortName);
+    this.copyDestTag.set(tag);
+    this.copyDestFolder.set("");
+    this.copyMessage.set(null);
+
+    // Load pushable folders
+    this.registry.getPushableFolders().subscribe({
+      next: (folders) => this.pushableFolders.set(folders),
+    });
+  }
+
+  closeCopyModal(): void {
+    this.copySource.set(null);
+  }
+
+  // Computed preview of the destination path
+  copyDestPreview = computed(() => {
+    const folder = this.copyDestFolder().trim();
+    const name = this.copyDestName().trim();
+    const tag = this.copyDestTag().trim();
+    if (!name) return "";
+    return folder ? `${folder}/${name}:${tag}` : `${name}:${tag}`;
+  });
+
+  executeCopy(): void {
+    const src = this.copySource();
+    if (!src || !this.copyDestName().trim()) return;
+    this.copying.set(true);
+    this.copyMessage.set(null);
+
+    const destRepo = this.copyDestFolder().trim()
+      ? `${this.copyDestFolder().trim()}/${this.copyDestName().trim()}`
+      : this.copyDestName().trim();
+
+    this.registry
+      .copyImage(
+        src.image.name,
+        src.tag,
+        destRepo,
+        this.copyDestTag().trim() || undefined,
+      )
+      .subscribe({
+        next: (res) => {
+          this.copying.set(false);
+          this.copyMessage.set(res.message);
+          this.loadImages();
+        },
+        error: (err) => {
+          this.copying.set(false);
+          this.copyMessage.set(err?.error?.detail ?? "Copy failed");
+        },
+      });
   }
 }

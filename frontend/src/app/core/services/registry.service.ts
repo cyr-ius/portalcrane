@@ -189,4 +189,27 @@ export class RegistryService {
       errors: any[];
     }>(`${this.BASE}/empty-repositories`);
   }
+
+  /** Return folder names the current user can pull from. Empty list = admin (no restriction). */
+  getMyFolders(): Observable<string[]> {
+    return this.http.get<string[]>("/api/folders/mine");
+  }
+
+  getPushableFolders(): Observable<string[]> {
+    return this.http.get<string[]>("/api/folders/pushable");
+  }
+
+  copyImage(
+    sourceRepository: string,
+    sourceTag: string,
+    destRepository: string,
+    destTag?: string,
+  ): Observable<{ message: string }> {
+    return this.http.post<{ message: string }>(`${this.BASE}/images/copy`, {
+      source_repository: sourceRepository,
+      source_tag: sourceTag,
+      dest_repository: destRepository,
+      dest_tag: destTag ?? null,
+    });
+  }
 }

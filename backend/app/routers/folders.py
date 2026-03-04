@@ -20,8 +20,9 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, field_validator
 
-from .auth import UserInfo, require_admin
 from ..config import DATA_DIR
+from ..core.jwt import get_current_user, UserInfo, require_admin
+
 
 router = APIRouter()
 
@@ -301,3 +302,40 @@ async def remove_permission(
     raise HTTPException(
         status_code=status.HTTP_404_NOT_FOUND, detail="Folder not found"
     )
+
+
+@router.get("/mine", response_model=list[str])
+async def list_my_folders(
+    current_user: UserInfo = Depends(get_current_user),
+) -> list[str]:
+    """
+    Return folder names the current user can pull from.
+    Admins receive an empty list meaning 'all folders allowed'.
+    """
+    if current_user.is_admin:
+        return []  # Empty = no restriction for admin
+
+    allowed: list[str] = []
+    for folder in _load_folders():
+        for perm in folder.get("permissions", []):
+            if perm["username"] == current_user.username and perm.get("can_pull"):
+                allowed.append(folder["name"])
+                break
+    return allowed
+
+
+@router.get("/pushable", response_model=list[str])
+async def list_pushable_folders(
+    current_user: UserInfo = Depends(get_current_user),
+) -> list[str]:
+    """Return folder names the user can push to. Empty = admin (all allowed)."""
+    if current_user.is_admin:
+        return []  # Admin: handled client-side (show all folders)
+
+    allowed: list[str] = []
+    for folder in _load_folders():
+        for perm in folder.get("permissions", []):
+            if perm["username"] == current_user.username and perm.get("can_push"):
+                allowed.append(folder["name"])
+                break
+    return allowed

@@ -237,6 +237,16 @@
                         <i class="bi bi-eye"></i>
                       </button>
                       <button
+                        class="btn btn-sm btn-outline-secondary"
+                        (click)="
+                          openCopyModal(image, image.tags[0] ?? 'latest');
+                          $event.stopPropagation()
+                        "
+                        title="Copy to another folder"
+                      >
+                        <i class="bi bi-copy"></i>
+                      </button>
+                      <button
                         class="btn btn-sm btn-outline-danger"
                         (click)="confirmDeleteImage(image)"
                         [title]="'Delete ' + image.name"
@@ -440,6 +450,157 @@
             } @else {
               <i class="bi bi-trash me-1"></i>Delete
             }
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ── Copy Image Modal ───────────────────────────────────────────────────── -->
+@if (copySource()) {
+  <div
+    class="modal d-block"
+    tabindex="-1"
+    style="background: rgba(0, 0, 0, 0.4)"
+  >
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content border-0 shadow">
+        <div class="modal-header border-0">
+          <h5 class="modal-title fw-semibold">
+            <i class="bi bi-copy me-2 text-primary"></i>Copy Image
+          </h5>
+          <button class="btn-close" (click)="closeCopyModal()"></button>
+        </div>
+        <div class="modal-body">
+          <!-- Source info -->
+          <div class="alert alert-secondary py-2 small mb-3">
+            <i class="bi bi-box-seam me-2"></i>
+            <strong>{{ copySource()!.image.name }}</strong>
+            <span
+              class="badge bg-secondary-subtle text-secondary ms-2 font-monospace"
+            >
+              {{ copySource()!.tag }}
+            </span>
+          </div>
+
+          <!-- Destination folder -->
+          <div class="mb-3">
+            <label class="form-label small fw-semibold"
+              >Destination folder</label
+            >
+            @if (isAdmin()) {
+              <!-- Admin: free text input -->
+              <input
+                type="text"
+                class="form-control form-control-sm"
+                placeholder="e.g. infra (leave empty for root)"
+                [value]="copyDestFolder()"
+                (input)="copyDestFolder.set($any($event.target).value)"
+              />
+              <div class="form-text">Leave empty to copy to root.</div>
+            } @else {
+              <!-- Non-admin: only allowed folders -->
+              <select
+                class="form-select form-select-sm"
+                [value]="copyDestFolder()"
+                (change)="copyDestFolder.set($any($event.target).value)"
+              >
+                <option value="">— select a folder —</option>
+                @for (f of pushableFolders(); track f) {
+                  <option [value]="f">{{ f }}</option>
+                }
+              </select>
+            }
+          </div>
+
+          @if (sourceTagOptions().length > 1) {
+            <div class="mb-3">
+              <label class="form-label small fw-semibold">Source tag</label>
+              <select
+                class="form-select form-select-sm"
+                [value]="copySource()!.tag"
+                (change)="
+                  copySource.set({
+                    image: copySource()!.image,
+                    tag: $any($event.target).value,
+                  })
+                "
+              >
+                @for (t of sourceTagOptions(); track t) {
+                  <option [value]="t">{{ t }}</option>
+                }
+              </select>
+            </div>
+          }
+
+          <!-- Destination name -->
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Image name</label>
+            <input
+              type="text"
+              class="form-control form-control-sm"
+              [value]="copyDestName()"
+              (input)="copyDestName.set($any($event.target).value)"
+            />
+          </div>
+
+          <!-- Destination tag -->
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Tag</label>
+            <input
+              type="text"
+              class="form-control form-control-sm"
+              [value]="copyDestTag()"
+              (input)="copyDestTag.set($any($event.target).value)"
+            />
+          </div>
+
+          <!-- Preview -->
+          @if (copyDestPreview()) {
+            <div class="alert alert-info py-2 small">
+              <i class="bi bi-arrow-right me-1"></i>
+              Destination: <code>{{ copyDestPreview() }}</code>
+            </div>
+          }
+
+          <!-- Result message -->
+          @if (copyMessage()) {
+            <div
+              class="alert py-2 small"
+              [class.alert-success]="
+                !copyMessage()!.toLowerCase().includes('fail')
+              "
+              [class.alert-danger]="
+                copyMessage()!.toLowerCase().includes('fail')
+              "
+            >
+              {{ copyMessage() }}
+            </div>
+          }
+        </div>
+        <div class="modal-footer border-0">
+          <button
+            class="btn btn-outline-secondary btn-sm"
+            (click)="closeCopyModal()"
+          >
+            Cancel
+          </button>
+          <button
+            class="btn btn-primary btn-sm"
+            (click)="executeCopy()"
+            [disabled]="
+              copying() ||
+              !copyDestName().trim() ||
+              (!isAdmin() && !copyDestFolder())
+            "
+          >
+            @if (copying()) {
+              <span class="spinner-border spinner-border-sm me-1"></span>
+            } @else {
+              <i class="bi bi-copy me-1"></i>
+            }
+            Copy
           </button>
         </div>
       </div>
