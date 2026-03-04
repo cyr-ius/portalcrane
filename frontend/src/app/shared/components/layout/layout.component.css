@@ -66,6 +66,17 @@
   text-align: center;
 }
 
+/* Clickable user info row */
+.user-info-row {
+  cursor: pointer;
+  border-radius: 8px;
+  padding: 6px 4px;
+  transition: background 0.15s;
+}
+.user-info-row:hover {
+  background: var(--pc-nav-hover);
+}
+
 /* Avatar */
 .avatar-circle {
   width: 32px;

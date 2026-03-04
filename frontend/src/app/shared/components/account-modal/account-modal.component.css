@@ -1,0 +1,81 @@
+/* ── Backdrop ─────────────────────────────────────────────────────────────── */
+.account-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(2px);
+  z-index: 1040;
+  animation: fadeIn 0.2s ease;
+}
+
+/* ── Drawer ───────────────────────────────────────────────────────────────── */
+.account-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 420px;
+  max-width: 100vw;
+  height: 100vh;
+  background: var(--pc-card-bg);
+  border-left: 1px solid var(--pc-border);
+  box-shadow: -8px 0 32px var(--pc-shadow);
+  z-index: 1050;
+  animation: slideIn 0.25s ease;
+}
+
+/* ── Header ───────────────────────────────────────────────────────────────── */
+.account-drawer-header {
+  background: var(--pc-sidebar-bg);
+  flex-shrink: 0;
+}
+
+/* ── Body ─────────────────────────────────────────────────────────────────── */
+.account-drawer-body {
+  background: var(--pc-main-bg);
+}
+
+/* ── Footer ───────────────────────────────────────────────────────────────── */
+.account-drawer-footer {
+  background: var(--pc-sidebar-bg);
+  flex-shrink: 0;
+}
+
+/* ── Avatar large ─────────────────────────────────────────────────────────── */
+.avatar-lg {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--pc-accent-soft);
+  color: var(--pc-accent);
+  font-size: 1.4rem;
+  flex-shrink: 0;
+}
+
+/* ── Registry icon ────────────────────────────────────────────────────────── */
+.registry-icon {
+  width: 36px;
+  height: 36px;
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+
+/* ── Animations ───────────────────────────────────────────────────────────── */
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}

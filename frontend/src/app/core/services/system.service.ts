@@ -59,6 +59,7 @@ export interface AuditEvent {
   bytes: number;
   elapsed_s: number;
   client_ip: string;
+  username: string | null;
 }
 
 @Injectable({ providedIn: "root" })

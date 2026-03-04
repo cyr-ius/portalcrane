@@ -38,7 +38,6 @@ type SettingsTab =
   | "sync"
   | "audit"
   | "oidc"
-  | "account"
   | "about";
 
 const SEVERITY_STYLE: Record<
@@ -138,13 +137,6 @@ export class SettingsComponent implements OnInit {
   loadingAuditLogs = signal(false);
   auditLogError = signal<string | null>(null);
 
-  // ── Account / Docker Hub ──────────────────────────────────────────────────
-  dockerHubUsername = signal("");
-  dockerHubPassword = signal("");
-  dockerHubHasPassword = signal(false);
-  savingDockerHub = signal(false);
-  dockerHubMessage = signal<string | null>(null);
-
   ngOnInit(): void {
     if (!this.authService.currentUser()?.is_admin) {
       this.router.navigate(["/dashboard"]);
@@ -164,9 +156,6 @@ export class SettingsComponent implements OnInit {
     }
     if (tab === "audit") {
       this.loadAuditLogs();
-    }
-    if (tab === "account") {
-      this.loadDockerHubAccount();
     }
   }
 
@@ -385,71 +374,5 @@ export class SettingsComponent implements OnInit {
 
   getSeverityIcon(sev: TrivySeverity): string {
     return SEVERITY_STYLE[sev].icon;
-  }
-
-  loadDockerHubAccount() {
-    this.dockerHubMessage.set(null);
-    this.authService.getDockerHubAccountSettings().subscribe({
-      next: (cfg) => {
-        this.dockerHubUsername.set(cfg.username || "");
-        this.dockerHubPassword.set("");
-        this.dockerHubHasPassword.set(cfg.has_password);
-      },
-      error: () => {
-        this.dockerHubMessage.set(
-          "Unable to load Docker Hub account settings.",
-        );
-      },
-    });
-  }
-
-  saveDockerHubAccount() {
-    this.savingDockerHub.set(true);
-    this.dockerHubMessage.set(null);
-    this.authService
-      .updateDockerHubAccountSettings({
-        username: this.dockerHubUsername().trim(),
-        password: this.dockerHubPassword(),
-      })
-      .subscribe({
-        next: (cfg) => {
-          this.savingDockerHub.set(false);
-          this.dockerHubHasPassword.set(cfg.has_password);
-          this.dockerHubPassword.set("");
-          this.dockerHubMessage.set(
-            cfg.has_password
-              ? "Docker Hub account saved."
-              : "Docker Hub account removed.",
-          );
-        },
-        error: (err) => {
-          this.savingDockerHub.set(false);
-          this.dockerHubMessage.set(
-            err?.error?.detail || "Unable to save Docker Hub account.",
-          );
-        },
-      });
-  }
-
-  deleteDockerHubAccount() {
-    this.savingDockerHub.set(true);
-    this.dockerHubMessage.set(null);
-    this.authService
-      .updateDockerHubAccountSettings({ username: "", password: "" })
-      .subscribe({
-        next: () => {
-          this.savingDockerHub.set(false);
-          this.dockerHubUsername.set("");
-          this.dockerHubPassword.set("");
-          this.dockerHubHasPassword.set(false);
-          this.dockerHubMessage.set("Docker Hub account removed.");
-        },
-        error: (err) => {
-          this.savingDockerHub.set(false);
-          this.dockerHubMessage.set(
-            err?.error?.detail || "Unable to remove Docker Hub account.",
-          );
-        },
-      });
   }
 }

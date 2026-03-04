@@ -1124,7 +1124,7 @@
             <button
               class="avatar-circle border-0 w-100"
               (click)="themePickerOpen.set(!themePickerOpen())"
-              [title]="'Theme: ' + themeService.theme()"
+              [title]="auth.currentUser()?.username ?? ''"
             >
               <i class="bi bi-person-fill"></i>
               <span class="theme-dot">
@@ -1140,6 +1140,19 @@
 
             @if (themePickerOpen()) {
               <div class="theme-dropdown-collapsed">
+                <!-- Account entry -->
+                <button
+                  class="theme-option"
+                  (click)="
+                    accountModalOpen.set(true); themePickerOpen.set(false)
+                  "
+                  title="My account"
+                >
+                  <i class="bi bi-person-circle"></i>
+                </button>
+                <!-- Divider -->
+                <div class="border-top my-1 mx-1"></div>
+                <!-- Theme options -->
                 <button
                   class="theme-option"
                   [class.active]="themeService.theme() === 'light'"
@@ -1163,6 +1176,16 @@
                   title="Auto"
                 >
                   <i class="bi bi-circle-half"></i>
+                </button>
+                <!-- Divider -->
+                <div class="border-top my-1 mx-1"></div>
+                <!-- Logout -->
+                <button
+                  class="theme-option text-danger"
+                  (click)="auth.logout()"
+                  title="Logout"
+                >
+                  <i class="bi bi-box-arrow-right"></i>
                 </button>
               </div>
             }
@@ -1201,8 +1224,12 @@
             </button>
           </div>
 
-          <!-- User info -->
-          <div class="d-flex align-items-center gap-2">
+          <!-- User info row — cliquable pour ouvrir la modale -->
+          <div
+            class="user-info-row d-flex align-items-center gap-2"
+            (click)="accountModalOpen.set(true)"
+            title="My account"
+          >
             <div class="avatar-circle">
               <i class="bi bi-person-fill"></i>
             </div>
@@ -1210,11 +1237,13 @@
               <div class="small fw-semibold text-truncate">
                 {{ auth.currentUser()?.username }}
               </div>
-              <div class="x-small text-muted">Administrator</div>
+              <div class="x-small text-muted">
+                {{ auth.currentUser()?.is_admin ? "Administrator" : "User" }}
+              </div>
             </div>
             <button
               class="btn btn-sm btn-link text-muted p-0"
-              (click)="auth.logout()"
+              (click)="auth.logout(); $event.stopPropagation()"
               title="Logout"
             >
               <i class="bi bi-box-arrow-right"></i>
@@ -1222,6 +1251,10 @@
           </div>
         }
       </div>
+      <!-- Account modal drawer — rendered at layout level, outside sidebar -->
+      @if (accountModalOpen()) {
+        <app-account-modal (close)="accountModalOpen.set(false)" />
+      }
     </div>
 
     <!-- Collapse toggle -->

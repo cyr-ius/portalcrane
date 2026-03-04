@@ -2,6 +2,7 @@ import { Component, inject, OnDestroy, OnInit, signal } from "@angular/core";
 import { RouterLink, RouterLinkActive, RouterOutlet } from "@angular/router";
 import { AuthService } from "../../../core/services/auth.service";
 import { ThemeService } from "../../../core/services/theme.service";
+import { AccountModalComponent } from "../account-modal/account-modal.component";
 import { SessionExpiredModalComponent } from "../session-expired-modal/session-expired-modal.component";
 
 // Breakpoint below which the sidebar auto-collapses (matches Bootstrap 'lg')
@@ -14,6 +15,7 @@ const COLLAPSE_BREAKPOINT = 992;
     RouterLink,
     RouterLinkActive,
     SessionExpiredModalComponent,
+    AccountModalComponent,
   ],
   templateUrl: "./layout.component.html",
   styleUrl: "./layout.component.css",
@@ -24,6 +26,7 @@ export class LayoutComponent implements OnInit, OnDestroy {
 
   sidebarCollapsed = signal(false);
   themePickerOpen = signal(false);
+  accountModalOpen = signal(false);
 
   // Tracks whether the sidebar was manually toggled by the user.
   // When true, automatic breakpoint logic will not override the user's choice.
