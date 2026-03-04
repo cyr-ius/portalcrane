@@ -42,7 +42,6 @@ export class OidcConfigPanel implements OnInit {
   });
 
   readonly oidcForm = form(this.oidcModel, (p) => {
-    required(p.enabled);
     required(p.issuer);
     required(p.client_id);
     required(p.redirect_uri);
@@ -92,7 +91,9 @@ export class OidcConfigPanel implements OnInit {
   }
 
   /** Persist OIDC enable/disable once the checkbox value has been applied. */
-  onEnabledToggle(): void {
+  onEnabledToggle(event: Event): void {
+    const checked = (event.target as HTMLInputElement).checked;
+    this.oidcModel.update((m) => ({ ...m, enabled: checked }));
     queueMicrotask(() => this.save());
   }
 }
