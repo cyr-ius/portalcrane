@@ -167,6 +167,45 @@
               </div>
             </div>
 
+            <!-- Visibility (admin only): global shared or personal -->
+            @if (authService.currentUser()?.is_admin) {
+              <div class="col-12">
+                <label class="form-label small fw-semibold">Visibility</label>
+                <div class="d-flex gap-3">
+                  <div class="form-check">
+                    <input
+                      class="form-check-input"
+                      type="radio"
+                      id="owner-personal"
+                      name="regOwner"
+                      value="personal"
+                      [checked]="formOwner() === 'personal'"
+                      (change)="formOwner.set('personal')"
+                    />
+                    <label class="form-check-label small" for="owner-personal">
+                      <i class="bi bi-person me-1"></i>Personal
+                      <span class="text-muted">(only you)</span>
+                    </label>
+                  </div>
+                  <div class="form-check">
+                    <input
+                      class="form-check-input"
+                      type="radio"
+                      id="owner-global"
+                      name="regOwner"
+                      value="global"
+                      [checked]="formOwner() === 'global'"
+                      (change)="formOwner.set('global')"
+                    />
+                    <label class="form-check-label small" for="owner-global">
+                      <i class="bi bi-globe me-1"></i>Global
+                      <span class="text-muted">(visible to all users)</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            }
+
             <!-- Test result -->
             @if (testResult()) {
               <div
@@ -257,6 +296,21 @@
                     {{ reg.host }}
                     @if (reg.username) {
                       · {{ reg.username }}
+
+                      <span
+                        class="badge ms-1"
+                        [class.bg-primary-subtle]="reg.owner === 'global'"
+                        [class.text-primary]="reg.owner === 'global'"
+                        [class.bg-secondary-subtle]="reg.owner !== 'global'"
+                        [class.text-secondary]="reg.owner !== 'global'"
+                        style="font-size: 0.65rem"
+                      >
+                        @if (reg.owner === "global") {
+                          <i class="bi bi-globe me-1"></i>Global
+                        } @else {
+                          <i class="bi bi-person me-1"></i>Personal
+                        }
+                      </span>
                     }
                   </div>
                 </div>

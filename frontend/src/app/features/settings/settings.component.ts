@@ -111,6 +111,7 @@ export class SettingsComponent implements OnInit {
   formHost = signal("");
   formUser = signal("");
   formPass = signal("");
+  formOwner = signal<string>("personal");
 
   savingRegistry = signal(false);
   testingRegistryId = signal<string | null>(null);
@@ -185,6 +186,7 @@ export class SettingsComponent implements OnInit {
     this.formPass.set("");
     this.testResult.set(null);
     this.showAddForm.set(true);
+    this.formOwner.set("personal");
   }
 
   openEditForm(reg: ExternalRegistry) {
@@ -195,6 +197,7 @@ export class SettingsComponent implements OnInit {
     this.formPass.set(""); // Do not pre-fill password
     this.testResult.set(null);
     this.showAddForm.set(true);
+    this.formOwner.set(reg.owner === "global" ? "global" : "personal");
   }
 
   cancelForm() {
@@ -211,6 +214,7 @@ export class SettingsComponent implements OnInit {
       host: this.formHost(),
       username: this.formUser(),
       password: this.formPass(),
+      owner: this.formOwner() === "global" ? "global" : undefined,
     };
     const obs = id
       ? this.extRegSvc.updateRegistry(id, payload)
@@ -249,7 +253,7 @@ export class SettingsComponent implements OnInit {
 
   testSavedRegistry(id: string) {
     this.testingRegistryId.set(id);
-    this.extRegSvc.testSavedRegistry(id).subscribe({
+    this.extRegSvc.testSaved(id).subscribe({
       next: () => this.testingRegistryId.set(null),
       error: () => this.testingRegistryId.set(null),
     });

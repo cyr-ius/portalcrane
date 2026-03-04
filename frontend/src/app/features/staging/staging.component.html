@@ -528,13 +528,31 @@
                                   "
                                 >
                                   <option value="">— Enter manually —</option>
-                                  @for (
-                                    reg of externalRegistries();
-                                    track reg.id
-                                  ) {
-                                    <option [value]="reg.id">
-                                      {{ reg.name }} ({{ reg.host }})
-                                    </option>
+
+                                  @if (globalRegistries().length > 0) {
+                                    <optgroup label="🌐 Global registries">
+                                      @for (
+                                        reg of globalRegistries();
+                                        track reg.id
+                                      ) {
+                                        <option [value]="reg.id">
+                                          {{ reg.name }} ({{ reg.host }})
+                                        </option>
+                                      }
+                                    </optgroup>
+                                  }
+
+                                  @if (personalRegistries().length > 0) {
+                                    <optgroup label="👤 My registries">
+                                      @for (
+                                        reg of personalRegistries();
+                                        track reg.id
+                                      ) {
+                                        <option [value]="reg.id">
+                                          {{ reg.name }} ({{ reg.host }})
+                                        </option>
+                                      }
+                                    </optgroup>
                                   }
                                 </select>
                               </div>

@@ -1,9 +1,6 @@
 /**
  * Portalcrane - External Registry Service
- * HTTP client for the /api/external endpoints:
- *  - CRUD for saved external registries
- *  - Connectivity test
- *  - Sync jobs
+ * HTTP client for the /api/external endpoints.
  */
 import { HttpClient } from "@angular/common/http";
 import { inject, Injectable } from "@angular/core";
@@ -18,6 +15,11 @@ export interface ExternalRegistry {
   username: string;
   /** Always "••••••••" when returned from the API. */
   password: string;
+  /**
+   * "global" → visible to all users (admin-created).
+   * Any other value → personal registry, visible only to that user and admins.
+   */
+  owner: string;
   created_at: string;
 }
 
@@ -26,6 +28,8 @@ export interface CreateRegistryPayload {
   host: string;
   username?: string;
   password?: string;
+  /** "global" for shared registries (admin only). Omit for personal. */
+  owner?: string;
 }
 
 export interface UpdateRegistryPayload {
@@ -33,6 +37,7 @@ export interface UpdateRegistryPayload {
   host?: string;
   username?: string;
   password?: string;
+  owner?: string;
 }
 
 export interface ConnectionTestResult {
@@ -82,7 +87,7 @@ export class ExternalRegistryService {
 
   // ── Registry CRUD ──────────────────────────────────────────────────────────
 
-  /** List all saved external registries (passwords redacted). */
+  /** List all external registries visible to the current user. */
   listRegistries(): Observable<ExternalRegistry[]> {
     return this.http.get<ExternalRegistry[]>(`${this.BASE}/registries`);
   }
@@ -116,26 +121,28 @@ export class ExternalRegistryService {
   ): Observable<ConnectionTestResult> {
     return this.http.post<ConnectionTestResult>(
       `${this.BASE}/registries/test`,
-      { host, username, password },
+      {
+        host,
+        username,
+        password,
+      },
     );
   }
 
   /** Test connectivity to a saved registry. */
-  testSavedRegistry(id: string): Observable<ConnectionTestResult> {
+  testSaved(id: string): Observable<ConnectionTestResult> {
     return this.http.post<ConnectionTestResult>(
       `${this.BASE}/registries/${id}/test`,
       {},
     );
   }
 
-  // ── Sync ──────────────────────────────────────────────────────────────────
+  // ── Sync ───────────────────────────────────────────────────────────────────
 
-  /** List all sync jobs (most recent first). */
   listSyncJobs(): Observable<SyncJob[]> {
     return this.http.get<SyncJob[]>(`${this.BASE}/sync/jobs`);
   }
 
-  /** Start a sync job from the local registry to an external one. */
   startSync(
     payload: SyncPayload,
   ): Observable<{ job_id: string; message: string }> {

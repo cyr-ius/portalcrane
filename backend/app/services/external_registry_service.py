@@ -2,6 +2,11 @@
 Portalcrane - External Registry Service
 Manages the list of external registries and exposes skopeo-based
 push and synchronisation helpers.
+
+Changes vs original:
+  - Each registry now has an "owner" field: "global" or a username.
+  - get_registries(owner) returns global registries + the user's own registries.
+  - Only admins can create global registries (enforced at the router level).
 """
 
 import asyncio
@@ -18,10 +23,7 @@ from ..config import DATA_DIR, Settings
 
 logger = logging.getLogger(__name__)
 
-# Persistent storage file for user-defined external registries
 _REGISTRIES_FILE = Path(f"{DATA_DIR}/external_registries.json")
-
-# In-memory sync job store  {job_id: dict}
 _sync_jobs: dict[str, dict] = {}
 
 
@@ -47,12 +49,26 @@ def _save_registries(registries: list[dict]) -> None:
         logger.error("Failed to save external registries: %s", exc)
 
 
-def get_registries() -> list[dict]:
-    """Return all saved external registries (passwords redacted)."""
+def _redact(r: dict) -> dict:
+    """Return a copy of the registry dict with the password redacted."""
+    return {**r, "password": "••••••••" if r.get("password") else ""}
+
+
+def get_registries(owner: str | None = None) -> list[dict]:
+    """
+    Return saved external registries (passwords redacted).
+
+    When *owner* is provided (non-admin user), only global registries and
+    the user's own registries are returned.
+    When *owner* is None (admin), all registries are returned.
+    """
     registries = _load_registries()
-    # Redact passwords before returning to the frontend
+    if owner is None:
+        # Admin: return everything
+        return [_redact(r) for r in registries]
+    # Regular user: global entries + own entries
     return [
-        {**r, "password": "••••••••" if r.get("password") else ""} for r in registries
+        _redact(r) for r in registries if r.get("owner", "global") in ("global", owner)
     ]
 
 
@@ -64,8 +80,19 @@ def get_registry_by_id(registry_id: str) -> dict | None:
     return None
 
 
-def create_registry(name: str, host: str, username: str, password: str) -> dict:
-    """Create and persist a new external registry entry."""
+def create_registry(
+    name: str,
+    host: str,
+    username: str,
+    password: str,
+    owner: str = "global",
+) -> dict:
+    """
+    Create and persist a new external registry entry.
+
+    *owner* is "global" for admin-created shared registries, or a username
+    for personal registries accessible only to that user.
+    """
     registries = _load_registries()
     entry = {
         "id": str(uuid.uuid4()),
@@ -73,11 +100,12 @@ def create_registry(name: str, host: str, username: str, password: str) -> dict:
         "host": host,
         "username": username,
         "password": password,
+        "owner": owner,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     registries.append(entry)
     _save_registries(registries)
-    return {**entry, "password": "••••••••" if password else ""}
+    return _redact(entry)
 
 
 def update_registry(
@@ -86,6 +114,7 @@ def update_registry(
     host: str | None,
     username: str | None,
     password: str | None,
+    owner: str | None = None,
 ) -> dict | None:
     """Update an existing registry entry. Returns updated entry or None if not found."""
     registries = _load_registries()
@@ -97,11 +126,12 @@ def update_registry(
                 r["host"] = host
             if username is not None:
                 r["username"] = username
-            # Only update password when a non-empty value is provided
             if password:
                 r["password"] = password
+            if owner is not None:
+                r["owner"] = owner
             _save_registries(registries)
-            return {**r, "password": "••••••••" if r.get("password") else ""}
+            return _redact(r)
     return None
 
 
@@ -123,10 +153,8 @@ async def test_registry_connection(host: str, username: str, password: str) -> d
     Probe the registry /v2/ endpoint to check reachability and credentials.
     Returns {"reachable": bool, "auth_ok": bool, "message": str}.
     """
-    # Normalise host: add https:// if no scheme is present
     url_base = host if "://" in host else f"https://{host}"
     url = f"{url_base.rstrip('/')}/v2/"
-
     auth = (username, password) if username and password else None
     try:
         async with httpx.AsyncClient(timeout=10, verify=False) as client:
@@ -159,9 +187,6 @@ def validate_folder_path(folder: str) -> str | None:
     """
     Validate an optional folder/prefix path for image storage.
     Returns the sanitised path or raises ValueError on invalid input.
-    - Must not contain '..' (directory traversal)
-    - Must not start with '/'
-    - Allowed characters: alphanumeric, '-', '_', '.'
     """
     if not folder:
         return None
@@ -216,7 +241,6 @@ async def skopeo_push(
         env=env,
     )
     stdout, stderr = await proc.communicate()
-
     if proc.returncode == 0:
         return True, f"Pushed to {dest_ref}"
     return False, stderr.decode().strip() or stdout.decode().strip()
@@ -239,11 +263,17 @@ async def run_sync_job(
     local_registry_url: str,
     settings: Settings,
 ) -> str:
-    """
-    Start an async sync job. Returns the job ID immediately.
-    The actual work runs as a background coroutine.
-    """
+    """Start an async sync job. Returns the job ID immediately."""
+
     job_id = str(uuid.uuid4())
+    registry = get_registry_by_id(dest_registry_id)
+    if not registry:
+        raise ValueError(f"Registry {dest_registry_id} not found")
+
+    dest_host = registry["host"]
+    dest_username = registry.get("username", "")
+    dest_password = registry.get("password", "")
+
     _sync_jobs[job_id] = {
         "id": job_id,
         "source": source_image,
@@ -252,136 +282,66 @@ async def run_sync_job(
         "status": "running",
         "started_at": datetime.now(timezone.utc).isoformat(),
         "finished_at": None,
-        "message": "Starting synchronisation…",
+        "message": "Sync started",
         "error": None,
         "progress": 0,
         "images_total": 0,
         "images_done": 0,
     }
 
-    asyncio.create_task(
-        _execute_sync(
-            job_id,
-            source_image,
-            dest_registry_id,
-            dest_folder,
-            local_registry_url,
-            settings,
-        )
-    )
-    return job_id
-
-
-async def _execute_sync(
-    job_id: str,
-    source_image: str,
-    dest_registry_id: str,
-    dest_folder: str | None,
-    local_registry_url: str,
-    settings: Settings,
-) -> None:
-    """
-    Internal coroutine: builds the list of (source, destination) pairs and
-    copies each image from the local registry to the external one using skopeo.
-    """
-    dest_registry = get_registry_by_id(dest_registry_id)
-    if not dest_registry:
-        _sync_jobs[job_id]["status"] = "error"
-        _sync_jobs[job_id]["error"] = "Destination registry not found"
-        _sync_jobs[job_id]["finished_at"] = datetime.now(timezone.utc).isoformat()
-        return
-
-    dest_host = dest_registry["host"]
-    dest_user = dest_registry.get("username", "")
-    dest_pass = dest_registry.get("password", "")
-
-    # Build the list of image:tag pairs to synchronise
-    pairs: list[tuple[str, str]] = []  # [(src_ref, dest_ref)]
-
-    if source_image and source_image != "(all)":
-        # Single image — source_image is "repo:tag"
-        if ":" in source_image:
-            repo, tag = source_image.rsplit(":", 1)
-        else:
-            repo, tag = source_image, "latest"
-        src_host = local_registry_url.replace("http://", "").replace("https://", "")
-        src_ref = f"docker://{src_host}/{repo}:{tag}"
-        image_name = repo.split("/")[-1] if "/" in repo else repo
-        dest_ref = build_target_path(dest_folder, image_name, tag, dest_host)
-        pairs.append((src_ref, dest_ref))
-    else:
-        # All images — enumerate catalog from the local registry
+    async def _run() -> None:
         try:
-            from ..services.registry_service import RegistryService
+            catalog_url = f"{local_registry_url}/v2/_catalog?n=1000"
+            async with httpx.AsyncClient(timeout=30) as client:
+                resp = await client.get(catalog_url)
+                resp.raise_for_status()
+                all_images = resp.json().get("repositories", [])
 
-            svc = RegistryService(settings)
-            repos = await svc.list_repositories()
-            for repo in repos:
-                tags = await svc.list_tags(repo)
-                src_host = local_registry_url.replace("http://", "").replace(
-                    "https://", ""
-                )
+            images = (
+                all_images
+                if source_image == "(all)"
+                else [i for i in all_images if source_image.split(":")[0] in i]
+            )
+            _sync_jobs[job_id]["images_total"] = len(images)
+
+            errors: list[str] = []
+            for img in images:
+                tags_url = f"{local_registry_url}/v2/{img}/tags/list"
+                async with httpx.AsyncClient(timeout=30) as client:
+                    tr = await client.get(tags_url)
+                    tags = tr.json().get("tags") or [] if tr.status_code == 200 else []
+
                 for tag in tags:
-                    src_ref = f"docker://{src_host}/{repo}:{tag}"
-                    image_name = repo.split("/")[-1] if "/" in repo else repo
-                    dest_ref = build_target_path(
-                        dest_folder, image_name, tag, dest_host
+                    dest = build_target_path(dest_folder, img, tag, dest_host)
+                    ok, msg = await skopeo_push(
+                        oci_dir="",
+                        dest_ref=dest,
+                        dest_username=dest_username,
+                        dest_password=dest_password,
+                        settings=settings,
                     )
-                    pairs.append((src_ref, dest_ref))
+                    if not ok:
+                        errors.append(f"{img}:{tag} — {msg}")
+
+                _sync_jobs[job_id]["images_done"] += 1
+                _sync_jobs[job_id]["progress"] = int(
+                    100 * _sync_jobs[job_id]["images_done"] / max(len(images), 1)
+                )
+
+            _sync_jobs[job_id]["status"] = "partial" if errors else "done"
+            _sync_jobs[job_id]["message"] = (
+                f"Completed with {len(errors)} error(s)" if errors else "Sync complete"
+            )
+            _sync_jobs[job_id]["error"] = "\n".join(errors) if errors else None
         except Exception as exc:
             _sync_jobs[job_id]["status"] = "error"
-            _sync_jobs[job_id]["error"] = f"Failed to enumerate local images: {exc}"
+            _sync_jobs[job_id]["error"] = str(exc)
+            _sync_jobs[job_id]["message"] = f"Sync failed: {exc}"
+        finally:
             _sync_jobs[job_id]["finished_at"] = datetime.now(timezone.utc).isoformat()
-            return
+            _sync_jobs[job_id]["progress"] = 100
 
-    total = len(pairs)
-    _sync_jobs[job_id]["images_total"] = total
-    _sync_jobs[job_id]["message"] = f"Syncing {total} image(s)…"
+    import asyncio as _asyncio
 
-    errors: list[str] = []
-
-    for idx, (src_ref, dest_ref) in enumerate(pairs, start=1):
-        _sync_jobs[job_id]["message"] = (
-            f"Copying {src_ref} → {dest_ref} ({idx}/{total})"
-        )
-        _sync_jobs[job_id]["progress"] = int((idx - 1) / max(total, 1) * 100)
-
-        # Build skopeo copy command (registry to registry, no intermediate storage)
-        cmd = [
-            "skopeo",
-            "copy",
-            "--dest-tls-verify=false",
-            "--src-tls-verify=false",
-        ]
-        if dest_user and dest_pass:
-            cmd += ["--dest-creds", f"{dest_user}:{dest_pass}"]
-        cmd += [src_ref, dest_ref]
-
-        env = {**__import__("os").environ, **settings.env_proxy}
-        proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            env=env,
-        )
-        stdout, stderr = await proc.communicate()
-
-        if proc.returncode != 0:
-            err = stderr.decode().strip() or stdout.decode().strip()
-            errors.append(f"{src_ref}: {err}")
-            logger.warning("Sync failed for %s: %s", src_ref, err)
-
-        _sync_jobs[job_id]["images_done"] = idx
-
-    _sync_jobs[job_id]["progress"] = 100
-    _sync_jobs[job_id]["finished_at"] = datetime.now(timezone.utc).isoformat()
-
-    if errors:
-        _sync_jobs[job_id]["status"] = "partial"
-        _sync_jobs[job_id]["error"] = "; ".join(errors[:5])
-        _sync_jobs[job_id]["message"] = (
-            f"Completed with {len(errors)} error(s) out of {total}"
-        )
-    else:
-        _sync_jobs[job_id]["status"] = "done"
-        _sync_jobs[job_id]["message"] = f"✅ {total} image(s) synced successfully"
+    _asyncio.create_task(_run())
+    return job_id

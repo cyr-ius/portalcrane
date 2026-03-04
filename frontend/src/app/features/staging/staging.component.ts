@@ -4,7 +4,14 @@
  * (local or external registry with optional folder prefix).
  *
  */
-import { Component, DestroyRef, inject, OnInit, signal } from "@angular/core";
+import {
+  Component,
+  computed,
+  DestroyRef,
+  inject,
+  OnInit,
+  signal,
+} from "@angular/core";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { RouterLink } from "@angular/router";
 import { switchMap, timer } from "rxjs";
@@ -61,27 +68,18 @@ export class StagingComponent implements OnInit {
 
   // ── Push state ─────────────────────────────────────────────────────────────
   pushing = signal<string | null>(null);
-
-  /**
-   * Per-job push field values keyed by `{job_id}_{field}`.
-   * Fields: img, tag, folder, ext_host, ext_user, ext_pass.
-   */
   pushTargets = signal<Record<string, string>>({});
-
-  /**
-   * Per-job push mode: "local" | "external".
-   * Defaults to "local" when unset.
-   */
   pushModes = signal<Record<string, PushMode>>({});
-
-  /**
-   * Per-job external registry selection.
-   * Value is a saved registry ID or "" for ad-hoc entry.
-   */
   pushExtRegistryId = signal<Record<string, string>>({});
 
   // ── External registries ────────────────────────────────────────────────────
   externalRegistries = signal<ExternalRegistry[]>([]);
+  readonly globalRegistries = computed(() =>
+    this.externalRegistries().filter((r) => r.owner === "global"),
+  );
+  readonly personalRegistries = computed(() =>
+    this.externalRegistries().filter((r) => r.owner !== "global"),
+  );
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
 
@@ -94,25 +92,7 @@ export class StagingComponent implements OnInit {
 
   // ── Auto-refresh ───────────────────────────────────────────────────────────
 
-  /**
-   * Unified polling loop that replaces the former loadJobs() + filtered timer combo.
-   *
-   * Strategy:
-   *  - timer(0, ...) emits immediately so the first load happens without delay.
-   *  - The interval adapts: 2 s when at least one job is active, 10 s otherwise.
-   *    This avoids hammering the API when nothing is happening while still
-   *    reacting quickly during an ongoing pipeline.
-   *  - The filter() gate that blocked polling until a job was already known to
-   *    be active has been intentionally removed — it caused newly created jobs
-   *    to be invisible until the next poll cycle triggered by an unrelated event.
-   *  - takeUntilDestroyed automatically cancels the subscription on component destroy.
-   */
   private startJobsAutoRefresh(): void {
-    // Poll every 3 s unconditionally — no filter() gate, no adaptive interval.
-    // timer(0, 3000) emits immediately (t=0) so the first load is instant,
-    // then every 3 s regardless of current job state.
-    // switchMap cancels any in-flight request before issuing the next one,
-    // so concurrent responses can never overwrite each other.
     timer(0, 3000)
       .pipe(
         switchMap(() => this.staging.listJobs()),
@@ -123,7 +103,6 @@ export class StagingComponent implements OnInit {
 
   // ── Data loading ───────────────────────────────────────────────────────────
 
-  /** Manual refresh — keeps the unified loop as the single source of truth. */
   loadJobs(): void {
     this.staging.listJobs().subscribe({
       next: (jobs) => this.jobs.set(StagingService.sortJobs(jobs)),
