@@ -7,15 +7,17 @@
  * reverse proxies when the image name contains slashes (e.g. org/image).
  */
 import { DatePipe } from "@angular/common";
-import { Component, inject, OnInit, signal } from "@angular/core";
+import { Component, computed, inject, OnInit, signal } from "@angular/core";
 import { toSignal } from "@angular/core/rxjs-interop";
 import { FormsModule } from "@angular/forms";
 import { ActivatedRoute, RouterLink } from "@angular/router";
+import { HttpClient } from "@angular/common/http";
 import { map } from "rxjs/operators";
 import {
   ImageDetail,
   RegistryService,
 } from "../../../core/services/registry.service";
+import { AuthService } from "../../../core/services/auth.service";
 
 @Component({
   selector: "app-image-detail",
@@ -26,6 +28,8 @@ import {
 export class ImageDetailComponent implements OnInit {
   private route = inject(ActivatedRoute);
   private registry = inject(RegistryService);
+  private readonly authService = inject(AuthService);
+  private readonly http = inject(HttpClient);
 
   /**
    * Repository name read from the ?repository= query param.
@@ -53,8 +57,18 @@ export class ImageDetailComponent implements OnInit {
 
   objectKeys = Object.keys;
 
+  pushableFolders = signal<string[]>([]);
+  configuredFolderNames = signal<string[]>([]);
+  isAdmin = computed(() => this.authService.currentUser()?.is_admin ?? false);
+
   ngOnInit() {
     this.loadTags();
+    this.registry.getPushableFolders().subscribe({
+      next: (folders) => this.pushableFolders.set(folders),
+    });
+    this.http.get<string[]>("/api/folders/names").subscribe({
+      next: (names) => this.configuredFolderNames.set(names),
+    });
   }
 
   loadTags() {
@@ -86,9 +100,25 @@ export class ImageDetailComponent implements OnInit {
     });
   }
 
+  private folderNameForImage(imageName: string): string {
+    const slashIdx = imageName.indexOf("/");
+    if (slashIdx === -1) return "(root)";
+
+    const prefix = imageName.substring(0, slashIdx);
+    return this.configuredFolderNames().includes(prefix) ? prefix : "(root)";
+  }
+
+  canManageRepository(): boolean {
+    if (this.isAdmin()) return true;
+    const repo = this.repository();
+    if (!repo) return false;
+    const folderName = this.folderNameForImage(repo);
+    return this.pushableFolders().includes(folderName);
+  }
+
   addTag() {
     // Test signal values (not the signal references which are always truthy)
-    if (!this.newTagName() || !this.addTagSource()) return;
+    if (!this.canManageRepository() || !this.newTagName() || !this.addTagSource()) return;
     this.addingTag.set(true);
     this.registry
       .addTag(this.repository(), this.addTagSource(), this.newTagName())
@@ -104,6 +134,7 @@ export class ImageDetailComponent implements OnInit {
   }
 
   confirmDeleteTag(tag: string) {
+    if (!this.canManageRepository()) return;
     this.deleteTagTarget.set(tag);
   }
 

@@ -233,6 +233,10 @@ export class ImagesListComponent implements OnInit {
       },
       error: () => this.loadImages(),
     });
+
+    this.registry.getPushableFolders().subscribe({
+      next: (folders) => this.pushableFolders.set(folders),
+    });
   }
 
   // ── Data loading ───────────────────────────────────────────────────────────
@@ -352,9 +356,30 @@ export class ImagesListComponent implements OnInit {
     return img.name.substring(idx + 1);
   }
 
+  private folderNameForImage(imageName: string): string {
+    const slashIdx = imageName.indexOf("/");
+    if (slashIdx === -1) return "(root)";
+
+    const prefix = imageName.substring(0, slashIdx);
+    return this.configuredFolderNames().includes(prefix) ? prefix : "(root)";
+  }
+
+  canDeleteImage(image: ImageInfo): boolean {
+    if (this.isAdmin()) return true;
+    const folderName = this.folderNameForImage(image.name);
+    return this.pushableFolders().includes(folderName);
+  }
+
+  canCopyImage(_image: ImageInfo): boolean {
+    if (this.isAdmin()) return true;
+    return this.pushableFolders().length > 0;
+  }
+
   // ── Copy modal ─────────────────────────────────────────────────────────────
 
   openCopyModal(image: ImageInfo, tag: string): void {
+    if (!this.canCopyImage(image)) return;
+
     this.copySource.set({ image, tag });
     this.sourceTagOptions.set(image.tags);
     // Pre-fill with current name (without folder prefix)
@@ -366,10 +391,9 @@ export class ImagesListComponent implements OnInit {
     this.copyDestFolder.set("");
     this.copyMessage.set(null);
 
-    // Load pushable folders for non-admin users
-    this.registry.getPushableFolders().subscribe({
-      next: (folders) => this.pushableFolders.set(folders),
-    });
+    if (!this.isAdmin() && this.pushableFolders().length === 0) {
+      this.copyMessage.set("No destination folder available with push permission.");
+    }
   }
 
   closeCopyModal(): void {
@@ -409,6 +433,7 @@ export class ImagesListComponent implements OnInit {
   // ── Delete modal ───────────────────────────────────────────────────────────
 
   confirmDeleteImage(image: ImageInfo): void {
+    if (!this.canDeleteImage(image)) return;
     this.deleteTarget.set(image);
   }
 
