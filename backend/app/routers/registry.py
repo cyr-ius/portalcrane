@@ -33,6 +33,7 @@ from ..core.jwt import (
     get_current_user,
 )
 from ..services.registry_service import RegistryService
+from .folders import check_folder_access
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -160,6 +161,28 @@ def _bytes_to_human(size: int) -> str:
     return f"{size:.2f} PB"
 
 
+def _ensure_folder_permission(
+    *, current_user: UserInfo, image_path: str, is_pull: bool
+) -> None:
+    """Enforce folder pull/push permission on a repository path for non-admins."""
+    if current_user.is_admin:
+        return
+
+    has_access = check_folder_access(
+        current_user.username,
+        image_path,
+        is_pull=is_pull,
+    )
+    if has_access:
+        return
+
+    action = "pull" if is_pull else "push"
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail=f"No {action} access on folder for '{image_path}'",
+    )
+
+
 # ─── Endpoints ────────────────────────────────────────────────────────────────
 
 
@@ -259,9 +282,14 @@ async def delete_tag(
     repository: str = Query(..., description="Repository name"),
     tag: str = Query(..., description="Tag name to delete"),
     registry: RegistryService = Depends(get_registry),
-    _: UserInfo = Depends(require_push_access),
+    current_user: UserInfo = Depends(require_push_access),
 ):
     """Delete a specific tag from an image repository."""
+    _ensure_folder_permission(
+        current_user=current_user,
+        image_path=repository,
+        is_pull=False,
+    )
     success = await registry.delete_tag(repository, tag)
     if not success:
         raise HTTPException(
@@ -275,9 +303,14 @@ async def delete_tag(
 async def delete_image(
     repository: str = Query(..., description="Repository name to delete entirely"),
     registry: RegistryService = Depends(get_registry),
-    _: UserInfo = Depends(require_push_access),
+    current_user: UserInfo = Depends(require_push_access),
 ):
     """Delete all tags (and the image) from a repository."""
+    _ensure_folder_permission(
+        current_user=current_user,
+        image_path=repository,
+        is_pull=False,
+    )
     tags = await registry.list_tags(repository)
     if not tags:
         raise HTTPException(
@@ -303,9 +336,14 @@ async def add_tag(
     repository: str = Query(..., description="Repository name"),
     request: AddTagRequest = Body(...),
     registry: RegistryService = Depends(get_registry),
-    _: UserInfo = Depends(require_push_access),
+    current_user: UserInfo = Depends(require_push_access),
 ):
     """Add a new tag to an existing image (retag via manifest copy)."""
+    _ensure_folder_permission(
+        current_user=current_user,
+        image_path=repository,
+        is_pull=False,
+    )
     manifest = await registry.get_manifest(repository, request.source_tag)
     if not manifest:
         raise HTTPException(
@@ -350,10 +388,21 @@ async def rename_image(
     repository: str = Query(..., description="Source repository name"),
     request: RenameImageRequest = Body(...),
     settings: Settings = Depends(get_settings),
-    _: UserInfo = Depends(require_push_access),
+    current_user: UserInfo = Depends(require_push_access),
 ):
     """Retag an image to a new repository/name using skopeo copy."""
     from urllib.parse import urlparse
+
+    _ensure_folder_permission(
+        current_user=current_user,
+        image_path=repository,
+        is_pull=True,
+    )
+    _ensure_folder_permission(
+        current_user=current_user,
+        image_path=request.new_repository,
+        is_pull=False,
+    )
 
     registry_host = urlparse(REGISTRY_URL).netloc
     source = f"docker://{registry_host}/{repository}:{request.new_tag}"
@@ -576,18 +625,17 @@ async def copy_image(
     Non-admins must have push access on the destination folder.
     """
     from urllib.parse import urlparse
-    from .folders import check_folder_access
 
-    # Check push access on destination
-    if not current_user.is_admin:
-        access = check_folder_access(
-            current_user.username, request.dest_repository, is_pull=False
-        )
-        if not access:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="No push access on destination folder",
-            )
+    _ensure_folder_permission(
+        current_user=current_user,
+        image_path=request.source_repository,
+        is_pull=True,
+    )
+    _ensure_folder_permission(
+        current_user=current_user,
+        image_path=request.dest_repository,
+        is_pull=False,
+    )
 
     registry_host = urlparse(REGISTRY_URL).netloc
     dest_tag = request.dest_tag or request.source_tag
