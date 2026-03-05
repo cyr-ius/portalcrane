@@ -402,3 +402,18 @@ async def list_pushable_folders(
                 allowed.append(folder["name"])
                 break
     return allowed
+
+
+@router.get("/names", response_model=list[str])
+async def list_folder_names(
+    _: UserInfo = Depends(get_current_user),
+) -> list[str]:
+    """
+    Return all configured folder names (excluding __root__).
+    Accessible to any authenticated user.
+
+    Used by the frontend to determine which visual tree nodes map to a real
+    Portalcrane folder vs the __root__ catch-all, so the folder tree reflects
+    the actual permission boundaries rather than the raw image path segments.
+    """
+    return [f["name"] for f in _load_folders() if f["name"] != ROOT_FOLDER_NAME]

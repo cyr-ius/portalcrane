@@ -5,7 +5,17 @@
  * Navigation to the image detail page now uses /images/detail with a
  * queryParam ?repository=... instead of /images/:repository path segment,
  * to avoid %2F encoding issues with reverse proxies.
+ *
+ * Changes vs original:
+ *  - configuredFolderNames signal: list of real Portalcrane folder names
+ *    fetched from GET /api/folders/names (accessible to all authenticated users).
+ *  - folderTree now applies the same logic as the backend get_folder_for_path():
+ *      * first segment matches a configured folder → visual folder = that segment
+ *      * first segment unknown OR no slash → visual folder = "(root)"
+ *    This ensures the visual tree reflects actual permission boundaries.
+ *  - imageShortName: unknown prefix → full name shown, known prefix → suffix only.
  */
+import { HttpClient } from "@angular/common/http";
 import { Component, computed, inject, OnInit, signal } from "@angular/core";
 import { FormsModule } from "@angular/forms";
 import { Router } from "@angular/router";
@@ -44,6 +54,7 @@ export class ImagesListComponent implements OnInit {
   private registry = inject(RegistryService);
   private router = inject(Router);
   private readonly authService = inject(AuthService);
+  private readonly http = inject(HttpClient);
   private readonly VIEW_MODE_KEY = "pc_images_view_mode";
 
   // ── Remote data ────────────────────────────────────────────────────────────
@@ -61,10 +72,34 @@ export class ImagesListComponent implements OnInit {
   allowedFolders = signal<string[]>([]);
   expandedFolders = signal<Set<string>>(new Set());
 
+  /**
+   * Names of all Portalcrane folders configured by the admin.
+   * Fetched from GET /api/folders/names (accessible to all authenticated users).
+   * Used by folderTree to apply the same grouping logic as the backend:
+   *   - known prefix  → own visual folder
+   *   - unknown prefix OR no slash → "(root)"
+   */
+  configuredFolderNames = signal<string[]>([]);
+
   // ── Client-side sort & filter state ────────────────────────────────────────
   sortField = signal<SortField>("name");
   sortDir = signal<SortDir>("asc");
   tagFilter = signal<TagFilter>("all");
+
+  // ── Copy modal state ───────────────────────────────────────────────────────
+  copySource = signal<{ image: ImageInfo; tag: string } | null>(null);
+  pushableFolders = signal<string[]>([]);
+  copyDestFolder = signal("");
+  copyDestName = signal("");
+  copyDestTag = signal("");
+  copying = signal(false);
+  copyMessage = signal<string | null>(null);
+  isAdmin = computed(() => this.authService.currentUser()?.is_admin ?? false);
+  sourceTagOptions = signal<string[]>([]);
+
+  // ── Delete modal state ─────────────────────────────────────────────────────
+  deleteTarget = signal<ImageInfo | null>(null);
+  deleting = signal(false);
 
   // ── Accessible items (folder access filter applied once) ──────────────────
   accessibleItems = computed(() => {
@@ -83,7 +118,7 @@ export class ImagesListComponent implements OnInit {
 
   // ── Derived: flat list (uses accessibleItems) ─────────────────────────────
   filteredItems = computed(() => {
-    const items = this.accessibleItems(); // ← était data()?.items
+    const items = this.accessibleItems();
     const tagF = this.tagFilter();
     const filtered =
       tagF === "single"
@@ -99,17 +134,28 @@ export class ImagesListComponent implements OnInit {
     });
   });
 
-  // ── Derived: folder tree (uses accessibleItems) ───────────────────────────
+  // ── Derived: folder tree (uses accessibleItems + configuredFolderNames) ───
   folderTree = computed<FolderNode[]>(() => {
-    const items = this.accessibleItems(); // ← était data()?.items
+    const items = this.accessibleItems();
+    const knownFolders = new Set(this.configuredFolderNames());
     const map = new Map<string, ImageInfo[]>();
 
     for (const img of items) {
       const slashIdx = img.name.indexOf("/");
-      const folder =
-        slashIdx === -1 ? "(root)" : img.name.substring(0, slashIdx);
-      if (!map.has(folder)) map.set(folder, []);
-      map.get(folder)!.push(img);
+      let visualFolder: string;
+
+      if (slashIdx === -1) {
+        // No slash → always root (e.g. "nginx")
+        visualFolder = "(root)";
+      } else {
+        const prefix = img.name.substring(0, slashIdx);
+        // Apply the same logic as the backend get_folder_for_path():
+        // known prefix → own visual folder, unknown prefix → root
+        visualFolder = knownFolders.has(prefix) ? prefix : "(root)";
+      }
+
+      if (!map.has(visualFolder)) map.set(visualFolder, []);
+      map.get(visualFolder)!.push(img);
     }
 
     const nodes: FolderNode[] = [];
@@ -127,25 +173,6 @@ export class ImagesListComponent implements OnInit {
     }
     return nodes;
   });
-
-  /**
-   * Image name relative to its folder (last segment of the path).
-   * Used in tree view to show only "api" under "app/backend" folder.
-   */
-  imageShortName(img: ImageInfo): string {
-    const idx = img.name.indexOf("/");
-    return idx === -1 ? img.name : img.name.substring(idx + 1);
-  }
-
-  /**
-   * Navigate to the image detail page using queryParams.
-   * Avoids %2F issues — repository name is safe in query string.
-   */
-  goToDetail(imageName: string): void {
-    this.router.navigate(["/images/detail"], {
-      queryParams: { repository: imageName },
-    });
-  }
 
   // ── Pagination helpers ─────────────────────────────────────────────────────
   pageStart = computed(() => {
@@ -177,16 +204,79 @@ export class ImagesListComponent implements OnInit {
     return result;
   });
 
-  // ── Copy modal state ───────────────────────────────────────────────────────
-  copySource = signal<{ image: ImageInfo; tag: string } | null>(null);
-  pushableFolders = signal<string[]>([]);
-  copyDestFolder = signal("");
-  copyDestName = signal("");
-  copyDestTag = signal("");
-  copying = signal(false);
-  copyMessage = signal<string | null>(null);
-  isAdmin = computed(() => this.authService.currentUser()?.is_admin ?? false);
-  sourceTagOptions = signal<string[]>([]);
+  // ── Copy destination preview ───────────────────────────────────────────────
+  copyDestPreview = computed(() => {
+    const folder = this.copyDestFolder().trim();
+    const name = this.copyDestName().trim();
+    const tag = this.copyDestTag().trim();
+    if (!name) return "";
+    return folder ? `${folder}/${name}:${tag}` : `${name}:${tag}`;
+  });
+
+  // ── Lifecycle ──────────────────────────────────────────────────────────────
+  ngOnInit() {
+    // Load configured folder names first so folderTree grouping is accurate
+    this.http.get<string[]>("/api/folders/names").subscribe({
+      next: (names) => {
+        this.configuredFolderNames.set(names);
+        this._loadFoldersAndImages();
+      },
+      error: () => this._loadFoldersAndImages(),
+    });
+  }
+
+  private _loadFoldersAndImages(): void {
+    this.registry.getMyFolders().subscribe({
+      next: (folders) => {
+        this.allowedFolders.set(folders);
+        this.loadImages();
+      },
+      error: () => this.loadImages(),
+    });
+  }
+
+  // ── Data loading ───────────────────────────────────────────────────────────
+  loadImages() {
+    this.loading.set(true);
+    this.registry
+      .getImages(this.currentPage(), this.pageSize, this.searchQuery)
+      .subscribe({
+        next: (data) => {
+          this.data.set(data);
+          // Expand all folders by default in tree mode
+          const allFolders = new Set(this.folderTree().map((n) => n.name));
+          this.expandedFolders.set(allFolders);
+          this.loading.set(false);
+        },
+        error: () => this.loading.set(false),
+      });
+  }
+
+  onSearch() {
+    if (this.searchTimeout) clearTimeout(this.searchTimeout);
+    this.searchTimeout = setTimeout(() => {
+      this.currentPage.set(1);
+      this.loadImages();
+    }, 400);
+  }
+
+  clearSearch() {
+    this.searchQuery = "";
+    this.currentPage.set(1);
+    this.loadImages();
+  }
+
+  onPageSizeChange() {
+    this.currentPage.set(1);
+    this.loadImages();
+  }
+
+  goToPage(page: number) {
+    const total = this.data()?.total_pages ?? 1;
+    if (page < 1 || page > total) return;
+    this.currentPage.set(page);
+    this.loadImages();
+  }
 
   // ── Sort helpers ───────────────────────────────────────────────────────────
   toggleSort(field: SortField): void {
@@ -234,84 +324,36 @@ export class ImagesListComponent implements OnInit {
     this.expandedFolders.set(set);
   }
 
-  // ── Delete modal state ─────────────────────────────────────────────────────
-  deleteTarget = signal<ImageInfo | null>(null);
-  deleting = signal(false);
+  // ── Image name helpers ─────────────────────────────────────────────────────
 
-  confirmDeleteImage(image: ImageInfo): void {
-    this.deleteTarget.set(image);
-  }
-
-  deleteImage(): void {
-    const target = this.deleteTarget();
-    if (!target) return;
-    this.deleting.set(true);
-    this.registry.deleteImage(target.name).subscribe({
-      next: () => {
-        this.deleteTarget.set(null);
-        this.deleting.set(false);
-        this.loadImages();
-      },
-      error: () => this.deleting.set(false),
+  /**
+   * Navigate to the image detail page using queryParams.
+   * Avoids %2F encoding issues with reverse proxies.
+   */
+  goToDetail(imageName: string): void {
+    this.router.navigate(["/images/detail"], {
+      queryParams: { repository: imageName },
     });
   }
 
-  // ── Lifecycle ──────────────────────────────────────────────────────────────
-  ngOnInit() {
-    // Load allowed folders first, then images
-    this.registry.getMyFolders().subscribe({
-      next: (folders) => {
-        this.allowedFolders.set(folders);
-        this.loadImages();
-      },
-      error: () => this.loadImages(), // fallback
-    });
+  /**
+   * Image display name inside its visual folder.
+   * - No slash → show full name (e.g. "nginx")
+   * - Known folder prefix → show only suffix (e.g. "sia/nginx" → "nginx")
+   * - Unknown prefix → show full name so the user sees "cyr-ius/wireguard-ui"
+   *   (it lives in root visually but the registry path must stay visible)
+   */
+  imageShortName(img: ImageInfo): string {
+    const idx = img.name.indexOf("/");
+    if (idx === -1) return img.name;
+    const prefix = img.name.substring(0, idx);
+    const knownFolders = new Set(this.configuredFolderNames());
+    if (!knownFolders.has(prefix)) return img.name;
+    return img.name.substring(idx + 1);
   }
 
-  // ── Data loading ───────────────────────────────────────────────────────────
-  loadImages() {
-    this.loading.set(true);
-    this.registry
-      .getImages(this.currentPage(), this.pageSize, this.searchQuery)
-      .subscribe({
-        next: (data) => {
-          this.data.set(data);
-          // Expand all folders by default in tree mode
-          const allFolders = new Set(this.folderTree().map((n) => n.name));
-          this.expandedFolders.set(allFolders);
-          this.loading.set(false);
-        },
-        error: () => this.loading.set(false),
-      });
-  }
+  // ── Copy modal ─────────────────────────────────────────────────────────────
 
-  onSearch() {
-    if (this.searchTimeout) clearTimeout(this.searchTimeout);
-    this.searchTimeout = setTimeout(() => {
-      this.currentPage.set(1);
-      this.loadImages();
-    }, 400);
-  }
-
-  clearSearch() {
-    this.searchQuery = "";
-    this.currentPage.set(1);
-    this.loadImages();
-  }
-
-  onPageSizeChange() {
-    this.currentPage.set(1);
-    this.loadImages();
-  }
-
-  goToPage(page: number) {
-    const total = this.data()?.total_pages ?? 1;
-    if (page < 1 || page > total) return;
-    this.currentPage.set(page);
-    this.loadImages();
-  }
-
-  // ── Copy modal state ───────────────────────────────────────────────────────
   openCopyModal(image: ImageInfo, tag: string): void {
     this.copySource.set({ image, tag });
     this.sourceTagOptions.set(image.tags);
@@ -324,7 +366,7 @@ export class ImagesListComponent implements OnInit {
     this.copyDestFolder.set("");
     this.copyMessage.set(null);
 
-    // Load pushable folders
+    // Load pushable folders for non-admin users
     this.registry.getPushableFolders().subscribe({
       next: (folders) => this.pushableFolders.set(folders),
     });
@@ -333,15 +375,6 @@ export class ImagesListComponent implements OnInit {
   closeCopyModal(): void {
     this.copySource.set(null);
   }
-
-  // Computed preview of the destination path
-  copyDestPreview = computed(() => {
-    const folder = this.copyDestFolder().trim();
-    const name = this.copyDestName().trim();
-    const tag = this.copyDestTag().trim();
-    if (!name) return "";
-    return folder ? `${folder}/${name}:${tag}` : `${name}:${tag}`;
-  });
 
   executeCopy(): void {
     const src = this.copySource();
@@ -371,5 +404,25 @@ export class ImagesListComponent implements OnInit {
           this.copyMessage.set(err?.error?.detail ?? "Copy failed");
         },
       });
+  }
+
+  // ── Delete modal ───────────────────────────────────────────────────────────
+
+  confirmDeleteImage(image: ImageInfo): void {
+    this.deleteTarget.set(image);
+  }
+
+  deleteImage(): void {
+    const target = this.deleteTarget();
+    if (!target) return;
+    this.deleting.set(true);
+    this.registry.deleteImage(target.name).subscribe({
+      next: () => {
+        this.deleteTarget.set(null);
+        this.deleting.set(false);
+        this.loadImages();
+      },
+      error: () => this.deleting.set(false),
+    });
   }
 }
