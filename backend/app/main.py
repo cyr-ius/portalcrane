@@ -111,7 +111,9 @@ if _FRONTEND_DIR.exists():
     async def serve_spa(full_path: str) -> FileResponse:
         """Catch-all: serve index.html so Angular's router can handle navigation."""
         candidate = (_FRONTEND_DIR / full_path).resolve()
-        if not candidate.is_relative_to(_FRONTEND_DIR):
+        frontend_root = os.fspath(_FRONTEND_DIR)
+        candidate_path = os.fspath(candidate)
+        if os.path.commonpath([candidate_path, frontend_root]) != frontend_root:
             raise HTTPException(status_code=404, detail="Not found")
         if candidate.is_file():
             return FileResponse(candidate)
