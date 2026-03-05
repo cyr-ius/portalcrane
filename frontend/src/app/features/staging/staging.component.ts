@@ -23,7 +23,6 @@ import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { RouterLink } from "@angular/router";
 import { switchMap, timer } from "rxjs";
 import { AppConfigService } from "../../core/services/app-config.service";
-import { AuthService } from "../../core/services/auth.service";
 import {
   ExternalRegistry,
   ExternalRegistryService,
@@ -65,7 +64,6 @@ export class StagingComponent implements OnInit {
   private externalRegistryService = inject(ExternalRegistryService);
   private destroyRef = inject(DestroyRef);
   readonly configService = inject(AppConfigService);
-  readonly authService = inject(AuthService);
 
   // Exposed for template access (module-level constant cannot be used directly in templates)
   readonly ACTIVE_STATUSES = ACTIVE_STATUSES;

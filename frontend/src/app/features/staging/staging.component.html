@@ -153,13 +153,9 @@
               <i class="bi bi-person-circle"></i>
               <span>
                 Uses your saved Docker Hub account for authenticated pulls.
-                Configure it in your
-                <button
-                  class="btn btn-link btn-sm p-0 align-baseline"
-                  style="font-size: inherit"
-                  (click)="authService.openAccountDrawer()"
-                >
-                  account settings</button
+                Configure it in
+                <a routerLink="/settings" class="text-decoration-none"
+                  >account settings</a
                 >.
               </span>
             </div>
