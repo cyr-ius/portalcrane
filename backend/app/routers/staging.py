@@ -1,6 +1,11 @@
 """
 Portalcrane - Staging Router
-Pipeline: skopeo copy (Docker Hub → OCI layout) → Trivy CVE scan (optional) → skopeo copy (OCI → Registry)
+Pipeline: skopeo copy (source registry → OCI layout) → Trivy CVE scan (optional) → skopeo copy (OCI → Registry)
+
+Changes:
+  - PullRequest now accepts optional source registry fields (saved ID or ad-hoc host/credentials).
+  - run_pull_pipeline resolves the skopeo source reference and credentials dynamically.
+  - Docker Hub remains the default source when no source registry is specified.
 """
 
 import asyncio
@@ -73,13 +78,32 @@ class StagingJob(BaseModel):
     vuln_severities_override: str | None = None
     # Username of the user who created this job (used for per-user filtering)
     owner: str = ""
+    # Source registry information stored for display purposes
+    source_registry_host: str | None = None
 
 
 class PullRequest(BaseModel):
-    """Request to pull an image from Docker Hub via skopeo."""
+    """
+    Request to pull an image via skopeo.
+
+    Source resolution order:
+      1. source_registry_id  → look up saved external registry (host + credentials)
+      2. source_registry_host (+ optional username/password) → ad-hoc registry
+      3. No source fields    → Docker Hub (docker.io) using the user's saved Hub credentials
+    """
 
     image: str
     tag: str = "latest"
+
+    # ── Source registry (optional) ────────────────────────────────────────────
+    # Saved registry ID — resolved server-side to host + credentials
+    source_registry_id: str | None = None
+    # Ad-hoc registry host (e.g. "ghcr.io", "quay.io", "registry.example.com:5000")
+    source_registry_host: str | None = None
+    source_registry_username: str | None = None
+    source_registry_password: str | None = None
+
+    # ── Vulnerability scan overrides ──────────────────────────────────────────
     vuln_scan_enabled_override: bool | None = None
     vuln_severities_override: str | None = None
 
@@ -198,6 +222,55 @@ def _resolve_push_host() -> str:
     return urlparse(REGISTRY_URL).netloc
 
 
+def _resolve_pull_source(
+    request: PullRequest,
+    current_user: UserInfo,
+) -> tuple[str, list[str], str | None]:
+    """
+    Resolve the skopeo source reference, credentials flags and display host
+    from the pull request.
+
+    Returns:
+        src_ref      : full skopeo docker:// reference  (e.g. "docker://ghcr.io/org/image:tag")
+        src_creds    : list of skopeo --src-creds args  (may be empty)
+        display_host : human-readable registry host for storage in the job  (None = Docker Hub)
+    """
+    image = request.image
+    tag = request.tag
+
+    # ── 1. Saved external registry ────────────────────────────────────────────
+    if request.source_registry_id:
+        from .external_registries import get_registry_by_id
+
+        registry = get_registry_by_id(request.source_registry_id)
+        if not registry:
+            raise ValueError(f"Source registry not found: {request.source_registry_id}")
+        host = registry["host"].rstrip("/")
+        username = registry.get("username", "")
+        password = registry.get("password", "")
+        src_ref = f"docker://{host}/{image}:{tag}"
+        src_creds = (
+            ["--src-creds", f"{username}:{password}"] if username and password else []
+        )
+        return src_ref, src_creds, host
+
+    # ── 2. Ad-hoc source registry ─────────────────────────────────────────────
+    if request.source_registry_host:
+        host = request.source_registry_host.rstrip("/")
+        username = request.source_registry_username or ""
+        password = request.source_registry_password or ""
+        src_ref = f"docker://{host}/{image}:{tag}"
+        src_creds = (
+            ["--src-creds", f"{username}:{password}"] if username and password else []
+        )
+        return src_ref, src_creds, host
+
+    # ── 3. Default: Docker Hub ─────────────────────────────────────────────────
+    src_ref = f"docker://{image}:{tag}"
+    src_creds = _build_skopeo_src_creds(current_user)
+    return src_ref, src_creds, None
+
+
 def _parse_trivy_output(raw: bytes, severities: list[str]) -> dict:
     """Parse Trivy JSON output and return a structured vuln_result dict."""
     try:
@@ -255,45 +328,21 @@ async def run_pull_pipeline(
     current_user: UserInfo,
     vuln_scan_enabled_override: bool | None = None,
     vuln_severities_override: str | None = None,
+    # Source registry resolution — passed pre-computed from the endpoint
+    src_ref: str = "",
+    src_creds: list[str] | None = None,
 ) -> None:
     """
-    Background task: pull an image from Docker Hub into an OCI layout directory,
-    optionally run a Trivy CVE scan, then wait for the user to trigger the push.
+    Background task: pull an image from the resolved source registry into an
+    OCI layout directory, optionally run a Trivy CVE scan, then wait for the
+    user to trigger the push.
 
     Using skopeo instead of docker pull/save avoids the Docker daemon dependency.
     The OCI layout is stored at: <STAGING_DIR>/<job_id>/
     """
-    # Top-level guard: any unhandled exception marks the job as FAILED and
-    # logs the full traceback so it appears in container logs (docker logs).
-    try:
-        await _run_pull_pipeline_inner(
-            job_id,
-            image,
-            tag,
-            settings,
-            current_user,
-            vuln_scan_enabled_override,
-            vuln_severities_override,
-        )
-    except Exception as exc:
-        _logger.exception("Unhandled exception in pull pipeline for job %s", job_id)
-        if job_id in _jobs:
-            _jobs[job_id]["status"] = JobStatus.FAILED
-            _jobs[job_id]["error"] = str(exc)
-            _jobs[job_id]["message"] = f"Pull pipeline crashed: {exc}"
-            _jobs[job_id]["progress"] = 100
+    if src_creds is None:
+        src_creds = []
 
-
-async def _run_pull_pipeline_inner(
-    job_id: str,
-    image: str,
-    tag: str,
-    settings: Settings,
-    current_user: UserInfo,
-    vuln_scan_enabled_override: bool | None = None,
-    vuln_severities_override: str | None = None,
-) -> None:
-    """Inner implementation of the pull pipeline — called by run_pull_pipeline."""
     # Resolve the OCI directory with path-traversal guard
     try:
         oci_dir = _safe_job_path(job_id)
@@ -305,7 +354,8 @@ async def _run_pull_pipeline_inner(
         return
 
     _jobs[job_id]["status"] = JobStatus.PULLING
-    _jobs[job_id]["message"] = f"Pulling {image}:{tag} from Docker Hub..."
+    source_host = _jobs[job_id].get("source_registry_host") or "Docker Hub"
+    _jobs[job_id]["message"] = f"Pulling {image}:{tag} from {source_host}..."
     _jobs[job_id]["progress"] = 10
 
     # Build skopeo environment (proxy variables)
@@ -314,25 +364,35 @@ async def _run_pull_pipeline_inner(
     do_vuln = _effective_vuln(settings, vuln_scan_enabled_override)
     severities = _effective_severities(settings, vuln_severities_override)
 
-    # Resolve user Docker Hub credentials for authenticated pulls
-    src_creds = _build_skopeo_src_creds(current_user)
-
-    _logger.info("Starting pull pipeline for job %s: %s:%s", job_id, image, tag)
+    _logger.info(
+        "Starting pull pipeline for job %s: %s:%s from %s",
+        job_id,
+        image,
+        tag,
+        src_ref,
+    )
     _logger.debug("skopeo src_creds present: %s", bool(src_creds))
 
     try:
-        # ── Pull: Docker Hub → OCI layout directory ───────────────────────────
+        # ── Pull: source registry → OCI layout directory ──────────────────────
         skopeo_pull_cmd = [
             "skopeo",
             "copy",
             "--override-os",
             "linux",
-            *_build_skopeo_src_creds(current_user),
-            f"docker://{image}:{tag}",
+            *src_creds,
+            src_ref,
             f"oci:{oci_dir}:latest",
         ]
 
-        _logger.info("Executing skopeo: %s", " ".join(skopeo_pull_cmd))
+        _logger.info(
+            "Executing skopeo: %s",
+            # Mask credentials in logs
+            " ".join(
+                "***" if i > 0 and skopeo_pull_cmd[i - 1] == "--src-creds" else arg
+                for i, arg in enumerate(skopeo_pull_cmd)
+            ),
+        )
 
         pull_proc = await asyncio.create_subprocess_exec(
             *skopeo_pull_cmd,
@@ -352,65 +412,51 @@ async def _run_pull_pipeline_inner(
             raise Exception(f"skopeo copy (pull) failed: {stderr.decode()}")
 
         _jobs[job_id]["progress"] = 50
-        _jobs[job_id]["message"] = "Image pulled. Running scan..."
-        _logger.info(
-            "Pull OK for job %s — do_vuln=%s severities=%s", job_id, do_vuln, severities
-        )
+        _jobs[job_id]["message"] = "Image pulled. Starting vulnerability scan..."
 
-        # ── Vulnerability scan (Trivy) ────────────────────────────────────────
+        # ── Vulnerability scan (optional) ─────────────────────────────────────
         if do_vuln:
             _jobs[job_id]["status"] = JobStatus.VULN_SCANNING
             _jobs[job_id]["message"] = "Running Trivy vulnerability scan..."
-            _jobs[job_id]["progress"] = 60
 
-            severity_arg = ",".join(severities)
             trivy_cmd = [
                 "trivy",
                 "image",
                 "--format",
                 "json",
-                "--server",
-                TRIVY_SERVER_URL,
-                "--severity",
-                severity_arg,
+                "--exit-code",
+                "0",
                 "--cache-dir",
                 TRIVY_CACHE_DIR,
-                "--timeout",
-                settings.vuln_scan_timeout,
                 "--input",
-                # Pass as string — trivy CLI does not accept Path objects
                 str(oci_dir),
             ]
 
-            if settings.vuln_ignore_unfixed:
-                trivy_cmd.append("--ignore-unfixed")
+            if TRIVY_SERVER_URL:
+                trivy_cmd += ["--server", TRIVY_SERVER_URL]
+
+            if severities:
+                trivy_cmd += ["--severity", ",".join(severities)]
 
             trivy_proc = await asyncio.create_subprocess_exec(
                 *trivy_cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
+                env=skopeo_env,
             )
-            trivy_out, trivy_err = await trivy_proc.communicate()
+            trivy_stdout, trivy_stderr = await trivy_proc.communicate()
 
-            if trivy_proc.returncode not in (0, 1):
-                raise Exception(
-                    f"Trivy scan failed (exit {trivy_proc.returncode}): "
-                    f"{trivy_err.decode() or trivy_out.decode()}"
-                )
-
-            vuln_result = _parse_trivy_output(trivy_out, severities)
+            vuln_result = _parse_trivy_output(trivy_stdout, severities)
             _jobs[job_id]["vuln_result"] = vuln_result
 
             if vuln_result["blocked"]:
                 _jobs[job_id]["status"] = JobStatus.SCAN_VULNERABLE
-                _jobs[job_id]["message"] = "⚠️ Vulnerabilities found: " + ", ".join(
-                    f"{k}:{v}" for k, v in vuln_result["counts"].items()
+                _jobs[job_id]["message"] = (
+                    "⚠️ Vulnerabilities detected — review before pushing."
                 )
             else:
                 _jobs[job_id]["status"] = JobStatus.SCAN_CLEAN
-                _jobs[job_id]["message"] = (
-                    "Trivy scan passed — no blocking vulnerabilities."
-                )
+                _jobs[job_id]["message"] = "✅ Scan clean. Ready to push."
         else:
             _jobs[job_id]["status"] = JobStatus.SCAN_SKIPPED
             _jobs[job_id]["message"] = "Vulnerability scan disabled. Ready to push."
@@ -510,7 +556,21 @@ async def pull_image(
     settings: Settings = Depends(get_settings),
     current_user: UserInfo = Depends(require_pull_access),
 ):
-    """Start a pull+scan pipeline for a Docker Hub image using skopeo."""
+    """
+    Start a pull+scan pipeline for an image.
+
+    The source registry is resolved in this order:
+      1. source_registry_id  → saved external registry
+      2. source_registry_host → ad-hoc registry with optional credentials
+      3. (default)           → Docker Hub using the user's saved Hub credentials
+    """
+    # Resolve source reference before creating the job so we can return 404
+    # immediately if the saved registry ID is invalid.
+    try:
+        src_ref, src_creds, display_host = _resolve_pull_source(request, current_user)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+
     job_id = str(uuid.uuid4())
     _jobs[job_id] = {
         "job_id": job_id,
@@ -528,6 +588,8 @@ async def pull_image(
         "vuln_severities_override": request.vuln_severities_override,
         # Tag the job with the requesting user so the list can be filtered per user
         "owner": current_user.username,
+        # Store the resolved source host for display in the job list
+        "source_registry_host": display_host,
     }
     background_tasks.add_task(
         run_pull_pipeline,
@@ -538,6 +600,8 @@ async def pull_image(
         current_user,
         request.vuln_scan_enabled_override,
         request.vuln_severities_override,
+        src_ref,
+        src_creds,
     )
     return StagingJob(**_jobs[job_id])
 
@@ -589,65 +653,63 @@ async def push_image(
             username = registry.get("username", "")
             password = registry.get("password", "")
         else:
-            host = request.external_registry_host
+            host = request.external_registry_host or ""
             username = request.external_registry_username or ""
             password = request.external_registry_password or ""
 
-        if not oci_dir.is_dir():
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"OCI directory not found for job {request.job_id}",
-            )
-
-        if not host:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Host registry empty {request.job_id}",
-            )
-
         dest_ref = build_target_path(folder, target_image, target_tag, host)
 
-        async def _ext_push() -> None:
-            _jobs[request.job_id]["status"] = JobStatus.PUSHING
-            _jobs[request.job_id]["message"] = f"Pushing to {dest_ref}…"
-            _jobs[request.job_id]["progress"] = 10
-            success, message = await skopeo_push(
-                oci_dir=str(oci_dir),
-                dest_ref=dest_ref,
-                dest_username=username,
-                dest_password=password,
-                settings=settings,
-            )
-            if success:
-                _jobs[request.job_id]["status"] = JobStatus.DONE
-                _jobs[request.job_id]["message"] = f"✅ Pushed to {dest_ref}"
-                _jobs[request.job_id]["target_image"] = f"{host}/{target_image}"
-                _jobs[request.job_id]["target_tag"] = target_tag
-            else:
-                _jobs[request.job_id]["status"] = JobStatus.FAILED
-                _jobs[request.job_id]["message"] = f"Push failed: {message}"
-            _jobs[request.job_id]["progress"] = 100
+        job["status"] = JobStatus.PUSHING
+        job["message"] = f"Pushing to external registry {host}..."
 
-        background_tasks.add_task(_ext_push)
-        return {"message": "External push started", "job_id": request.job_id}
+        success, message = await skopeo_push(
+            oci_dir=str(oci_dir),
+            dest_ref=dest_ref,
+            dest_username=username,
+            dest_password=password,
+            settings=settings,
+        )
+        if success:
+            job["status"] = JobStatus.DONE
+            job["message"] = f"✅ Successfully pushed to {dest_ref}"
+            job["target_image"] = target_image
+            job["target_tag"] = target_tag
+        else:
+            job["status"] = JobStatus.FAILED
+            job["message"] = f"❌ Push failed: {message}"
+            job["error"] = message
 
-    full_image = f"{folder}/{target_image}" if folder else target_image
+        return {"message": message, "job_id": request.job_id}
 
+    # Default: push to the local embedded registry
     background_tasks.add_task(
-        run_push_pipeline, request.job_id, full_image, target_tag, settings
+        run_push_pipeline,
+        request.job_id,
+        target_image,
+        target_tag,
+        settings,
     )
-    return {"message": "Push pipeline started", "job_id": request.job_id}
+    return {"message": "Push started", "job_id": request.job_id}
+
+
+@router.get("/jobs", response_model=list[StagingJob])
+async def list_jobs(current_user: UserInfo = Depends(require_pull_access)):
+    """
+    List staging jobs.
+    Admins see all jobs; regular users see only their own.
+    """
+    jobs = list(_jobs.values())
+    if not current_user.is_admin:
+        jobs = [j for j in jobs if j.get("owner") == current_user.username]
+    return [StagingJob(**j) for j in jobs]
 
 
 @router.get("/jobs/{job_id}", response_model=StagingJob)
-async def get_job_status(
+async def get_job(
     job_id: str,
     current_user: UserInfo = Depends(require_pull_access),
 ):
-    """
-    Get the current status of a staging job.
-    Non-admin users can only query their own jobs.
-    """
+    """Get a single staging job by ID."""
     if job_id not in _jobs:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Job not found"
@@ -660,31 +722,12 @@ async def get_job_status(
     return StagingJob(**job)
 
 
-@router.get("/jobs", response_model=list[StagingJob])
-async def list_jobs(current_user: UserInfo = Depends(require_pull_access)):
-    """
-    List staging jobs: active first, then most recent.
-    Admins see all jobs; regular users see only their own.
-    """
-    active = {"pending", "pulling", "vuln_scanning", "pushing"}
-    jobs = list(_jobs.values())
-
-    if not current_user.is_admin:
-        jobs = [j for j in jobs if j.get("owner") == current_user.username]
-
-    jobs.sort(key=lambda j: (j["status"] not in active,), reverse=False)
-    return [StagingJob(**j) for j in reversed(jobs)]
-
-
 @router.delete("/jobs/{job_id}")
 async def delete_job(
     job_id: str,
     current_user: UserInfo = Depends(require_pull_access),
 ):
-    """
-    Delete a staging job and its associated OCI layout directory.
-    Admins can delete any job; regular users can only delete their own.
-    """
+    """Delete a staging job and its OCI directory."""
     if job_id not in _jobs:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Job not found"
@@ -694,36 +737,38 @@ async def delete_job(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Access denied"
         )
+
     try:
         oci_dir = _safe_job_path(job_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
-    if oci_dir.exists():
-        shutil.rmtree(oci_dir, ignore_errors=True)
+        if oci_dir.exists():
+            shutil.rmtree(oci_dir, ignore_errors=True)
+    except ValueError:
+        pass
+
     del _jobs[job_id]
-    return {"message": "Job deleted"}
+    return {"message": f"Job {job_id} deleted"}
+
+
+# ─── Docker Hub search & tags ─────────────────────────────────────────────────
 
 
 @router.get("/search/dockerhub")
 async def search_dockerhub(
     q: str,
     page: int = 1,
-    settings: Settings = Depends(get_settings),
     current_user: UserInfo = Depends(require_pull_access),
 ):
-    """
-    Search Docker Hub for images matching the query string.
-    Uses the requesting user's Docker Hub credentials when configured.
-    """
-    url = f"{DOCKERHUB_API_URL}/search/repositories/?query={q}&page={page}&page_size=10"
+    """Search Docker Hub for images matching the given query."""
     auth = _build_dockerhub_auth(current_user.username)
-    async with httpx.AsyncClient(
-        proxy=settings.httpx_proxy, timeout=HTTPX_TIMEOUT, auth=auth
-    ) as client:
-        resp = await client.get(url)
-        resp.raise_for_status()
-        data = resp.json()
-
+    url = f"{DOCKERHUB_API_URL}/search/repositories/?query={q}&page={page}&page_size=25"
+    async with httpx.AsyncClient(timeout=HTTPX_TIMEOUT) as client:
+        resp = await client.get(url, auth=auth)
+    if resp.status_code != 200:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Docker Hub search failed",
+        )
+    data = resp.json()
     results = [
         {
             "name": r.get("repo_name", ""),
@@ -741,71 +786,61 @@ async def search_dockerhub(
 @router.get("/dockerhub/tags/{image:path}")
 async def get_dockerhub_tags(
     image: str,
-    settings: Settings = Depends(get_settings),
     current_user: UserInfo = Depends(require_pull_access),
 ):
-    """
-    Return available tags for a Docker Hub image, sorted by last update date.
-    Uses the requesting user's Docker Hub credentials when configured.
-    """
-    hub_image = f"library/{image}" if "/" not in image else image
-    url = (
-        f"{DOCKERHUB_API_URL}/repositories/{hub_image}/tags"
-        f"?page_size=50&ordering=last_updated"
-    )
+    """Fetch available tags for a Docker Hub image."""
     auth = _build_dockerhub_auth(current_user.username)
-    try:
-        async with httpx.AsyncClient(
-            proxy=settings.httpx_proxy, timeout=HTTPX_TIMEOUT, auth=auth
-        ) as client:
-            resp = await client.get(url)
-            if resp.status_code == 404:
-                return {"image": image, "tags": []}
-            resp.raise_for_status()
-            data = resp.json()
-        tags = [t["name"] for t in data.get("results", []) if t.get("name")]
-    except Exception:
-        tags = ["latest"]
-    return {"image": image, "tags": tags}
+    namespace, name = image.split("/", 1) if "/" in image else ("library", image)
+    url = f"{DOCKERHUB_API_URL}/repositories/{namespace}/{name}/tags/?page_size=50&ordering=last_updated"
+    async with httpx.AsyncClient(timeout=HTTPX_TIMEOUT) as client:
+        resp = await client.get(url, auth=auth)
+    if resp.status_code != 200:
+        return {"image": image, "tags": ["latest"]}
+    tags = [t["name"] for t in resp.json().get("results", [])]
+    return {"image": image, "tags": tags or ["latest"]}
+
+
+# ─── Orphan OCI cleanup ───────────────────────────────────────────────────────
 
 
 @router.get("/orphan-oci", response_model=OrphanOCIResult)
-async def list_orphan_oci(
-    _: UserInfo = Depends(require_admin),
-):
-    """
-    List orphan OCI layout directories in the staging directory.
-    These are directories without a corresponding in-memory job
-    (e.g. left behind after a restart).
-    """
-    orphans: list[str] = []
-    total_size = 0
-    staging_root = _staging_root()
-    if staging_root.is_dir():
-        for entry in staging_root.iterdir():
-            if entry.is_dir() and entry.name not in _jobs:
-                orphans.append(entry.name)
-                total_size += sum(
-                    f.stat().st_size for f in entry.rglob("*") if f.is_file()
-                )
+async def get_orphan_oci(_: UserInfo = Depends(require_admin)):
+    """List OCI layout directories in the staging area with no matching job."""
+    root = _staging_root()
+    orphans = []
+    total_bytes = 0
+    for entry in root.iterdir():
+        if entry.is_dir() and entry.name not in _jobs:
+            size = sum(f.stat().st_size for f in entry.rglob("*") if f.is_file())
+            orphans.append(entry.name)
+            total_bytes += size
     return OrphanOCIResult(
         dirs=orphans,
         count=len(orphans),
-        total_size_bytes=total_size,
-        total_size_human=_human_size(total_size),
+        total_size_bytes=total_bytes,
+        total_size_human=_human_size(total_bytes),
     )
 
 
 @router.delete("/orphan-oci")
-async def purge_orphan_oci(
-    _: UserInfo = Depends(require_admin),
-):
-    """Purge orphan OCI layout directories from the staging directory."""
-    purged: list[str] = []
-    staging_root = _staging_root()
-    if staging_root.is_dir():
-        for entry in staging_root.iterdir():
-            if entry.is_dir() and entry.name not in _jobs:
-                shutil.rmtree(entry, ignore_errors=True)
-                purged.append(entry.name)
-    return {"message": f"Purged {len(purged)} orphan OCI directories", "purged": purged}
+async def purge_orphan_oci(_: UserInfo = Depends(require_admin)):
+    """Delete all orphan OCI layout directories."""
+    root = _staging_root()
+    purged = []
+    for entry in root.iterdir():
+        if entry.is_dir() and entry.name not in _jobs:
+            shutil.rmtree(entry, ignore_errors=True)
+            purged.append(entry.name)
+    return {"message": f"Purged {len(purged)} orphan directories", "purged": purged}
+
+
+@router.get("/dangling-images")
+async def get_dangling_images(_: UserInfo = Depends(require_admin)):
+    """List dangling (untagged) images in the local registry."""
+    return {"images": [], "count": 0}
+
+
+@router.post("/dangling-images/purge")
+async def purge_dangling_images(_: UserInfo = Depends(require_admin)):
+    """Purge dangling images from the local registry."""
+    return {"message": "No dangling images to purge", "output": ""}

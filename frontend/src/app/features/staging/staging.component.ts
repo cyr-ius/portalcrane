@@ -1,8 +1,15 @@
 /**
  * Portalcrane - Staging Component
- * Pull pipeline: Docker Hub search → tag selection → pull → CVE scan → push
+ * Pull pipeline: source registry selection → image pull → CVE scan → push
  * (local or external registry with optional folder prefix).
  *
+ * Changes:
+ *  - Added pull source mode: "dockerhub" | "saved" | "adhoc"
+ *  - New signals: pullSourceMode, pullSourceRegistryId, pullSourceHost,
+ *    pullSourceUser, pullSourcePass
+ *  - selectImage() now only fetches Docker Hub tags when source is Docker Hub
+ *  - startPull() forwards the resolved source registry fields to the service
+ *  - Job list now shows the source registry host badge
  */
 import {
   Component,
@@ -39,6 +46,14 @@ const ACTIVE_STATUSES = new Set([
 /** Push destination modes. */
 export type PushMode = "local" | "external";
 
+/**
+ * Pull source modes:
+ *  - "dockerhub" → Docker Hub (default, uses saved Hub credentials)
+ *  - "saved"     → a saved external registry selected by ID
+ *  - "adhoc"     → ad-hoc host + optional credentials entered manually
+ */
+export type PullSourceMode = "dockerhub" | "saved" | "adhoc";
+
 @Component({
   selector: "app-staging",
   imports: [RouterLink],
@@ -52,6 +67,9 @@ export class StagingComponent implements OnInit {
   readonly configService = inject(AppConfigService);
   readonly authService = inject(AuthService);
 
+  // Exposed for template access (module-level constant cannot be used directly in templates)
+  readonly ACTIVE_STATUSES = ACTIVE_STATUSES;
+
   // ── Job list ───────────────────────────────────────────────────────────────
   jobs = signal<StagingJob[]>([]);
 
@@ -60,11 +78,23 @@ export class StagingComponent implements OnInit {
   searchResults = signal<DockerHubResult[]>([]);
   searching = signal(false);
 
-  // ── Pull form ──────────────────────────────────────────────────────────────
+  // ── Pull form — image & tag ────────────────────────────────────────────────
   pullImage = signal("");
   pullTag = signal("latest");
   availableTags = signal<string[]>([]);
   pulling = signal(false);
+
+  // ── Pull form — source registry ────────────────────────────────────────────
+  /** Selected source mode for the pull. */
+  pullSourceMode = signal<PullSourceMode>("dockerhub");
+  /** ID of the saved external registry to use as source (mode = "saved"). */
+  pullSourceRegistryId = signal<string>("");
+  /** Ad-hoc registry host (mode = "adhoc"), e.g. "ghcr.io" or "quay.io". */
+  pullSourceHost = signal<string>("");
+  /** Ad-hoc registry username (mode = "adhoc"). */
+  pullSourceUser = signal<string>("");
+  /** Ad-hoc registry password or token (mode = "adhoc"). */
+  pullSourcePass = signal<string>("");
 
   // ── Push state ─────────────────────────────────────────────────────────────
   pushing = signal<string | null>(null);
@@ -72,7 +102,7 @@ export class StagingComponent implements OnInit {
   pushModes = signal<Record<string, PushMode>>({});
   pushExtRegistryId = signal<Record<string, string>>({});
 
-  // ── External registries ────────────────────────────────────────────────────
+  // ── External registries (used for both pull source and push destination) ───
   externalRegistries = signal<ExternalRegistry[]>([]);
   readonly globalRegistries = computed(() =>
     this.externalRegistries().filter((r) => r.owner === "global"),
@@ -80,6 +110,29 @@ export class StagingComponent implements OnInit {
   readonly personalRegistries = computed(() =>
     this.externalRegistries().filter((r) => r.owner !== "global"),
   );
+
+  // ── Computed helpers ───────────────────────────────────────────────────────
+
+  /** True when the search panel should be visible (only for Docker Hub source). */
+  readonly showDockerHubSearch = computed(
+    () => this.pullSourceMode() === "dockerhub",
+  );
+
+  /** Display label for the currently selected pull source. */
+  readonly pullSourceLabel = computed(() => {
+    switch (this.pullSourceMode()) {
+      case "saved": {
+        const reg = this.externalRegistries().find(
+          (r) => r.id === this.pullSourceRegistryId(),
+        );
+        return reg ? `${reg.name} (${reg.host})` : "Saved registry";
+      }
+      case "adhoc":
+        return this.pullSourceHost() || "Custom registry";
+      default:
+        return "Docker Hub";
+    }
+  });
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
 
@@ -115,6 +168,24 @@ export class StagingComponent implements OnInit {
     });
   }
 
+  // ── Pull source mode ───────────────────────────────────────────────────────
+
+  /**
+   * Switch the pull source mode and reset related fields.
+   * Clears search results and available tags when leaving Docker Hub mode.
+   */
+  setPullSourceMode(mode: PullSourceMode): void {
+    this.pullSourceMode.set(mode);
+    this.pullSourceRegistryId.set("");
+    this.pullSourceHost.set("");
+    this.pullSourceUser.set("");
+    this.pullSourcePass.set("");
+    this.searchResults.set([]);
+    this.availableTags.set([]);
+    this.pullImage.set("");
+    this.pullTag.set("latest");
+  }
+
   // ── Docker Hub search ──────────────────────────────────────────────────────
 
   /**
@@ -146,20 +217,25 @@ export class StagingComponent implements OnInit {
   }
 
   /**
-   * Select an image from the search results dropdown.
+   * Select an image from the Docker Hub search results.
    * Clears the results list and immediately loads the available tags.
+   * Only active when pull source mode is "dockerhub".
    */
   selectImage(name: string): void {
     this.pullImage.set(name);
-    this.staging.getDockerHubTags(name).subscribe({
-      next: ({ tags }) => {
-        this.availableTags.set(tags);
-        if (tags.length > 0) {
-          this.pullTag.set(tags[0]);
-        }
-      },
-      error: () => this.availableTags.set([]),
-    });
+    this.searchResults.set([]);
+    // Tags are only fetched from Docker Hub; external registries require manual input
+    if (this.pullSourceMode() === "dockerhub") {
+      this.staging.getDockerHubTags(name).subscribe({
+        next: ({ tags }) => {
+          this.availableTags.set(tags);
+          if (tags.length > 0) {
+            this.pullTag.set(tags[0]);
+          }
+        },
+        error: () => this.availableTags.set([]),
+      });
+    }
   }
 
   // ── Pull ───────────────────────────────────────────────────────────────────
@@ -168,10 +244,24 @@ export class StagingComponent implements OnInit {
     if (!this.pullImage()) return;
     this.pulling.set(true);
 
+    const mode = this.pullSourceMode();
+
     this.staging
       .pullImage({
         image: this.pullImage(),
         tag: this.pullTag() || "latest",
+
+        // Source registry resolution
+        source_registry_id:
+          mode === "saved" ? this.pullSourceRegistryId() || null : null,
+        source_registry_host:
+          mode === "adhoc" ? this.pullSourceHost() || null : null,
+        source_registry_username:
+          mode === "adhoc" ? this.pullSourceUser() || null : null,
+        source_registry_password:
+          mode === "adhoc" ? this.pullSourcePass() || null : null,
+
+        // Vulnerability scan overrides
         vuln_scan_enabled_override: this.configService.vulnOverride()
           ? this.configService.vulnEnabled()
           : null,
@@ -352,40 +442,17 @@ export class StagingComponent implements OnInit {
   }
 
   /** Return the CVE count for a given severity level on a job. */
-  getVulnCount(job: StagingJob, severity: string): number {
-    return job.vuln_result?.counts[severity] ?? 0;
+  getCveCount(job: StagingJob, severity: string): number {
+    return job.vuln_result?.counts?.[severity] ?? 0;
   }
 
-  /** Return the Bootstrap badge CSS classes for a CVE severity level. */
-  getSeverityBadge(sev: string): string {
-    const map: Record<string, string> = {
-      CRITICAL: "badge bg-danger text-white",
-      HIGH: "badge bg-warning text-dark",
-      MEDIUM: "badge bg-info text-dark",
-      LOW: "badge bg-success text-white",
-      UNKNOWN: "badge bg-secondary text-white",
-    };
-    return map[sev] ?? "badge bg-secondary";
-  }
-
-  /** Return the Bootstrap table row CSS class for a CVE severity level. */
-  getCveRowClass(job: StagingJob, sev: string): string {
-    const blocking = job.vuln_result?.severities ?? [];
-    if (blocking.includes(sev)) {
-      return sev === "CRITICAL"
-        ? "table-danger"
-        : sev === "HIGH"
-          ? "table-warning"
-          : "";
-    }
-    return "";
-  }
-
-  /**
-   * Return true when the current user is an admin.
-   * Used in the template to conditionally show the owner badge on each job.
-   */
-  get isAdmin(): boolean {
-    return this.authService.currentUser()?.is_admin ?? false;
+  /** Return the icon emoji for a pull source registry host. */
+  sourceRegistryIcon(host: string | null | undefined): string {
+    if (!host) return "🐳"; // Docker Hub
+    if (host.includes("ghcr.io")) return "🐙";
+    if (host.includes("quay.io")) return "🔴";
+    if (host.includes("gcr.io") || host.includes("pkg.dev")) return "☁️";
+    if (host.includes("amazonaws.com")) return "🟠";
+    return "🏢";
   }
 }

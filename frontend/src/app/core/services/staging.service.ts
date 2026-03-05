@@ -1,10 +1,14 @@
 /**
  * Portalcrane - Staging Service
  * HTTP client for /api/staging endpoints.
- * Supports: pull pipeline, push (local + external registry), Docker Hub search and tags.
+ * Supports: pull pipeline (Docker Hub or any external registry), push
+ * (local + external registry), Docker Hub search and tags.
  *
- * Changes vs original:
- *  - StagingJob interface now includes the optional `owner` field returned by the backend.
+ * Changes:
+ *  - PullOptions now includes optional source registry fields:
+ *      source_registry_id, source_registry_host, source_registry_username,
+ *      source_registry_password.
+ *  - StagingJob interface now includes source_registry_host for display.
  */
 import { HttpClient } from "@angular/common/http";
 import { inject, Injectable } from "@angular/core";
@@ -61,6 +65,8 @@ export interface StagingJob {
   vuln_scan_enabled_override: boolean | null;
   vuln_severities_override: string | null;
   owner?: string;
+  /** Host of the source registry used for the pull (null = Docker Hub). */
+  source_registry_host?: string | null;
 }
 
 export interface DockerHubResult {
@@ -72,9 +78,27 @@ export interface DockerHubResult {
   is_automated: boolean;
 }
 
+/**
+ * Pull options sent to POST /api/staging/pull.
+ *
+ * Source resolution order (backend):
+ *   1. source_registry_id  → saved external registry (host + creds looked up server-side)
+ *   2. source_registry_host → ad-hoc registry with optional credentials
+ *   3. (default)            → Docker Hub using the user's saved Hub credentials
+ */
 export interface PullOptions {
   image: string;
   tag: string;
+
+  // ── Source registry (optional) ───────────────────────────────────────────
+  /** ID of a saved external registry to pull from. */
+  source_registry_id?: string | null;
+  /** Ad-hoc registry host (e.g. "ghcr.io", "quay.io", "registry.corp.com:5000"). */
+  source_registry_host?: string | null;
+  source_registry_username?: string | null;
+  source_registry_password?: string | null;
+
+  // ── Vulnerability scan overrides ─────────────────────────────────────────
   vuln_scan_enabled_override?: boolean | null;
   vuln_severities_override?: string | null;
 }
