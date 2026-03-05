@@ -14,16 +14,12 @@
   </div>
 
   <div class="card-body">
-    <!-- Global error -->
     @if (error()) {
     <div class="alert alert-danger d-flex align-items-center gap-2 py-2 mb-3">
       <i class="bi bi-exclamation-triangle-fill"></i>
       {{ error() }}
     </div>
-    }
-
-    <!-- Loading -->
-    @if (loading()) {
+    } @if (loading()) {
     <div class="d-flex align-items-center gap-2 text-muted">
       <span class="spinner-border spinner-border-sm"></span>
       Loading users…
@@ -114,31 +110,14 @@
               </label>
             </div>
           </div>
-          <div class="col-12">
-            <div class="d-flex flex-wrap gap-3">
-              <div class="form-check form-switch">
-                <input
-                  class="form-check-input"
-                  type="checkbox"
-                  id="newCanPull"
-                  [formField]="createForm.canPullImages"
-                />
-                <label class="form-check-label small" for="newCanPull">
-                  Can pull images
-                </label>
-              </div>
-              <div class="form-check form-switch">
-                <input
-                  class="form-check-input"
-                  type="checkbox"
-                  id="newCanPush"
-                  [formField]="createForm.canPushImages"
-                />
-                <label class="form-check-label small" for="newCanPush">
-                  Can push images
-                </label>
-              </div>
-            </div>
+        </div>
+
+        <!-- Info: permissions via folders -->
+        <div class="alert alert-info d-flex gap-2 py-2 small mt-3 mb-0">
+          <i class="bi bi-folder2 flex-shrink-0 mt-1"></i>
+          <div>
+            Pull and push permissions are granted in the
+            <strong>Folders</strong> tab after creating the user.
           </div>
         </div>
 
@@ -180,13 +159,13 @@
           <tr class="text-muted" style="font-size: 0.78rem">
             <th>Username</th>
             <th>Role</th>
-            <th>Permissions</th>
             <th>Created</th>
             <th class="text-end">Actions</th>
           </tr>
         </thead>
         <tbody>
           @for (user of users(); track user.id) {
+
           <!-- Normal row -->
           @if (editingId() !== user.id) {
           <tr>
@@ -217,19 +196,6 @@
                 <i class="bi bi-person me-1"></i>User
               </span>
               }
-            </td>
-            <td>
-              <div class="d-flex flex-wrap gap-1">
-                @if (user.can_pull_images) {
-                <span class="badge bg-info-subtle text-info">Pull</span>
-                } @if (user.can_push_images) {
-                <span class="badge bg-success-subtle text-success">Push</span>
-                } @if (!user.can_pull_images && !user.can_push_images) {
-                <span class="badge bg-body-secondary text-muted"
-                  >No image access</span
-                >
-                }
-              </div>
             </td>
             <td class="text-muted small">{{ formatDate(user.created_at) }}</td>
             <td class="text-end">
@@ -267,7 +233,7 @@
           <!-- Inline edit row -->
           @if (editingId() === user.id) {
           <tr class="table-active">
-            <td colspan="5">
+            <td colspan="4">
               <div class="p-2">
                 <div class="fw-semibold small mb-2">
                   <i class="bi bi-pencil-fill me-1 text-primary"></i>
@@ -326,44 +292,15 @@
                       </label>
                     </div>
                   </div>
-                  <div class="col-md-4">
-                    <div class="d-flex flex-column gap-1">
-                      <div class="form-check form-switch">
-                        <input
-                          class="form-check-input"
-                          type="checkbox"
-                          [id]="'editPull_' + user.id"
-                          [formField]="updateForm.canPullImages"
-                        />
-                        <label
-                          class="form-check-label small"
-                          [for]="'editPull_' + user.id"
-                          >Can pull images</label
-                        >
-                      </div>
-                      <div class="form-check form-switch">
-                        <input
-                          class="form-check-input"
-                          type="checkbox"
-                          [id]="'editPush_' + user.id"
-                          [formField]="updateForm.canPushImages"
-                        />
-                        <label
-                          class="form-check-label small"
-                          [for]="'editPush_' + user.id"
-                          >Can push images</label
-                        >
-                      </div>
-                    </div>
-                  </div>
+
                   <!-- Buttons -->
-                  <div class="col-md-12 d-flex gap-2 justify-content-end">
+                  <div class="col-md-4 d-flex gap-2 justify-content-end">
                     <button
                       class="btn btn-primary btn-sm d-flex align-items-center gap-1"
                       (click)="saveEdit(user.id)"
-                      [disabled]="!updateForm().valid()"
+                      [disabled]="saving()"
                     >
-                      @if (updateForm().submitting()) {
+                      @if (saving()) {
                       <span class="spinner-border spinner-border-sm"></span>
                       } @else {
                       <i class="bi bi-floppy-fill"></i>
@@ -372,7 +309,7 @@
                     <button
                       class="btn btn-outline-secondary btn-sm"
                       (click)="cancelEdit()"
-                      [disabled]="!updateForm().valid()"
+                      [disabled]="saving()"
                     >
                       Cancel
                     </button>
@@ -391,10 +328,12 @@
     <div class="alert alert-info d-flex gap-2 mt-3 py-2 small">
       <i class="bi bi-lightbulb-fill flex-shrink-0 mt-1"></i>
       <div>
-        The <strong>ENV</strong> account is defined via the
-        <code>ADMIN_USERNAME</code> / <code>ADMIN_PASSWORD</code> environment
-        variables and cannot be modified here. Additional users are stored in
-        <code>/var/lib/portalcrane/local_users.json</code>.
+        The <strong>ENV</strong> account is defined via
+        <code>ADMIN_USERNAME</code> / <code>ADMIN_PASSWORD</code> and cannot be
+        modified here. Pull and push permissions are managed in the
+        <strong>Folders</strong> tab — the special folder
+        <code>__root__</code> controls access to images with no namespace
+        prefix.
       </div>
     </div>
 

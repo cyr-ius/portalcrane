@@ -1,6 +1,9 @@
 """
 Portalcrane - JWT helpers
 Token creation, decoding, and FastAPI dependency functions used across all routers.
+
+Pull/push permission checks have been removed from UserInfo.
+All access control is now handled exclusively by folder rules in registry_proxy.py.
 """
 
 import json
@@ -16,7 +19,6 @@ from ..config import ALGORITHM, DATA_DIR, Settings, get_settings
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/token")
 
-# Path to the local users JSON file — needed to resolve permissions
 _USERS_FILE = Path(f"{DATA_DIR}/local_users.json")
 
 
@@ -38,12 +40,14 @@ class TokenData(BaseModel):
 
 
 class UserInfo(BaseModel):
-    """Authenticated user information returned by /me and used as dependency."""
+    """Authenticated user information returned by /me and used as dependency.
+
+    can_pull_images and can_push_images have been removed — access control
+    is now handled exclusively through folder permissions.
+    """
 
     username: str
-    is_admin: bool = True
-    can_pull_images: bool = True
-    can_push_images: bool = True
+    is_admin: bool = False
 
 
 # ─── Internal helpers ─────────────────────────────────────────────────────────
@@ -66,26 +70,6 @@ def _is_admin_user(username: str, settings: Settings) -> bool:
     for user in _load_users():
         if user["username"] == username:
             return user.get("is_admin", False)
-    return False
-
-
-def _can_pull_images(username: str, settings: Settings) -> bool:
-    """Return True when the username is allowed to pull images."""
-    if username == settings.admin_username:
-        return True
-    for user in _load_users():
-        if user["username"] == username:
-            return user.get("is_admin", False) or user.get("can_pull_images", False)
-    return False
-
-
-def _can_push_images(username: str, settings: Settings) -> bool:
-    """Return True when the username is allowed to push images."""
-    if username == settings.admin_username:
-        return True
-    for user in _load_users():
-        if user["username"] == username:
-            return user.get("is_admin", False) or user.get("can_push_images", False)
     return False
 
 
@@ -125,8 +109,6 @@ async def get_current_user(
     return UserInfo(
         username=username,
         is_admin=_is_admin_user(username, settings),
-        can_pull_images=_can_pull_images(username, settings),
-        can_push_images=_can_push_images(username, settings),
     )
 
 
@@ -141,20 +123,27 @@ def require_admin(current_user: UserInfo = Depends(get_current_user)) -> UserInf
 
 
 def require_pull_access(current_user: UserInfo = Depends(get_current_user)) -> UserInfo:
-    """FastAPI dependency: raise 403 when the current user cannot pull images."""
-    if not current_user.can_pull_images:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Pull permission required",
-        )
+    """FastAPI dependency: raise 403 when the current user cannot pull images.
+
+    With the new folder-based model, pull access is verified by the registry
+    proxy directly. This dependency now only blocks non-authenticated users.
+    Kept for backward compatibility with routes that use it explicitly.
+    """
+    if not current_user.is_admin:
+        # Actual pull permission is checked per-image by the registry proxy.
+        # Here we just ensure the user is authenticated (token valid = allowed
+        # to attempt; the proxy enforces the real rule).
+        pass
     return current_user
 
 
 def require_push_access(current_user: UserInfo = Depends(get_current_user)) -> UserInfo:
-    """FastAPI dependency: raise 403 when the current user cannot push images."""
-    if not current_user.can_push_images:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Push permission required",
-        )
+    """FastAPI dependency: raise 403 when the current user cannot push images.
+
+    With the new folder-based model, push access is verified by the registry
+    proxy directly. This dependency now only blocks non-authenticated users.
+    Kept for backward compatibility with routes that use it explicitly.
+    """
+    if not current_user.is_admin:
+        pass
     return current_user

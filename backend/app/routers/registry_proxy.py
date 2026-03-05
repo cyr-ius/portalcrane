@@ -14,7 +14,7 @@ from fastapi import APIRouter, Request, Response, status
 from jose import JWTError, jwt
 
 from ..config import ALGORITHM, PROXY_TIMEOUT, REGISTRY_URL, get_settings
-from ..core.jwt import _can_pull_images, _is_admin_user
+from ..core.jwt import _is_admin_user
 from ..core.security import verify_user
 from ..routers.folders import check_folder_access
 from ..services.audit_service import AuditService
@@ -138,9 +138,20 @@ def _client_ip(request: Request) -> str:
 async def _authorize_registry_proxy(
     request: Request, method: str, v2_path: str = ""
 ) -> Response | None:
-    """Authorize an incoming registry request.
+    """
+    Authorize an incoming registry request.
 
-    Returns None when access is granted, or a Response (401/403) to abort.
+    Decision flow:
+    1. Auth disabled globally → allow.
+    2. No credentials → 401.
+    3. Invalid credentials → 401.
+    4. Admin user → allow.
+    5. Folder check (includes __root__ fallback):
+       - True  → allow.
+       - False → 403.
+       - None  → __root__ not configured → deny push, deny pull (fail-secure).
+
+    Returns None when access is granted, a Response (401/403) to abort.
     """
     if not settings.registry_proxy_auth_enabled:
         return None
@@ -166,31 +177,30 @@ async def _authorize_registry_proxy(
 
     await audit.log(subject="registry_authorize", status=status.HTTP_200_OK)
 
+    # Admins bypass all folder checks
     if _is_admin_user(username, settings):
         return None
 
     is_pull = method in _PULL_METHODS
-    is_push = method in _PUSH_METHODS
     image_path = _extract_image_path(v2_path)
     folder_result = check_folder_access(username, image_path, is_pull=is_pull)
 
-    if folder_result is not None:
-        if not folder_result:
-            action = "pull" if is_pull else "push"
-            return await _forbidden_response(
-                f"Folder access denied: {action} permission required"
-            )
-        return None
+    if folder_result is True:
+        return None  # Explicitly granted by a folder rule
 
-    if is_push:
+    if folder_result is False:
+        action = "pull" if is_pull else "push"
         return await _forbidden_response(
-            "Push to root namespace is restricted to administrators"
+            f"Folder access denied: {action} permission required"
         )
 
-    if is_pull and not _can_pull_images(username, settings):
-        return await _forbidden_response("Pull permission required")
-
-    return None
+    # folder_result is None → __root__ not configured
+    # Fail-secure: deny everything rather than accidentally opening access
+    action = "pull" if is_pull else "push"
+    return await _forbidden_response(
+        f"Access denied: no folder rule applies for this image "
+        f"(configure __root__ to grant {action} access)"
+    )
 
 
 # ─── Core proxy ───────────────────────────────────────────────────────────────

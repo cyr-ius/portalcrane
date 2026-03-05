@@ -1,11 +1,5 @@
 import { HttpClient } from "@angular/common/http";
-import {
-  ChangeDetectionStrategy,
-  Component,
-  inject,
-  OnInit,
-  signal,
-} from "@angular/core";
+import { Component, inject, OnInit, signal } from "@angular/core";
 import {
   form,
   FormField,
@@ -15,13 +9,14 @@ import {
 } from "@angular/forms/signals";
 import { firstValueFrom } from "rxjs";
 
-/** Local user as returned by the API. */
+/** Local user as returned by the API.
+ * Pull/push permissions have been removed from the user model —
+ * they are now managed exclusively through folder permissions.
+ */
 export interface LocalUser {
   id: string;
   username: string;
   is_admin: boolean;
-  can_pull_images: boolean;
-  can_push_images: boolean;
   created_at: string;
 }
 
@@ -46,7 +41,6 @@ export class AccountsConfigPanel implements OnInit {
   readonly createError = signal<string | null>(null);
 
   // ── Edit state ─────────────────────────────────────────────────────────────
-  /** ID of the user currently being edited (null = none). */
   readonly editingId = signal<string | null>(null);
   readonly showEditPassword = signal(false);
   readonly saving = signal(false);
@@ -55,12 +49,11 @@ export class AccountsConfigPanel implements OnInit {
   // ── Delete state ───────────────────────────────────────────────────────────
   readonly deletingId = signal<string | null>(null);
 
+  // ── Create form model (username, password, isAdmin only) ──────────────────
   createModel = signal({
     username: "",
     password: "",
     isAdmin: false,
-    canPullImages: false,
-    canPushImages: false,
   });
   createModelOrig = structuredClone(this.createModel());
   createForm = form(this.createModel, (p) => {
@@ -71,11 +64,10 @@ export class AccountsConfigPanel implements OnInit {
     });
   });
 
+  // ── Update form model (password, isAdmin only) ────────────────────────────
   updateModel = signal({
     password: "",
     isAdmin: false,
-    canPullImages: false,
-    canPushImages: false,
   });
   updateModelOrig = structuredClone(this.updateModel());
   updateForm = form(this.updateModel, (p) => {
@@ -131,8 +123,7 @@ export class AccountsConfigPanel implements OnInit {
             username: formData.username.trim(),
             password: formData.password,
             is_admin: formData.isAdmin,
-            can_pull_images: formData.canPullImages,
-            can_push_images: formData.canPushImages,
+            // Pull/push permissions are granted via the Folders tab
           }),
         );
         this.users.update((list) => [...list, user]);
@@ -150,8 +141,6 @@ export class AccountsConfigPanel implements OnInit {
     this.updateModel.set({
       password: "",
       isAdmin: user.is_admin,
-      canPullImages: user.can_pull_images,
-      canPushImages: user.can_push_images,
     });
     this.editingId.set(user.id);
     this.showEditPassword.set(false);
@@ -170,18 +159,16 @@ export class AccountsConfigPanel implements OnInit {
     submit(this.updateForm, async (form) => {
       const formData = form().value();
 
-      if (formData.password.length > 0) {
-        if (formData.password.length < 8) {
-          this.saveError.set("Password must be at least 8 characters");
-          return;
-        }
+      if (formData.password.length > 0 && formData.password.length < 8) {
+        this.saveError.set("Password must be at least 8 characters");
+        this.saving.set(false);
+        return;
       }
 
       const body = {
         password: formData.password ? formData.password : null,
         is_admin: formData.isAdmin,
-        can_pull_images: formData.canPullImages,
-        can_push_images: formData.canPushImages,
+        // Pull/push permissions are managed via folder rules
       };
 
       try {

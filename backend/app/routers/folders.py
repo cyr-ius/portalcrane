@@ -7,9 +7,13 @@ Example: folder "production" → images pushed as production/my-image:tag
 
 Access rules:
 - Admin users always have full access to all folders.
-- For non-admin users, folder permissions take priority over global permissions.
-- A user without an explicit folder entry is denied, even if can_pull_images=True globally.
-- Images pushed without a folder prefix are only allowed for admin users.
+- All access decisions for non-admin users go through folder permissions only.
+- The special __root__ folder covers:
+    * images with no path prefix       (e.g. "nginx")
+    * images whose prefix is unknown   (e.g. "editeur/nginx" when no folder
+      named "editeur" exists)
+    * only the FIRST segment matters   ("production/editeur/image" → "production")
+- A user without an explicit entry in the matched folder is always denied.
 """
 
 import json
@@ -23,11 +27,12 @@ from pydantic import BaseModel, field_validator
 from ..config import DATA_DIR
 from ..core.jwt import get_current_user, UserInfo, require_admin
 
-
 router = APIRouter()
 
-# Persistent storage for folders
 _FOLDERS_FILE = Path(f"{DATA_DIR}/folders.json")
+
+# Reserved name for the catch-all folder
+ROOT_FOLDER_NAME = "__root__"
 
 
 # ─── Models ──────────────────────────────────────────────────────────────────
@@ -128,38 +133,95 @@ def _dict_to_folder(d: dict) -> Folder:
     )
 
 
-# ─── Public helper used by registry_proxy ────────────────────────────────────
+# ─── Migration helper ─────────────────────────────────────────────────────────
+
+
+def migrate_root_folder(users: list[dict]) -> None:
+    """
+    One-time migration: create the __root__ folder and populate it from the
+    legacy can_pull_images / can_push_images flags stored on each user account.
+
+    Called at application startup via main.py lifespan.
+    Safe to call multiple times — does nothing when __root__ already exists.
+    """
+    folders = _load_folders()
+
+    if any(f["name"] == ROOT_FOLDER_NAME for f in folders):
+        return  # Already migrated
+
+    perms: list[dict] = []
+    for user in users:
+        if user.get("is_admin"):
+            continue  # Admins bypass all folder checks, skip them
+        can_pull = user.get("can_pull_images", False)
+        can_push = user.get("can_push_images", False)
+        if can_pull or can_push:
+            perms.append(
+                {
+                    "username": user["username"],
+                    "can_pull": can_pull,
+                    "can_push": can_push,
+                }
+            )
+
+    root_entry = {
+        "id": str(uuid.uuid4()),
+        "name": ROOT_FOLDER_NAME,
+        "description": "Default folder — covers images with no known namespace prefix",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "permissions": perms,
+    }
+    folders.append(root_entry)
+    _save_folders(folders)
+
+
+# ─── Public helpers used by registry_proxy and registry routers ───────────────
 
 
 def get_folder_for_path(image_path: str) -> dict | None:
     """
-    Return the folder dict whose name matches the first path segment of image_path.
-    Returns None if no folder matches (image has no folder prefix).
-    Example: "production/nginx" → looks for folder named "production".
+    Return the folder dict that governs access to image_path.
+
+    Resolution order:
+    1. If image_path contains '/', extract the first segment and look for
+       an exact folder name match.
+    2. If no explicit folder matches (unknown prefix) or there is no '/',
+       fall back to the __root__ folder.
+    3. Return None only when __root__ itself is not configured.
+
+    Examples:
+        "nginx"                    → no slash          → __root__
+        "editeur/nginx"            → "editeur" unknown → __root__
+        "production/nginx"         → folder "production"
+        "production/editeur/image" → folder "production"
     """
-    if not image_path or "/" not in image_path:
-        return None
-    prefix = image_path.split("/")[0]
-    for folder in _load_folders():
-        if folder["name"] == prefix:
+    folders = _load_folders()
+
+    if image_path and "/" in image_path:
+        prefix = image_path.split("/")[0]
+        for folder in folders:
+            if folder["name"] == prefix:
+                return folder
+
+    # No explicit folder matched — fall back to __root__
+    for folder in folders:
+        if folder["name"] == ROOT_FOLDER_NAME:
             return folder
-    return None
+
+    return None  # __root__ not configured — no rule applies
 
 
 def check_folder_access(username: str, image_path: str, is_pull: bool) -> bool | None:
     """
-    Check whether a user is allowed to pull or push an image path.
+    Check whether username is allowed to pull or push image_path.
 
     Returns:
         True  — access granted by folder rules
         False — access denied by folder rules
-        None  — no folder applies, caller should fall back to global rules
-                (only relevant for pull on paths without folder; push without
-                 folder is always denied for non-admins by the proxy layer)
+        None  — no folder rule applies at all (__root__ not configured)
     """
     folder = get_folder_for_path(image_path)
     if folder is None:
-        # No folder prefix — return None so the proxy can apply its own logic
         return None
 
     for perm in folder.get("permissions", []):
@@ -168,7 +230,7 @@ def check_folder_access(username: str, image_path: str, is_pull: bool) -> bool |
                 perm.get("can_pull", False) if is_pull else perm.get("can_push", False)
             )
 
-    # User has no explicit entry in this folder → denied
+    # User has no explicit entry in the matched folder → denied
     return False
 
 
@@ -188,13 +250,11 @@ async def create_folder(
 ) -> Folder:
     """Create a new folder. Requires admin."""
     folders = _load_folders()
-
     if any(f["name"] == payload.name for f in folders):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Folder '{payload.name}' already exists",
         )
-
     entry = {
         "id": str(uuid.uuid4()),
         "name": payload.name,
@@ -246,10 +306,7 @@ async def set_permission(
     payload: SetPermissionRequest,
     _: UserInfo = Depends(require_admin),
 ) -> Folder:
-    """
-    Set or update a user's pull/push permissions on a folder.
-    Creates the entry if it does not exist. Requires admin.
-    """
+    """Set or update a user's pull/push permissions on a folder. Requires admin."""
     folders = _load_folders()
     for f in folders:
         if f["id"] == folder_id:
@@ -260,7 +317,6 @@ async def set_permission(
                     p["can_push"] = payload.can_push
                     _save_folders(folders)
                     return _dict_to_folder(f)
-            # New permission entry
             perms.append(
                 {
                     "username": payload.username,
@@ -311,12 +367,14 @@ async def list_my_folders(
     """
     Return folder names the current user can pull from.
     Admins receive an empty list meaning 'all folders allowed'.
+    __root__ is excluded — it is implicit and has no display name in the UI.
     """
     if current_user.is_admin:
-        return []  # Empty = no restriction for admin
-
+        return []
     allowed: list[str] = []
     for folder in _load_folders():
+        if folder["name"] == ROOT_FOLDER_NAME:
+            continue
         for perm in folder.get("permissions", []):
             if perm["username"] == current_user.username and perm.get("can_pull"):
                 allowed.append(folder["name"])
@@ -328,12 +386,17 @@ async def list_my_folders(
 async def list_pushable_folders(
     current_user: UserInfo = Depends(get_current_user),
 ) -> list[str]:
-    """Return folder names the user can push to. Empty = admin (all allowed)."""
+    """
+    Return folder names the user can push to.
+    Empty list means admin (all folders allowed).
+    __root__ is excluded — pushing to root namespace has no folder prefix.
+    """
     if current_user.is_admin:
-        return []  # Admin: handled client-side (show all folders)
-
+        return []
     allowed: list[str] = []
     for folder in _load_folders():
+        if folder["name"] == ROOT_FOLDER_NAME:
+            continue
         for perm in folder.get("permissions", []):
             if perm["username"] == current_user.username and perm.get("can_push"):
                 allowed.append(folder["name"])
