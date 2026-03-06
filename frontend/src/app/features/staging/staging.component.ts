@@ -221,17 +221,17 @@ export class StagingComponent implements OnInit {
    */
   selectImage(name: string): void {
     this.pullImage.set(name);
-    this.searchResults.set([]);
+    // Do NOT clear searchResults — the list must remain displayed
     // Tags are only fetched from Docker Hub; external registries require manual input
     if (this.pullSourceMode() === "dockerhub") {
       this.staging.getDockerHubTags(name).subscribe({
         next: ({ tags }) => {
           this.availableTags.set(tags);
-          if (tags.length > 0) {
-            this.pullTag.set(tags[0]);
-          }
-        },
-        error: () => this.availableTags.set([]),
+            if (tags.length > 0) {
+              this.pullTag.set(tags[0]);
+            }
+         },
+         error: () => this.availableTags.set([]),
       });
     }
   }
