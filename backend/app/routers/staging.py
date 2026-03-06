@@ -14,6 +14,7 @@ import logging
 import os
 import shutil
 import uuid
+from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 
@@ -76,10 +77,9 @@ class StagingJob(BaseModel):
     error: str | None = None
     vuln_scan_enabled_override: bool | None = None
     vuln_severities_override: str | None = None
-    # Username of the user who created this job (used for per-user filtering)
     owner: str = ""
-    # Source registry information stored for display purposes
     source_registry_host: str | None = None
+    created_at: str = ""
 
 
 class PullRequest(BaseModel):
@@ -586,10 +586,9 @@ async def pull_image(
         "error": None,
         "vuln_scan_enabled_override": request.vuln_scan_enabled_override,
         "vuln_severities_override": request.vuln_severities_override,
-        # Tag the job with the requesting user so the list can be filtered per user
         "owner": current_user.username,
-        # Store the resolved source host for display in the job list
         "source_registry_host": display_host,
+        "created_at": datetime.now(timezone.utc).isoformat()
     }
     background_tasks.add_task(
         run_pull_pipeline,
