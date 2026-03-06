@@ -65,8 +65,8 @@ export interface StagingJob {
   vuln_scan_enabled_override: boolean | null;
   vuln_severities_override: string | null;
   owner?: string;
-  /** Host of the source registry used for the pull (null = Docker Hub). */
   source_registry_host?: string | null;
+  created_at?: string | null;
 }
 
 export interface DockerHubResult {
@@ -91,9 +91,7 @@ export interface PullOptions {
   tag: string;
 
   // ── Source registry (optional) ───────────────────────────────────────────
-  /** ID of a saved external registry to pull from. */
   source_registry_id?: string | null;
-  /** Ad-hoc registry host (e.g. "ghcr.io", "quay.io", "registry.corp.com:5000"). */
   source_registry_host?: string | null;
   source_registry_username?: string | null;
   source_registry_password?: string | null;
@@ -110,15 +108,10 @@ export interface PullOptions {
  */
 export interface PushOptions {
   job_id: string;
-  /** Optional rename (image name only, no host/folder). */
   target_image?: string | null;
-  /** Optional retag. */
   target_tag?: string | null;
-  /** Optional folder prefix, e.g. "infra" or "app/backend". */
   folder?: string | null;
-  /** ID of a saved external registry — mutually exclusive with host. */
   external_registry_id?: string | null;
-  /** Ad-hoc external registry host — used when not saved. */
   external_registry_host?: string | null;
   external_registry_username?: string | null;
   external_registry_password?: string | null;
@@ -256,11 +249,17 @@ export class StagingService {
   // ── Utilities ─────────────────────────────────────────────────────────────
 
   /** Sort jobs so active ones appear at the top, then preserve backend order. */
-  static sortJobs(jobs: StagingJob[]): StagingJob[] {
-    return [...jobs].sort((a, b) => {
-      const aActive = ACTIVE_STATUSES.includes(a.status) ? 0 : 1;
-      const bActive = ACTIVE_STATUSES.includes(b.status) ? 0 : 1;
-      return aActive - bActive;
-    });
-  }
+   static sortJobs(jobs: StagingJob[]): StagingJob[] {
+     return [...jobs].sort((a, b) => {
+       // Active jobs bubble to the top
+       const aActive = ACTIVE_STATUSES.includes(a.status) ? 0 : 1;
+       const bActive = ACTIVE_STATUSES.includes(b.status) ? 0 : 1;
+       if (aActive !== bActive) return aActive - bActive;
+
+       // Within the same group: newest first
+       const aTime = a.created_at ? new Date(a.created_at).getTime() : 0;
+       const bTime = b.created_at ? new Date(b.created_at).getTime() : 0;
+       return bTime - aTime;
+     });
+   }
 }
