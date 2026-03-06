@@ -1,5 +1,12 @@
 <!-- Portalcrane - Staging Component Template -->
 <!-- Angular 21: @if / @for control flow, [value]/(input) signal bindings, no *ngIf / *ngFor -->
+<!--
+  Changes applied vs previous version:
+  - FIX 1: Jobs sorted newest-first (handled in staging.service.ts sortJobs)
+  - FIX 2: scan_vulnerable → push panel hidden, CVE table displayed instead
+  - FIX 3: Search results stay visible after image selection (selectImage fix in .ts)
+  - FIX 4: Delete button uses bi-x-lg (cross icon) instead of bi-trash
+-->
 <div class="p-4">
   <!-- ── Page header ─────────────────────────────────────────────────────── -->
   <div class="d-flex align-items-center justify-content-between mb-4">
@@ -43,10 +50,10 @@
               title="{{
                 externalRegistries().length === 0
                   ? 'No saved registries — add one in Settings'
-                  : ''
+                  : 'Pull from a saved registry'
               }}"
             >
-              🏢 Saved registry
+              <i class="bi bi-hdd-network me-1"></i>Saved registry
             </button>
             <button
               type="button"
@@ -55,21 +62,14 @@
               [class.btn-outline-secondary]="pullSourceMode() !== 'adhoc'"
               (click)="setPullSourceMode('adhoc')"
             >
-              ⚡ Custom
+              <i class="bi bi-pencil me-1"></i>Custom
             </button>
           </div>
 
           <!-- Saved registry selector -->
-          @if (pullSourceMode() === "saved") {
-            <div class="mb-2">
+          @if (pullSourceMode() === 'saved') {
+            <div class="mb-3">
               <label class="form-label small fw-semibold">Registry</label>
-              @if (globalRegistries().length > 0) {
-                <optgroup label="🌐 Global">
-                  @for (reg of globalRegistries(); track reg.id) {
-                    <!-- rendered inside the select below -->
-                  }
-                </optgroup>
-              }
               <select
                 class="form-select form-select-sm"
                 [value]="pullSourceRegistryId()"
@@ -77,71 +77,52 @@
               >
                 <option value="">— Select a registry —</option>
                 @if (globalRegistries().length > 0) {
-                  <optgroup label="🌐 Global registries">
-                    @for (reg of globalRegistries(); track reg.id) {
-                      <option [value]="reg.id">
-                        {{ reg.name }} ({{ reg.host }})
-                      </option>
-                    }
-                  </optgroup>
+                  @for (reg of globalRegistries(); track reg.id) {
+                    <option [value]="reg.id">
+                      {{ reg.name }} ({{ reg.host }})
+                    </option>
+                  }
                 }
                 @if (personalRegistries().length > 0) {
-                  <optgroup label="👤 My registries">
-                    @for (reg of personalRegistries(); track reg.id) {
-                      <option [value]="reg.id">
-                        {{ reg.name }} ({{ reg.host }})
-                      </option>
-                    }
-                  </optgroup>
+                  @for (reg of personalRegistries(); track reg.id) {
+                    <option [value]="reg.id">
+                      {{ reg.name }} ({{ reg.host }})
+                    </option>
+                  }
                 }
               </select>
-              <div class="form-text">
-                Credentials are retrieved from the saved registry configuration.
-              </div>
             </div>
           }
 
           <!-- Ad-hoc registry fields -->
-          @if (pullSourceMode() === "adhoc") {
-            <div class="row g-2">
-              <div class="col-12">
-                <label class="form-label small fw-semibold"
-                  >Registry host</label
-                >
-                <input
-                  type="text"
-                  class="form-control form-control-sm"
-                  placeholder="ghcr.io, quay.io, registry.mycompany.com:5000…"
-                  [value]="pullSourceHost()"
-                  (input)="pullSourceHost.set($any($event.target).value)"
-                />
-              </div>
-              <div class="col-6">
-                <label class="form-label small fw-semibold">Username</label>
-                <input
-                  type="text"
-                  class="form-control form-control-sm"
-                  placeholder="(optional)"
-                  [value]="pullSourceUser()"
-                  (input)="pullSourceUser.set($any($event.target).value)"
-                />
-              </div>
-              <div class="col-6">
-                <label class="form-label small fw-semibold"
-                  >Password / token</label
-                >
-                <input
-                  type="password"
-                  class="form-control form-control-sm"
-                  placeholder="(optional)"
-                  [value]="pullSourcePass()"
-                  (input)="pullSourcePass.set($any($event.target).value)"
-                />
-              </div>
-              <div class="col-12">
-                <div class="form-text">
-                  <i class="bi bi-info-circle me-1"></i>
-                  Use a Personal Access Token (PAT) instead of your password.
+          @if (pullSourceMode() === 'adhoc') {
+            <div class="mb-3">
+              <label class="form-label small fw-semibold">Registry host</label>
+              <input
+                type="text"
+                class="form-control form-control-sm font-monospace mb-2"
+                placeholder="e.g. ghcr.io, quay.io, registry.example.com:5000"
+                [value]="pullSourceHost()"
+                (input)="pullSourceHost.set($any($event.target).value)"
+              />
+              <div class="row g-2">
+                <div class="col-6">
+                  <input
+                    type="text"
+                    class="form-control form-control-sm"
+                    placeholder="Username (optional)"
+                    [value]="pullSourceUser()"
+                    (input)="pullSourceUser.set($any($event.target).value)"
+                  />
+                </div>
+                <div class="col-6">
+                  <input
+                    type="password"
+                    class="form-control form-control-sm"
+                    placeholder="Password (optional)"
+                    [value]="pullSourcePass()"
+                    (input)="pullSourcePass.set($any($event.target).value)"
+                  />
                 </div>
               </div>
             </div>
@@ -197,6 +178,7 @@
             </div>
 
             <!-- Search results list -->
+            <!-- FIX 3: list stays visible after image selection -->
             @if (searchResults().length > 0) {
               <div class="search-results-list">
                 @for (result of searchResults(); track result.name) {
@@ -412,10 +394,12 @@
               started.
             </div>
           } @else {
+            <!-- FIX 1: jobs are sorted newest-first via StagingService.sortJobs() -->
             <div class="job-list p-3 d-flex flex-column gap-3">
               @for (job of jobs(); track job.job_id) {
                 <div class="job-card rounded-3 p-3">
-                  <!-- Job header: image name + status badge -->
+
+                  <!-- Job header: image name + status badge + delete button -->
                   <div
                     class="d-flex align-items-start justify-content-between gap-2 mb-2"
                   >
@@ -438,12 +422,15 @@
                       <span [class]="getStatusBadgeClass(job.status)">{{
                         job.status
                       }}</span>
+                      <!-- FIX 4: cross icon (bi-x-lg) replaces bi-trash -->
                       <button
-                        class="btn btn-sm btn-outline-danger"
+                        class="btn btn-sm btn-outline-danger p-0"
+                        style="width: 1.6rem; height: 1.6rem; line-height: 1"
                         (click)="deleteJob(job.job_id)"
                         title="Delete job"
+                        type="button"
                       >
-                        <i class="bi bi-trash"></i>
+                        <i class="bi bi-x-lg"></i>
                       </button>
                     </div>
                   </div>
@@ -472,120 +459,180 @@
                   <!-- Message -->
                   <div class="text-muted small mb-2">{{ job.message }}</div>
 
-                  <!-- CVE counts (scan_vulnerable) -->
+                  <!-- FIX 2: scan_vulnerable → CVE table replaces push panel -->
                   @if (job.status === "scan_vulnerable" && job.vuln_result) {
-                    <div class="d-flex gap-1 flex-wrap mb-2">
-                      @for (
-                        sev of ["CRITICAL", "HIGH", "MEDIUM", "LOW"];
-                        track sev
-                      ) {
-                        @if (getCveCount(job, sev) > 0) {
-                          <span
-                            class="badge"
-                            [class.bg-danger]="sev === 'CRITICAL'"
-                            [class.bg-warning]="sev === 'HIGH'"
-                            [class.text-dark]="sev === 'HIGH'"
-                            [class.bg-secondary]="
-                              sev === 'MEDIUM' || sev === 'LOW'
-                            "
-                          >
-                            {{ sev }}: {{ getCveCount(job, sev) }}
-                          </span>
+                    <div class="mt-2 pt-2 border-top">
+                      <!-- Header: blocked notice + severity badges -->
+                      <div
+                        class="d-flex align-items-center gap-2 flex-wrap mb-2"
+                      >
+                        <span class="small fw-semibold text-danger">
+                          <i class="bi bi-shield-x me-1"></i>Vulnerabilities
+                          detected — push blocked
+                        </span>
+                        @for (
+                          sev of ["CRITICAL", "HIGH", "MEDIUM", "LOW"];
+                          track sev
+                        ) {
+                          @if (getCveCount(job, sev) > 0) {
+                            <span
+                              class="badge"
+                              [class.bg-danger]="sev === 'CRITICAL'"
+                              [class.bg-warning]="sev === 'HIGH'"
+                              [class.text-dark]="sev === 'HIGH'"
+                              [class.bg-secondary]="
+                                sev === 'MEDIUM' || sev === 'LOW'
+                              "
+                            >
+                              {{ sev }}: {{ getCveCount(job, sev) }}
+                            </span>
+                          }
                         }
+                      </div>
+
+                      <!-- CVE detail table -->
+                      @if (
+                        job.vuln_result.vulnerabilities &&
+                        job.vuln_result.vulnerabilities.length > 0
+                      ) {
+                        <div
+                          class="table-responsive"
+                          style="max-height: 260px; overflow-y: auto"
+                        >
+                          <table
+                            class="table table-sm table-hover mb-0"
+                            style="font-size: 0.75rem"
+                          >
+                            <thead class="sticky-top table-light">
+                              <tr>
+                                <th>CVE ID</th>
+                                <th>Sev.</th>
+                                <th>Package</th>
+                                <th>Installed</th>
+                                <th>Fixed</th>
+                                <th>CVSS</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              @for (
+                                vuln of job.vuln_result.vulnerabilities;
+                                track vuln.id
+                              ) {
+                                <tr>
+                                  <td>
+                                    <a
+                                      [href]="
+                                        'https://nvd.nist.gov/vuln/detail/' +
+                                        vuln.id
+                                      "
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      class="text-decoration-none font-monospace"
+                                      style="font-size: 0.72rem"
+                                      >{{ vuln.id }}</a
+                                    >
+                                  </td>
+                                  <td>
+                                    <span
+                                      class="badge"
+                                      [class.bg-danger]="
+                                        vuln.severity === 'CRITICAL'
+                                      "
+                                      [class.bg-warning]="
+                                        vuln.severity === 'HIGH'
+                                      "
+                                      [class.text-dark]="
+                                        vuln.severity === 'HIGH'
+                                      "
+                                      [class.bg-secondary]="
+                                        vuln.severity === 'MEDIUM' ||
+                                        vuln.severity === 'LOW'
+                                      "
+                                      style="font-size: 0.65rem"
+                                      >{{ vuln.severity }}</span
+                                    >
+                                  </td>
+                                  <td class="font-monospace">
+                                    {{ vuln.package }}
+                                  </td>
+                                  <td>{{ vuln.installed_version }}</td>
+                                  <td>{{ vuln.fixed_version ?? "—" }}</td>
+                                  <td>{{ vuln.cvss_score ?? "—" }}</td>
+                                </tr>
+                              }
+                            </tbody>
+                          </table>
+                        </div>
                       }
                     </div>
                   }
 
-                  <!-- Push panel (visible when scan is clean or skipped) -->
+                  <!-- Push panel — only when scan passed or was skipped -->
+                  <!-- FIX 2: scan_vulnerable intentionally excluded -->
                   @if (
                     job.status === "scan_clean" ||
-                    job.status === "scan_skipped" ||
-                    job.status === "scan_vulnerable"
+                    job.status === "scan_skipped"
                   ) {
                     <div class="mt-2 pt-2 border-top">
                       <!-- Push mode toggle -->
-                      <div class="d-flex gap-2 mb-2">
-                        <button
-                          class="btn btn-sm"
-                          [class.btn-outline-secondary]="
-                            getPushMode(job) !== 'local'
-                          "
-                          [class.btn-secondary]="getPushMode(job) === 'local'"
-                          (click)="setPushMode(job, 'local')"
-                          type="button"
-                        >
-                          <i class="bi bi-hdd me-1"></i>Local
-                        </button>
-                        <button
-                          class="btn btn-sm"
-                          [class.btn-outline-primary]="
-                            getPushMode(job) !== 'external'
-                          "
-                          [class.btn-primary]="getPushMode(job) === 'external'"
-                          (click)="setPushMode(job, 'external')"
-                          type="button"
-                        >
-                          <i class="bi bi-cloud-upload me-1"></i>External
-                        </button>
+                      <div class="d-flex align-items-center gap-2 mb-2">
+                        <span class="small text-muted">Push to:</span>
+                        <div class="btn-group btn-group-sm" role="group">
+                          <button
+                            type="button"
+                            class="btn"
+                            [class.btn-primary]="getPushMode(job) === 'local'"
+                            [class.btn-outline-secondary]="
+                              getPushMode(job) !== 'local'
+                            "
+                            (click)="setPushMode(job, 'local')"
+                          >
+                            <i class="bi bi-hdd me-1"></i>Local
+                          </button>
+                          <button
+                            type="button"
+                            class="btn"
+                            [class.btn-primary]="
+                              getPushMode(job) === 'external'
+                            "
+                            [class.btn-outline-secondary]="
+                              getPushMode(job) !== 'external'
+                            "
+                            (click)="setPushMode(job, 'external')"
+                          >
+                            <i class="bi bi-cloud-upload me-1"></i>External
+                          </button>
+                        </div>
                       </div>
 
-                      <!-- External registry fields -->
-                      @if (getPushMode(job) === "external") {
-                        <div
-                          class="mb-2 p-2 rounded border border-primary-subtle bg-primary-subtle bg-opacity-10"
-                        >
-                          <!-- Saved registry selector -->
+                      <!-- External registry selector -->
+                      @if (getPushMode(job) === 'external') {
+                        <div class="mb-2">
                           @if (externalRegistries().length > 0) {
-                            <div class="mb-2">
-                              <label class="form-label small fw-semibold"
-                                >Saved registry</label
-                              >
-                              <select
-                                class="form-select form-select-sm"
-                                [value]="getExtRegistryId(job)"
-                                (change)="
-                                  setExtRegistryId(
-                                    job,
-                                    $any($event.target).value
-                                  )
-                                "
-                              >
-                                <option value="">— Enter manually —</option>
-                                @if (globalRegistries().length > 0) {
-                                  <optgroup label="🌐 Global registries">
-                                    @for (
-                                      reg of globalRegistries();
-                                      track reg.id
-                                    ) {
-                                      <option [value]="reg.id">
-                                        {{ reg.name }} ({{ reg.host }})
-                                      </option>
-                                    }
-                                  </optgroup>
-                                }
-                                @if (personalRegistries().length > 0) {
-                                  <optgroup label="👤 My registries">
-                                    @for (
-                                      reg of personalRegistries();
-                                      track reg.id
-                                    ) {
-                                      <option [value]="reg.id">
-                                        {{ reg.name }} ({{ reg.host }})
-                                      </option>
-                                    }
-                                  </optgroup>
-                                }
-                              </select>
-                            </div>
+                            <select
+                              class="form-select form-select-sm mb-2"
+                              [value]="getExtRegistryId(job)"
+                              (change)="
+                                setExtRegistryId(
+                                  job,
+                                  $any($event.target).value
+                                )
+                              "
+                            >
+                              <option value="">— Ad-hoc (enter below) —</option>
+                              @for (reg of externalRegistries(); track reg.id) {
+                                <option [value]="reg.id">
+                                  {{ reg.name }} ({{ reg.host }})
+                                </option>
+                              }
+                            </select>
                           }
-
-                          <!-- Ad-hoc fields shown when no saved registry is selected -->
                           @if (!getExtRegistryId(job)) {
                             <div class="row g-2">
                               <div class="col-12">
                                 <input
                                   type="text"
-                                  class="form-control form-control-sm"
+                                  class="form-control form-control-sm font-monospace"
                                   placeholder="Registry host (e.g. registry.mycompany.com)"
                                   [value]="getPushTarget(job, 'ext_host')"
                                   (input)="
