@@ -5,7 +5,7 @@ version: 0.1
 log:
   accesslog:
     disabled: true
-  level: ${LOG_LEVEL}
+  level: ${REGISTRY_LOG_LEVEL}
   formatter: text
 
 storage:
