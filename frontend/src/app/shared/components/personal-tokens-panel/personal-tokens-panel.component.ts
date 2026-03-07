@@ -100,6 +100,7 @@ export class PersonalTokensPanelComponent implements OnInit {
           created_at: created.created_at,
           expires_at: created.expires_at,
           last_used_at: null,
+          short_token_hint: created.short_token_hint,
         },
       ]);
       this.createdToken.set(created);

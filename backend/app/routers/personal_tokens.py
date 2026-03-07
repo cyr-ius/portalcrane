@@ -32,6 +32,8 @@ embedded sub claim as the authenticated username.
 """
 
 import json
+import secrets
+import string
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -50,6 +52,7 @@ _TOKENS_FILE = Path(f"{DATA_DIR}/personal_tokens.json")
 
 # Raw token prefix — makes it recognisable in logs and easy to grep.
 _TOKEN_PREFIX = "pct_"
+_SHORT_TOKEN_LENGTH = 16
 
 # Default validity when no expiry is requested (90 days).
 _DEFAULT_EXPIRY_DAYS = 90
@@ -66,12 +69,14 @@ class PersonalTokenPublic(BaseModel):
     created_at: str
     expires_at: str | None = None
     last_used_at: str | None = None
+    short_token_hint: str | None = None
 
 
 class PersonalTokenCreated(PersonalTokenPublic):
     """Returned only at creation time — contains the raw token shown once."""
 
     raw_token: str
+    short_token: str
 
 
 class CreateTokenRequest(BaseModel):
@@ -108,7 +113,26 @@ def _token_to_public(t: dict) -> PersonalTokenPublic:
         created_at=t["created_at"],
         expires_at=t.get("expires_at"),
         last_used_at=t.get("last_used_at"),
+        short_token_hint=t.get("short_token_hint"),
     )
+
+
+def _normalise_short_token(candidate: str) -> str:
+    """Normalize user-provided short token input.
+
+    Accepts either the bare 16-char discriminator (recommended) or the
+    prefixed form `pct_<discriminator>` and returns only the discriminator.
+    """
+    token = candidate.strip()
+    if token.startswith(_TOKEN_PREFIX):
+        token = token.removeprefix(_TOKEN_PREFIX)
+    return token
+
+
+def _generate_short_token() -> str:
+    """Generate a 16-char high-entropy discriminator for PAT quick login."""
+    alphabet = string.ascii_letters + string.digits
+    return "".join(secrets.choice(alphabet) for _ in range(_SHORT_TOKEN_LENGTH))
 
 
 # ─── Token verification (used by registry_proxy) ─────────────────────────────
@@ -125,36 +149,50 @@ def verify_personal_token(raw_token: str, settings: Settings) -> str | None:
 
     Returns the username string on success, None on any failure.
     """
-    try:
-        payload = jwt.decode(raw_token, settings.secret_key, algorithms=[ALGORITHM])
-    except Exception:
-        return None
-
-    # Must carry the pat=true claim so regular session tokens are rejected here
-    if not payload.get("pat"):
-        return None
-
-    username: str = payload.get("sub", "")
-    if not username:
-        return None
-
     tokens = _load_tokens()
     now = datetime.now(timezone.utc)
 
+    # Path A: full PAT (legacy and current format)
+    try:
+        payload = jwt.decode(raw_token, settings.secret_key, algorithms=[ALGORITHM])
+    except Exception:
+        payload = None
+
+    if payload and payload.get("pat"):
+        username: str = payload.get("sub", "")
+        if username:
+            for token in tokens:
+                if token["username"] != username:
+                    continue
+                if not verify_password(raw_token, token.get("token_hash", "")):
+                    continue
+                # Check expiry stored in the record (belt-and-suspenders with JWT exp)
+                if token.get("expires_at"):
+                    exp = datetime.fromisoformat(token["expires_at"])
+                    if now > exp:
+                        continue
+                token["last_used_at"] = now.isoformat()
+                _save_tokens(tokens)
+                return username
+
+    # Path B: short 16-char discriminator (or pct_<discriminator>)
+    short_candidate = _normalise_short_token(raw_token)
+    if len(short_candidate) != _SHORT_TOKEN_LENGTH:
+        return None
+
     for token in tokens:
-        if token["username"] != username:
+        short_hash = token.get("short_token_hash", "")
+        if not short_hash:
             continue
-        if not verify_password(raw_token, token.get("token_hash", "")):
+        if not verify_password(short_candidate, short_hash):
             continue
-        # Check expiry stored in the record (belt-and-suspenders with JWT exp)
         if token.get("expires_at"):
             exp = datetime.fromisoformat(token["expires_at"])
             if now > exp:
                 continue
-        # Valid — record last use without blocking the request
         token["last_used_at"] = now.isoformat()
         _save_tokens(tokens)
-        return username
+        return token["username"]
 
     return None
 
@@ -213,6 +251,7 @@ async def create_token(
     raw_token = _TOKEN_PREFIX + jwt.encode(
         claims, settings.secret_key, algorithm=ALGORITHM
     )
+    short_token = _generate_short_token()
 
     token_id = str(uuid.uuid4())
     entry = {
@@ -220,6 +259,8 @@ async def create_token(
         "username": current_user.username,
         "name": name,
         "token_hash": hash_password(raw_token),
+        "short_token_hash": hash_password(short_token),
+        "short_token_hint": f"{short_token[:4]}…{short_token[-4:]}",
         "created_at": now.isoformat(),
         "expires_at": expires_at.isoformat(),
         "last_used_at": None,
@@ -235,6 +276,8 @@ async def create_token(
         created_at=now.isoformat(),
         expires_at=expires_at.isoformat(),
         raw_token=raw_token,
+        short_token=short_token,
+        short_token_hint=entry["short_token_hint"],
     )
 
 
