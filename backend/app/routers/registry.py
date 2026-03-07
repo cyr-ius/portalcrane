@@ -442,7 +442,7 @@ async def rename_image(
 # ─── Garbage Collection ───────────────────────────────────────────────────────
 
 
-async def _run_gc(settings: Settings) -> None:
+async def _run_gc(dry_run: bool, settings: Settings) -> None:
     """Run registry garbage-collect inside the container via supervisord."""
     import xmlrpc.client
 
@@ -476,6 +476,9 @@ async def _run_gc(settings: Settings) -> None:
 
         try:
             cmd = [REGISTRY_BINARY, "garbage-collect", REGISTRY_CONFIG]
+            if dry_run:
+                cmd.append("--dry-run")
+
             output_lines.append(f"Running: {' '.join(cmd)}")
 
             proc = await asyncio.create_subprocess_exec(
@@ -526,6 +529,7 @@ async def _run_gc(settings: Settings) -> None:
 @router.post("/gc", response_model=GCStatus)
 async def start_garbage_collect(
     background_tasks: BackgroundTasks,
+    dry_run: bool = False,
     settings: Settings = Depends(get_settings),
     _: UserInfo = Depends(require_admin),
 ):
@@ -536,7 +540,7 @@ async def start_garbage_collect(
             detail="A garbage-collect is already running",
         )
 
-    background_tasks.add_task(_run_gc, settings)
+    background_tasks.add_task(_run_gc, dry_run, settings)
     return GCStatus(
         status="running",
         started_at=datetime.now(timezone.utc).isoformat(),
