@@ -22,6 +22,7 @@ import {
   startWith,
   switchMap,
   take,
+  tap,
 } from "rxjs";
 
 @Injectable({ providedIn: "root" })
@@ -75,23 +76,38 @@ export class BackendAvailabilityService {
   // ── Private helpers ────────────────────────────────────────────────────────
 
   /**
-   * Perform a single health-check immediately on startup.
-   * If the backend is already down the user is redirected straight away and
-   * the recovery poll starts. If the backend is healthy nothing changes.
+   * Perform startup health-checks with a short grace period.
+   *
+   * This avoids false positives during app bootstrap (proxy warm-up,
+   * backend cold start, transient network hiccup) where the first probe can
+   * fail even though the backend becomes reachable a moment later.
    */
   private probeOnStartup(): void {
-    this.http
-      .get<{ status: string }>("/api/health")
+    let recoveredDuringGrace = false;
+
+    interval(1200)
       .pipe(
-        take(1),
-        map((response) => response.status === "healthy"),
-        catchError(() => of(false)),
+        startWith(0),
+        take(3),
+        switchMap(() =>
+          this.http.get<{ status: string }>("/api/health").pipe(
+            map((response) => response.status === "healthy"),
+            catchError(() => of(false)),
+          ),
+        ),
+        tap((isHealthy) => {
+          if (isHealthy) {
+            recoveredDuringGrace = true;
+          }
+        }),
       )
-      .subscribe((isHealthy) => {
-        if (!isHealthy) {
-          // Backend is already down — show the unavailable page immediately.
-          this.markBackendUnavailable();
-        }
+      .subscribe({
+        complete: () => {
+          if (!recoveredDuringGrace) {
+            // Backend appears genuinely unavailable after grace probes.
+            this.markBackendUnavailable();
+          }
+        },
       });
   }
 
