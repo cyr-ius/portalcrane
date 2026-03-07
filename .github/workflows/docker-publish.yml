@@ -31,7 +31,7 @@ jobs:
 
       # ── QEMU (for multi-arch builds: amd64 + arm64) ──────────────────────
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@v4
 
       # ── Login to Docker Hub ───────────────────────────────────────────────
       - name: Log in to Docker Hub
