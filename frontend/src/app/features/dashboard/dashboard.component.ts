@@ -87,6 +87,7 @@ export class DashboardComponent implements OnInit {
         this.gcStatus.set(s);
         if (s.status === "done" && !this.gcDryStatus()) {
           this.loadStats(false);
+          this.purgeGhostRepos();
           this.checkGhostRepos();
         }
       });
