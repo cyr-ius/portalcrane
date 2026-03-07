@@ -490,9 +490,13 @@
                   <button
                     class="btn btn-sm btn-outline-secondary"
                     (click)="checkOrphanOci()"
+                    [disabled]="orphanOciRefreshing()"
                     title="Refresh"
                   >
-                    <i class="bi bi-arrow-clockwise"></i>
+                    <i
+                      class="bi bi-arrow-clockwise"
+                      [class.spin]="orphanOciRefreshing()"
+                    ></i>
                   </button>
                   <button
                     class="btn btn-sm btn-outline-warning"

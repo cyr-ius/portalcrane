@@ -113,9 +113,13 @@
                   <button
                     class="btn btn-sm btn-outline-info border-0 ms-auto me-3"
                     (click)="$event.stopPropagation(); copyToClipboard(tag)"
+                    [disabled]="copyingTag() === tag"
                     title="Copy pull path"
                   >
-                    <i class="bi bi-copy"></i>
+                    <i
+                      class="bi bi-copy"
+                      [class.spin]="copyingTag() === tag"
+                    ></i>
                   </button>
                   <button
                     class="btn btn-sm btn-outline-danger border-0"
