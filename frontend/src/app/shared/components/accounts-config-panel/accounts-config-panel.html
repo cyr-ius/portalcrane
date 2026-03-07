@@ -19,21 +19,25 @@
       <i class="bi bi-exclamation-triangle-fill"></i>
       {{ error() }}
     </div>
-    } @if (loading()) {
+    }
+
+    @if (loading()) {
     <div class="d-flex align-items-center gap-2 text-muted">
       <span class="spinner-border spinner-border-sm"></span>
       Loading users…
     </div>
-    } @if (!loading()) {
+    }
 
-    <!-- ── Create form ───────────────────────────────────────────────── -->
+    @if (!loading()) {
+
+    <!-- ── Create form (local accounts only) ────────────────────────────── -->
     @if (showCreateForm()) {
     <div
       class="card border border-primary-subtle bg-primary-subtle bg-opacity-10 mb-4"
     >
       <div class="card-body">
         <h6 class="fw-semibold mb-3">
-          <i class="bi bi-person-plus-fill me-2 text-primary"></i>New User
+          <i class="bi bi-person-plus-fill me-2 text-primary"></i>New Local User
         </h6>
 
         @if (createError()) {
@@ -146,7 +150,7 @@
     </div>
     }
 
-    <!-- ── Users table ────────────────────────────────────────────────── -->
+    <!-- ── Users table ────────────────────────────────────────────────────── -->
     @if (users().length === 0) {
     <div class="text-center text-muted py-4">
       <i class="bi bi-people display-6 d-block mb-2"></i>
@@ -158,6 +162,7 @@
         <thead>
           <tr class="text-muted" style="font-size: 0.78rem">
             <th>Username</th>
+            <th>Source</th>
             <th>Role</th>
             <th>Created</th>
             <th class="text-end">Actions</th>
@@ -166,26 +171,55 @@
         <tbody>
           @for (user of users(); track user.id) {
 
-          <!-- Normal row -->
+          <!-- ── Normal row ─────────────────────────────────────────────── -->
           @if (editingId() !== user.id) {
           <tr>
+            <!-- Username + env badge -->
             <td>
               <div class="d-flex align-items-center gap-2">
                 <div class="avatar-sm">
+                  @if (isOidcUser(user)) {
+                  <i class="bi bi-shield-lock-fill"></i>
+                  } @else {
                   <i class="bi bi-person-fill"></i>
+                  }
                 </div>
-                <span class="fw-semibold font-monospace small"
-                  >{{ user.username }}</span
-                >
+                <span class="fw-semibold font-monospace small">{{ user.username }}</span>
                 @if (user.id === 'env-admin') {
                 <span
                   class="badge bg-secondary-subtle text-secondary"
                   style="font-size: 0.65rem"
+                  title="Defined via ADMIN_USERNAME / ADMIN_PASSWORD environment variables"
                   >ENV</span
                 >
                 }
               </div>
             </td>
+
+            <!-- Auth source badge -->
+            <td>
+              @if (isOidcUser(user)) {
+              <span
+                class="badge bg-primary-subtle text-primary d-inline-flex align-items-center gap-1"
+                style="font-size: 0.7rem"
+                title="Account provisioned automatically on first SSO login. Password is managed by the identity provider."
+              >
+                <i class="bi bi-shield-lock"></i>
+                OIDC
+              </span>
+              } @else {
+              <span
+                class="badge bg-body-secondary text-muted d-inline-flex align-items-center gap-1"
+                style="font-size: 0.7rem"
+                title="Local account with password stored in Portalcrane."
+              >
+                <i class="bi bi-person"></i>
+                Local
+              </span>
+              }
+            </td>
+
+            <!-- Role -->
             <td>
               @if (user.is_admin) {
               <span class="badge bg-warning-subtle text-warning">
@@ -197,7 +231,11 @@
               </span>
               }
             </td>
+
+            <!-- Created date -->
             <td class="text-muted small">{{ formatDate(user.created_at) }}</td>
+
+            <!-- Actions -->
             <td class="text-end">
               @if (user.id !== 'env-admin') {
               <div class="d-flex gap-1 justify-content-end">
@@ -212,7 +250,7 @@
                   class="btn btn-sm btn-outline-danger"
                   (click)="deleteUser(user.id)"
                   [disabled]="deletingId() === user.id"
-                  title="Delete user"
+                  [title]="isOidcUser(user) ? 'Delete and revoke SSO access' : 'Delete user'"
                 >
                   @if (deletingId() === user.id) {
                   <span class="spinner-border spinner-border-sm"></span>
@@ -230,15 +268,23 @@
           </tr>
           }
 
-          <!-- Inline edit row -->
+          <!-- ── Inline edit row ────────────────────────────────────────── -->
           @if (editingId() === user.id) {
           <tr class="table-active">
-            <td colspan="4">
+            <td colspan="5">
               <div class="p-2">
                 <div class="fw-semibold small mb-2">
                   <i class="bi bi-pencil-fill me-1 text-primary"></i>
                   Editing:
                   <span class="font-monospace">{{ user.username }}</span>
+                  @if (isOidcUser(user)) {
+                  <span
+                    class="badge bg-primary-subtle text-primary ms-2"
+                    style="font-size: 0.65rem"
+                  >
+                    <i class="bi bi-shield-lock me-1"></i>OIDC account
+                  </span>
+                  }
                 </div>
 
                 @if (saveError()) {
@@ -247,8 +293,21 @@
                 </div>
                 }
 
+                <!-- OIDC info banner — password change not available -->
+                @if (isOidcUser(user)) {
+                <div class="alert alert-info d-flex gap-2 py-2 small mb-3">
+                  <i class="bi bi-info-circle-fill flex-shrink-0 mt-1"></i>
+                  <div>
+                    This account is authenticated via an external identity
+                    provider. The password is managed by the provider and cannot
+                    be changed here. You can only modify the admin role.
+                  </div>
+                </div>
+                }
+
                 <div class="row g-2 align-items-end">
-                  <!-- New password -->
+                  <!-- New password — hidden for OIDC accounts -->
+                  @if (!isOidcUser(user)) {
                   <div class="col-md-5">
                     <label class="form-label small mb-1">New Password</label>
                     <div class="input-group input-group-sm">
@@ -273,6 +332,7 @@
                       </button>
                     </div>
                   </div>
+                  }
 
                   <!-- Admin toggle -->
                   <div class="col-md-3">
@@ -324,19 +384,17 @@
     </div>
     }
 
-    <!-- Info note -->
+    <!-- ── Legend / info note ──────────────────────────────────────────────── -->
     <div class="alert alert-info d-flex gap-2 mt-3 py-2 small">
       <i class="bi bi-lightbulb-fill flex-shrink-0 mt-1"></i>
       <div>
         The <strong>ENV</strong> account is defined via
         <code>ADMIN_USERNAME</code> / <code>ADMIN_PASSWORD</code> and cannot be
-        modified here. Pull and push permissions are managed in the
-        <strong>Folders</strong> tab — the root namespace shown as
-        <code>/ (root)</code> in the UI maps to the special folder key
-        <code>__root__</code>.
+        modified here.
+        <strong>OIDC</strong> accounts are provisioned automatically on first
+        SSO login — deleting one revokes future access.
       </div>
     </div>
-
     }
   </div>
 </div>

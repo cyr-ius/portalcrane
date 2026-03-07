@@ -5,7 +5,17 @@ Routes dedicated to the OpenID Connect flow:
   - POST /oidc/callback        → exchange authorization code for a local JWT
   - GET  /oidc/settings        → full config for the settings page (admin)
   - PUT  /oidc/settings        → persist config overrides (admin)
+
+OIDC user provisioning strategy (just-in-time):
+  - On first successful SSO login the user is automatically created in
+    local_users.json with auth_source="oidc" and no password hash.
+  - If an admin has previously deleted the account the callback returns 403
+    (access revoked) instead of re-creating it silently.
+  - Subsequent logins perform an upsert to keep the record up-to-date.
 """
+
+import uuid
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
@@ -17,6 +27,7 @@ from ..core.jwt import (
     get_current_user,
     require_admin,
 )
+from ..routers.auth import AUTH_SOURCE_OIDC, _load_users, _save_users, is_oidc_revoked
 from ..services.oidc_service import (
     OidcAdminSettings,
     OidcPublicConfig,
@@ -27,6 +38,43 @@ from ..services.oidc_service import (
 )
 
 router = APIRouter()
+
+
+# ─── Just-in-time provisioning ────────────────────────────────────────────────
+
+
+def _provision_oidc_user(username: str) -> None:
+    """Create or refresh an OIDC user entry in local_users.json.
+
+    - If the username is in the revocation list (is_oidc_revoked) the call
+      raises 403 — the admin explicitly deleted this account.
+    - If the user already exists (auth_source='oidc') the record is left
+      unchanged (no password_hash, is_admin preserved).
+    - If the username does not exist a new record is created with
+      auth_source='oidc' and no password_hash.
+    """
+    if is_oidc_revoked(username):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "Your account has been revoked. Please contact your administrator."
+            ),
+        )
+
+    users = _load_users()
+    existing = next((u for u in users if u["username"] == username), None)
+
+    if existing is None:
+        # First SSO login — create the record
+        entry = {
+            "id": str(uuid.uuid4()),
+            "username": username,
+            "auth_source": AUTH_SOURCE_OIDC,
+            "is_admin": False,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        users.append(entry)
+        _save_users(users)
 
 
 # ─── Public endpoint (no authentication required) ────────────────────────────
@@ -53,10 +101,11 @@ async def oidc_callback(
 ):
     """Exchange an OIDC authorization code for a Portalcrane JWT.
 
-    The browser is redirected here by the OIDC provider after a successful
-    login.  The code is exchanged for an id_token / access_token, the username
-    is extracted (userinfo endpoint → id_token claims fallback), and a local
-    JWT is issued.
+    Flow:
+    1. Exchange the authorization code for a username via the token endpoint.
+    2. Provision (or verify) the user in local_users.json (just-in-time).
+       Raises 403 when the account has been revoked by an admin.
+    3. Issue a local Portalcrane JWT for the authenticated user.
     """
     try:
         username = await exchange_code_for_username(code, settings)
@@ -65,6 +114,9 @@ async def oidc_callback(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"OIDC callback failed: {exc}",
         )
+
+    # Provision or check revocation — may raise 403
+    _provision_oidc_user(username)
 
     access_token = create_access_token({"sub": username}, settings)
     return Token(
@@ -85,20 +137,20 @@ async def get_oidc_settings(
     """Return full OIDC settings (env defaults merged with persisted overrides).
 
     Accessible to any authenticated user so the Settings page can display them.
-    The client_secret is returned here because the page needs to allow editing.
+    The client_secret is returned because the page needs to allow editing.
     """
     return resolve_oidc_settings(settings)
 
 
 @router.put("/settings", response_model=OidcAdminSettings)
-async def save_oidc_settings(
+async def update_oidc_settings(
     payload: OidcAdminSettings,
+    settings: Settings = Depends(get_settings),
     _: UserInfo = Depends(require_admin),
 ):
-    """Persist OIDC settings to the JSON override file.
+    """Persist OIDC configuration overrides (admin only).
 
-    Values saved here override env vars at runtime without requiring a restart.
-    Only admins can call this endpoint.
+    Saved values take precedence over environment variables on next request.
     """
     save_oidc_config(payload.model_dump())
-    return payload
+    return resolve_oidc_settings(settings)

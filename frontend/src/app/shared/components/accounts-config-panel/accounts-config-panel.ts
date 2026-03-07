@@ -1,3 +1,14 @@
+/**
+ * Portalcrane - AccountsConfigPanel
+ * Displays and manages local and OIDC-provisioned user accounts.
+ *
+ * Key behaviors:
+ * - OIDC users show a provider badge and cannot have their password changed.
+ * - The password field is hidden in the edit row for OIDC accounts.
+ * - Deleting an OIDC user also revokes their SSO access (handled by backend).
+ * - The env-admin row is always read-only.
+ */
+
 import { HttpClient } from "@angular/common/http";
 import { Component, inject, OnInit, signal } from "@angular/core";
 import {
@@ -9,15 +20,19 @@ import {
 } from "@angular/forms/signals";
 import { firstValueFrom } from "rxjs";
 
-/** Local user as returned by the API.
- * Pull/push permissions have been removed from the user model —
- * they are now managed exclusively through folder permissions.
+/** Auth source values matching the backend constants. */
+export type AuthSource = "local" | "oidc";
+
+/**
+ * Local user as returned by GET /api/auth/users.
+ * auth_source distinguishes password-based accounts from SSO-provisioned ones.
  */
 export interface LocalUser {
   id: string;
   username: string;
   is_admin: boolean;
   created_at: string;
+  auth_source: AuthSource;
 }
 
 @Component({
@@ -49,7 +64,7 @@ export class AccountsConfigPanel implements OnInit {
   // ── Delete state ───────────────────────────────────────────────────────────
   readonly deletingId = signal<string | null>(null);
 
-  // ── Create form model (username, password, isAdmin only) ──────────────────
+  // ── Create form model (username + password + isAdmin) ─────────────────────
   createModel = signal({
     username: "",
     password: "",
@@ -64,7 +79,7 @@ export class AccountsConfigPanel implements OnInit {
     });
   });
 
-  // ── Update form model (password, isAdmin only) ────────────────────────────
+  // ── Update form model (isAdmin only — password hidden for OIDC users) ─────
   updateModel = signal({
     password: "",
     isAdmin: false,
@@ -96,7 +111,12 @@ export class AccountsConfigPanel implements OnInit {
     });
   }
 
-  /** Open the create form. */
+  /** Return true when the user was provisioned via OIDC. */
+  isOidcUser(user: LocalUser): boolean {
+    return user.auth_source === "oidc";
+  }
+
+  /** Open the create form (only for local accounts). */
   openCreateForm(): void {
     this.createModel.set(this.createModelOrig);
     this.createForm().reset();
@@ -110,7 +130,7 @@ export class AccountsConfigPanel implements OnInit {
     this.showCreateForm.set(false);
   }
 
-  /** Submit the new user form. */
+  /** Submit the new user form (creates a local account with a password). */
   createUser(): void {
     this.creating.set(true);
     this.createError.set(null);
@@ -123,7 +143,6 @@ export class AccountsConfigPanel implements OnInit {
             username: formData.username.trim(),
             password: formData.password,
             is_admin: formData.isAdmin,
-            // Pull/push permissions are granted via the Folders tab
           }),
         );
         this.users.update((list) => [...list, user]);
@@ -136,7 +155,7 @@ export class AccountsConfigPanel implements OnInit {
     });
   }
 
-  /** Open the inline edit row for a given user. */
+  /** Open the inline edit row. For OIDC users the password field is hidden. */
   openEdit(user: LocalUser): void {
     this.updateModel.set({
       password: "",
@@ -151,7 +170,7 @@ export class AccountsConfigPanel implements OnInit {
     this.editingId.set(null);
   }
 
-  /** Save the edited user. */
+  /** Save admin-role changes (and optionally password for local users). */
   saveEdit(userId: string): void {
     this.saving.set(true);
     this.saveError.set(null);
@@ -165,11 +184,13 @@ export class AccountsConfigPanel implements OnInit {
         return;
       }
 
-      const body = {
-        password: formData.password ? formData.password : null,
+      // Only send password when the field was actually filled in
+      const body: Record<string, unknown> = {
         is_admin: formData.isAdmin,
-        // Pull/push permissions are managed via folder rules
       };
+      if (formData.password) {
+        body["password"] = formData.password;
+      }
 
       try {
         const updated = await firstValueFrom(
@@ -187,7 +208,10 @@ export class AccountsConfigPanel implements OnInit {
     });
   }
 
-  /** Delete a user after confirmation. */
+  /**
+   * Delete a user. For OIDC accounts the backend also adds the username to
+   * the revocation list so the next SSO callback returns 403.
+   */
   deleteUser(userId: string): void {
     if (userId === "env-admin") return;
     this.deletingId.set(userId);
