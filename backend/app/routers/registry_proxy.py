@@ -5,6 +5,7 @@ and audit-logs every pull and push operation.
 """
 
 import base64
+import ipaddress
 import json
 import logging
 import time
@@ -126,9 +127,47 @@ def _extract_image_path(v2_path: str) -> str:
 
 
 def _client_ip(request: Request) -> str:
-    forwarded = request.headers.get("x-forwarded-for")
+    """Get ip address."""
+
+    forwarded = request.headers.get("forwarded")
     if forwarded:
-        return forwarded.split(",")[0].strip()
+        for part in forwarded.split(","):
+            for item in part.split(";"):
+                key, sep, value = item.strip().partition("=")
+                if sep and key.lower() == "for" and value:
+                    candidate = (
+                        value.strip().strip('"').removeprefix("[").removesuffix("]")
+                    )
+                    # IPv6 values can include a :port suffix in the Forwarded header.
+                    if candidate.count(":") > 1 and "]:" in value:
+                        candidate = candidate.rsplit(":", 1)[0]
+                    elif candidate.count(":") == 1:
+                        host, port = candidate.rsplit(":", 1)
+                        if port.isdigit():
+                            candidate = host
+                    try:
+                        return str(ipaddress.ip_address(candidate))
+                    except ValueError:
+                        continue
+
+    # De-facto reverse-proxy header, ex: X-Forwarded-For: client, proxy1, proxy2
+    x_forwarded_for = request.headers.get("x-forwarded-for")
+    if x_forwarded_for:
+        for ip in x_forwarded_for.split(","):
+            candidate = ip.strip()
+            try:
+                return str(ipaddress.ip_address(candidate))
+            except ValueError:
+                continue
+
+    x_real_ip = request.headers.get("x-real-ip")
+    if x_real_ip:
+        candidate = x_real_ip.strip()
+        try:
+            return str(ipaddress.ip_address(candidate))
+        except ValueError:
+            pass
+
     return request.client.host if request.client else "unknown"
 
 
