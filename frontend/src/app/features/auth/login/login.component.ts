@@ -28,12 +28,12 @@ export class LoginComponent implements OnInit {
   readonly themeService = inject(ThemeService);
 
   // ── Local login form ──────────────────────────────────────────────────────
-
-  readonly loginModel = signal({ username: "", password: "" });
-  readonly loginForm = form(this.loginModel, (p) => ({
-    username: [required(p.username)],
-    password: [required(p.password)],
-  }));
+  login = { username: "", password: "" };
+  readonly loginModel = signal({ ...this.login });
+  readonly loginForm = form(this.loginModel, (p) => {
+    required(p.username);
+    required(p.password);
+  });
 
   readonly loading = signal(false);
   readonly error = signal("");
@@ -62,6 +62,7 @@ export class LoginComponent implements OnInit {
       try {
         await firstValueFrom(this.auth.login(username!, password!));
         this.router.navigate(["/"]);
+        f().reset({ ...this.login });
       } catch (err: unknown) {
         const httpErr = err as { error?: { detail?: string } };
         this.error.set(httpErr.error?.detail ?? "Authentication failed");
