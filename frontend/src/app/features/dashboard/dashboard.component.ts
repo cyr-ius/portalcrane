@@ -85,7 +85,7 @@ export class DashboardComponent implements OnInit {
       )
       .subscribe((s) => {
         this.gcStatus.set(s);
-        if (s.status === "done") {
+        if (s.status === "done" && !this.gcDryStatus()) {
           this.loadStats(false);
           this.checkGhostRepos();
         }
@@ -136,9 +136,9 @@ export class DashboardComponent implements OnInit {
   }
 
   startGC(dryRun: boolean) {
+    this.gcDryStatus.set(dryRun);
     this.registryService.startGarbageCollect(dryRun).subscribe({
       next: (s) => {
-        if (dryRun) this.gcDryStatus.set(false);
         this.gcStatus.set(s);
         this.gcPollTrigger$.next();
       },
