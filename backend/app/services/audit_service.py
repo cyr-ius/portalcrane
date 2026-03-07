@@ -36,8 +36,11 @@ from pathlib import Path
 from threading import Lock
 from typing import Any
 
+from fastapi import Request
+from jose import JWTError, jwt
 from pydantic import BaseModel
 
+from ..config import ALGORITHM
 from ..config import DATA_DIR, Settings
 
 audit_logger = logging.getLogger("portalcrane.audit")
@@ -179,3 +182,50 @@ class AuditService:
 
         _store_recent_event(event)
         audit_logger.info(json.dumps(event))
+
+
+def _extract_username_from_request(request: Request, settings: Settings) -> str | None:
+    auth_header = request.headers.get("authorization", "")
+    if not auth_header.lower().startswith("bearer "):
+        return None
+
+    token = auth_header[7:].strip()
+    if not token:
+        return None
+
+    try:
+        payload = jwt.decode(token, settings.secret_key, algorithms=[ALGORITHM])
+    except JWTError:
+        return None
+
+    username = payload.get("sub")
+    return username if isinstance(username, str) and username else None
+
+
+async def log_web_ui_action(
+    request: Request,
+    status_code: int,
+    settings: Settings,
+    elapsed_s: float,
+) -> None:
+    """Log web UI API actions (non-GET requests) to the audit stream."""
+    if request.method.upper() in {"GET", "HEAD", "OPTIONS"}:
+        return
+
+    path = request.url.path
+    if not path.startswith("/api/"):
+        return
+
+    if path.startswith("/api/system/audit/logs"):
+        return
+
+    audit = AuditService(settings)
+    await audit.log(
+        subject="web_ui_action",
+        path=path,
+        method=request.method,
+        status=status_code,
+        elapsed=elapsed_s,
+        client_ip=request.client.host if request.client else None,
+        username=_extract_username_from_request(request, settings),
+    )

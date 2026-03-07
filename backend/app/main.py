@@ -5,12 +5,14 @@ Main FastAPI application entry point.
 
 import logging
 from pathlib import Path
+from time import perf_counter
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from .config import get_settings
+from .services.audit_service import log_web_ui_action
 from .routers import (
     about,
     auth,
@@ -41,6 +43,21 @@ app = FastAPI(
     description="Docker Registry Management API",
     version="1.0.0",
 )
+
+
+@app.middleware("http")
+async def audit_web_ui_actions(request, call_next):
+    start = perf_counter()
+    response = await call_next(request)
+    elapsed = perf_counter() - start
+
+    await log_web_ui_action(
+        request=request,
+        status_code=response.status_code,
+        settings=settings,
+        elapsed_s=elapsed,
+    )
+    return response
 
 
 # ── Routers ───────────────────────────────────────────────────────────────────
