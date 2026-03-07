@@ -1,0 +1,12 @@
+/* Portalcrane - Personal Tokens Panel Styles */
+
+.token-icon {
+  width: 36px;
+  height: 36px;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.token-list .border-bottom:last-child {
+  border-bottom: none !important;
+}

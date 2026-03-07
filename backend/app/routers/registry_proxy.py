@@ -2,6 +2,11 @@
 Portalcrane - Registry Reverse Proxy
 Proxies all Docker Registry v2 API calls, enforces per-user access control,
 and audit-logs every pull and push operation.
+
+Authentication accepted:
+  - Basic Auth with username + password  (local accounts)
+  - Basic Auth with username + PAT       (OIDC and local accounts via docker login)
+  - Bearer JWT                           (web UI session token)
 """
 
 import base64
@@ -18,6 +23,7 @@ from ..config import ALGORITHM, PROXY_TIMEOUT, REGISTRY_URL, get_settings
 from ..core.jwt import _is_admin_user
 from ..core.security import verify_user
 from ..routers.folders import check_folder_access
+from ..routers.personal_tokens import verify_personal_token
 from ..services.audit_service import AuditService
 
 logger = logging.getLogger(__name__)
@@ -127,8 +133,7 @@ def _extract_image_path(v2_path: str) -> str:
 
 
 def _client_ip(request: Request) -> str:
-    """Get ip address."""
-
+    """Extract the real client IP, handling common reverse-proxy headers."""
     forwarded = request.headers.get("forwarded")
     if forwarded:
         for part in forwarded.split(","):
@@ -138,7 +143,6 @@ def _client_ip(request: Request) -> str:
                     candidate = (
                         value.strip().strip('"').removeprefix("[").removesuffix("]")
                     )
-                    # IPv6 values can include a :port suffix in the Forwarded header.
                     if candidate.count(":") > 1 and "]:" in value:
                         candidate = candidate.rsplit(":", 1)[0]
                     elif candidate.count(":") == 1:
@@ -150,7 +154,6 @@ def _client_ip(request: Request) -> str:
                     except ValueError:
                         continue
 
-    # De-facto reverse-proxy header, ex: X-Forwarded-For: client, proxy1, proxy2
     x_forwarded_for = request.headers.get("x-forwarded-for")
     if x_forwarded_for:
         for ip in x_forwarded_for.split(","):
@@ -183,12 +186,16 @@ async def _authorize_registry_proxy(
     Decision flow:
     1. Auth disabled globally → allow.
     2. No credentials → 401.
-    3. Invalid credentials → 401.
+    3. Credentials present — try in order:
+       a. Basic Auth  with username + password   (local accounts / env-admin)
+       b. Basic Auth  with username + PAT        (OIDC + local via docker login)
+       c. Bearer JWT                             (web UI session token)
+       → None of the above match → 401.
     4. Admin user → allow.
-    5. Folder check (includes __root__ fallback):
+    5. Folder check:
        - True  → allow.
        - False → 403.
-       - None  → __root__ not configured → deny push, deny pull (fail-secure).
+       - None  → __root__ not configured → fail-secure deny.
 
     Returns None when access is granted, a Response (401/403) to abort.
     """
@@ -205,10 +212,21 @@ async def _authorize_registry_proxy(
     if basic is not None:
         user, pwd = basic
         audit.username = user
-        if not verify_user(user, pwd, settings):
-            return await _unauthorized_response("Invalid credentials")
-        username = user
+
+        # Path A: classic password-based login (local accounts + env-admin)
+        if verify_user(user, pwd, settings):
+            username = user
+        else:
+            # Path B: PAT supplied as password field (docker login for OIDC users)
+            # The token is self-contained (JWT) — we verify the signature and
+            # the bcrypt hash stored in personal_tokens.json.
+            pat_username = verify_personal_token(pwd, settings)
+            if pat_username is not None and pat_username == user:
+                username = pat_username
+            else:
+                return await _unauthorized_response("Invalid credentials")
     else:
+        # Path C: Bearer JWT issued by the web UI login flow
         username = _decode_bearer_username(auth_header)
         audit.username = username
         if not username:
@@ -220,7 +238,7 @@ async def _authorize_registry_proxy(
     if _is_admin_user(username, settings):
         return None
 
-    # Allow authenticated users to ping/login (v2_path == "")
+    # Allow authenticated users to ping / login (v2_path == "")
     if not v2_path:
         return None
 
@@ -229,7 +247,7 @@ async def _authorize_registry_proxy(
     folder_result = check_folder_access(username, image_path, is_pull=is_pull)
 
     if folder_result is True:
-        return None  # Explicitly granted by a folder rule
+        return None
 
     if folder_result is False:
         action = "pull" if is_pull else "push"
@@ -237,8 +255,7 @@ async def _authorize_registry_proxy(
             f"Folder access denied: {action} permission required"
         )
 
-    # folder_result is None → __root__ not configured
-    # Fail-secure: deny everything rather than accidentally opening access
+    # folder_result is None → __root__ not configured → fail-secure
     action = "pull" if is_pull else "push"
     return await _forbidden_response(
         f"Access denied: no folder rule applies for this image "

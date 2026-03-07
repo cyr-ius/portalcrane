@@ -1,6 +1,7 @@
 /**
  * Portalcrane - Account Modal
- * User profile panel: account info, Docker Hub credentials, personal external registries.
+ * User profile panel: account info, Docker Hub credentials,
+ * personal access tokens, and personal external registries.
  * Accessible to ALL authenticated users via the sidebar user zone.
  */
 import { Component, inject, OnInit, output, signal } from "@angular/core";
@@ -9,9 +10,11 @@ import {
   ExternalRegistry,
   ExternalRegistryService,
 } from "../../../core/services/external-registry.service";
+import { PersonalTokensPanelComponent } from "../personal-tokens-panel/personal-tokens-panel.component";
 
 @Component({
   selector: "app-account-modal",
+  imports: [PersonalTokensPanelComponent],
   templateUrl: "./account-modal.component.html",
   styleUrl: "./account-modal.component.css",
 })
@@ -86,6 +89,7 @@ export class AccountModalComponent implements OnInit {
 
   deleteDockerHubAccount(): void {
     this.savingDockerHub.set(true);
+    this.dockerHubMessage.set(null);
     this.authService
       .updateDockerHubAccountSettings({ username: "", password: "" })
       .subscribe({
@@ -96,15 +100,19 @@ export class AccountModalComponent implements OnInit {
           this.dockerHubHasPassword.set(false);
           this.dockerHubMessage.set("Credentials removed.");
         },
-        error: () => this.savingDockerHub.set(false),
+        error: (err) => {
+          this.savingDockerHub.set(false);
+          this.dockerHubMessage.set(err?.error?.detail || "Failed to remove.");
+        },
       });
   }
 
+  // ── Personal external registries ───────────────────────────────────────────
+
   loadRegistries(): void {
-    // Lists only personal registries (backend filters by owner automatically)
     this.extRegSvc.listRegistries().subscribe({
-      next: (regs) =>
-        this.registries.set(regs.filter((r) => r.owner !== "global")),
+      next: (list: ExternalRegistry[]) =>
+        this.registries.set(list.filter((r) => r.owner !== "global")),
     });
   }
 
@@ -122,7 +130,7 @@ export class AccountModalComponent implements OnInit {
     this.editingId.set(reg.id);
     this.formName.set(reg.name);
     this.formHost.set(reg.host);
-    this.formUser.set(reg.username);
+    this.formUser.set(reg.username || "");
     this.formPass.set("");
     this.testResult.set(null);
     this.showAddForm.set(true);
@@ -130,35 +138,37 @@ export class AccountModalComponent implements OnInit {
 
   cancelForm(): void {
     this.showAddForm.set(false);
-    this.editingId.set(null);
+    this.testResult.set(null);
   }
 
   saveRegistry(): void {
     this.savingRegistry.set(true);
-    const id = this.editingId();
     const payload = {
       name: this.formName(),
       host: this.formHost(),
       username: this.formUser(),
       password: this.formPass(),
     };
-    const obs = id
+    const id = this.editingId();
+    const request = id
       ? this.extRegSvc.updateRegistry(id, payload)
       : this.extRegSvc.createRegistry(payload);
-    obs.subscribe({
+
+    request.subscribe({
       next: () => {
         this.savingRegistry.set(false);
-        this.cancelForm();
+        this.showAddForm.set(false);
         this.loadRegistries();
       },
-      error: () => this.savingRegistry.set(false),
+      error: (err: any) => {
+        this.savingRegistry.set(false);
+        this.testResult.set({
+          reachable: false,
+          auth_ok: false,
+          message: err?.error?.detail || "Failed to save.",
+        });
+      },
     });
-  }
-
-  deleteRegistry(id: string): void {
-    this.extRegSvc
-      .deleteRegistry(id)
-      .subscribe({ next: () => this.loadRegistries() });
   }
 
   testNewRegistry(): void {
@@ -167,11 +177,20 @@ export class AccountModalComponent implements OnInit {
     this.extRegSvc
       .testConnection(this.formHost(), this.formUser(), this.formPass())
       .subscribe({
-        next: (r) => {
-          this.testResult.set(r);
+        next: (result) => {
+          this.testResult.set(result);
           this.testingNew.set(false);
         },
-        error: () => this.testingNew.set(false),
+        error: () => {
+          this.testResult.set({ reachable: false, auth_ok: false, message: "Test failed." });
+          this.testingNew.set(false);
+        },
       });
+  }
+
+  deleteRegistry(id: string): void {
+    this.extRegSvc.deleteRegistry(id).subscribe({
+      next: () => this.loadRegistries(),
+    });
   }
 }

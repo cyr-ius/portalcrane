@@ -21,6 +21,7 @@ from .routers import (
     external_registries,
     folders,
     oidc,
+    personal_tokens,
     registry,
     registry_proxy,
     staging,
@@ -65,6 +66,11 @@ async def audit_web_ui_actions(request, call_next):
 
 # Local authentication + user management
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
+
+# Personal access tokens (docker login for OIDC users)
+app.include_router(
+    personal_tokens.router, prefix="/api/auth", tags=["Personal Access Tokens"]
+)
 
 # OIDC flow (public config, callback, admin settings)
 app.include_router(oidc.router, prefix="/api/oidc", tags=["OIDC"])
@@ -111,7 +117,6 @@ if _FRONTEND_DIR.exists():
         """Catch-all: serve index.html so Angular's router can handle navigation."""
         candidate = (_FRONTEND_DIR / full_path).resolve()
         try:
-            # Ensure the resolved candidate path is within the frontend directory
             candidate.relative_to(_FRONTEND_DIR)
         except ValueError:
             raise HTTPException(status_code=404, detail="Not found")

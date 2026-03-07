@@ -41,13 +41,27 @@ def hash_password(password: str) -> str:
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    """Verify a plain-text password against a bcrypt hash."""
-    secret = plain.encode("utf-8")[:72]
-    return bcrypt.checkpw(secret, hashed.encode("utf-8"))
+    """Verify a plain-text password against a bcrypt hash.
+
+    Returns False immediately when hashed is empty or blank — this covers
+    OIDC-provisioned accounts that have no password_hash stored, preventing
+    a ValueError: Invalid salt from bcrypt.
+    """
+    if not hashed or not hashed.strip():
+        return False
+    try:
+        secret = plain.encode("utf-8")[:72]
+        return bcrypt.checkpw(secret, hashed.encode("utf-8"))
+    except ValueError:
+        # Malformed hash stored on disk — treat as invalid rather than crashing
+        return False
 
 
 def verify_user(username: str, password: str, settings: Settings) -> bool:
     """Verify credentials against the env-based admin, then the local users file.
+
+    OIDC-provisioned users have no password_hash; verify_password returns False
+    for them, so they can only authenticate via PAT (registry proxy) or SSO.
 
     Used by both the login endpoint and the registry proxy Basic Auth handler.
     """

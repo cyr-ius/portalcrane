@@ -1,0 +1,233 @@
+<!-- Portalcrane - Personal Access Tokens Panel -->
+<div class="card border-0 mb-3">
+  <div
+    class="card-header border-0 d-flex align-items-center justify-content-between pb-0"
+  >
+    <div>
+      <h6 class="fw-semibold mb-0">
+        <i class="bi bi-key-fill me-2 text-primary"></i>Personal Access Tokens
+      </h6>
+      <p class="text-muted small mt-1 mb-0">
+        Use as password for
+        <code>docker login</code> — works for all account types.
+      </p>
+    </div>
+    @if (!showCreateForm()) {
+    <button
+      class="btn btn-sm btn-primary"
+      (click)="openCreateForm()"
+    >
+      <i class="bi bi-plus-lg me-1"></i>New token
+    </button>
+    }
+  </div>
+
+  <div class="card-body pt-3">
+
+    <!-- ── Error banner ───────────────────────────────────────────────────── -->
+    @if (listError()) {
+    <div class="alert alert-danger d-flex gap-2 py-2 small mb-3">
+      <i class="bi bi-exclamation-triangle-fill flex-shrink-0 mt-1"></i>
+      {{ listError() }}
+    </div>
+    }
+
+    <!-- ── Newly created token banner (shown once) ────────────────────────── -->
+    @if (createdToken()) {
+    <div class="alert alert-success mb-3 p-3">
+      <div class="d-flex align-items-start justify-content-between gap-2 mb-2">
+        <div class="fw-semibold small">
+          <i class="bi bi-check-circle-fill me-1"></i>
+          Token "<strong>{{ createdToken()!.name }}</strong>" created — copy it now, it won't be shown again.
+        </div>
+        <button
+          class="btn-close btn-close-sm flex-shrink-0"
+          (click)="dismissCreated()"
+          title="Dismiss"
+        ></button>
+      </div>
+
+      <!-- Raw token display -->
+      <div class="input-group input-group-sm mb-2">
+        <input
+          type="text"
+          class="form-control font-monospace"
+          [value]="createdToken()!.raw_token"
+          readonly
+          style="font-size: 0.72rem"
+        />
+        <button
+          class="btn btn-outline-success"
+          (click)="copyToken()"
+          [title]="copied() ? 'Copied!' : 'Copy to clipboard'"
+        >
+          @if (copied()) {
+          <i class="bi bi-check-lg"></i>
+          } @else {
+          <i class="bi bi-clipboard"></i>
+          }
+        </button>
+      </div>
+
+      <!-- docker login usage hint -->
+      <div class="bg-dark rounded p-2" style="font-size: 0.7rem">
+        <code class="text-success">
+          docker login &lt;registry-host&gt; -u &lt;username&gt; -p {{ createdToken()!.raw_token }}
+        </code>
+      </div>
+    </div>
+    }
+
+    <!-- ── Create form ────────────────────────────────────────────────────── -->
+    @if (showCreateForm()) {
+    <div
+      class="border border-primary-subtle rounded p-3 mb-3 bg-primary-subtle bg-opacity-10"
+    >
+      <h6 class="fw-semibold mb-3 text-primary small">
+        <i class="bi bi-key me-1"></i>New Personal Access Token
+      </h6>
+
+      @if (createError()) {
+      <div class="alert alert-danger py-2 small mb-3">
+        <i class="bi bi-exclamation-circle me-1"></i>{{ createError() }}
+      </div>
+      }
+
+      <div class="row g-3">
+        <!-- Token name -->
+        <div class="col-12">
+          <label class="form-label small fw-semibold">
+            Name <span class="text-danger">*</span>
+          </label>
+          <input
+            type="text"
+            class="form-control form-control-sm"
+            placeholder="e.g. My laptop, CI/CD pipeline…"
+            [value]="newTokenName()"
+            (input)="newTokenName.set($any($event.target).value)"
+          />
+        </div>
+
+        <!-- Expiry -->
+        <div class="col-12">
+          <label class="form-label small fw-semibold">Expires in</label>
+          <select
+            class="form-select form-select-sm"
+            [value]="newTokenExpiry()"
+            (change)="newTokenExpiry.set(+$any($event.target).value)"
+          >
+            <option [value]="30">30 days</option>
+            <option [value]="90" selected>90 days (default)</option>
+            <option [value]="180">180 days</option>
+            <option [value]="365">1 year</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="d-flex gap-2 mt-3">
+        <button
+          class="btn btn-primary btn-sm d-flex align-items-center gap-1"
+          (click)="createToken()"
+          [disabled]="creating() || !newTokenName().trim()"
+        >
+          @if (creating()) {
+          <span class="spinner-border spinner-border-sm"></span>
+          Creating… } @else {
+          <i class="bi bi-check-lg"></i>
+          Generate }
+        </button>
+        <button
+          class="btn btn-outline-secondary btn-sm"
+          (click)="cancelCreate()"
+          [disabled]="creating()"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+    }
+
+    <!-- ── Loading skeleton ───────────────────────────────────────────────── -->
+    @if (loading()) {
+    <div class="d-flex align-items-center gap-2 text-muted small py-2">
+      <span class="spinner-border spinner-border-sm"></span>
+      Loading tokens…
+    </div>
+    }
+
+    <!-- ── Empty state ────────────────────────────────────────────────────── -->
+    @if (!loading() && tokens().length === 0 && !showCreateForm()) {
+    <div class="text-center text-muted py-3">
+      <i class="bi bi-key display-6 d-block mb-2 opacity-25"></i>
+      <div class="small">No personal access tokens yet.</div>
+    </div>
+    }
+
+    <!-- ── Token list ─────────────────────────────────────────────────────── -->
+    @if (!loading() && tokens().length > 0) {
+    <div class="token-list">
+      @for (token of tokens(); track token.id) {
+      <div
+        class="d-flex align-items-center gap-3 py-2 border-bottom"
+        [class.opacity-50]="isExpired(token)"
+      >
+        <!-- Icon -->
+        <div
+          class="token-icon d-flex align-items-center justify-content-center rounded-2 bg-body-tertiary flex-shrink-0"
+        >
+          @if (isExpired(token)) {
+          <i class="bi bi-key text-danger"></i>
+          } @else {
+          <i class="bi bi-key text-success"></i>
+          }
+        </div>
+
+        <!-- Info -->
+        <div class="flex-grow-1 min-w-0">
+          <div class="fw-semibold small text-truncate">{{ token.name }}</div>
+          <div class="text-muted" style="font-size: 0.7rem">
+            @if (isExpired(token)) {
+            <span class="text-danger">
+              <i class="bi bi-exclamation-triangle me-1"></i>Expired
+              {{ formatDate(token.expires_at) }}
+            </span>
+            } @else {
+            <span>Expires {{ formatDate(token.expires_at) }}</span>
+            }
+            @if (token.last_used_at) {
+            <span class="ms-2 text-muted">
+              · Last used {{ formatDate(token.last_used_at) }}
+            </span>
+            }
+          </div>
+        </div>
+
+        <!-- Revoke button -->
+        <button
+          class="btn btn-sm btn-outline-danger flex-shrink-0"
+          (click)="revokeToken(token.id)"
+          [disabled]="revokingId() === token.id"
+          title="Revoke token"
+        >
+          @if (revokingId() === token.id) {
+          <span class="spinner-border spinner-border-sm"></span>
+          } @else {
+          <i class="bi bi-trash3"></i>
+          }
+        </button>
+      </div>
+      }
+    </div>
+    }
+
+    <!-- ── Info note ──────────────────────────────────────────────────────── -->
+    <div class="alert alert-info d-flex gap-2 mt-3 py-2 small mb-0">
+      <i class="bi bi-info-circle-fill flex-shrink-0 mt-1"></i>
+      <div>
+        Tokens are stored securely as bcrypt hashes. The raw value is only
+        shown once at creation time. OIDC users should use tokens as password
+        for <code>docker login</code> since they have no local password.
+      </div>
+    </div>
+  </div>
+</div>
