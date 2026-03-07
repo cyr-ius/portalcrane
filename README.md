@@ -1,6 +1,6 @@
 # 🐳 Portalcrane
 
-**Portalcrane** is a self-hosted Docker Registry Manager.  
+**Portalcrane** is a self-hosted Docker Registry Manager.
 It provides a modern, intuitive interface to browse, search, and manage images and tags,
 with a staging pipeline including vulnerability scanning.
 
@@ -252,5 +252,5 @@ Image tags follow semantic versioning: `latest`, `edge`, `X`, `X.Y`, `X.Y.Z`, `s
 
 ## License
 
-MIT — see [LICENSE](LICENSE) for details.  
+MIT — see [LICENSE](LICENSE) for details.
 Author: [@cyr-ius](https://github.com/cyr-ius)

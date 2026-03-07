@@ -588,7 +588,7 @@ async def pull_image(
         "vuln_severities_override": request.vuln_severities_override,
         "owner": current_user.username,
         "source_registry_host": display_host,
-        "created_at": datetime.now(timezone.utc).isoformat()
+        "created_at": datetime.now(timezone.utc).isoformat(),
     }
     background_tasks.add_task(
         run_pull_pipeline,
