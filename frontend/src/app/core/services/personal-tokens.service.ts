@@ -15,11 +15,13 @@ export interface PersonalToken {
   created_at: string;
   expires_at: string | null;
   last_used_at: string | null;
+  short_token_hint: string | null;
 }
 
 /** Returned once at creation time — contains the raw token shown once. */
 export interface PersonalTokenCreated extends PersonalToken {
   raw_token: string;
+  short_token: string;
 }
 
 /** Request body to create a new token. */
