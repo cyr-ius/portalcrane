@@ -5,7 +5,12 @@ from ..services.process_manager import (
     get_all_process_statuses,
     run_registry_garbage_collect,
 )
-from ..services.trivy_service import get_trivy_db_info, scan_image, update_trivy_db
+from ..services.trivy_service import (
+    get_trivy_db_info,
+    has_explicit_tag_or_digest,
+    scan_image,
+    update_trivy_db,
+)
 from ..services.audit_service import get_recent_audit_events
 from ..core.jwt import UserInfo, require_admin
 
@@ -47,7 +52,7 @@ async def force_trivy_update(_: UserInfo = Depends(require_admin)):
 @router.get("/trivy/scan")
 async def scan(
     image: str = Query(
-        ..., description="Full image ref, e.g. localhost:5000/myapp:1.0"
+        ..., description="Full image ref with explicit tag or digest, e.g. localhost:5000/myapp:1.0"
     ),
     severity: list[str] = Query(default=["HIGH", "CRITICAL"]),
     ignore_unfixed: bool = Query(default=False),
@@ -57,6 +62,15 @@ async def scan(
     Scans a specific image from the local registry with Trivy.
     Returns grouped vulnerabilities with CVSS scores.
     """
+    if not has_explicit_tag_or_digest(image):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Image reference must include an explicit tag or digest "
+                "(example: production/redis:7.2 or production/redis@sha256:...)."
+            ),
+        )
+
     result = await scan_image(image, severity=severity, ignore_unfixed=ignore_unfixed)
     if not result.get("success"):
         raise HTTPException(status_code=500, detail=result.get("error"))

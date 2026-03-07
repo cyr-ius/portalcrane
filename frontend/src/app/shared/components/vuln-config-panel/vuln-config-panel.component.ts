@@ -1,4 +1,4 @@
-import { Component, inject, OnInit, signal } from "@angular/core";
+import { Component, computed, inject, OnInit, signal } from "@angular/core";
 import {
   AppConfigService,
   TRIVY_SEVERITIES,
@@ -26,15 +26,24 @@ export class VulnConfigPanelComponent implements OnInit {
   trivyDb = signal<TrivyDbInfo | null>(null);
   updatingDb = signal(false);
 
-  imageToScan = signal("");
+  selectedImage = signal("");
+  selectedTag = signal("");
   scanning = signal(false);
   scanResult = signal<ScanResult | null>(null);
   severityFilter = signal<string[]>(["HIGH", "CRITICAL"]);
   ignoreUnfixed = signal(false);
 
-  // Registry image list for the scan dropdown
+  // Registry image/tag lists for the scan dropdowns
   registryImages = signal<string[]>([]);
+  availableTags = signal<string[]>([]);
   loadingImages = signal(false);
+  loadingTags = signal(false);
+
+  readonly imageToScan = computed(() => {
+    const image = this.selectedImage().trim();
+    const tag = this.selectedTag().trim();
+    return image && tag ? `${image}:${tag}` : "";
+  });
 
   readonly allSeverities = TRIVY_SEVERITIES;
   readonly timeoutOptions = TRIVY_TIMEOUT_OPTIONS;
@@ -59,12 +68,54 @@ export class VulnConfigPanelComponent implements OnInit {
       next: (res) => {
         const images = (res.items || []).map((r) => r.name);
         this.registryImages.set(images);
-        if (!this.imageToScan() && images.length > 0) {
-          this.imageToScan.set(images[0]);
+
+        if (images.length === 0) {
+          this.selectedImage.set("");
+          this.selectedTag.set("");
+          this.availableTags.set([]);
+          this.loadingImages.set(false);
+          return;
         }
+
+        const nextImage = this.selectedImage() || images[0];
+        this.selectedImage.set(nextImage);
+        this.loadTagsForImage(nextImage);
         this.loadingImages.set(false);
       },
-      error: () => this.loadingImages.set(false),
+      error: () => {
+        this.loadingImages.set(false);
+        this.availableTags.set([]);
+      },
+    });
+  }
+
+  onImageChange(image: string): void {
+    this.selectedImage.set(image);
+    this.selectedTag.set("");
+    this.availableTags.set([]);
+    this.loadTagsForImage(image);
+  }
+
+  private loadTagsForImage(image: string): void {
+    if (!image) {
+      this.availableTags.set([]);
+      this.selectedTag.set("");
+      return;
+    }
+
+    this.loadingTags.set(true);
+    this.registryService.getImageTags(image).subscribe({
+      next: (res) => {
+        const tags = (res.tags || []).filter(Boolean);
+        this.availableTags.set(tags);
+        this.selectedTag.set(tags[0] ?? "");
+        this.loadingTags.set(false);
+      },
+      error: () => {
+        this.availableTags.set([]);
+        this.selectedTag.set("");
+        this.loadingTags.set(false);
+      },
     });
   }
 
