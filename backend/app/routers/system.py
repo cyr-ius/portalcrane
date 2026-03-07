@@ -51,9 +51,7 @@ async def force_trivy_update(_: UserInfo = Depends(require_admin)):
 
 @router.get("/trivy/scan")
 async def scan(
-    image: str = Query(
-        ..., description="Full image ref with explicit tag or digest, e.g. localhost:5000/myapp:1.0"
-    ),
+    image: str = Query(..., description="Full image ref with explicit tag or digest"),
     severity: list[str] = Query(default=["HIGH", "CRITICAL"]),
     ignore_unfixed: bool = Query(default=False),
     _: UserInfo = Depends(require_admin),
