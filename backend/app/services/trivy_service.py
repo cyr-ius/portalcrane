@@ -7,6 +7,7 @@ The Trivy server runs on localhost:4954 (managed by supervisord).
 import asyncio
 import json
 import logging
+import re
 from datetime import datetime
 from urllib.parse import urlparse
 
@@ -19,6 +20,22 @@ from ..config import (
 )
 
 logger = logging.getLogger(__name__)
+
+_DIGEST_RE = re.compile(r"@sha256:[a-fA-F0-9]{64}$")
+
+
+def has_explicit_tag_or_digest(image_ref: str) -> bool:
+    """Return True when an image reference includes an explicit tag or digest."""
+    # Digest form: repo/image@sha256:...
+    if _DIGEST_RE.search(image_ref):
+        return True
+
+    # Tag form: repo/image:tag
+    # We only treat ':' as a tag separator when it appears after the last '/'.
+    # This avoids confusing a registry host port (e.g. localhost:5000/repo/img).
+    last_slash = image_ref.rfind("/")
+    last_colon = image_ref.rfind(":")
+    return last_colon > last_slash
 
 
 def _normalize_image_ref(image_ref: str) -> str:

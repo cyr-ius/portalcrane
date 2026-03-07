@@ -76,7 +76,7 @@
   <div class="card-body">
     <div class="row g-3 mb-3">
       <!-- Image selector -->
-      <div class="col-sm-6">
+      <div class="col-sm-4">
         <label class="form-label small fw-semibold">Image to scan</label>
         @if (loadingImages()) {
           <div class="form-control form-control-sm placeholder-glow">
@@ -85,26 +85,41 @@
         } @else if (registryImages().length > 0) {
           <select
             class="form-select form-select-sm"
-            [value]="imageToScan()"
-            (change)="imageToScan.set($any($event.target).value)"
+            [value]="selectedImage()"
+            (change)="onImageChange($any($event.target).value)"
           >
             @for (img of registryImages(); track img) {
               <option [value]="img">{{ img }}</option>
             }
           </select>
         } @else {
-          <!-- Fallback: no images in registry yet, plain text input -->
-          <input
-            type="text"
-            class="form-control form-control-sm"
-            placeholder="localhost:5000/myimage:latest"
-            [value]="imageToScan()"
-            (input)="imageToScan.set($any($event.target).value)"
-          />
+          <div class="form-control form-control-sm text-muted">No images found</div>
           <div class="text-muted mt-1" style="font-size: 0.72rem">
             <i class="bi bi-exclamation-circle me-1"></i>No images found in
             registry.
           </div>
+        }
+      </div>
+
+      <!-- Tag selector -->
+      <div class="col-sm-2">
+        <label class="form-label small fw-semibold">Tag</label>
+        @if (loadingTags()) {
+          <div class="form-control form-control-sm placeholder-glow">
+            <span class="placeholder w-50"></span>
+          </div>
+        } @else if (availableTags().length > 0) {
+          <select
+            class="form-select form-select-sm"
+            [value]="selectedTag()"
+            (change)="selectedTag.set($any($event.target).value)"
+          >
+            @for (tag of availableTags(); track tag) {
+              <option [value]="tag">{{ tag }}</option>
+            }
+          </select>
+        } @else {
+          <div class="form-control form-control-sm text-muted">No tags</div>
         }
       </div>
 
@@ -142,6 +157,10 @@
           </label>
         </div>
       </div>
+    </div>
+
+    <div class="small text-muted mb-2">
+      Selected reference: <code>{{ imageToScan() || "—" }}</code>
     </div>
 
     <button
