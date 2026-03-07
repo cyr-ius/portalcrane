@@ -27,7 +27,7 @@ jobs:
 
       # ── Docker Buildx (multi-arch support) ───────────────────────────────
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       # ── QEMU (for multi-arch builds: amd64 + arm64) ──────────────────────
       - name: Set up QEMU
