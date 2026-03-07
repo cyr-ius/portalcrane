@@ -43,14 +43,14 @@ export class TrivyService {
 
   /** Returns Trivy vulnerability database metadata. */
   async getTrivyDbInfo(): Promise<TrivyDbInfo> {
-    return firstValueFrom(this.http.get<TrivyDbInfo>(`${this.BASE}/trivy/db`));
+    return firstValueFrom(this.http.get<TrivyDbInfo>(`${this.BASE}/db`));
   }
 
   /** Forces an immediate Trivy DB update. */
   async updateTrivyDb(): Promise<{ success: boolean; output: string }> {
     return firstValueFrom(
       this.http.post<{ success: boolean; output: string }>(
-        `${this.BASE}/trivy/db/update`,
+        `${this.BASE}/db/update`,
         {},
       ),
     );
@@ -73,7 +73,7 @@ export class TrivyService {
     if (ignoreUnfixed) params.set("ignore_unfixed", "true");
 
     return firstValueFrom(
-      this.http.get<ScanResult>(`${this.BASE}/trivy/scan?${params.toString()}`),
+      this.http.get<ScanResult>(`${this.BASE}/scan?${params.toString()}`),
     );
   }
 }
