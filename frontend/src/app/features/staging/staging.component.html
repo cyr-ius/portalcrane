@@ -275,6 +275,12 @@
                 [value]="pullImage()"
                 (input)="pullImage.set($any($event.target).value)"
               />
+              <!-- warning when attempting to pull out-of-folder from local registry -->
+              @if (pullFolderWarning()) {
+                <div class="form-text text-danger small">
+                  {{ pullFolderWarning() }}
+                </div>
+              }
             </div>
 
             <!-- Tag selector or free-text input -->
@@ -348,7 +354,8 @@
                   pulling() ||
                   !pullImage() ||
                   (pullSourceMode() === 'saved' && !pullSourceRegistryId()) ||
-                  (pullSourceMode() === 'adhoc' && !pullSourceHost())
+                  (pullSourceMode() === 'adhoc' && !pullSourceHost()) ||
+                  !!pullFolderWarning()
                 "
                 type="button"
               >
@@ -688,19 +695,50 @@
                           >
                             Folder <span class="opacity-50">(optional)</span>
                           </label>
-                          <input
-                            type="text"
-                            class="form-control form-control-sm font-monospace"
-                            placeholder="e.g. infra"
-                            [value]="getPushTarget(job, 'folder')"
-                            (input)="
-                              updatePushTarget(
-                                job,
-                                'folder',
-                                $any($event.target).value
-                              )
-                            "
-                          />
+                          <!-- if push folders are restricted and user not admin, show
+                               a select; otherwise fall back to free text -->
+                          @if (!isAdmin() && pushFolderOptions().length === 0) {
+                            <input
+                              type="text"
+                              class="form-control form-control-sm font-monospace"
+                              placeholder="(no push permissions)"
+                              disabled
+                            />
+                            <div class="form-text text-danger small">
+                              You do not have permission to push to any folder.
+                            </div>
+                          } @else if (pushFolderOptions().length > 0 && !isAdmin()) {
+                            <select
+                              class="form-select form-select-sm"
+                              [value]="getPushTarget(job, 'folder')"
+                              (change)="
+                                updatePushTarget(
+                                  job,
+                                  'folder',
+                                  $any($event.target).value
+                                )
+                              "
+                            >
+                              <option value="">(root)</option>
+                              @for (f of pushFolderOptions(); track f) {
+                                <option [value]="f">{{ f }}</option>
+                              }
+                            </select>
+                          } @else {
+                            <input
+                              type="text"
+                              class="form-control form-control-sm font-monospace"
+                              placeholder="e.g. infra"
+                              [value]="getPushTarget(job, 'folder')"
+                              (input)="
+                                updatePushTarget(
+                                  job,
+                                  'folder',
+                                  $any($event.target).value
+                                )
+                              "
+                            />
+                          }
                         </div>
                         <div class="col">
                           <label
@@ -757,7 +795,18 @@
                         <button
                           class="btn btn-sm btn-success"
                           (click)="pushImage(job)"
-                          [disabled]="pushing() === job.job_id"
+                          [disabled]="
+                            pushing() === job.job_id ||
+                            (getPushMode(job) === 'local' && (
+                              (!isAdmin() &&
+                              pushFolderOptions().length > 0 &&
+                              !pushFolderOptions().includes(
+                                getPushTarget(job, 'folder') || job.folder || ''
+                              )) ||
+                              (!isAdmin() &&
+                              pushFolderOptions().length === 0)
+                            ))
+                          "
                           type="button"
                         >
                           @if (pushing() === job.job_id) {

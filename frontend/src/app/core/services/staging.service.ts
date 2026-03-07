@@ -9,6 +9,8 @@
  *      source_registry_id, source_registry_host, source_registry_username,
  *      source_registry_password.
  *  - StagingJob interface now includes source_registry_host for display.
+ *  - Added optional folder property to StagingJob and PushOptions; backend
+ *    now respects the folder when pushing to the local registry.
  */
 import { HttpClient } from "@angular/common/http";
 import { inject, Injectable } from "@angular/core";
@@ -61,6 +63,7 @@ export interface StagingJob {
   vuln_result: VulnResult | null;
   target_image: string | null;
   target_tag: string | null;
+  folder?: string | null;
   error: string | null;
   vuln_scan_enabled_override: boolean | null;
   vuln_severities_override: string | null;

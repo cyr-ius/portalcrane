@@ -23,10 +23,12 @@ import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { RouterLink } from "@angular/router";
 import { switchMap, timer } from "rxjs";
 import { AppConfigService } from "../../core/services/app-config.service";
+import { AuthService } from "../../core/services/auth.service";
 import {
   ExternalRegistry,
   ExternalRegistryService,
 } from "../../core/services/external-registry.service";
+import { RegistryService } from "../../core/services/registry.service";
 import {
   DockerHubResult,
   StagingJob,
@@ -62,7 +64,9 @@ export type PullSourceMode = "dockerhub" | "saved" | "adhoc";
 export class StagingComponent implements OnInit {
   private staging = inject(StagingService);
   private externalRegistryService = inject(ExternalRegistryService);
+  private registry = inject(RegistryService);
   private destroyRef = inject(DestroyRef);
+  private authService = inject(AuthService);
   readonly configService = inject(AppConfigService);
 
   // Exposed for template access (module-level constant cannot be used directly in templates)
@@ -109,6 +113,53 @@ export class StagingComponent implements OnInit {
     this.externalRegistries().filter((r) => r.owner !== "global"),
   );
 
+  // ── Folder permission helpers ──────────────────────────────────────────────
+
+  /** True when the current user has admin privileges. */
+  readonly isAdmin = computed(
+    () => this.authService.currentUser()?.is_admin ?? false,
+  );
+
+  /** Folders the current user may pull from (local registry only). */
+  allowedPullFolders = signal<string[]>([]);
+
+  /** Folders the current user may push to (local registry only). */
+  allowedPushFolders = signal<string[]>([]);
+
+  /** Display host of the local registry (hard-coded for now). */
+  readonly localRegistryHost = "localhost:5000";
+
+  /** True when pull source is the local registry based on current inputs. */
+  readonly isPullingFromLocal = computed(() => {
+    if (this.pullSourceMode() === "adhoc") {
+      return this.pullSourceHost() === this.localRegistryHost;
+    }
+    if (this.pullSourceMode() === "saved") {
+      const reg = this.externalRegistries().find(
+        (r) => r.id === this.pullSourceRegistryId(),
+      );
+      return reg ? reg.host === this.localRegistryHost : false;
+    }
+    return false;
+  });
+
+  /** Warning message when the pull image is outside allowed folders. */
+  readonly pullFolderWarning = computed(() => {
+    if (!this.isPullingFromLocal()) return "";
+    const img = this.pullImage().trim();
+    if (!img) return "";
+    const prefix = img.includes("/") ? img.split("/")[0] : img;
+    const allowed = this.allowedPullFolders();
+    if (
+      !this.isAdmin() &&
+      allowed.length > 0 &&
+      !allowed.includes(prefix)
+    ) {
+      return `You only have access to folders: ${allowed.join(", ")}`;
+    }
+    return "";
+  });
+
   // ── Computed helpers ───────────────────────────────────────────────────────
 
   /** True when the search panel should be visible (only for Docker Hub source). */
@@ -139,7 +190,21 @@ export class StagingComponent implements OnInit {
     // the race condition where two concurrent responses could overwrite each other.
     this.startJobsAutoRefresh();
     this.loadExternalRegistries();
+    this.loadFolderPermissions();
   }
+
+  /** Load pullable and pushable folders for the current user. */
+  private loadFolderPermissions(): void {
+    this.registry.getMyFolders().subscribe({
+      next: (folders) => this.allowedPullFolders.set(folders),
+    });
+    this.registry.getPushableFolders().subscribe({
+      next: (folders) => this.allowedPushFolders.set(folders),
+    });
+  }
+
+  /** Options used in the folder dropdown when pushing. */
+  readonly pushFolderOptions = computed(() => this.allowedPushFolders());
 
   // ── Auto-refresh ───────────────────────────────────────────────────────────
 
@@ -315,7 +380,11 @@ export class StagingComponent implements OnInit {
    */
   pushPreview(job: StagingJob): string {
     const mode = this.getPushMode(job);
-    const folder = this.getPushTarget(job, "folder").trim();
+    // prefer explicit user input, otherwise fall back to job.folder saved
+    let folder = this.getPushTarget(job, "folder").trim();
+    if (!folder && job.folder) {
+      folder = job.folder;
+    }
     const img = (this.getPushTarget(job, "img") || job.image).trim();
     const tag = (this.getPushTarget(job, "tag") || job.tag).trim();
     const path = folder ? `${folder}/${img}` : img;

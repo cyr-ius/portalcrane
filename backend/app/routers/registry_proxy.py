@@ -181,6 +181,10 @@ async def _authorize_registry_proxy(
     if _is_admin_user(username, settings):
         return None
 
+    # Allow authenticated users to ping/login (v2_path == "")
+    if not v2_path:
+        return None
+
     is_pull = method in _PULL_METHODS
     image_path = _extract_image_path(v2_path)
     folder_result = check_folder_access(username, image_path, is_pull=is_pull)

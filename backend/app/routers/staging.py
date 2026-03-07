@@ -33,7 +33,13 @@ from ..config import (
     get_settings,
 )
 from .auth import get_user_dockerhub_credentials, require_admin
-from ..core.jwt import UserInfo, require_pull_access, require_push_access
+from ..core.jwt import (
+    UserInfo,
+    require_pull_access,
+    require_push_access,
+    _is_admin_user,
+)
+from ..routers.folders import check_folder_access
 
 router = APIRouter()
 
@@ -74,6 +80,7 @@ class StagingJob(BaseModel):
     vuln_result: dict | None = None
     target_image: str | None = None
     target_tag: str | None = None
+    folder: str | None = None  # optional folder prefix used during push
     error: str | None = None
     vuln_scan_enabled_override: bool | None = None
     vuln_severities_override: str | None = None
@@ -488,13 +495,36 @@ async def run_push_pipeline(
     target_image: str,
     target_tag: str,
     settings: Settings,
+    folder: str | None = None,
 ) -> None:
     """
     Background task: push an OCI layout directory to the private registry via skopeo.
     The source OCI directory is cleaned up after a successful push.
+
+    The optional ``folder`` parameter is a prefix that should be prepended
+    to ``target_image`` when pushing to the internal registry.  Previously the
+    folder was ignored, which caused images like
+    ``production/foo:tag`` to be pushed as ``foo:tag`` at the registry root.
     """
+    # defense-in-depth: verify folder push permission again inside the
+    # background task.  The endpoint already checks this, but the job data
+    # could hypothetically be modified afterwards.
+    if not _is_admin_user(_jobs[job_id].get("owner", ""), settings):
+        full_path = f"{folder}/{target_image}" if folder else target_image
+        access = check_folder_access(
+            _jobs[job_id].get("owner", ""), full_path, is_pull=False
+        )
+        if access is not True:
+            _jobs[job_id]["status"] = JobStatus.FAILED
+            _jobs[job_id]["message"] = "Push denied: insufficient folder permissions"
+            _jobs[job_id]["error"] = "authorization"
+            _jobs[job_id]["progress"] = 100
+            return
+
     _jobs[job_id]["status"] = JobStatus.PUSHING
-    _jobs[job_id]["message"] = f"Pushing to registry as {target_image}:{target_tag}..."
+    _jobs[job_id]["message"] = (
+        f"Pushing to registry as {folder + '/' if folder else ''}{target_image}:{target_tag}..."
+    )
     _jobs[job_id]["progress"] = 10
 
     try:
@@ -507,7 +537,9 @@ async def run_push_pipeline(
         return
 
     push_host = _resolve_push_host()
-    dest = f"docker://{push_host}/{target_image}:{target_tag}"
+    # include folder prefix if provided
+    image_path = f"{folder}/{target_image}" if folder else target_image
+    dest = f"docker://{push_host}/{image_path}:{target_tag}"
 
     skopeo_env = {**os.environ, **settings.env_proxy}
 
@@ -575,6 +607,27 @@ async def pull_image(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
 
+    # If pulling from the local registry, enforce folder-based pull permissions
+    # (a user could otherwise specify localhost:5000 manually and bypass the
+    # proxy's access control).  display_host is either a hostname or None
+    # (Docker Hub).  We compare with the local registry host derived from
+    # REGISTRY_URL.
+    from urllib.parse import urlparse
+
+    local_host = urlparse(REGISTRY_URL).netloc
+    if display_host and display_host == local_host:
+        # folder check uses image name (no tag)
+        if not _is_admin_user(current_user.username, settings):
+            access = check_folder_access(
+                current_user.username, request.image, is_pull=True
+            )
+            if access is not True:
+                # False or None both treated as forbidden
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Folder access denied: pull permission required",
+                )
+
     job_id = str(uuid.uuid4())
     _jobs[job_id] = {
         "job_id": job_id,
@@ -587,6 +640,7 @@ async def pull_image(
         "vuln_result": None,
         "target_image": None,
         "target_tag": None,
+        "folder": None,
         "error": None,
         "vuln_scan_enabled_override": request.vuln_scan_enabled_override,
         "vuln_severities_override": request.vuln_severities_override,
@@ -629,6 +683,8 @@ async def push_image(
         )
 
     job = _jobs[request.job_id]
+    # remember folder in job record for auditing/debugging
+    job["folder"] = request.folder or ""
 
     if not current_user.is_admin and job.get("owner") != current_user.username:
         raise HTTPException(
@@ -684,6 +740,18 @@ async def push_image(
 
         return {"message": message, "job_id": request.job_id}
 
+    # Before scheduling local push, verify push permission for the
+    # requested folder/image combination.  ``target_image`` already includes
+    # the requested image name; ``folder`` may be empty.
+    if not _is_admin_user(current_user.username, settings):
+        full_path = f"{folder}/{target_image}" if folder else target_image
+        access = check_folder_access(current_user.username, full_path, is_pull=False)
+        if access is not True:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Folder access denied: push permission required",
+            )
+
     # Default: push to the local embedded registry
     background_tasks.add_task(
         run_push_pipeline,
@@ -691,6 +759,7 @@ async def push_image(
         target_image,
         target_tag,
         settings,
+        request.folder,
     )
     return {"message": "Push started", "job_id": request.job_id}
 
