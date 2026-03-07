@@ -72,9 +72,14 @@
   border-radius: 8px;
   padding: 6px 4px;
   transition: background 0.15s;
+  min-width: 0;
 }
 .user-info-row:hover {
   background: var(--pc-nav-hover);
+}
+
+.logout-button {
+  flex-shrink: 0;
 }
 
 /* Avatar */

@@ -1224,26 +1224,29 @@
             </button>
           </div>
 
-          <!-- User info row — cliquable pour ouvrir la modale -->
-          <div
-            class="user-info-row d-flex align-items-center gap-2"
-            (click)="accountModalOpen.set(true)"
-            title="My account"
-          >
-            <div class="avatar-circle">
-              <i class="bi bi-person-fill"></i>
-            </div>
-            <div class="flex-grow-1 overflow-hidden">
-              <div class="small fw-semibold text-truncate">
-                {{ auth.currentUser()?.username }}
+          <div class="d-flex align-items-center gap-2">
+            <!-- User info row — cliquable pour ouvrir la modale -->
+            <div
+              class="user-info-row d-flex align-items-center gap-2 flex-grow-1"
+              (click)="accountModalOpen.set(true)"
+              title="My account"
+            >
+              <div class="avatar-circle">
+                <i class="bi bi-person-fill"></i>
               </div>
-              <div class="x-small text-muted">
-                {{ auth.currentUser()?.is_admin ? "Administrator" : "User" }}
+              <div class="flex-grow-1 overflow-hidden">
+                <div class="small fw-semibold text-truncate">
+                  {{ auth.currentUser()?.username }}
+                </div>
+                <div class="x-small text-muted">
+                  {{ auth.currentUser()?.is_admin ? "Administrator" : "User" }}
+                </div>
               </div>
             </div>
+
             <button
-              class="btn btn-sm btn-link text-muted p-0"
-              (click)="auth.logout(); $event.stopPropagation()"
+              class="btn btn-sm btn-link text-muted p-0 logout-button"
+              (click)="auth.logout()"
               title="Logout"
             >
               <i class="bi bi-box-arrow-right"></i>
