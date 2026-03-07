@@ -9,11 +9,11 @@ import {
   DestroyRef,
   inject,
   OnInit,
-  signal,
+  signal
 } from "@angular/core";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { RouterLink } from "@angular/router";
-import { Subject, switchMap, takeWhile } from "rxjs";
+import { Subject, switchMap, takeWhile, timer } from "rxjs";
 import { AppConfigService } from "../../core/services/app-config.service";
 import { AuthService } from "../../core/services/auth.service";
 import {
@@ -66,26 +66,30 @@ export class DashboardComponent implements OnInit {
     this.refresh();
   }
 
+  /**
+   * Setup garbage collection status polling.
+   * When gcPollTrigger$ emits, start polling getGCStatus() every 2 seconds
+   * until status changes from "running" to "done" or "failed".
+   * On completion, reload stats and recheck for ghost repositories.
+   */
   private setupGCPolling(): void {
-    import("rxjs").then(({ timer }) => {
-      this.gcPollTrigger$
-        .pipe(
-          switchMap(() =>
-            timer(0, 2000).pipe(
-              switchMap(() => this.registryService.getGCStatus()),
-              takeWhile((s) => s.status === "running", /* inclusive */ true),
-            ),
+    this.gcPollTrigger$
+      .pipe(
+        switchMap(() =>
+          timer(0, 2000).pipe(
+            switchMap(() => this.registryService.getGCStatus()),
+            takeWhile((s) => s.status === "running", /* inclusive */ true),
           ),
-          takeUntilDestroyed(this.destroyRef),
-        )
-        .subscribe((s) => {
-          this.gcStatus.set(s);
-          if (s.status === "done") {
-            this.loadStats(false);
-            this.checkGhostRepos();
-          }
-        });
-    });
+        ),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe((s) => {
+        this.gcStatus.set(s);
+        if (s.status === "done") {
+          this.loadStats(false);
+          this.checkGhostRepos();
+        }
+      });
   }
 
   // ── Public methods ────────────────────────────────────────────────────────
