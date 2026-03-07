@@ -54,6 +54,7 @@ export class ImageDetailComponent implements OnInit {
   addingTag = signal(false);
   deleteTagTarget = signal<string | null>(null);
   deletingTag = signal(false);
+  copyingTag = signal<string | null>(null);
 
   objectKeys = Object.keys;
 
@@ -154,8 +155,18 @@ export class ImageDetailComponent implements OnInit {
   }
 
   copyToClipboard(tag: string) {
+    if (this.copyingTag()) return;
+
     const cmd = `docker pull ${window.location.host}/${this.repository()}:${tag}`;
-    navigator.clipboard.writeText(cmd);
+    this.copyingTag.set(tag);
+    navigator.clipboard
+      .writeText(cmd)
+      .catch(() => {
+        // no-op: keep current UX if clipboard is unavailable
+      })
+      .finally(() => {
+        window.setTimeout(() => this.copyingTag.set(null), 450);
+      });
   }
 
   formatBytes(bytes: number): string {

@@ -58,6 +58,7 @@ export class DashboardComponent implements OnInit {
   orphanOciSize = signal("");
   orphanOciChecked = signal(false);
   purgingOrphanOci = signal(false);
+  orphanOciRefreshing = signal(false);
 
   private gcPollTrigger$ = new Subject<void>();
 
@@ -175,13 +176,18 @@ export class DashboardComponent implements OnInit {
   // ── Orphan OCI layouts ───────────────────────────────────────────────────
 
   checkOrphanOci() {
+    this.orphanOciRefreshing.set(true);
     this.stagingService.getOrphanOci().subscribe({
       next: (res) => {
         this.orphanOciDirs.set(res.dirs);
         this.orphanOciSize.set(res.total_size_human);
         this.orphanOciChecked.set(true);
+        this.orphanOciRefreshing.set(false);
       },
-      error: () => this.orphanOciChecked.set(true),
+      error: () => {
+        this.orphanOciChecked.set(true);
+        this.orphanOciRefreshing.set(false);
+      },
     });
   }
 
