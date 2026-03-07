@@ -1,78 +1,23 @@
-from fastapi import APIRouter, HTTPException, Query, Depends
+from fastapi import APIRouter, Query, Depends
 from pydantic import BaseModel
 
 from ..services.process_manager import (
     get_all_process_statuses,
-    run_registry_garbage_collect,
-)
-from ..services.trivy_service import (
-    get_trivy_db_info,
-    has_explicit_tag_or_digest,
-    scan_image,
-    update_trivy_db,
 )
 from ..services.audit_service import get_recent_audit_events
 from ..core.jwt import UserInfo, require_admin
 
-router = APIRouter(prefix="/api/system", tags=["system"])
+router = APIRouter()
 
 
 class AuditEventsResponse(BaseModel):
     events: list[dict[str, object]]
 
 
-class GCResult(BaseModel):
-    success: bool
-    output: str
-    dry_run: bool
-    return_code: int | None = None
-
-
 @router.get("/processes")
 async def list_processes(_: UserInfo = Depends(require_admin)):
     """Returns runtime status of all supervised processes."""
     return await get_all_process_statuses()
-
-
-@router.get("/trivy/db")
-async def trivy_db_status(_: UserInfo = Depends(require_admin)):
-    """Returns Trivy vulnerability database info and freshness status."""
-    return await get_trivy_db_info()
-
-
-@router.post("/trivy/db/update")
-async def force_trivy_update(_: UserInfo = Depends(require_admin)):
-    """Forces an immediate Trivy DB update."""
-    result = await update_trivy_db()
-    if not result["success"]:
-        raise HTTPException(status_code=500, detail=result["output"])
-    return result
-
-
-@router.get("/trivy/scan")
-async def scan(
-    image: str = Query(..., description="Full image ref with explicit tag or digest"),
-    severity: list[str] = Query(default=["HIGH", "CRITICAL"]),
-    ignore_unfixed: bool = Query(default=False),
-    _: UserInfo = Depends(require_admin),
-):
-    """
-    Scans a specific image from the local registry with Trivy.
-    Returns grouped vulnerabilities with CVSS scores.
-    """
-    if not has_explicit_tag_or_digest(image):
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                "Image reference must include an explicit tag or digest "
-                "(example: production/redis:7.2 or production/redis@sha256:...)."
-            ),
-        )
-
-    result = await scan_image(image, severity=severity, ignore_unfixed=ignore_unfixed)
-    if not result.get("success"):
-        raise HTTPException(status_code=500, detail=result.get("error"))
-    return result
 
 
 @router.get("/audit/logs", response_model=AuditEventsResponse)
@@ -82,16 +27,3 @@ async def get_audit_logs(
 ):
     """Returns the most recent in-memory audit log events (newest first)."""
     return {"events": get_recent_audit_events(limit=limit)}
-
-
-@router.post("/gc", response_model=GCResult)
-async def garbage_collect(dry_run: bool = False, _: UserInfo = Depends(require_admin)):
-    """
-    Triggers registry garbage collection.
-    Stops the registry, runs GC, restarts it.
-    Use dry_run=true to preview what would be deleted.
-    """
-    result = await run_registry_garbage_collect(dry_run=dry_run)
-    if not result["success"]:
-        raise HTTPException(status_code=500, detail=result["output"])
-    return result

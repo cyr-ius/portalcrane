@@ -25,6 +25,7 @@ from .routers import (
     registry_proxy,
     staging,
     system,
+    trivy,
 )
 
 _FRONTEND_DIR = Path("/app/frontend/dist/portalcrane/browser").resolve()
@@ -75,7 +76,8 @@ app.include_router(config_router.router, prefix="/api/config", tags=["Configurat
 app.include_router(about.router, prefix="/api", tags=["About"])
 app.include_router(registry_proxy.router, prefix="", tags=["Registry Proxy"])
 app.include_router(folders.router, prefix="/api/folders", tags=["Folders"])
-app.include_router(system.router)
+app.include_router(trivy.router, prefix="/api/trivy", tags=["Trivy"])
+app.include_router(system.router, prefix="/api/system", tags=["System"])
 app.include_router(
     external_registries.router, prefix="/api/external", tags=["External Registries"]
 )
