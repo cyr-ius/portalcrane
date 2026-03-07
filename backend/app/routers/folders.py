@@ -417,3 +417,21 @@ async def list_folder_names(
     the actual permission boundaries rather than the raw image path segments.
     """
     return [f["name"] for f in _load_folders() if f["name"] != ROOT_FOLDER_NAME]
+
+
+def remove_permissions_for_username(username: str) -> int:
+    """Remove a username from all folder permission lists and return removals."""
+    folders = _load_folders()
+    removed_count = 0
+
+    for folder in folders:
+        perms = folder.get("permissions", [])
+        filtered = [p for p in perms if p.get("username") != username]
+        removed_count += len(perms) - len(filtered)
+        folder["permissions"] = filtered
+
+    if removed_count:
+        _save_folders(folders)
+
+    return removed_count
+
