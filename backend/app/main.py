@@ -64,17 +64,11 @@ async def audit_web_ui_actions(request, call_next):
 
 # ── Routers ───────────────────────────────────────────────────────────────────
 
-# Local authentication + user management
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
-
-# Personal access tokens (docker login for OIDC users)
 app.include_router(
     personal_tokens.router, prefix="/api/auth", tags=["Personal Access Tokens"]
 )
-
-# OIDC flow (public config, callback, admin settings)
 app.include_router(oidc.router, prefix="/api/oidc", tags=["OIDC"])
-
 app.include_router(registry.router, prefix="/api/registry", tags=["Registry"])
 app.include_router(staging.router, prefix="/api/staging", tags=["Staging"])
 app.include_router(dashboard.router, prefix="/api/dashboard", tags=["Dashboard"])
