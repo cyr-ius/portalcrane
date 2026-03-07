@@ -125,8 +125,14 @@ def verify_personal_token(raw_token: str, settings: Settings) -> str | None:
 
     Returns the username string on success, None on any failure.
     """
+    token_to_decode = raw_token
+    if raw_token.startswith(_TOKEN_PREFIX):
+        token_to_decode = raw_token[len(_TOKEN_PREFIX) :]
+
     try:
-        payload = jwt.decode(raw_token, settings.secret_key, algorithms=[ALGORITHM])
+        payload = jwt.decode(
+            token_to_decode, settings.secret_key, algorithms=[ALGORITHM]
+        )
     except Exception:
         return None
 
