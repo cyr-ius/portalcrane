@@ -4,17 +4,13 @@ Main FastAPI application entry point.
 """
 
 import logging
-import os
-from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
-from .config import STAGING_DIR, get_settings
+from .config import get_settings
 from .routers import (
     about,
     auth,
@@ -40,28 +36,12 @@ logging.basicConfig(
 )
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Application lifespan manager — startup and shutdown hooks."""
-    os.makedirs(STAGING_DIR, exist_ok=True)
-    yield
-
-
 app = FastAPI(
     title="Portalcrane API",
     description="Docker Registry Management API",
     version="1.0.0",
-    lifespan=lifespan,
 )
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
 
 # ── Routers ───────────────────────────────────────────────────────────────────
 
