@@ -9,11 +9,13 @@ import { inject } from "@angular/core";
 import { catchError, throwError } from "rxjs";
 
 import { AuthService } from "../services/auth.service";
+import { BackendAvailabilityService } from "../services/backend-availability.service";
 import { SessionExpiredService } from "../services/session-expired.service";
 
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const auth = inject(AuthService);
   const sessionExpired = inject(SessionExpiredService);
+  const backendAvailability = inject(BackendAvailabilityService);
   const token = auth.getToken();
 
   // Attach Authorization header to all API requests when a token is available
@@ -29,6 +31,15 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
         auth.clearSession();
         sessionExpired.show();
       }
+
+      const isBackendDownError = [0, 502, 503, 504].includes(error.status);
+      const isApiRequest = req.url.includes("/api/");
+      const isHealthCheck = req.url.includes("/api/health");
+
+      if (isBackendDownError && isApiRequest && !isHealthCheck) {
+        backendAvailability.markBackendUnavailable();
+      }
+
       return throwError(() => error);
     }),
   );
