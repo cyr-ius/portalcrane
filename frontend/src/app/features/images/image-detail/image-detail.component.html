@@ -18,10 +18,15 @@
           class="card-header border-0 d-flex align-items-center justify-content-between"
         >
           <h6 class="fw-semibold mb-0">Tags</h6>
-          <button class="btn btn-sm btn-primary" (click)="showAddTag.set(true)">
+          <button class="btn btn-sm btn-primary" (click)="showAddTag.set(true)" [disabled]="!canManageRepository()" [title]="canManageRepository() ? 'Add Tag' : 'No push permission on this folder'">
             <i class="bi bi-plus-lg me-1"></i>Add Tag
           </button>
         </div>
+        @if (!canManageRepository()) {
+          <div class="px-3 pb-2">
+            <small class="text-muted">Vous avez accès en lecture seule sur ce dossier.</small>
+          </div>
+        }
 
         <!-- Add tag form -->
         @if (showAddTag()) {
@@ -63,7 +68,7 @@
               <button
                 class="btn btn-success"
                 (click)="addTag()"
-                [disabled]="!newTagName() || addingTag()"
+                [disabled]="!canManageRepository() || !newTagName() || addingTag()"
               >
                 @if (addingTag()) {
                   <span class="spinner-border spinner-border-sm"></span>
@@ -115,7 +120,8 @@
                   <button
                     class="btn btn-sm btn-outline-danger border-0"
                     (click)="$event.stopPropagation(); confirmDeleteTag(tag)"
-                    title="Delete tag"
+                    [disabled]="!canManageRepository()"
+                    [title]="canManageRepository() ? 'Delete tag' : 'No push permission on this folder'"
                   >
                     <i class="bi bi-trash"></i>
                   </button>
