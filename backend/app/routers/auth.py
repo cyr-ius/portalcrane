@@ -30,6 +30,9 @@ from ..core.jwt import (
     require_admin,
 )
 from ..core.security import hash_password, verify_user
+from ..services.external_registry_service import delete_registries_for_owner
+from .folders import remove_permissions_for_username
+from .personal_tokens import revoke_tokens_for_username
 
 router = APIRouter()
 
@@ -394,9 +397,16 @@ async def delete_local_user(
             status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
         )
 
+    username = target["username"]
+
     # Persist revocation before removing the record for OIDC accounts
     if target.get("auth_source") == AUTH_SOURCE_OIDC:
-        revoke_oidc_username(target["username"])
+        revoke_oidc_username(username)
+
+    # Cascade cleanup for resources tied to this account
+    remove_permissions_for_username(username)
+    delete_registries_for_owner(username)
+    revoke_tokens_for_username(username)
 
     _save_users([u for u in users if u["id"] != user_id])
 

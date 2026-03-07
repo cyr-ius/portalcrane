@@ -145,6 +145,16 @@ def delete_registry(registry_id: str) -> bool:
     return True
 
 
+def delete_registries_for_owner(owner: str) -> int:
+    """Delete all personal registries owned by *owner* and return count."""
+    registries = _load_registries()
+    new_list = [r for r in registries if r.get("owner", "global") != owner]
+    deleted_count = len(registries) - len(new_list)
+    if deleted_count:
+        _save_registries(new_list)
+    return deleted_count
+
+
 # ── Connectivity test ─────────────────────────────────────────────────────────
 
 
