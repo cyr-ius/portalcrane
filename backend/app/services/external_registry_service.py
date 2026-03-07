@@ -157,7 +157,9 @@ async def test_registry_connection(host: str, username: str, password: str) -> d
     url = f"{url_base.rstrip('/')}/v2/"
     auth = (username, password) if username and password else None
     try:
-        async with httpx.AsyncClient(timeout=10, verify=False) as client:
+        async with httpx.AsyncClient(
+            timeout=10, verify=False, follow_redirects=True
+        ) as client:
             resp = await client.get(url, auth=auth)
         if resp.status_code in (200, 401):
             auth_ok = resp.status_code == 200 or (resp.status_code == 401 and not auth)
