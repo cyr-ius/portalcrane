@@ -132,6 +132,18 @@ def _extract_image_path(v2_path: str) -> str:
     return v2_path
 
 
+def _is_push_preflight_head(v2_path: str, method: str) -> bool:
+    """Return True for HEAD probes commonly issued during docker push.
+
+    docker push performs HEAD checks against blobs/manifests to discover whether
+    content already exists. Those probes should be accepted for users who can
+    push, even when they don't have explicit pull permission.
+    """
+    if method != "HEAD":
+        return False
+    return "/blobs/" in v2_path or "/manifests/" in v2_path
+
+
 def _client_ip(request: Request) -> str:
     """Extract the real client IP, handling common reverse-proxy headers."""
     forwarded = request.headers.get("forwarded")
@@ -244,7 +256,13 @@ async def _authorize_registry_proxy(
 
     is_pull = method in _PULL_METHODS
     image_path = _extract_image_path(v2_path)
-    folder_result = check_folder_access(username, image_path, is_pull=is_pull)
+
+    if _is_push_preflight_head(v2_path=v2_path, method=method):
+        can_pull = check_folder_access(username, image_path, is_pull=True)
+        can_push = check_folder_access(username, image_path, is_pull=False)
+        folder_result = True if (can_pull is True or can_push is True) else can_pull
+    else:
+        folder_result = check_folder_access(username, image_path, is_pull=is_pull)
 
     if folder_result is True:
         return None
