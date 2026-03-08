@@ -129,7 +129,6 @@ export interface OrphanOCIResult {
 export const ACTIVE_STATUSES: JobStatus[] = [
   "pending",
   "pulling",
-  "scanning",
   "vuln_scanning",
   "pushing",
 ];
