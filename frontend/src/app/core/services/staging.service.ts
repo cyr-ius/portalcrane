@@ -133,6 +133,14 @@ export const ACTIVE_STATUSES: JobStatus[] = [
   "pushing",
 ];
 
+export const TERMINATE_STATUSES: JobStatus[] = [
+    "scan_clean",
+    "scan_skipped",
+    "done",
+    "scan_vulnerable",
+    "failed",
+  ]
+
 // ── Service ───────────────────────────────────────────────────────────────────
 
 @Injectable({ providedIn: "root" })

@@ -34,6 +34,7 @@ import {
   DockerHubResult,
   StagingJob,
   StagingService,
+  TERMINATE_STATUSES,
 } from "../../core/services/staging.service";
 
 
@@ -66,6 +67,7 @@ export class StagingComponent implements OnInit {
   jobs = signal<StagingJob[]>([]);
 
   readonly ACTIVE_STATUSES = ACTIVE_STATUSES
+  readonly TERMINATE_STATUSES = TERMINATE_STATUSES
 
   // ── Docker Hub search ──────────────────────────────────────────────────────
   searchQuery = signal("");
@@ -506,16 +508,7 @@ export class StagingComponent implements OnInit {
    * regardless of what the backend reported.
    */
   displayProgress(job: StagingJob): number {
-    if (
-      [
-        "scan_clean",
-        "scan_skipped",
-        "done",
-        "scan_vulnerable",
-        "scan_infected",
-        "failed",
-      ].includes(job.status)
-    ) {
+    if (TERMINATE_STATUSES.includes(job.status)) {
       return 100;
     }
     return job.progress;
