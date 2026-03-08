@@ -203,7 +203,6 @@ def verify_personal_token(raw_token: str, settings: Settings) -> str | None:
     return None
 
 
-
 def revoke_tokens_for_username(username: str) -> int:
     """Revoke all PATs owned by *username* and return the number removed."""
     tokens = _load_tokens()

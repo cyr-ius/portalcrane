@@ -98,7 +98,11 @@ async def list_registries(
     List external registries visible to the current user.
     Admins see all registries; regular users see global + their own.
     """
-    logger.debug("[external] list registries requested by user=%s is_admin=%s", current_user.username, current_user.is_admin)
+    logger.debug(
+        "[external] list registries requested by user=%s is_admin=%s",
+        current_user.username,
+        current_user.is_admin,
+    )
     if current_user.is_admin:
         return get_registries(owner=None)
     return get_registries(owner=current_user.username)
@@ -129,7 +133,12 @@ async def add_registry(
         # Default: personal registry owned by the requesting user
         effective_owner = current_user.username
 
-    logger.debug("[external] create registry requested by user=%s host=%s owner=%s", current_user.username, payload.host, effective_owner)
+    logger.debug(
+        "[external] create registry requested by user=%s host=%s owner=%s",
+        current_user.username,
+        payload.host,
+        effective_owner,
+    )
 
     return create_registry(
         name=payload.name,
@@ -170,7 +179,11 @@ async def edit_registry(
             detail="Only admins can make a registry global",
         )
 
-    logger.debug("[external] edit registry requested by user=%s id=%s", current_user.username, registry_id)
+    logger.debug(
+        "[external] edit registry requested by user=%s id=%s",
+        current_user.username,
+        registry_id,
+    )
 
     updated = update_registry(
         registry_id=registry_id,
@@ -207,7 +220,11 @@ async def remove_registry(
             status_code=status.HTTP_403_FORBIDDEN, detail="Access denied"
         )
 
-    logger.debug("[external] delete registry requested by user=%s id=%s", current_user.username, registry_id)
+    logger.debug(
+        "[external] delete registry requested by user=%s id=%s",
+        current_user.username,
+        registry_id,
+    )
 
     if not delete_registry(registry_id):
         raise HTTPException(
@@ -221,7 +238,11 @@ async def test_registry(
     _: UserInfo = Depends(get_current_user),
 ):
     """Test connectivity to a registry (without saving it)."""
-    logger.debug("[external] test unsaved registry requested by user=%s host=%s", _.username, payload.host)
+    logger.debug(
+        "[external] test unsaved registry requested by user=%s host=%s",
+        _.username,
+        payload.host,
+    )
     return await test_registry_connection(
         host=payload.host,
         username=payload.username,
@@ -250,7 +271,12 @@ async def test_saved_registry(
             status_code=status.HTTP_403_FORBIDDEN, detail="Access denied"
         )
 
-    logger.debug("[external] test saved registry requested by user=%s id=%s host=%s", current_user.username, registry_id, registry.get("host"))
+    logger.debug(
+        "[external] test saved registry requested by user=%s id=%s host=%s",
+        current_user.username,
+        registry_id,
+        registry.get("host"),
+    )
     return await test_registry_connection(
         host=registry["host"],
         username=registry.get("username", ""),
@@ -270,7 +296,13 @@ async def push_to_external(
     """Push a staged OCI layout directory to an external registry via skopeo."""
     import os
 
-    logger.debug("[external] push requested by user=%s job_id=%s registry_id=%s registry_host=%s", current_user.username, payload.job_id, payload.registry_id, payload.registry_host)
+    logger.debug(
+        "[external] push requested by user=%s job_id=%s registry_id=%s registry_host=%s",
+        current_user.username,
+        payload.job_id,
+        payload.registry_id,
+        payload.registry_host,
+    )
 
     if payload.registry_id:
         registry = get_registry_by_id(payload.registry_id)
@@ -325,7 +357,13 @@ async def push_to_external(
     tag = payload.tag or job["tag"]
     dest_ref = build_target_path(folder, image_name, tag, host)
 
-    logger.debug("[external] push resolved destination host=%s image=%s tag=%s folder=%s", host, image_name, tag, folder)
+    logger.debug(
+        "[external] push resolved destination host=%s image=%s tag=%s folder=%s",
+        host,
+        image_name,
+        tag,
+        folder,
+    )
 
     success, message = await skopeo_push(
         oci_dir=oci_dir,
@@ -368,7 +406,12 @@ async def start_sync(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
         )
 
-    logger.debug("[external] sync start requested source=%s dest_registry_id=%s folder=%s", payload.source_image, payload.dest_registry_id, folder)
+    logger.debug(
+        "[external] sync start requested source=%s dest_registry_id=%s folder=%s",
+        payload.source_image,
+        payload.dest_registry_id,
+        folder,
+    )
 
     dest_registry = get_registry_by_id(payload.dest_registry_id)
     if not dest_registry:

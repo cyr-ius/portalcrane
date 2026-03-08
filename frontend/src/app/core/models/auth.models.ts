@@ -54,4 +54,3 @@ export interface OidcAdminSettings {
   response_type: string;
   scope: string;
 }
-

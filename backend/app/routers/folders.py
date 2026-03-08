@@ -434,4 +434,3 @@ def remove_permissions_for_username(username: str) -> int:
         _save_folders(folders)
 
     return removed_count
-
