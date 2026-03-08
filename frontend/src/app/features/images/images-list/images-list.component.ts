@@ -1,24 +1,20 @@
 /**
  * Portalcrane - Images List Component
  * Displays registry images in flat list or hierarchical folder tree view.
- *
- * Navigation to the image detail page now uses /images/detail with a
- * queryParam ?repository=... instead of /images/:repository path segment,
- * to avoid %2F encoding issues with reverse proxies.
- *
- * Changes vs original:
- *  - configuredFolderNames signal: list of real Portalcrane folder names
- *    fetched from GET /api/folders/names (accessible to all authenticated users).
- *  - folderTree now applies the same logic as the backend get_folder_for_path():
- *      * first segment matches a configured folder → visual folder = that segment
- *      * first segment unknown OR no slash → visual folder = "(root)"
- *    This ensures the visual tree reflects actual permission boundaries.
- *  - imageShortName: unknown prefix → full name shown, known prefix → suffix only.
  */
 import { HttpClient } from "@angular/common/http";
-import { Component, computed, inject, OnInit, signal } from "@angular/core";
+import {
+  Component,
+  computed,
+  DestroyRef,
+  inject,
+  OnInit,
+  signal,
+} from "@angular/core";
+import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { FormsModule } from "@angular/forms";
 import { Router } from "@angular/router";
+import { debounceTime, distinctUntilChanged, Subject } from "rxjs";
 import { AuthService } from "../../../core/services/auth.service";
 import {
   ImageInfo,
@@ -55,6 +51,7 @@ export class ImagesListComponent implements OnInit {
   private router = inject(Router);
   private readonly authService = inject(AuthService);
   private readonly http = inject(HttpClient);
+  private readonly destroyRef = inject(DestroyRef);
   private readonly VIEW_MODE_KEY = "pc_images_view_mode";
 
   // ── Remote data ────────────────────────────────────────────────────────────
@@ -63,7 +60,8 @@ export class ImagesListComponent implements OnInit {
   currentPage = signal(1);
   pageSize = 20;
   searchQuery = "";
-  private searchTimeout: ReturnType<typeof setTimeout> | null = null;
+
+  private readonly searchQuery$ = new Subject<string>();
 
   // ── View mode ──────────────────────────────────────────────────────────────
   viewMode = signal<ViewMode>(
@@ -71,14 +69,6 @@ export class ImagesListComponent implements OnInit {
   );
   allowedFolders = signal<string[]>([]);
   expandedFolders = signal<Set<string>>(new Set());
-
-  /**
-   * Names of all Portalcrane folders configured by the admin.
-   * Fetched from GET /api/folders/names (accessible to all authenticated users).
-   * Used by folderTree to apply the same grouping logic as the backend:
-   *   - known prefix  → own visual folder
-   *   - unknown prefix OR no slash → "(root)"
-   */
   configuredFolderNames = signal<string[]>([]);
 
   // ── Client-side sort & filter state ────────────────────────────────────────
@@ -129,92 +119,47 @@ export class ImagesListComponent implements OnInit {
     const field = this.sortField();
     const dir = this.sortDir() === "asc" ? 1 : -1;
     return [...filtered].sort((a, b) => {
-      if (field === "tag_count") return (a.tag_count - b.tag_count) * dir;
-      return a.name.localeCompare(b.name) * dir;
+      if (field === "name") return dir * a.name.localeCompare(b.name);
+      return dir * (a.tag_count - b.tag_count);
     });
   });
 
-  // ── Derived: folder tree (uses accessibleItems + configuredFolderNames) ───
+  // ── Derived: folder tree ───────────────────────────────────────────────────
   folderTree = computed<FolderNode[]>(() => {
     const items = this.accessibleItems();
-    const knownFolders = new Set(this.configuredFolderNames());
     const map = new Map<string, ImageInfo[]>();
-
     for (const img of items) {
-      const slashIdx = img.name.indexOf("/");
-      let visualFolder: string;
-
-      if (slashIdx === -1) {
-        // No slash → always root (e.g. "nginx")
-        visualFolder = "(root)";
-      } else {
-        const prefix = img.name.substring(0, slashIdx);
-        // Apply the same logic as the backend get_folder_for_path():
-        // known prefix → own visual folder, unknown prefix → root
-        visualFolder = knownFolders.has(prefix) ? prefix : "(root)";
-      }
-
-      if (!map.has(visualFolder)) map.set(visualFolder, []);
-      map.get(visualFolder)!.push(img);
+      const folder = this.folderNameForImage(img.name);
+      const list = map.get(folder) ?? [];
+      list.push(img);
+      map.set(folder, list);
     }
-
-    const nodes: FolderNode[] = [];
-    const sortedKeys = [...map.keys()].sort((a, b) => {
-      if (a === "(root)") return -1;
-      if (b === "(root)") return 1;
-      return a.localeCompare(b);
-    });
-
-    for (const key of sortedKeys) {
-      nodes.push({
-        name: key,
-        images: map.get(key)!.sort((a, b) => a.name.localeCompare(b.name)),
-      });
-    }
-    return nodes;
+    // Sort: (root) first, then alphabetically
+    return [...map.entries()]
+      .sort(([a], [b]) => {
+        if (a === "(root)") return -1;
+        if (b === "(root)") return 1;
+        return a.localeCompare(b);
+      })
+      .map(([name, images]) => ({ name, images }));
   });
 
-  // ── Pagination helpers ─────────────────────────────────────────────────────
-  pageStart = computed(() => {
-    const d = this.data();
-    if (!d) return 0;
-    return (d.page - 1) * d.page_size + 1;
-  });
-
-  pageEnd = computed(() => {
-    const d = this.data();
-    if (!d) return 0;
-    return Math.min(d.page * d.page_size, d.total);
-  });
-
-  pages = computed(() => {
-    const d = this.data();
-    if (!d) return [];
-    const total = d.total_pages;
-    const current = d.page;
-    const delta = 2;
-    const result: number[] = [];
-    for (
-      let i = Math.max(1, current - delta);
-      i <= Math.min(total, current + delta);
-      i++
-    ) {
-      result.push(i);
-    }
-    return result;
-  });
-
-  // ── Copy destination preview ───────────────────────────────────────────────
-  copyDestPreview = computed(() => {
+  // ── Copy preview ───────────────────────────────────────────────────────────
+  readonly copyDestPreview = computed(() => {
     const folder = this.copyDestFolder().trim();
     const name = this.copyDestName().trim();
     const tag = this.copyDestTag().trim();
-    if (!name) return "";
-    return folder ? `${folder}/${name}:${tag}` : `${name}:${tag}`;
+    return folder && name && tag
+      ? `${folder}/${name}:${tag}`
+      : name && tag
+        ? `${name}:${tag}`
+        : "";
   });
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
-  ngOnInit() {
+
+  ngOnInit(): void {
+    this.setupSearchDebounce();
     // Load configured folder names first so folderTree grouping is accurate
     this.http.get<string[]>("/api/folders/names").subscribe({
       next: (names) => {
@@ -223,6 +168,32 @@ export class ImagesListComponent implements OnInit {
       },
       error: () => this._loadFoldersAndImages(),
     });
+  }
+
+  // ── Search debounce pipeline ───────────────────────────────────────────────
+
+  /**
+   * Wire the debounced search pipeline once at init.
+   *
+   * searchQuery$ receives the raw input string on every (ngModelChange) event.
+   * debounceTime(400) matches the previous setTimeout delay — the API call is
+   * deferred until the user stops typing for 400 ms.
+   * distinctUntilChanged skips duplicate values (e.g. user types "a", deletes
+   * it, retypes "a" before the debounce fires — only one HTTP call is made).
+   * takeUntilDestroyed(this.destroyRef) automatically unsubscribes when Angular
+   * destroys the component, preventing post-destruction loadImages() calls.
+   */
+  private setupSearchDebounce(): void {
+    this.searchQuery$
+      .pipe(
+        debounceTime(400),
+        distinctUntilChanged(),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe(() => {
+        this.currentPage.set(1);
+        this.loadImages();
+      });
   }
 
   private _loadFoldersAndImages(): void {
@@ -240,7 +211,8 @@ export class ImagesListComponent implements OnInit {
   }
 
   // ── Data loading ───────────────────────────────────────────────────────────
-  loadImages() {
+
+  loadImages(): void {
     this.loading.set(true);
     this.registry
       .getImages(this.currentPage(), this.pageSize, this.searchQuery)
@@ -256,26 +228,37 @@ export class ImagesListComponent implements OnInit {
       });
   }
 
-  onSearch() {
-    if (this.searchTimeout) clearTimeout(this.searchTimeout);
-    this.searchTimeout = setTimeout(() => {
-      this.currentPage.set(1);
-      this.loadImages();
-    }, 400);
+  /**
+   * Called on every (ngModelChange) from the search input.
+   * Feeds the debounce Subject — the actual loadImages() call is deferred
+   * by 400 ms via the pipeline set up in setupSearchDebounce().
+   *
+   * Template binding (unchanged):
+   *   [(ngModel)]="searchQuery" (ngModelChange)="onSearch()"
+   */
+  onSearch(): void {
+    this.searchQuery$.next(this.searchQuery);
   }
 
-  clearSearch() {
+  /**
+   * Called when the user clicks the clear (×) button.
+   * Resets immediately without debounce — explicit user action warrants
+   * instant feedback. Also emits the empty string into the Subject so
+   * any in-flight debounce timer is superseded.
+   */
+  clearSearch(): void {
     this.searchQuery = "";
+    this.searchQuery$.next("");
     this.currentPage.set(1);
     this.loadImages();
   }
 
-  onPageSizeChange() {
+  onPageSizeChange(): void {
     this.currentPage.set(1);
     this.loadImages();
   }
 
-  goToPage(page: number) {
+  goToPage(page: number): void {
     const total = this.data()?.total_pages ?? 1;
     if (page < 1 || page > total) return;
     this.currentPage.set(page);
@@ -283,6 +266,7 @@ export class ImagesListComponent implements OnInit {
   }
 
   // ── Sort helpers ───────────────────────────────────────────────────────────
+
   toggleSort(field: SortField): void {
     if (this.sortField() === field) {
       this.sortDir.set(this.sortDir() === "asc" ? "desc" : "asc");
@@ -314,6 +298,7 @@ export class ImagesListComponent implements OnInit {
   }
 
   // ── Folder tree helpers ────────────────────────────────────────────────────
+
   isFolderExpanded(folderName: string): boolean {
     return this.expandedFolders().has(folderName);
   }
@@ -359,7 +344,6 @@ export class ImagesListComponent implements OnInit {
   private folderNameForImage(imageName: string): string {
     const slashIdx = imageName.indexOf("/");
     if (slashIdx === -1) return "(root)";
-
     const prefix = imageName.substring(0, slashIdx);
     return this.configuredFolderNames().includes(prefix) ? prefix : "(root)";
   }
@@ -374,6 +358,43 @@ export class ImagesListComponent implements OnInit {
     if (this.isAdmin()) return true;
     return this.pushableFolders().length > 0;
   }
+
+  // ── Pagination helpers ────────────────────────────────────────────────────
+
+  /** Index of the first item displayed on the current page (1-based). */
+  pageStart = computed(() => {
+    const d = this.data();
+    if (!d) return 0;
+    return (d.page - 1) * d.page_size + 1;
+  });
+
+  /** Index of the last item displayed on the current page (1-based). */
+  pageEnd = computed(() => {
+    const d = this.data();
+    if (!d) return 0;
+    return Math.min(d.page * d.page_size, d.total);
+  });
+
+  /**
+   * Sliding window of page numbers to display in the pagination bar.
+   * Shows up to 5 pages centred around the current page (delta = 2).
+   */
+  pages = computed(() => {
+    const d = this.data();
+    if (!d) return [];
+    const total = d.total_pages;
+    const current = d.page;
+    const delta = 2;
+    const result: number[] = [];
+    for (
+      let i = Math.max(1, current - delta);
+      i <= Math.min(total, current + delta);
+      i++
+    ) {
+      result.push(i);
+    }
+    return result;
+  });
 
   // ── Copy modal ─────────────────────────────────────────────────────────────
 
@@ -392,7 +413,9 @@ export class ImagesListComponent implements OnInit {
     this.copyMessage.set(null);
 
     if (!this.isAdmin() && this.pushableFolders().length === 0) {
-      this.copyMessage.set("No destination folder available with push permission.");
+      this.copyMessage.set(
+        "No destination folder available with push permission.",
+      );
     }
   }
 
