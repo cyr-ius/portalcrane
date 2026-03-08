@@ -45,78 +45,6 @@
   <!-- ── Scrollable body ─────────────────────────────────────────────────── -->
   <div class="account-drawer-body flex-grow-1 overflow-auto p-4">
 
-    <!-- Docker Hub section -->
-    <div class="card border-0 mb-4">
-      <div class="card-header border-0 pb-0">
-        <h6 class="fw-semibold mb-0">
-          <i class="bi bi-box-seam me-2 text-primary"></i>Docker Hub Account
-        </h6>
-        <p class="text-muted small mt-1 mb-0">
-          Used for Docker Hub search and staging pulls.
-        </p>
-      </div>
-      <div class="card-body">
-        <div class="row g-3">
-          <div class="col-12">
-            <label class="form-label small fw-semibold">Username</label>
-            <input
-              type="text"
-              class="form-control"
-              [value]="dockerHubUsername()"
-              (input)="dockerHubUsername.set($any($event.target).value)"
-              placeholder="dockerhub-username"
-            />
-          </div>
-          <div class="col-12">
-            <label class="form-label small fw-semibold">
-              Password / Access token
-            </label>
-            <input
-              type="password"
-              class="form-control"
-              [value]="dockerHubPassword()"
-              (input)="dockerHubPassword.set($any($event.target).value)"
-              placeholder="••••••••"
-            />
-            @if (dockerHubHasPassword()) {
-              <div class="form-text text-success">
-                <i class="bi bi-check-circle me-1"></i>
-                Credentials saved — enter a new value to update.
-              </div>
-            }
-          </div>
-        </div>
-
-        @if (dockerHubMessage()) {
-          <div class="alert alert-info py-2 small mt-3 mb-0">
-            {{ dockerHubMessage() }}
-          </div>
-        }
-
-        <div class="d-flex gap-2 mt-3">
-          <button
-            class="btn btn-primary btn-sm"
-            (click)="saveDockerHubAccount()"
-            [disabled]="savingDockerHub()"
-          >
-            @if (savingDockerHub()) {
-              <span class="spinner-border spinner-border-sm me-1"></span>
-            } @else {
-              <i class="bi bi-floppy-fill me-1"></i>
-            }
-            Save
-          </button>
-          <button
-            class="btn btn-outline-danger btn-sm"
-            (click)="deleteDockerHubAccount()"
-            [disabled]="savingDockerHub() || !dockerHubHasPassword()"
-          >
-            <i class="bi bi-trash me-1"></i>Remove
-          </button>
-        </div>
-      </div>
-    </div>
-
     <!-- ── Personal Access Tokens section ──────────────────────────────── -->
     <app-personal-tokens-panel />
 
@@ -154,6 +82,36 @@
                   [value]="formName()"
                   (input)="formName.set($any($event.target).value)"
                 />
+              </div>
+              <div class="col-12">
+                <label class="form-label small fw-semibold">Known registries</label>
+                <div class="d-flex flex-wrap gap-2 mb-2">
+                  @for (preset of registryPresets(); track preset.id) {
+                    <button
+                      type="button"
+                      class="btn btn-sm btn-outline-secondary preset-btn"
+                      (click)="selectPreset(preset)"
+                    >
+                      <span class="me-1">{{ preset.logo }}</span>{{ preset.name }}
+                    </button>
+                  }
+                </div>
+                <div class="input-group input-group-sm">
+                  <input
+                    type="text"
+                    class="form-control"
+                    placeholder="Custom host (ex: registry.company.tld)"
+                    [value]="customHost()"
+                    (input)="customHost.set($any($event.target).value)"
+                  />
+                  <button
+                    type="button"
+                    class="btn btn-outline-primary"
+                    (click)="addCustomHostToPresets()"
+                  >
+                    <i class="bi bi-plus-lg me-1"></i>Add to list
+                  </button>
+                </div>
               </div>
               <div class="col-6">
                 <label class="form-label small fw-semibold">Host</label>

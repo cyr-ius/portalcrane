@@ -4,7 +4,6 @@
  *   - login() / logout() with local credentials
  *   - JWT token storage (localStorage)
  *   - reactive user and authentication state (signals)
- *   - Docker Hub account settings
  *
  * OIDC-specific logic (config fetch, redirect, callback) lives in OidcService.
  */
@@ -14,12 +13,7 @@ import { computed, inject, Injectable, signal } from "@angular/core";
 import { Router } from "@angular/router";
 import { tap } from "rxjs";
 
-import {
-  DockerHubAccountSettings,
-  LoginResponse,
-  UpdateDockerHubAccountSettingsRequest,
-  UserInfo,
-} from "../models/auth.models";
+import { LoginResponse, UserInfo } from "../models/auth.models";
 import { OidcService } from "./oidc.service";
 
 @Injectable({ providedIn: "root" })
@@ -111,24 +105,6 @@ export class AuthService {
     return this._token();
   }
 
-  // ── Docker Hub account settings ───────────────────────────────────────────
-
-  /** Fetch Docker Hub credentials for the authenticated user. */
-  getDockerHubAccountSettings() {
-    return this.http.get<DockerHubAccountSettings>(
-      "/api/auth/account/dockerhub",
-    );
-  }
-
-  /** Create or update Docker Hub credentials for the authenticated user. */
-  updateDockerHubAccountSettings(
-    payload: UpdateDockerHubAccountSettingsRequest,
-  ) {
-    return this.http.put<DockerHubAccountSettings>(
-      "/api/auth/account/dockerhub",
-      payload,
-    );
-  }
 
   /**
    * Store a JWT access token in memory and localStorage.

@@ -79,3 +79,7 @@
     opacity: 1;
   }
 }
+
+.preset-btn {
+  border-radius: 999px;
+}

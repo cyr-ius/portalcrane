@@ -4,7 +4,7 @@ Handles local authentication and user management:
   - POST /token           → OAuth2 password-flow token endpoint
   - POST /login           → JSON login endpoint
   - GET  /me              → current user information
-  - GET/PUT /account/dockerhub → per-user Docker Hub credentials
+  - GET /account/dockerhub → Docker Hub credentials source (external registry)
   - GET/POST/PATCH/DELETE /users → local users CRUD
 
 Pull/push permissions are managed exclusively through folder permissions.
@@ -30,14 +30,16 @@ from ..core.jwt import (
     require_admin,
 )
 from ..core.security import hash_password, verify_user
-from ..services.external_registry_service import delete_registries_for_owner
+from ..services.external_registry_service import (
+    delete_registries_for_owner,
+    find_registry_credentials_for_host,
+)
 from .folders import remove_permissions_for_username
 from .personal_tokens import revoke_tokens_for_username
 
 router = APIRouter()
 
 _USERS_FILE = Path(f"{DATA_DIR}/local_users.json")
-_ACCOUNT_SETTINGS_FILE = Path(f"{DATA_DIR}/account_settings.json")
 _REVOKED_OIDC_FILE = Path(f"{DATA_DIR}/oidc_revoked.json")
 
 # Valid auth source values stored in the user record.
@@ -118,13 +120,6 @@ class DockerHubAccountSettings(BaseModel):
     has_password: bool = False
 
 
-class UpdateDockerHubAccountSettingsRequest(BaseModel):
-    """Payload to update Docker Hub credentials for the authenticated user."""
-
-    username: str
-    password: str
-
-
 # ─── Local users helpers ──────────────────────────────────────────────────────
 
 
@@ -193,34 +188,12 @@ def _user_to_public(u: dict) -> LocalUserPublic:
     )
 
 
-# ─── Account settings helpers ─────────────────────────────────────────────────
-
-
-def _load_account_settings() -> dict:
-    """Load per-user account settings from disk."""
-    try:
-        if _ACCOUNT_SETTINGS_FILE.exists():
-            return json.loads(_ACCOUNT_SETTINGS_FILE.read_text())
-    except Exception:
-        pass
-    return {}
-
-
-def _save_account_settings(data: dict) -> None:
-    """Persist per-user account settings to disk."""
-    _ACCOUNT_SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
-    _ACCOUNT_SETTINGS_FILE.write_text(json.dumps(data, indent=2))
+# ─── Docker Hub helpers ───────────────────────────────────────────────────────
 
 
 def get_user_dockerhub_credentials(username: str) -> tuple[str, str] | None:
-    """Return (hub_username, hub_password) for username, or None when absent."""
-    data = _load_account_settings()
-    entry = data.get(username, {})
-    hub_user = entry.get("dockerhub_username", "")
-    hub_pass = entry.get("dockerhub_password", "")
-    if hub_user and hub_pass:
-        return hub_user, hub_pass
-    return None
+    """Return Docker Hub credentials from external registries for *username*."""
+    return find_registry_credentials_for_host("docker.io", owner=username)
 
 
 # ─── Endpoints ────────────────────────────────────────────────────────────────
@@ -416,23 +389,15 @@ async def get_dockerhub_account(
     current_user: UserInfo = Depends(get_current_user),
 ) -> DockerHubAccountSettings:
     """Return the Docker Hub credentials stored for the current user."""
-    data = _load_account_settings()
-    entry = data.get(current_user.username, {})
-    return DockerHubAccountSettings(
-        username=entry.get("dockerhub_username", ""),
-        has_password=bool(entry.get("dockerhub_password")),
+    creds = find_registry_credentials_for_host(
+        "docker.io",
+        owner=current_user.username,
     )
+    if creds:
+        username, password = creds
+        return DockerHubAccountSettings(
+            username=username,
+            has_password=bool(password),
+        )
 
-
-@router.put("/account/dockerhub", response_model=DockerHubAccountSettings)
-async def update_dockerhub_account(
-    payload: UpdateDockerHubAccountSettingsRequest,
-    current_user: UserInfo = Depends(get_current_user),
-) -> DockerHubAccountSettings:
-    """Save Docker Hub credentials for the current user."""
-    data = _load_account_settings()
-    data.setdefault(current_user.username, {})
-    data[current_user.username]["dockerhub_username"] = payload.username
-    data[current_user.username]["dockerhub_password"] = payload.password
-    _save_account_settings(data)
-    return DockerHubAccountSettings(username=payload.username, has_password=True)
+    return DockerHubAccountSettings(username="", has_password=False)

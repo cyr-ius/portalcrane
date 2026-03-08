@@ -55,16 +55,3 @@ export interface OidcAdminSettings {
   scope: string;
 }
 
-// ── Account ───────────────────────────────────────────────────────────────────
-
-/** Docker Hub credentials summary returned by /api/auth/account/dockerhub. */
-export interface DockerHubAccountSettings {
-  username: string;
-  has_password: boolean;
-}
-
-/** Payload to update Docker Hub credentials. */
-export interface UpdateDockerHubAccountSettingsRequest {
-  username: string;
-  password: string;
-}

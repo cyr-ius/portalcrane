@@ -119,6 +119,36 @@
                   (input)="formName.set($any($event.target).value)"
                 />
               </div>
+              <div class="col-12">
+                <label class="form-label small fw-semibold">Known registries</label>
+                <div class="d-flex flex-wrap gap-2 mb-2">
+                  @for (preset of registryPresets(); track preset.id) {
+                    <button
+                      type="button"
+                      class="btn btn-sm btn-outline-secondary preset-btn"
+                      (click)="selectPreset(preset)"
+                    >
+                      <span class="me-1">{{ preset.logo }}</span>{{ preset.name }}
+                    </button>
+                  }
+                </div>
+                <div class="input-group input-group-sm">
+                  <input
+                    type="text"
+                    class="form-control"
+                    placeholder="Custom host (e.g. registry.company.tld)"
+                    [value]="customHost()"
+                    (input)="customHost.set($any($event.target).value)"
+                  />
+                  <button
+                    type="button"
+                    class="btn btn-outline-primary"
+                    (click)="addCustomHostToPresets()"
+                  >
+                    <i class="bi bi-plus-lg me-1"></i>Add to list
+                  </button>
+                </div>
+              </div>
               <div class="col-md-6">
                 <label class="form-label small fw-semibold"
                   >Registry host</label

@@ -28,6 +28,10 @@ import { AccountsConfigPanel } from "../../shared/components/accounts-config-pan
 import { FoldersConfigPanel } from "../../shared/components/folders-config-panel/folders-config-panel.component";
 import { OidcConfigPanel } from "../../shared/components/oidc-config-panel/oidc-config-panel";
 import { VulnConfigPanelComponent } from "../../shared/components/vuln-config-panel/vuln-config-panel.component";
+import {
+  KNOWN_REGISTRY_PRESETS,
+  RegistryPreset,
+} from "../../core/constants/registry-presets.constants";
 
 /** Tabs available in the Settings page. */
 type SettingsTab =
@@ -108,6 +112,8 @@ export class SettingsComponent implements OnInit {
   // Add / edit form fields
   formName = signal("");
   formHost = signal("");
+  customHost = signal("");
+  registryPresets = signal<RegistryPreset[]>([...KNOWN_REGISTRY_PRESETS]);
   formUser = signal("");
   formPass = signal("");
   formOwner = signal<string>("personal");
@@ -173,6 +179,7 @@ export class SettingsComponent implements OnInit {
     this.formHost.set("");
     this.formUser.set("");
     this.formPass.set("");
+    this.customHost.set("");
     this.testResult.set(null);
     this.showAddForm.set(true);
     this.formOwner.set("personal");
@@ -184,6 +191,7 @@ export class SettingsComponent implements OnInit {
     this.formHost.set(reg.host);
     this.formUser.set(reg.username);
     this.formPass.set(""); // Do not pre-fill password
+    this.customHost.set("");
     this.testResult.set(null);
     this.showAddForm.set(true);
     this.formOwner.set(reg.owner === "global" ? "global" : "personal");
@@ -192,7 +200,52 @@ export class SettingsComponent implements OnInit {
   cancelForm() {
     this.showAddForm.set(false);
     this.editingId.set(null);
+    this.customHost.set("");
     this.testResult.set(null);
+  }
+
+
+  private normalizeHost(host: string): string {
+    return host
+      .trim()
+      .toLowerCase()
+      .replace(/^https?:\/\//, "")
+      .split("/")[0]
+      .trim();
+  }
+
+  selectPreset(preset: RegistryPreset) {
+    const host = this.normalizeHost(preset.host);
+    this.formHost.set(host);
+    if (!this.formName().trim()) {
+      this.formName.set(preset.name);
+    }
+  }
+
+  addCustomHostToPresets() {
+    const host = this.normalizeHost(this.customHost());
+    if (!host) return;
+
+    const exists = this.registryPresets().some(
+      (p) => this.normalizeHost(p.host) === host,
+    );
+    if (!exists) {
+      this.registryPresets.set([
+        {
+          id: `custom-${host}`,
+          name: host,
+          host,
+          logo: "🏢",
+        },
+        ...this.registryPresets(),
+      ]);
+    }
+
+    this.formHost.set(host);
+    if (!this.formName().trim()) {
+      this.formName.set(host);
+    }
+    this.customHost.set("");
   }
 
   saveRegistry() {

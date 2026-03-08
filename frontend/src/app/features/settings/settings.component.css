@@ -38,3 +38,7 @@
   border-radius: 0.5rem;
   background: var(--pc-bg-secondary, rgba(0, 0, 0, 0.04));
 }
+
+.preset-btn {
+  border-radius: 999px;
+}

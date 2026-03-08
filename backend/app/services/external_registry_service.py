@@ -13,6 +13,7 @@ import asyncio
 import json
 import logging
 import re
+from urllib.parse import urlparse
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -77,6 +78,45 @@ def get_registry_by_id(registry_id: str) -> dict | None:
     for r in _load_registries():
         if r["id"] == registry_id:
             return r
+    return None
+
+
+def _normalize_registry_host(host: str) -> str:
+    """Normalise a registry host (strip scheme, path and trailing slash)."""
+    value = (host or "").strip().lower()
+    if not value:
+        return ""
+    if "://" in value:
+        value = urlparse(value).netloc or value
+    return value.split("/", 1)[0].strip("/")
+
+
+
+def find_registry_credentials_for_host(host: str, owner: str) -> tuple[str, str] | None:
+    """Return (username, password) for matching host from owner registries, then global."""
+    target = _normalize_registry_host(host)
+    if not target:
+        return None
+
+    registries = _load_registries()
+    owner_matches = [
+        r
+        for r in registries
+        if r.get("owner") == owner and _normalize_registry_host(r.get("host", "")) == target
+    ]
+    global_matches = [
+        r
+        for r in registries
+        if r.get("owner", "global") == "global"
+        and _normalize_registry_host(r.get("host", "")) == target
+    ]
+
+    for match in [*owner_matches, *global_matches]:
+        username = (match.get("username") or "").strip()
+        password = match.get("password") or ""
+        if username and password:
+            return username, password
+
     return None
 
 

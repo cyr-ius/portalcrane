@@ -1,6 +1,6 @@
 /**
  * Portalcrane - Account Modal
- * User profile panel: account info, Docker Hub credentials,
+ * User profile panel: account info,
  * personal access tokens, and personal external registries.
  * Accessible to ALL authenticated users via the sidebar user zone.
  */
@@ -11,6 +11,10 @@ import {
   ExternalRegistryService,
 } from "../../../core/services/external-registry.service";
 import { PersonalTokensPanelComponent } from "../personal-tokens-panel/personal-tokens-panel.component";
+import {
+  KNOWN_REGISTRY_PRESETS,
+  RegistryPreset,
+} from "../../../core/constants/registry-presets.constants";
 
 @Component({
   selector: "app-account-modal",
@@ -25,12 +29,6 @@ export class AccountModalComponent implements OnInit {
 
   readonly currentUser = this.authService.currentUser;
 
-  // ── Docker Hub ─────────────────────────────────────────────────────────────
-  dockerHubUsername = signal("");
-  dockerHubPassword = signal("");
-  dockerHubHasPassword = signal(false);
-  savingDockerHub = signal(false);
-  dockerHubMessage = signal<string | null>(null);
 
   // ── Personal external registries ───────────────────────────────────────────
   registries = signal<ExternalRegistry[]>([]);
@@ -38,6 +36,8 @@ export class AccountModalComponent implements OnInit {
   editingId = signal<string | null>(null);
   formName = signal("");
   formHost = signal("");
+  customHost = signal("");
+  registryPresets = signal<RegistryPreset[]>([...KNOWN_REGISTRY_PRESETS]);
   formUser = signal("");
   formPass = signal("");
   savingRegistry = signal(false);
@@ -49,63 +49,9 @@ export class AccountModalComponent implements OnInit {
   testingNew = signal(false);
 
   ngOnInit(): void {
-    this.loadDockerHubAccount();
     this.loadRegistries();
   }
 
-  loadDockerHubAccount(): void {
-    this.authService.getDockerHubAccountSettings().subscribe({
-      next: (cfg) => {
-        this.dockerHubUsername.set(cfg.username || "");
-        this.dockerHubPassword.set("");
-        this.dockerHubHasPassword.set(cfg.has_password);
-      },
-    });
-  }
-
-  saveDockerHubAccount(): void {
-    this.savingDockerHub.set(true);
-    this.dockerHubMessage.set(null);
-    this.authService
-      .updateDockerHubAccountSettings({
-        username: this.dockerHubUsername().trim(),
-        password: this.dockerHubPassword(),
-      })
-      .subscribe({
-        next: (cfg) => {
-          this.savingDockerHub.set(false);
-          this.dockerHubHasPassword.set(cfg.has_password);
-          this.dockerHubPassword.set("");
-          this.dockerHubMessage.set(
-            cfg.has_password ? "Credentials saved." : "Credentials removed.",
-          );
-        },
-        error: (err) => {
-          this.savingDockerHub.set(false);
-          this.dockerHubMessage.set(err?.error?.detail || "Failed to save.");
-        },
-      });
-  }
-
-  deleteDockerHubAccount(): void {
-    this.savingDockerHub.set(true);
-    this.dockerHubMessage.set(null);
-    this.authService
-      .updateDockerHubAccountSettings({ username: "", password: "" })
-      .subscribe({
-        next: () => {
-          this.savingDockerHub.set(false);
-          this.dockerHubUsername.set("");
-          this.dockerHubPassword.set("");
-          this.dockerHubHasPassword.set(false);
-          this.dockerHubMessage.set("Credentials removed.");
-        },
-        error: (err) => {
-          this.savingDockerHub.set(false);
-          this.dockerHubMessage.set(err?.error?.detail || "Failed to remove.");
-        },
-      });
-  }
 
   // ── Personal external registries ───────────────────────────────────────────
 
@@ -122,6 +68,7 @@ export class AccountModalComponent implements OnInit {
     this.formHost.set("");
     this.formUser.set("");
     this.formPass.set("");
+    this.customHost.set("");
     this.testResult.set(null);
     this.showAddForm.set(true);
   }
@@ -132,13 +79,59 @@ export class AccountModalComponent implements OnInit {
     this.formHost.set(reg.host);
     this.formUser.set(reg.username || "");
     this.formPass.set("");
+    this.customHost.set("");
     this.testResult.set(null);
     this.showAddForm.set(true);
   }
 
   cancelForm(): void {
     this.showAddForm.set(false);
+    this.customHost.set("");
     this.testResult.set(null);
+  }
+
+
+  private normalizeHost(host: string): string {
+    return host
+      .trim()
+      .toLowerCase()
+      .replace(/^https?:\/\//, "")
+      .split("/")[0]
+      .trim();
+  }
+
+  selectPreset(preset: RegistryPreset): void {
+    const host = this.normalizeHost(preset.host);
+    this.formHost.set(host);
+    if (!this.formName().trim()) {
+      this.formName.set(preset.name);
+    }
+  }
+
+  addCustomHostToPresets(): void {
+    const host = this.normalizeHost(this.customHost());
+    if (!host) return;
+
+    const exists = this.registryPresets().some(
+      (p) => this.normalizeHost(p.host) === host,
+    );
+    if (!exists) {
+      this.registryPresets.set([
+        {
+          id: `custom-${host}`,
+          name: host,
+          host,
+          logo: "🏢",
+        },
+        ...this.registryPresets(),
+      ]);
+    }
+
+    this.formHost.set(host);
+    if (!this.formName().trim()) {
+      this.formName.set(host);
+    }
+    this.customHost.set("");
   }
 
   saveRegistry(): void {
