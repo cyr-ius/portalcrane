@@ -30,19 +30,12 @@ import {
 } from "../../core/services/external-registry.service";
 import { RegistryService } from "../../core/services/registry.service";
 import {
+  ACTIVE_STATUSES,
   DockerHubResult,
   StagingJob,
   StagingService,
 } from "../../core/services/staging.service";
 
-/** Job statuses that indicate an active pipeline step. */
-const ACTIVE_STATUSES = new Set([
-  "pending",
-  "pulling",
-  "scanning",
-  "vuln_scanning",
-  "pushing",
-]);
 
 /** Push destination modes. */
 export type PushMode = "local" | "external";
@@ -69,11 +62,10 @@ export class StagingComponent implements OnInit {
   private authService = inject(AuthService);
   readonly configService = inject(AppConfigService);
 
-  // Exposed for template access (module-level constant cannot be used directly in templates)
-  readonly ACTIVE_STATUSES = ACTIVE_STATUSES;
-
   // ── Job list ───────────────────────────────────────────────────────────────
   jobs = signal<StagingJob[]>([]);
+
+  readonly ACTIVE_STATUSES = ACTIVE_STATUSES
 
   // ── Docker Hub search ──────────────────────────────────────────────────────
   searchQuery = signal("");
@@ -87,15 +79,10 @@ export class StagingComponent implements OnInit {
   pulling = signal(false);
 
   // ── Pull form — source registry ────────────────────────────────────────────
-  /** Selected source mode for the pull. */
   pullSourceMode = signal<PullSourceMode>("dockerhub");
-  /** ID of the saved external registry to use as source (mode = "saved"). */
   pullSourceRegistryId = signal<string>("");
-  /** Ad-hoc registry host (mode = "adhoc"), e.g. "ghcr.io" or "quay.io". */
   pullSourceHost = signal<string>("");
-  /** Ad-hoc registry username (mode = "adhoc"). */
   pullSourceUser = signal<string>("");
-  /** Ad-hoc registry password or token (mode = "adhoc"). */
   pullSourcePass = signal<string>("");
 
   // ── Push state ─────────────────────────────────────────────────────────────

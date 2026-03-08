@@ -456,10 +456,10 @@
                         job.status === 'done' || job.status === 'scan_clean'
                       "
                       [class.progress-bar-animated]="
-                        ACTIVE_STATUSES.has(job.status)
+                        ACTIVE_STATUSES.includes(job.status)
                       "
                       [class.progress-bar-striped]="
-                        ACTIVE_STATUSES.has(job.status)
+                        ACTIVE_STATUSES.includes(job.status)
                       "
                       [style.width.%]="displayProgress(job)"
                     ></div>

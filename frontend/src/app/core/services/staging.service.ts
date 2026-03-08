@@ -128,7 +128,7 @@ export interface OrphanOCIResult {
 }
 
 /** Active job statuses — used to sort running jobs to the top. */
-const ACTIVE_STATUSES: JobStatus[] = [
+export const ACTIVE_STATUSES: JobStatus[] = [
   "pending",
   "pulling",
   "scanning",
