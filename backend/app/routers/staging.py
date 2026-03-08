@@ -243,6 +243,16 @@ def _resolve_push_host() -> str:
     return urlparse(REGISTRY_URL).netloc
 
 
+
+def _build_external_target_image(image: str, username: str) -> str:
+    """Return external target image path, replacing source namespace with destination username."""
+    if not username:
+        return image
+
+    leaf = image.split("/")[-1]
+    return f"{username}/{leaf}"
+
+
 def _resolve_pull_source(
     request: PullRequest,
     current_user: UserInfo,
@@ -726,7 +736,14 @@ async def push_image(
             username = request.external_registry_username or ""
             password = request.external_registry_password or ""
 
-        dest_ref = build_target_path(folder, target_image, target_tag, host)
+        external_target_image = _build_external_target_image(target_image, username)
+        _logger.debug(
+            "External push image mapping source=%s username=%s mapped=%s",
+            target_image,
+            username,
+            external_target_image,
+        )
+        dest_ref = build_target_path(folder, external_target_image, target_tag, host)
 
         job["status"] = JobStatus.PUSHING
         job["message"] = f"Pushing to external registry {host}..."
@@ -741,7 +758,7 @@ async def push_image(
         if success:
             job["status"] = JobStatus.DONE
             job["message"] = f"✅ Successfully pushed to {dest_ref}"
-            job["target_image"] = target_image
+            job["target_image"] = external_target_image
             job["target_tag"] = target_tag
         else:
             job["status"] = JobStatus.FAILED
