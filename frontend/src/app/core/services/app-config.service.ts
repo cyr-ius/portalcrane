@@ -1,3 +1,6 @@
+/**
+ * Portalcrane - App Config Service
+ */
 import { HttpClient } from "@angular/common/http";
 import { computed, inject, Injectable, signal } from "@angular/core";
 import { tap } from "rxjs";
@@ -68,6 +71,15 @@ export class AppConfigService {
   private _oidcConfig = signal<OidcConfig | null>(null);
   readonly oidcConfig = this._oidcConfig.asReadonly();
 
+  /**
+   * True when the bootstrap call to loadConfig() failed (e.g. the backend
+   * was temporarily unreachable during app initialization).
+   * Cleared automatically on any subsequent successful load.
+   * Components can read this signal to show a non-blocking warning banner.
+   */
+  private _configLoadError = signal(false);
+  readonly configLoadError = this._configLoadError.asReadonly();
+
   // ── User preferences (persisted in localStorage) ──────────────────────────
 
   /** Whether the user has enabled Trivy CVE scanning (local override). */
@@ -105,10 +117,23 @@ export class AppConfigService {
 
   // ── Bootstrap ─────────────────────────────────────────────────────────────
 
+  /**
+   * Fetch the public server configuration from /api/config/public.
+   *
+   * Called once by the app initializer in app.config.ts before any route is
+   * activated.  On success, clears configLoadError and applies server defaults
+   * for every preference key not yet present in localStorage.
+   *
+   * SettingsComponent may also call this to force a reload, but the guard
+   * `if (!this.configService.serverConfig())` prevents redundant HTTP calls
+   * when the config was already loaded at bootstrap.
+   */
   loadConfig() {
     return this.http.get<PublicConfig>("/api/config/public").pipe(
       tap((cfg) => {
         this._serverConfig.set(cfg);
+        // Clear any previous bootstrap error on a successful fetch
+        this._configLoadError.set(false);
         // Apply server defaults only when no local override exists yet
         if (localStorage.getItem(KEYS.VULN_OVERRIDE) === null)
           this._vulnOverride.set(cfg.vuln_scan_override);
@@ -129,6 +154,16 @@ export class AppConfigService {
           this._vulnTimeout.set(cfg.vuln_scan_timeout);
       }),
     );
+  }
+
+  /**
+   * Record a bootstrap config-load failure.
+   * Called by the app initializer's catchError() handler in app.config.ts.
+   * Setting this flag allows the layout component to show a dismissible
+   * warning alert without blocking the user from logging in.
+   */
+  markConfigLoadFailed(): void {
+    this._configLoadError.set(true);
   }
 
   // ── Setters ───────────────────────────────────────────────────────────────

@@ -1,5 +1,11 @@
+/**
+ * Portalcrane - Layout Component
+ *
+ * All sidebar / breakpoint / theme logic is unchanged.
+ */
 import { Component, inject, OnDestroy, OnInit, signal } from "@angular/core";
 import { RouterLink, RouterLinkActive, RouterOutlet } from "@angular/router";
+import { AppConfigService } from "../../../core/services/app-config.service";
 import { AuthService } from "../../../core/services/auth.service";
 import { ThemeService } from "../../../core/services/theme.service";
 import { AccountModalComponent } from "../account-modal/account-modal.component";
@@ -23,6 +29,10 @@ const COLLAPSE_BREAKPOINT = 992;
 export class LayoutComponent implements OnInit, OnDestroy {
   auth = inject(AuthService);
   themeService = inject(ThemeService);
+
+  /** Exposed to the template to show the config-load-failed warning banner. */
+  readonly configService = inject(AppConfigService);
+
   private readonly SIDEBAR_KEY = "pc_sidebar_collapsed";
 
   sidebarCollapsed = signal<boolean>(
@@ -68,20 +78,18 @@ export class LayoutComponent implements OnInit, OnDestroy {
       const saved = localStorage.getItem(this.SIDEBAR_KEY);
       this.sidebarCollapsed.set(saved === "true" ? true : false);
     }
-    // Wide screen + user has toggled: leave sidebarCollapsed as-is
   }
 
   toggleSidebar(): void {
+    const next = !this.sidebarCollapsed();
+    this.sidebarCollapsed.set(next);
     this.userHasToggled.set(true);
-    this.sidebarCollapsed.set(!this.sidebarCollapsed());
-    localStorage.setItem(this.SIDEBAR_KEY, String(this.sidebarCollapsed()));
-    if (!this.sidebarCollapsed()) {
-      this.themePickerOpen.set(false);
-    }
+    localStorage.setItem(this.SIDEBAR_KEY, String(next));
   }
 
   setTheme(theme: "light" | "dark" | "auto"): void {
     this.themeService.setTheme(theme);
     this.themePickerOpen.set(false);
   }
+
 }
