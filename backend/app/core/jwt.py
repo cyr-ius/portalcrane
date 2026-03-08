@@ -130,9 +130,6 @@ def require_pull_access(current_user: UserInfo = Depends(get_current_user)) -> U
     Kept for backward compatibility with routes that use it explicitly.
     """
     if not current_user.is_admin:
-        # Actual pull permission is checked per-image by the registry proxy.
-        # Here we just ensure the user is authenticated (token valid = allowed
-        # to attempt; the proxy enforces the real rule).
         pass
     return current_user
 
