@@ -11,13 +11,13 @@ import { Component, computed, inject, OnInit, signal } from "@angular/core";
 import { toSignal } from "@angular/core/rxjs-interop";
 import { FormsModule } from "@angular/forms";
 import { ActivatedRoute, RouterLink } from "@angular/router";
-import { HttpClient } from "@angular/common/http";
 import { map } from "rxjs/operators";
+import { AuthService } from "../../../core/services/auth.service";
+import { FolderService } from "../../../core/services/folder.service";
 import {
   ImageDetail,
   RegistryService,
 } from "../../../core/services/registry.service";
-import { AuthService } from "../../../core/services/auth.service";
 
 @Component({
   selector: "app-image-detail",
@@ -29,7 +29,7 @@ export class ImageDetailComponent implements OnInit {
   private route = inject(ActivatedRoute);
   private registry = inject(RegistryService);
   private readonly authService = inject(AuthService);
-  private readonly http = inject(HttpClient);
+  private readonly folderSvc = inject(FolderService)
 
   /**
    * Repository name read from the ?repository= query param.
@@ -67,7 +67,7 @@ export class ImageDetailComponent implements OnInit {
     this.registry.getPushableFolders().subscribe({
       next: (folders) => this.pushableFolders.set(folders),
     });
-    this.http.get<string[]>("/api/folders/names").subscribe({
+    this.folderSvc.getFolderNames().subscribe({
       next: (names) => this.configuredFolderNames.set(names),
     });
   }

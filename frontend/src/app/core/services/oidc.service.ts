@@ -12,8 +12,6 @@
 
 import { HttpClient } from "@angular/common/http";
 import { inject, Injectable } from "@angular/core";
-import { tap } from "rxjs";
-
 import { OIDC_STATE_KEY } from "../constants/oidc.constants";
 import {
   LoginResponse,

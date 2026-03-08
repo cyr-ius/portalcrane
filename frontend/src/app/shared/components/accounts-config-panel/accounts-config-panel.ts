@@ -9,7 +9,6 @@
  * - The env-admin row is always read-only.
  */
 
-import { HttpClient } from "@angular/common/http";
 import { Component, inject, OnInit, signal } from "@angular/core";
 import {
   form,
@@ -19,21 +18,8 @@ import {
   submit,
 } from "@angular/forms/signals";
 import { firstValueFrom } from "rxjs";
+import { LocalUser, UpdateUser, UsersService } from "../../../core/services/users.service";
 
-/** Auth source values matching the backend constants. */
-export type AuthSource = "local" | "oidc";
-
-/**
- * Local user as returned by GET /api/auth/users.
- * auth_source distinguishes password-based accounts from SSO-provisioned ones.
- */
-export interface LocalUser {
-  id: string;
-  username: string;
-  is_admin: boolean;
-  created_at: string;
-  auth_source: AuthSource;
-}
 
 @Component({
   selector: "app-accounts-config-panel",
@@ -42,7 +28,7 @@ export interface LocalUser {
   styleUrl: "./accounts-config-panel.css",
 })
 export class AccountsConfigPanel implements OnInit {
-  private http = inject(HttpClient);
+  private usersSvc = inject(UsersService)
 
   // ── Users list ─────────────────────────────────────────────────────────────
   readonly users = signal<LocalUser[]>([]);
@@ -99,7 +85,7 @@ export class AccountsConfigPanel implements OnInit {
   loadUsers(): void {
     this.loading.set(true);
     this.error.set(null);
-    this.http.get<LocalUser[]>("/api/auth/users").subscribe({
+    this.usersSvc.getUser().subscribe({
       next: (users) => {
         this.users.set(users);
         this.loading.set(false);
@@ -139,11 +125,11 @@ export class AccountsConfigPanel implements OnInit {
       const formData = form().value();
       try {
         const user = await firstValueFrom(
-          this.http.post<LocalUser>("/api/auth/users", {
-            username: formData.username.trim(),
-            password: formData.password,
-            is_admin: formData.isAdmin,
-          }),
+          this.usersSvc.createUser(
+            formData.username.trim(),
+            formData.password,
+            formData.isAdmin,
+          )
         );
         this.users.update((list) => [...list, user]);
         this.showCreateForm.set(false);
@@ -185,7 +171,7 @@ export class AccountsConfigPanel implements OnInit {
       }
 
       // Only send password when the field was actually filled in
-      const body: Record<string, unknown> = {
+      const body: UpdateUser = {
         is_admin: formData.isAdmin,
       };
       if (formData.password) {
@@ -194,7 +180,7 @@ export class AccountsConfigPanel implements OnInit {
 
       try {
         const updated = await firstValueFrom(
-          this.http.patch<LocalUser>(`/api/auth/users/${userId}`, body),
+          this.usersSvc.updateUser(userId, body)
         );
         this.users.update((list) =>
           list.map((u) => (u.id === userId ? updated : u)),
@@ -215,7 +201,7 @@ export class AccountsConfigPanel implements OnInit {
   deleteUser(userId: string): void {
     if (userId === "env-admin") return;
     this.deletingId.set(userId);
-    this.http.delete(`/api/auth/users/${userId}`).subscribe({
+    this.usersSvc.deleteUser(userId).subscribe({
       next: () => {
         this.users.update((list) => list.filter((u) => u.id !== userId));
         this.deletingId.set(null);

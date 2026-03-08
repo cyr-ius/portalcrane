@@ -2,7 +2,6 @@
  * Portalcrane - Images List Component
  * Displays registry images in flat list or hierarchical folder tree view.
  */
-import { HttpClient } from "@angular/common/http";
 import {
   Component,
   computed,
@@ -16,6 +15,7 @@ import { FormsModule } from "@angular/forms";
 import { Router } from "@angular/router";
 import { debounceTime, distinctUntilChanged, Subject } from "rxjs";
 import { AuthService } from "../../../core/services/auth.service";
+import { FolderService } from "../../../core/services/folder.service";
 import {
   ImageInfo,
   PaginatedImages,
@@ -49,8 +49,8 @@ interface FolderNode {
 export class ImagesListComponent implements OnInit {
   private registry = inject(RegistryService);
   private router = inject(Router);
+  private readonly folderSvc = inject(FolderService)
   private readonly authService = inject(AuthService);
-  private readonly http = inject(HttpClient);
   private readonly destroyRef = inject(DestroyRef);
   private readonly VIEW_MODE_KEY = "pc_images_view_mode";
 
@@ -161,7 +161,7 @@ export class ImagesListComponent implements OnInit {
   ngOnInit(): void {
     this.setupSearchDebounce();
     // Load configured folder names first so folderTree grouping is accurate
-    this.http.get<string[]>("/api/folders/names").subscribe({
+    this.folderSvc.getFolderNames().subscribe({
       next: (names) => {
         this.configuredFolderNames.set(names);
         this._loadFoldersAndImages();

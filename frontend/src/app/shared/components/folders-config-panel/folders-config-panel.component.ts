@@ -1,29 +1,8 @@
 /**
  * Portalcrane - Folders Configuration Panel
  */
-import { HttpClient } from "@angular/common/http";
 import { Component, computed, inject, OnInit, signal } from "@angular/core";
-
-// ── Models ────────────────────────────────────────────────────────────────────
-
-export interface FolderPermission {
-  username: string;
-  can_pull: boolean;
-  can_push: boolean;
-}
-
-export interface Folder {
-  id: string;
-  name: string;
-  description: string;
-  created_at: string;
-  permissions: FolderPermission[];
-}
-
-export interface UserSummary {
-  id: string;
-  username: string;
-}
+import { Folder, FolderService, UserSummary } from "../../../core/services/folder.service";
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -34,7 +13,7 @@ export interface UserSummary {
   styleUrl: "./folders-config-panel.component.css",
 })
 export class FoldersConfigPanel implements OnInit {
-  private http = inject(HttpClient);
+  private folderSvc = inject(FolderService)
 
   // ── Folders list ───────────────────────────────────────────────────────────
   readonly folders = signal<Folder[]>([]);
@@ -85,7 +64,7 @@ export class FoldersConfigPanel implements OnInit {
   loadFolders(): void {
     this.loading.set(true);
     this.error.set(null);
-    this.http.get<Folder[]>("/api/folders").subscribe({
+    this.folderSvc.getFolders().subscribe({
       next: (folders) => {
         this.folders.set(folders);
         this.loading.set(false);
@@ -99,7 +78,7 @@ export class FoldersConfigPanel implements OnInit {
 
   /** Fetch the user list so the permission form can offer a dropdown. */
   loadUsers(): void {
-    this.http.get<UserSummary[]>("/api/auth/users").subscribe({
+    this.folderSvc.getUserSummaries().subscribe({
       next: (users) => this.users.set(users),
       error: () => this.users.set([]), // Silently ignore if not admin
     });
@@ -122,11 +101,10 @@ export class FoldersConfigPanel implements OnInit {
     if (!this.canCreate()) return;
     this.creating.set(true);
     this.createError.set(null);
-    this.http
-      .post<Folder>("/api/folders", {
-        name: this.newName().trim().toLowerCase(),
-        description: this.newDescription().trim(),
-      })
+    this.folderSvc.createFolder(
+      this.newName().trim().toLowerCase(),
+      this.newDescription().trim(),
+      )
       .subscribe({
         next: (folder) => {
           this.folders.update((list) => [...list, folder]);
@@ -162,10 +140,7 @@ export class FoldersConfigPanel implements OnInit {
 
   saveDesc(folderId: string): void {
     this.savingDesc.set(true);
-    this.http
-      .patch<Folder>(`/api/folders/${folderId}`, {
-        description: this.editDesc().trim(),
-      })
+    this.folderSvc.saveDesc(folderId, this.editDesc().trim())
       .subscribe({
         next: (updated) => {
           this.folders.update((list) =>
@@ -184,7 +159,7 @@ export class FoldersConfigPanel implements OnInit {
 
   deleteFolder(folderId: string): void {
     this.deletingId.set(folderId);
-    this.http.delete(`/api/folders/${folderId}`).subscribe({
+    this.folderSvc.deleteFolder(folderId).subscribe({
       next: () => {
         this.folders.update((list) => list.filter((f) => f.id !== folderId));
         if (this.expandedId() === folderId) this.expandedId.set(null);
@@ -214,12 +189,11 @@ export class FoldersConfigPanel implements OnInit {
     if (!this.canAddPerm()) return;
     this.savingPerm.set(true);
     this.permError.set(null);
-    this.http
-      .put<Folder>(`/api/folders/${folderId}/permissions`, {
-        username: this.addPermUsername().trim(),
-        can_pull: this.addPermCanPull(),
-        can_push: this.addPermCanPush(),
-      })
+    this.folderSvc.savePerm(
+      folderId, this.addPermUsername().trim(),
+      this.addPermCanPull(),
+      this.addPermCanPush(),
+      )
       .subscribe({
         next: (updated) => {
           this.folders.update((list) =>
@@ -241,12 +215,7 @@ export class FoldersConfigPanel implements OnInit {
     can_pull: boolean,
     can_push: boolean,
   ): void {
-    this.http
-      .put<Folder>(`/api/folders/${folderId}/permissions`, {
-        username,
-        can_pull,
-        can_push,
-      })
+    this.folderSvc.savePerm(folderId, username, can_pull, can_push)
       .subscribe({
         next: (updated) => {
           this.folders.update((list) =>
@@ -257,8 +226,7 @@ export class FoldersConfigPanel implements OnInit {
   }
 
   removePerm(folderId: string, username: string): void {
-    this.http
-      .delete(`/api/folders/${folderId}/permissions/${username}`)
+    this.folderSvc.removePerm(folderId, username)
       .subscribe({
         next: () => {
           this.folders.update((list) =>
