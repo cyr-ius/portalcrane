@@ -20,7 +20,7 @@ from fastapi import APIRouter, Request, Response, status
 from jose import JWTError, jwt
 
 from ..config import ALGORITHM, PROXY_TIMEOUT, REGISTRY_URL, get_settings
-from ..core.jwt import _is_admin_user
+from ..core.jwt import is_admin_user
 from ..core.security import verify_user
 from ..routers.folders import check_folder_access
 from ..routers.personal_tokens import verify_personal_token
@@ -235,7 +235,7 @@ async def _authorize_registry_proxy(
     await audit.log(subject="registry_authorize", status=status.HTTP_200_OK)
 
     # Admins bypass all folder checks
-    if _is_admin_user(username, settings):
+    if is_admin_user(username, settings):
         return None
 
     # Allow authenticated users to ping / login (v2_path == "")

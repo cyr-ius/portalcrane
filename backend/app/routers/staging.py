@@ -37,7 +37,7 @@ from ..core.jwt import (
     UserInfo,
     require_pull_access,
     require_push_access,
-    _is_admin_user,
+    is_admin_user,
 )
 from ..routers.folders import check_folder_access
 
@@ -241,7 +241,6 @@ def _resolve_push_host() -> str:
     from urllib.parse import urlparse
 
     return urlparse(REGISTRY_URL).netloc
-
 
 
 def _build_external_target_image(image: str, username: str) -> str:
@@ -529,7 +528,7 @@ async def run_push_pipeline(
     # defense-in-depth: verify folder push permission again inside the
     # background task.  The endpoint already checks this, but the job data
     # could hypothetically be modified afterwards.
-    if not _is_admin_user(_jobs[job_id].get("owner", ""), settings):
+    if not is_admin_user(_jobs[job_id].get("owner", ""), settings):
         full_path = f"{folder}/{target_image}" if folder else target_image
         access = check_folder_access(
             _jobs[job_id].get("owner", ""), full_path, is_pull=False
@@ -637,7 +636,7 @@ async def pull_image(
     local_host = urlparse(REGISTRY_URL).netloc
     if display_host and display_host == local_host:
         # folder check uses image name (no tag)
-        if not _is_admin_user(current_user.username, settings):
+        if not is_admin_user(current_user.username, settings):
             access = check_folder_access(
                 current_user.username, request.image, is_pull=True
             )
@@ -770,7 +769,7 @@ async def push_image(
     # Before scheduling local push, verify push permission for the
     # requested folder/image combination.  ``target_image`` already includes
     # the requested image name; ``folder`` may be empty.
-    if not _is_admin_user(current_user.username, settings):
+    if not is_admin_user(current_user.username, settings):
         full_path = f"{folder}/{target_image}" if folder else target_image
         access = check_folder_access(current_user.username, full_path, is_pull=False)
         if access is not True:

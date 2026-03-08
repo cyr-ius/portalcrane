@@ -63,7 +63,7 @@ def _load_users() -> list[dict]:
     return []
 
 
-def _is_admin_user(username: str, settings: Settings) -> bool:
+def is_admin_user(username: str, settings: Settings) -> bool:
     """Return True when the username has admin rights."""
     if username == settings.admin_username:
         return True
@@ -108,7 +108,7 @@ async def get_current_user(
     username = token_data.username or ""
     return UserInfo(
         username=username,
-        is_admin=_is_admin_user(username, settings),
+        is_admin=is_admin_user(username, settings),
     )
 
 
