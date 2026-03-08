@@ -274,6 +274,19 @@ def build_target_path(
 ) -> str:
     """Build the full skopeo destination reference."""
     path = f"{folder}/{image_name}" if folder else image_name
+    normalized_host = _normalize_registry_host(registry_host)
+
+    # Docker Hub push expects docker://<namespace>/<image>:<tag> without host.
+    if normalized_host in {"docker.io", "index.docker.io", "registry-1.docker.io"}:
+        dest_ref = f"docker://{path}:{tag}"
+        logger.debug(
+            "Docker Hub destination normalized host=%s original_host=%s dest=%s",
+            normalized_host,
+            registry_host,
+            dest_ref,
+        )
+        return dest_ref
+
     return f"docker://{registry_host}/{path}:{tag}"
 
 
