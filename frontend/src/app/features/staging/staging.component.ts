@@ -539,12 +539,10 @@ export class StagingComponent implements OnInit {
     const map: Record<string, string> = {
       pending: "badge bg-secondary-subtle text-secondary",
       pulling: "badge bg-info-subtle text-info",
-      scanning: "badge bg-warning-subtle text-warning",
       scan_skipped: "badge bg-secondary-subtle text-secondary",
       vuln_scanning: "badge bg-warning-subtle text-warning",
       scan_clean: "badge bg-success-subtle text-success",
       scan_vulnerable: "badge bg-danger text-white",
-      scan_infected: "badge bg-danger text-white",
       pushing: "badge bg-primary-subtle text-primary",
       done: "badge bg-success text-white",
       failed: "badge bg-danger text-white",
