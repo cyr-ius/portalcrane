@@ -64,6 +64,7 @@ def get_registries(owner: str | None = None) -> list[dict]:
     When *owner* is None (admin), all registries are returned.
     """
     registries = _load_registries()
+    logger.debug("External registry list requested (owner=%s, total=%d)", owner, len(registries))
     if owner is None:
         # Admin: return everything
         return [_redact(r) for r in registries]
@@ -77,7 +78,9 @@ def get_registry_by_id(registry_id: str) -> dict | None:
     """Return a registry by ID (with real password for internal use)."""
     for r in _load_registries():
         if r["id"] == registry_id:
+            logger.debug("External registry found by id=%s (host=%s, owner=%s)", registry_id, r.get("host"), r.get("owner", "global"))
             return r
+    logger.debug("External registry not found by id=%s", registry_id)
     return None
 
 
@@ -96,6 +99,7 @@ def find_registry_credentials_for_host(host: str, owner: str) -> tuple[str, str]
     """Return (username, password) for matching host from owner registries, then global."""
     target = _normalize_registry_host(host)
     if not target:
+        logger.debug("External registry credential lookup skipped: empty normalized host (input=%s)", host)
         return None
 
     registries = _load_registries()
@@ -111,12 +115,16 @@ def find_registry_credentials_for_host(host: str, owner: str) -> tuple[str, str]
         and _normalize_registry_host(r.get("host", "")) == target
     ]
 
+    logger.debug("External registry credential lookup host=%s owner=%s (owner_matches=%d, global_matches=%d)", target, owner, len(owner_matches), len(global_matches))
+
     for match in [*owner_matches, *global_matches]:
         username = (match.get("username") or "").strip()
         password = match.get("password") or ""
         if username and password:
+            logger.debug("External registry credentials resolved host=%s using owner=%s registry_owner=%s", target, owner, match.get("owner", "global"))
             return username, password
 
+    logger.debug("External registry credentials not found host=%s owner=%s", target, owner)
     return None
 
 
@@ -145,6 +153,7 @@ def create_registry(
     }
     registries.append(entry)
     _save_registries(registries)
+    logger.debug("External registry created id=%s host=%s owner=%s", entry["id"], host, owner)
     return _redact(entry)
 
 
@@ -171,7 +180,9 @@ def update_registry(
             if owner is not None:
                 r["owner"] = owner
             _save_registries(registries)
+            logger.debug("External registry updated id=%s host=%s owner=%s", registry_id, r.get("host"), r.get("owner", "global"))
             return _redact(r)
+    logger.debug("External registry update target not found id=%s", registry_id)
     return None
 
 
@@ -180,8 +191,10 @@ def delete_registry(registry_id: str) -> bool:
     registries = _load_registries()
     new_list = [r for r in registries if r["id"] != registry_id]
     if len(new_list) == len(registries):
+        logger.debug("External registry delete target not found id=%s", registry_id)
         return False
     _save_registries(new_list)
+    logger.debug("External registry deleted id=%s", registry_id)
     return True
 
 
@@ -192,6 +205,7 @@ def delete_registries_for_owner(owner: str) -> int:
     deleted_count = len(registries) - len(new_list)
     if deleted_count:
         _save_registries(new_list)
+        logger.debug("External registries deleted for owner=%s count=%d", owner, deleted_count)
     return deleted_count
 
 
@@ -204,6 +218,7 @@ async def test_registry_connection(host: str, username: str, password: str) -> d
     Returns {"reachable": bool, "auth_ok": bool, "message": str}.
     """
     url_base = host if "://" in host else f"https://{host}"
+    logger.debug("Testing external registry connectivity host=%s auth=%s", host, bool(username and password))
     url = f"{url_base.rstrip('/')}/v2/"
     auth = (username, password) if username and password else None
     try:
@@ -211,6 +226,7 @@ async def test_registry_connection(host: str, username: str, password: str) -> d
             timeout=10, verify=False, follow_redirects=True
         ) as client:
             resp = await client.get(url, auth=auth)
+        logger.debug("External registry connectivity response host=%s status=%s", host, resp.status_code)
         if resp.status_code in (200, 401):
             auth_ok = resp.status_code == 200 or (resp.status_code == 401 and not auth)
             return {
@@ -286,6 +302,8 @@ async def skopeo_push(
     cmd += [f"oci:{oci_dir}:latest", dest_ref]
 
     env = {**__import__("os").environ, **settings.env_proxy}
+    logger.debug("Running skopeo push to external registry dest=%s auth=%s", dest_ref, bool(dest_username and dest_password))
+
     proc = await asyncio.create_subprocess_exec(
         *cmd,
         stdout=asyncio.subprocess.PIPE,

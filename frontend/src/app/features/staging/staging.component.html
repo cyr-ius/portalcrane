@@ -77,16 +77,18 @@
               >
                 <option value="">— Select a registry —</option>
                 @if (globalRegistries().length > 0) {
+                  <option disabled>──────── 🌐 Global registries ────────</option>
                   @for (reg of globalRegistries(); track reg.id) {
                     <option [value]="reg.id">
-                      {{ reg.name }} ({{ reg.host }})
+                      🌐 │ {{ reg.name }} ({{ reg.host }})
                     </option>
                   }
                 }
                 @if (personalRegistries().length > 0) {
+                  <option disabled>──────── 👤 Personal registries ────────</option>
                   @for (reg of personalRegistries(); track reg.id) {
                     <option [value]="reg.id">
-                      {{ reg.name }} ({{ reg.host }})
+                      👤 │ {{ reg.name }} ({{ reg.host }})
                     </option>
                   }
                 }
