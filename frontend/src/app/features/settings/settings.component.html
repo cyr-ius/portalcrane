@@ -447,20 +447,20 @@
               <input
                 type="text"
                 class="form-control form-control-sm font-monospace"
-                placeholder="e.g. prod/ or myorg/ — leave empty to keep original path"
+                placeholder="e.g. prod/ or myorg/ — leave empty to use registry username"
                 [value]="syncFolder()"
                 (input)="syncFolder.set($any($event.target).value)"
               />
-              <!-- Preview line: uses getSyncDestHost() instead of find() lambda -->
+              <!--
+                FIX: Preview now calls getSyncPreview() which mirrors the backend
+                _rewrite_image_name_for_sync() logic: only the LAST path segment
+                of the source image is kept, prefixed with dest_folder or username.
+                Example: "cyrius44/alpine/ansible:2.20.0" → "docker.io/cyrius44/ansible:2.20.0"
+              -->
               @if (syncDestId()) {
                 <div class="text-muted mt-1" style="font-size: 0.72rem">
                   <i class="bi bi-arrow-right me-1"></i>
-                  Preview:
-                  <code>
-                    {{ getSyncDestHost() }}/{{
-                      syncFolder() ? syncFolder() + "/" : ""
-                    }}{{ syncSource() === "(all)" ? "*" : syncSource() }}
-                  </code>
+                  Preview: <code>{{ getSyncPreview() }}</code>
                 </div>
               }
             </div>
@@ -492,6 +492,10 @@
         <h6 class="fw-semibold mb-0">
           <i class="bi bi-clock-history me-2"></i>Sync history
         </h6>
+        <!--
+          Manual refresh button: also re-triggers the polling loop via loadSyncData().
+          Auto-polling runs every 3 s while any job is "running" (see TS component).
+        -->
         <button
           class="btn btn-sm btn-outline-secondary"
           (click)="loadSyncData()"
@@ -512,14 +516,21 @@
             @for (job of syncJobs(); track job.id) {
               <div class="list-group-item px-3 py-2">
                 <div class="d-flex align-items-start gap-2">
-                  <i class="bi mt-1" [class]="syncStatusIcon(job.status)"></i>
+                  <!--
+                    FIX: icon now includes colour class (text-info/success/warning/danger)
+                    returned by syncStatusIcon() — spin animation for running jobs.
+                  -->
+                  <i
+                    class="bi mt-1"
+                    [class]="syncStatusIcon(job.status)"
+                    [class.spin]="job.status === 'running'"
+                  ></i>
                   <div class="flex-grow-1 min-w-0">
                     <div class="d-flex flex-wrap align-items-center gap-1 mb-1">
                       <code class="small bg-body-tertiary px-1 rounded">{{
                         job.source
                       }}</code>
                       <i class="bi bi-arrow-right text-muted small"></i>
-                      <!-- getRegistryHost() replaces the find() lambda -->
                       <code
                         class="small bg-body-tertiary px-1 rounded text-truncate"
                         style="max-width: 220px"
@@ -528,6 +539,7 @@
                         }}{{ job.dest_folder ? "/" + job.dest_folder : "" }}
                       </code>
                     </div>
+
                     <div class="d-flex align-items-center gap-2 flex-wrap">
                       <span [class]="syncStatusBadge(job.status)">{{
                         job.status
@@ -535,30 +547,47 @@
                       <span class="text-muted" style="font-size: 0.7rem">{{
                         job.started_at | slice: 0 : 16
                       }}</span>
+
+                      <!-- Progress bar — visible while running -->
                       @if (job.status === "running") {
-                        <span class="text-muted small"
-                          >{{ job.images_done }}/{{ job.images_total }}</span
-                        >
+                        <span class="text-muted small">
+                          {{ job.images_done }}/{{ job.images_total }}
+                        </span>
                         <div
                           class="progress flex-grow-1"
                           style="height: 4px; max-width: 100px"
                         >
                           <div
-                            class="progress-bar progress-bar-animated"
+                            class="progress-bar progress-bar-striped progress-bar-animated"
                             [style.width.%]="job.progress"
                           ></div>
                         </div>
                       }
+
+                      <!-- Finished_at — shown once job is done -->
+                      @if (job.finished_at) {
+                        <span class="text-muted" style="font-size: 0.7rem">
+                          <i class="bi bi-flag me-1"></i>{{ job.finished_at | slice: 0 : 16 }}
+                        </span>
+                      }
                     </div>
-                    @if (job.error) {
-                      <div class="text-danger mt-1" style="font-size: 0.7rem">
-                        <i class="bi bi-exclamation-circle me-1"></i
-                        >{{ job.error }}
+
+                    <!-- Success message -->
+                    @if (job.status === "done" || job.status === "partial") {
+                      <div
+                        class="mt-1"
+                        style="font-size: 0.7rem"
+                        [class.text-success]="job.status === 'done'"
+                        [class.text-warning]="job.status === 'partial'"
+                      >
+                        <i class="bi bi-check-circle me-1"></i>{{ job.message }}
                       </div>
                     }
-                    @if (job.status === "done") {
-                      <div class="text-success mt-1" style="font-size: 0.7rem">
-                        {{ job.message }}
+
+                    <!-- Error detail -->
+                    @if (job.error) {
+                      <div class="text-danger mt-1" style="font-size: 0.7rem">
+                        <i class="bi bi-exclamation-circle me-1"></i>{{ job.error }}
                       </div>
                     }
                   </div>

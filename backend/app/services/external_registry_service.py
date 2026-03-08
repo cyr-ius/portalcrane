@@ -7,11 +7,17 @@ Changes vs original:
   - Each registry now has an "owner" field: "global" or a username.
   - get_registries(owner) returns global registries + the user's own registries.
   - Only admins can create global registries (enforced at the router level).
+  - [FIX] run_sync_job: replaced skopeo_push(oci_dir="") with skopeo_sync_image()
+    which uses docker:// transport on both sides.  The old call produced:
+      oci::latest → "open index.json: no such file or directory"
+  - [FIX] Namespace rewriting in sync: local image namespace is replaced by
+    dest_folder or dest_username so skopeo pushes to the correct namespace.
 """
 
 import asyncio
 import json
 import logging
+import os
 import re
 from urllib.parse import urlparse
 import uuid
@@ -64,7 +70,9 @@ def get_registries(owner: str | None = None) -> list[dict]:
     When *owner* is None (admin), all registries are returned.
     """
     registries = _load_registries()
-    logger.debug("External registry list requested (owner=%s, total=%d)", owner, len(registries))
+    logger.debug(
+        "External registry list requested (owner=%s, total=%d)", owner, len(registries)
+    )
     if owner is None:
         # Admin: return everything
         return [_redact(r) for r in registries]
@@ -78,7 +86,12 @@ def get_registry_by_id(registry_id: str) -> dict | None:
     """Return a registry by ID (with real password for internal use)."""
     for r in _load_registries():
         if r["id"] == registry_id:
-            logger.debug("External registry found by id=%s (host=%s, owner=%s)", registry_id, r.get("host"), r.get("owner", "global"))
+            logger.debug(
+                "External registry found by id=%s (host=%s, owner=%s)",
+                registry_id,
+                r.get("host"),
+                r.get("owner", "global"),
+            )
             return r
     logger.debug("External registry not found by id=%s", registry_id)
     return None
@@ -94,19 +107,22 @@ def _normalize_registry_host(host: str) -> str:
     return value.split("/", 1)[0].strip("/")
 
 
-
 def find_registry_credentials_for_host(host: str, owner: str) -> tuple[str, str] | None:
     """Return (username, password) for matching host from owner registries, then global."""
     target = _normalize_registry_host(host)
     if not target:
-        logger.debug("External registry credential lookup skipped: empty normalized host (input=%s)", host)
+        logger.debug(
+            "External registry credential lookup skipped: empty normalized host (input=%s)",
+            host,
+        )
         return None
 
     registries = _load_registries()
     owner_matches = [
         r
         for r in registries
-        if r.get("owner") == owner and _normalize_registry_host(r.get("host", "")) == target
+        if r.get("owner") == owner
+        and _normalize_registry_host(r.get("host", "")) == target
     ]
     global_matches = [
         r
@@ -115,16 +131,29 @@ def find_registry_credentials_for_host(host: str, owner: str) -> tuple[str, str]
         and _normalize_registry_host(r.get("host", "")) == target
     ]
 
-    logger.debug("External registry credential lookup host=%s owner=%s (owner_matches=%d, global_matches=%d)", target, owner, len(owner_matches), len(global_matches))
+    logger.debug(
+        "External registry credential lookup host=%s owner=%s (owner_matches=%d, global_matches=%d)",
+        target,
+        owner,
+        len(owner_matches),
+        len(global_matches),
+    )
 
     for match in [*owner_matches, *global_matches]:
         username = (match.get("username") or "").strip()
         password = match.get("password") or ""
         if username and password:
-            logger.debug("External registry credentials resolved host=%s using owner=%s registry_owner=%s", target, owner, match.get("owner", "global"))
+            logger.debug(
+                "External registry credentials resolved host=%s using owner=%s registry_owner=%s",
+                target,
+                owner,
+                match.get("owner", "global"),
+            )
             return username, password
 
-    logger.debug("External registry credentials not found host=%s owner=%s", target, owner)
+    logger.debug(
+        "External registry credentials not found host=%s owner=%s", target, owner
+    )
     return None
 
 
@@ -153,7 +182,9 @@ def create_registry(
     }
     registries.append(entry)
     _save_registries(registries)
-    logger.debug("External registry created id=%s host=%s owner=%s", entry["id"], host, owner)
+    logger.debug(
+        "External registry created id=%s host=%s owner=%s", entry["id"], host, owner
+    )
     return _redact(entry)
 
 
@@ -180,7 +211,12 @@ def update_registry(
             if owner is not None:
                 r["owner"] = owner
             _save_registries(registries)
-            logger.debug("External registry updated id=%s host=%s owner=%s", registry_id, r.get("host"), r.get("owner", "global"))
+            logger.debug(
+                "External registry updated id=%s host=%s owner=%s",
+                registry_id,
+                r.get("host"),
+                r.get("owner", "global"),
+            )
             return _redact(r)
     logger.debug("External registry update target not found id=%s", registry_id)
     return None
@@ -205,7 +241,9 @@ def delete_registries_for_owner(owner: str) -> int:
     deleted_count = len(registries) - len(new_list)
     if deleted_count:
         _save_registries(new_list)
-        logger.debug("External registries deleted for owner=%s count=%d", owner, deleted_count)
+        logger.debug(
+            "External registries deleted for owner=%s count=%d", owner, deleted_count
+        )
     return deleted_count
 
 
@@ -218,7 +256,11 @@ async def test_registry_connection(host: str, username: str, password: str) -> d
     Returns {"reachable": bool, "auth_ok": bool, "message": str}.
     """
     url_base = host if "://" in host else f"https://{host}"
-    logger.debug("Testing external registry connectivity host=%s auth=%s", host, bool(username and password))
+    logger.debug(
+        "Testing external registry connectivity host=%s auth=%s",
+        host,
+        bool(username and password),
+    )
     url = f"{url_base.rstrip('/')}/v2/"
     auth = (username, password) if username and password else None
     try:
@@ -226,7 +268,11 @@ async def test_registry_connection(host: str, username: str, password: str) -> d
             timeout=10, verify=False, follow_redirects=True
         ) as client:
             resp = await client.get(url, auth=auth)
-        logger.debug("External registry connectivity response host=%s status=%s", host, resp.status_code)
+        logger.debug(
+            "External registry connectivity response host=%s status=%s",
+            host,
+            resp.status_code,
+        )
         if resp.status_code in (200, 401):
             auth_ok = resp.status_code == 200 or (resp.status_code == 401 and not auth)
             return {
@@ -290,7 +336,7 @@ def build_target_path(
     return f"docker://{registry_host}/{path}:{tag}"
 
 
-# ── Skopeo push helper ────────────────────────────────────────────────────────
+# ── Skopeo helpers ────────────────────────────────────────────────────────────
 
 
 async def skopeo_push(
@@ -303,6 +349,14 @@ async def skopeo_push(
 ) -> tuple[bool, str]:
     """
     Push an OCI layout directory to a registry using skopeo.
+
+    Used by the Staging pipeline (Pull -> Scan -> Push to local or external
+    registry).  The source is always a local OCI directory produced by a
+    previous skopeo pull step.
+
+    NOTE: do NOT call this with oci_dir="" — use skopeo_sync_image() instead
+    for registry-to-registry copies (Sync feature).
+
     Returns (success, message).
     """
     cmd = [
@@ -314,8 +368,12 @@ async def skopeo_push(
         cmd += ["--dest-creds", f"{dest_username}:{dest_password}"]
     cmd += [f"oci:{oci_dir}:latest", dest_ref]
 
-    env = {**__import__("os").environ, **settings.env_proxy}
-    logger.debug("Running skopeo push to external registry dest=%s auth=%s", dest_ref, bool(dest_username and dest_password))
+    env = {**os.environ, **settings.env_proxy}
+    logger.debug(
+        "Running skopeo push to external registry dest=%s auth=%s",
+        dest_ref,
+        bool(dest_username and dest_password),
+    )
 
     proc = await asyncio.create_subprocess_exec(
         *cmd,
@@ -327,6 +385,109 @@ async def skopeo_push(
     if proc.returncode == 0:
         return True, f"Pushed to {dest_ref}"
     return False, stderr.decode().strip() or stdout.decode().strip()
+
+
+async def skopeo_sync_image(
+    src_ref: str,
+    dest_ref: str,
+    dest_username: str,
+    dest_password: str,
+    settings: Settings,
+    src_username: str = "",
+    src_password: str = "",
+    src_tls_verify: bool = False,
+    dest_tls_verify: bool = False,
+) -> tuple[bool, str]:
+    """
+    Copy an image between two docker:// registries using skopeo copy.
+
+    Used by the Sync feature (Settings -> Sync).  Both source and destination
+    use the docker:// transport — no intermediate OCI directory needed.
+    This avoids the "oci::latest: open index.json" error that occurs when
+    skopeo_push is called with an empty oci_dir.
+
+    Returns (success, message).
+    """
+    cmd = [
+        "skopeo",
+        "copy",
+        f"--src-tls-verify={'true' if src_tls_verify else 'false'}",
+        f"--dest-tls-verify={'true' if dest_tls_verify else 'false'}",
+    ]
+    if src_username and src_password:
+        cmd += ["--src-creds", f"{src_username}:{src_password}"]
+    if dest_username and dest_password:
+        cmd += ["--dest-creds", f"{dest_username}:{dest_password}"]
+    cmd += [src_ref, dest_ref]
+
+    env = {**os.environ, **settings.env_proxy}
+
+    # Log command with credentials masked
+    logger.debug(
+        "skopeo sync: %s",
+        " ".join(
+            "***" if i > 0 and cmd[i - 1] in ("--src-creds", "--dest-creds") else a
+            for i, a in enumerate(cmd)
+        ),
+    )
+
+    proc = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        env=env,
+    )
+    stdout, stderr = await proc.communicate()
+    if proc.returncode == 0:
+        return True, f"Copied {src_ref} -> {dest_ref}"
+    return False, stderr.decode().strip() or stdout.decode().strip()
+
+
+# ── Sync namespace rewriting ──────────────────────────────────────────────────
+
+
+def _rewrite_image_name_for_sync(
+    img: str,
+    dest_folder: str | None,
+    dest_username: str,
+) -> str:
+    """
+    Rewrite the image repository name for the destination registry.
+
+    External registries (Docker Hub, GHCR …) use a flat two-level namespace:
+      <username>/<image>
+
+    Local images may carry multiple path segments (e.g. "cyrius44/alpine/ansible",
+    "production/infra/nginx").  Only the LAST segment is the real image name —
+    all intermediate segments are local organisational namespaces that must be
+    dropped when syncing to an external registry.
+
+    This mirrors the behaviour of _build_external_target_image() in staging.py
+    which uses  image.split("/")[-1]  to extract the bare image name.
+
+    Resolution order:
+      1. dest_folder set  → "<dest_folder>/<leaf>"
+      2. dest_username    → "<dest_username>/<leaf>"
+      3. fallback         → keep image name unchanged
+
+    Examples
+    --------
+    img="cyrius44/alpine/ansible", dest_username="cyrius44" -> "cyrius44/ansible"
+    img="infra/nginx",             dest_username="alice"    -> "alice/nginx"
+    img="nginx",                   dest_username="alice"    -> "alice/nginx"
+    img="a/b/c",                   dest_folder="myorg"      -> "myorg/c"
+    """
+    # Always use the last segment as the bare image name — strip all namespaces
+    leaf = img.split("/")[-1]
+
+    if dest_folder:
+        return f"{dest_folder}/{leaf}"
+
+    if dest_username:
+        return f"{dest_username}/{leaf}"
+
+    # No rewrite target — return the leaf alone (no namespace)
+    return leaf
 
 
 # ── Sync jobs ─────────────────────────────────────────────────────────────────
@@ -346,8 +507,17 @@ async def run_sync_job(
     local_registry_url: str,
     settings: Settings,
 ) -> str:
-    """Start an async sync job. Returns the job ID immediately."""
+    """
+    Start an asynchronous sync job and return the job ID immediately.
 
+    Copies images from the local registry to an external registry using
+    skopeo copy with docker:// transport on both sides.
+    No intermediate OCI directory is used.
+
+    Namespace rewriting:
+      The local image namespace (first path segment) is replaced by dest_folder
+      (priority) or dest_username via _rewrite_image_name_for_sync().
+    """
     job_id = str(uuid.uuid4())
     registry = get_registry_by_id(dest_registry_id)
     if not registry:
@@ -356,6 +526,10 @@ async def run_sync_job(
     dest_host = registry["host"]
     dest_username = registry.get("username", "")
     dest_password = registry.get("password", "")
+
+    # Resolve local registry network details before spawning the async task
+    src_tls_verify = local_registry_url.startswith("https://")
+    local_host = urlparse(local_registry_url).netloc  # e.g. "localhost:5000"
 
     _sync_jobs[job_id] = {
         "id": job_id,
@@ -374,12 +548,14 @@ async def run_sync_job(
 
     async def _run() -> None:
         try:
+            # Fetch the full list of repositories from the local registry catalog
             catalog_url = f"{local_registry_url}/v2/_catalog?n=1000"
             async with httpx.AsyncClient(timeout=30) as client:
                 resp = await client.get(catalog_url)
                 resp.raise_for_status()
                 all_images = resp.json().get("repositories", [])
 
+            # Filter to the requested source image when not syncing everything
             images = (
                 all_images
                 if source_image == "(all)"
@@ -392,19 +568,58 @@ async def run_sync_job(
                 tags_url = f"{local_registry_url}/v2/{img}/tags/list"
                 async with httpx.AsyncClient(timeout=30) as client:
                     tr = await client.get(tags_url)
-                    tags = tr.json().get("tags") or [] if tr.status_code == 200 else []
+                    tags: list[str] = (
+                        tr.json().get("tags") or [] if tr.status_code == 200 else []
+                    )
 
                 for tag in tags:
-                    dest = build_target_path(dest_folder, img, tag, dest_host)
-                    ok, msg = await skopeo_push(
-                        oci_dir="",
-                        dest_ref=dest,
+                    # FIX: build docker:// source reference from the local registry.
+                    # The previous code called skopeo_push(oci_dir="") which produced
+                    # "oci::latest" and caused "open index.json: no such file or directory".
+                    src_ref = f"docker://{local_host}/{img}:{tag}"
+
+                    # Rewrite destination image name to replace the local namespace
+                    # with the destination folder or username.
+                    dest_image = _rewrite_image_name_for_sync(
+                        img=img,
+                        dest_folder=dest_folder,
+                        dest_username=dest_username,
+                    )
+
+                    # build_target_path handles Docker Hub host normalisation.
+                    # Pass None as folder: _rewrite_image_name_for_sync already
+                    # embedded dest_folder when applicable, avoiding double-prefix.
+                    dest_ref = build_target_path(None, dest_image, tag, dest_host)
+
+                    logger.info(
+                        "Sync job %s: %s -> %s",
+                        job_id,
+                        src_ref,
+                        dest_ref,
+                    )
+
+                    ok, msg = await skopeo_sync_image(
+                        src_ref=src_ref,
+                        dest_ref=dest_ref,
+                        # Local registry has no auth internally
+                        src_username="",
+                        src_password="",
                         dest_username=dest_username,
                         dest_password=dest_password,
                         settings=settings,
+                        src_tls_verify=src_tls_verify,
+                        dest_tls_verify=False,
                     )
+
                     if not ok:
                         errors.append(f"{img}:{tag} — {msg}")
+                        logger.warning(
+                            "Sync job %s: failed %s:%s — %s",
+                            job_id,
+                            img,
+                            tag,
+                            msg,
+                        )
 
                 _sync_jobs[job_id]["images_done"] += 1
                 _sync_jobs[job_id]["progress"] = int(
@@ -417,6 +632,7 @@ async def run_sync_job(
             )
             _sync_jobs[job_id]["error"] = "\n".join(errors) if errors else None
         except Exception as exc:
+            logger.exception("Sync job %s failed: %s", job_id, exc)
             _sync_jobs[job_id]["status"] = "error"
             _sync_jobs[job_id]["error"] = str(exc)
             _sync_jobs[job_id]["message"] = f"Sync failed: {exc}"

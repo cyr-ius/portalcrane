@@ -3,11 +3,29 @@
  * Updated with two new tabs:
  *  - "External Registries": CRUD for saved registries + connectivity test
  *  - "Sync": trigger and monitor sync jobs from local → external registry
+ *
+ * Changes:
+ *  - Added sync job polling: auto-refreshes every 3 s while any job is "running",
+ *    stops automatically when all jobs are terminal (done/partial/error).
+ *    Polling starts when entering the Sync tab and stops on component destroy.
+ *  - Added getSyncPreview(): computes the correct destination path by applying
+ *    the same namespace-rewriting logic as the backend (_rewrite_image_name_for_sync):
+ *    only the last segment of the source image name is kept, prefixed with
+ *    dest_folder (if set) or the registry username.
  */
 import { SlicePipe } from "@angular/common";
-import { Component, inject, OnInit, signal } from "@angular/core";
+import {
+  Component,
+  computed,
+  DestroyRef,
+  inject,
+  OnInit,
+  signal,
+} from "@angular/core";
+import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { FormsModule } from "@angular/forms";
 import { Router } from "@angular/router";
+import { Subject, switchMap, timer } from "rxjs";
 import { AboutService } from "../../core/services/about.service";
 import {
   AppConfigService,
@@ -98,6 +116,7 @@ export class SettingsComponent implements OnInit {
   private registrySvc = inject(RegistryService);
   private systemService = inject(SystemService);
   private router = inject(Router);
+  private destroyRef = inject(DestroyRef);
 
   readonly severities = TRIVY_SEVERITIES;
 
@@ -138,6 +157,20 @@ export class SettingsComponent implements OnInit {
   startingSync = signal(false);
   loadingSyncJobs = signal(false);
 
+  /**
+   * True when at least one sync job is still running.
+   * Used to drive the polling loop: polling is active only when this is true.
+   */
+  private readonly hasSyncRunning = computed(() =>
+    this.syncJobs().some((j) => j.status === "running"),
+  );
+
+  /**
+   * Subject that triggers a new polling cycle each time a sync job is started.
+   * Emitting on this subject (re)starts the 3-second poll loop.
+   */
+  private readonly syncPollTrigger$ = new Subject<void>();
+
   // ── Audit logs ─────────────────────────────────────────────────────────────
   auditLogs = signal<AuditEvent[]>([]);
   loadingAuditLogs = signal(false);
@@ -153,6 +186,38 @@ export class SettingsComponent implements OnInit {
     }
     this.aboutService.load();
     this.loadRegistries();
+    this.setupSyncPolling();
+  }
+
+  // ── Sync polling ───────────────────────────────────────────────────────────
+
+  /**
+   * Set up automatic sync-job refresh.
+   *
+   * Each time syncPollTrigger$ emits (i.e. when a sync job is started or the
+   * Sync tab is opened), a timer fires every 3 seconds and fetches the job
+   * list from the backend.  The inner observable is kept alive as long as at
+   * least one job has status "running"; it stops automatically once all jobs
+   * reach a terminal state, avoiding unnecessary network traffic.
+   *
+   * The outer pipe uses takeUntilDestroyed so the subscription is cleaned up
+   * when the component is destroyed.
+   */
+  private setupSyncPolling(): void {
+    this.syncPollTrigger$
+      .pipe(
+        // Each new trigger cancels the previous poll cycle (switchMap)
+        switchMap(() =>
+          timer(0, 3000).pipe(
+            switchMap(() => this.extRegSvc.listSyncJobs()),
+          ),
+        ),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe((jobs) => {
+        this.syncJobs.set(jobs);
+        this.loadingSyncJobs.set(false);
+      });
   }
 
   setTab(tab: SettingsTab) {
@@ -203,7 +268,6 @@ export class SettingsComponent implements OnInit {
     this.customHost.set("");
     this.testResult.set(null);
   }
-
 
   private normalizeHost(host: string): string {
     return host
@@ -303,15 +367,15 @@ export class SettingsComponent implements OnInit {
 
   // ── Sync helpers ───────────────────────────────────────────────────────────
 
+  /**
+   * Load sync jobs and local images, then kick off the polling loop.
+   * Called when switching to the Sync tab or clicking the refresh button.
+   */
   loadSyncData() {
     this.loadingSyncJobs.set(true);
-    this.extRegSvc.listSyncJobs().subscribe({
-      next: (jobs) => {
-        this.syncJobs.set(jobs);
-        this.loadingSyncJobs.set(false);
-      },
-      error: () => this.loadingSyncJobs.set(false),
-    });
+    // Trigger the polling loop — it will immediately fire one request
+    // and keep polling every 3 s while any job is running.
+    this.syncPollTrigger$.next();
 
     // Load local images for the source dropdown
     this.loadingLocalImages.set(true);
@@ -346,7 +410,8 @@ export class SettingsComponent implements OnInit {
       .subscribe({
         next: () => {
           this.startingSync.set(false);
-          setTimeout(() => this.loadSyncData(), 500);
+          // Kick off (or restart) the polling loop now that a job is running
+          this.syncPollTrigger$.next();
         },
         error: () => this.startingSync.set(false),
       });
@@ -373,6 +438,47 @@ export class SettingsComponent implements OnInit {
     return reg ? reg.host : "";
   }
 
+  /**
+   * Compute the destination image path preview shown below the folder field.
+   *
+   * Mirrors the backend _rewrite_image_name_for_sync() logic:
+   *   - Only the LAST segment of the source image is kept (bare image name).
+   *   - If dest_folder is set, it is used as the namespace prefix.
+   *   - Otherwise, the registry username is used as the namespace prefix.
+   *   - "(all)" source renders as a "*" wildcard.
+   *
+   * Examples (registry username = "cyrius44"):
+   *   source="cyrius44/alpine/ansible:2.20.0", folder=""     → "cyrius44/ansible:2.20.0"
+   *   source="cyrius44/alpine/ansible:2.20.0", folder="prod" → "prod/ansible:2.20.0"
+   *   source="(all)",                          folder=""     → "cyrius44/*"
+   */
+  getSyncPreview(): string {
+    const host = this.getSyncDestHost();
+    if (!host) return "";
+
+    const reg = this.registries().find((r) => r.id === this.syncDestId());
+    const username = reg?.username ?? "";
+    const folder = this.syncFolder().trim();
+    const source = this.syncSource();
+
+    // Resolve the namespace prefix: folder takes priority over username
+    const ns = folder || username;
+
+    if (source === "(all)") {
+      return `${host}/${ns ? ns + "/" : ""}*`;
+    }
+
+    // Extract the bare image name (last path segment, before any ":" tag)
+    const nameWithTag = source.includes("/")
+      ? source.split("/").at(-1)!
+      : source;
+    const [imageName, tag] = nameWithTag.split(":");
+    const tagSuffix = tag ? `:${tag}` : "";
+
+    const destPath = ns ? `${ns}/${imageName}` : imageName;
+    return `${host}/${destPath}${tagSuffix}`;
+  }
+
   // ── Status badge / icon helpers ────────────────────────────────────────────
 
   syncStatusBadge(status: string): string {
@@ -387,10 +493,10 @@ export class SettingsComponent implements OnInit {
 
   syncStatusIcon(status: string): string {
     const map: Record<string, string> = {
-      running: "bi-arrow-repeat",
-      done: "bi-check-circle",
-      partial: "bi-exclamation-circle",
-      error: "bi-x-circle",
+      running: "bi-arrow-repeat text-info",
+      done: "bi-check-circle text-success",
+      partial: "bi-exclamation-circle text-warning",
+      error: "bi-x-circle text-danger",
     };
     return map[status] ?? "bi-circle";
   }
