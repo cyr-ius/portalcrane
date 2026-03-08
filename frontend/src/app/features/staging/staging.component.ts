@@ -375,28 +375,92 @@ export class StagingComponent implements OnInit {
   }
 
   /**
+   * Compute the effective image name for a push to an external registry.
+   *
+   * When pushing to a saved external registry that has a declared username,
+   * the source namespace/username prefix is replaced by that registry username.
+   * The user's manual override (pushTargets img field) always takes precedence.
+   *
+   * Examples (no manual override, registry username = "myorg"):
+   *   "library/nginx"  → "myorg/nginx"
+   *   "someuser/myapp" → "myorg/myapp"
+   *   "nginx"          → "myorg/nginx"
+   *
+   * @param job       The staging job.
+   * @param rawImg    The raw source image name (job.image or user override).
+   * @param username  The target registry declared username (may be empty).
+   */
+  private computeExternalImageName(
+    job: StagingJob,
+    rawImg: string,
+    username: string,
+  ): string {
+    // If the user has explicitly typed an image name, never touch it
+    const userOverriddenImg = this.getPushTarget(job, "img").trim();
+    if (userOverriddenImg) return userOverriddenImg;
+
+    if (!username) return rawImg;
+
+    // Strip the leading namespace segment, keep only the bare image name
+    const bareName = rawImg.includes("/")
+      ? rawImg.split("/").slice(1).join("/")
+      : rawImg;
+    return `${username}/${bareName}`;
+  }
+
+  /**
+   * Return the placeholder text for the "Image name" input in the push panel.
+   * Mirrors pushPreview() logic so the hint always matches the preview path.
+   */
+  getImageNamePlaceholder(job: StagingJob): string {
+    const mode = this.getPushMode(job);
+    const rawImg = job.image.trim();
+
+    if (mode === "local") return rawImg;
+
+    const regId = this.getExtRegistryId(job);
+    const reg = this.externalRegistries().find((r) => r.id === regId);
+    const username = reg?.username ?? "";
+
+    return this.computeExternalImageName(job, rawImg, username);
+  }
+
+  /**
    * Compute the full target image reference for preview in the template.
    * Reflects current push mode, folder, image name, tag and registry.
+   *
+   * When pushing to an external registry with a declared username,
+   * the original namespace/username prefix of the source image is replaced
+   * by the username of the target registry account.
+   * Example: "library/nginx" pushed to ghcr.io (user "myorg") → "ghcr.io/myorg/nginx"
+   * Example: "nginx" pushed to ghcr.io (user "myorg")         → "ghcr.io/myorg/nginx"
    */
   pushPreview(job: StagingJob): string {
     const mode = this.getPushMode(job);
-    // prefer explicit user input, otherwise fall back to job.folder saved
+    // Prefer explicit user input for folder, otherwise fall back to job.folder
     let folder = this.getPushTarget(job, "folder").trim();
     if (!folder && job.folder) {
       folder = job.folder;
     }
-    const img = (this.getPushTarget(job, "img") || job.image).trim();
+
+    const rawImg = (this.getPushTarget(job, "img") || job.image).trim();
     const tag = (this.getPushTarget(job, "tag") || job.tag).trim();
-    const path = folder ? `${folder}/${img}` : img;
 
     if (mode === "local") {
+      const path = folder ? `${folder}/${rawImg}` : rawImg;
       return `localhost:5000/${path}:${tag}`;
     }
+
+    // ── External mode ──────────────────────────────────────────────────────────
     const regId = this.getExtRegistryId(job);
     const reg = this.externalRegistries().find((r) => r.id === regId);
     const host = reg
       ? reg.host
       : this.getPushTarget(job, "ext_host") || "<registry>";
+    const username = reg?.username ?? "";
+
+    const effectiveImg = this.computeExternalImageName(job, rawImg, username);
+    const path = folder ? `${folder}/${effectiveImg}` : effectiveImg;
     return `${host}/${path}:${tag}`;
   }
 

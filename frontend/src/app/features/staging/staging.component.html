@@ -751,7 +751,7 @@
                           <input
                             type="text"
                             class="form-control form-control-sm font-monospace"
-                            [placeholder]="job.image"
+                            [placeholder]="getImageNamePlaceholder(job)"
                             [value]="getPushTarget(job, 'img')"
                             (input)="
                               updatePushTarget(
