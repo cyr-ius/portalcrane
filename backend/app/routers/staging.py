@@ -222,7 +222,17 @@ def _build_dockerhub_auth(username: str) -> httpx.BasicAuth | None:
     """
     creds = get_user_dockerhub_credentials(username)
     if creds:
+        _logger.debug(
+            "Docker Hub auth resolved for user=%s using docker_username=%s",
+            username,
+            creds[0],
+        )
         return httpx.BasicAuth(username=creds[0], password=creds[1])
+
+    _logger.debug(
+        "Docker Hub auth resolved for user=%s using anonymous mode (no credentials)",
+        username,
+    )
     return None
 
 
@@ -832,6 +842,13 @@ async def search_dockerhub(
 ):
     """Search Docker Hub for images matching the given query."""
     auth = _build_dockerhub_auth(current_user.username)
+    _logger.debug(
+        "Docker Hub search request user=%s query=%s page=%s auth=%s",
+        current_user.username,
+        q,
+        page,
+        "authenticated" if auth else "anonymous",
+    )
     url = f"{DOCKERHUB_API_URL}/search/repositories/?query={q}&page={page}&page_size=25"
     async with httpx.AsyncClient(timeout=HTTPX_TIMEOUT) as client:
         resp = await client.get(url, auth=auth)
@@ -862,6 +879,12 @@ async def get_dockerhub_tags(
 ):
     """Fetch available tags for a Docker Hub image."""
     auth = _build_dockerhub_auth(current_user.username)
+    _logger.debug(
+        "Docker Hub tags request user=%s image=%s auth=%s",
+        current_user.username,
+        image,
+        "authenticated" if auth else "anonymous",
+    )
     namespace, name = image.split("/", 1) if "/" in image else ("library", image)
     url = f"{DOCKERHUB_API_URL}/repositories/{namespace}/{name}/tags/?page_size=50&ordering=last_updated"
     async with httpx.AsyncClient(timeout=HTTPX_TIMEOUT) as client:
