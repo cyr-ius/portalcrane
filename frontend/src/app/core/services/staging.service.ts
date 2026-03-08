@@ -21,10 +21,8 @@ import { Observable } from "rxjs";
 export type JobStatus =
   | "pending"
   | "pulling"
-  | "scanning"
   | "scan_skipped"
   | "scan_clean"
-  | "scan_infected"
   | "vuln_scanning"
   | "scan_vulnerable"
   | "pushing"
