@@ -62,7 +62,7 @@ export class DashboardComponent implements OnInit {
 
   private gcPollTrigger$ = new Subject<void>();
 
-  ngOnInit() {
+  ngOnInit(): void {
     this.setupGCPolling();
     this.refresh();
   }
