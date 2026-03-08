@@ -751,7 +751,7 @@
                           <input
                             type="text"
                             class="form-control form-control-sm font-monospace"
-                            [placeholder]="job.image"
+                            placeholder="e.g. alpine"
                             [value]="getPushTarget(job, 'img')"
                             (input)="
                               updatePushTarget(
@@ -761,6 +761,9 @@
                               )
                             "
                           />
+                          <div class="form-text" style="font-size: 0.68rem">
+                            Namespace auto-set to destination username for external push.
+                          </div>
                         </div>
                         <div class="col-auto" style="min-width: 90px">
                           <label
