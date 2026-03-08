@@ -80,7 +80,7 @@
                   <option disabled>──────── 🌐 Global registries ────────</option>
                   @for (reg of globalRegistries(); track reg.id) {
                     <option [value]="reg.id">
-                      🌐 │ {{ reg.name }} ({{ reg.host }})
+                      {{ reg.name }} ({{ reg.host }})
                     </option>
                   }
                 }
@@ -88,7 +88,7 @@
                   <option disabled>──────── 👤 Personal registries ────────</option>
                   @for (reg of personalRegistries(); track reg.id) {
                     <option [value]="reg.id">
-                      👤 │ {{ reg.name }} ({{ reg.host }})
+                      {{ reg.name }} ({{ reg.host }})
                     </option>
                   }
                 }
@@ -751,7 +751,7 @@
                           <input
                             type="text"
                             class="form-control form-control-sm font-monospace"
-                            placeholder="e.g. alpine"
+                            [placeholder]="job.image"
                             [value]="getPushTarget(job, 'img')"
                             (input)="
                               updatePushTarget(
@@ -761,9 +761,6 @@
                               )
                             "
                           />
-                          <div class="form-text" style="font-size: 0.68rem">
-                            Namespace auto-set to destination username for external push.
-                          </div>
                         </div>
                         <div class="col-auto" style="min-width: 90px">
                           <label
