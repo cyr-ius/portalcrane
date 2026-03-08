@@ -1,0 +1,286 @@
+<div class="card border-0 mb-3">
+    <div
+    class="card-header border-0 d-flex align-items-center justify-content-between"
+    >
+    <div>
+        <h6 class="fw-semibold mb-0">
+        <i class="bi bi-globe me-2"></i>External Registries
+        </h6>
+        <div class="text-muted small mt-1">
+        Saved registries used for push and sync operations.
+        </div>
+    </div>
+    <button class="btn btn-sm btn-primary" (click)="openAddForm()">
+        <i class="bi bi-plus-lg me-1"></i>Add registry
+    </button>
+    </div>
+    <div class="card-body">
+    <!-- Add / edit form -->
+    @if (showAddForm()) {
+        <div
+        class="border border-primary-subtle rounded p-3 mb-3 bg-primary-subtle bg-opacity-10"
+        >
+        <h6 class="fw-semibold mb-3 text-primary">
+            {{ editingId() ? "Edit registry" : "New external registry" }}
+        </h6>
+        <div class="row g-2 mb-2">
+            <div class="col-md-6">
+            <label class="form-label small fw-semibold">Display name</label>
+            <input
+                type="text"
+                class="form-control form-control-sm"
+                placeholder="e.g. Docker Hub"
+                [value]="formName()"
+                (input)="formName.set($any($event.target).value)"
+            />
+            </div>
+            <div class="col-12">
+            <label class="form-label small fw-semibold">Known registries</label>
+            <div class="d-flex flex-wrap gap-2 mb-2">
+                @for (preset of registryPresets(); track preset.id) {
+                <button
+                    type="button"
+                    class="btn btn-sm btn-outline-secondary preset-btn"
+                    (click)="selectPreset(preset)"
+                >
+                    <span class="me-1">{{ preset.logo }}</span>{{ preset.name }}
+                </button>
+                }
+            </div>
+            <div class="input-group input-group-sm">
+                <input
+                type="text"
+                class="form-control"
+                placeholder="Custom host (e.g. registry.company.tld)"
+                [value]="customHost()"
+                (input)="customHost.set($any($event.target).value)"
+                />
+                <button
+                type="button"
+                class="btn btn-outline-primary"
+                (click)="addCustomHostToPresets()"
+                >
+                <i class="bi bi-plus-lg me-1"></i>Add to list
+                </button>
+            </div>
+            </div>
+            <div class="col-md-6">
+            <label class="form-label small fw-semibold"
+                >Registry host</label
+            >
+            <input
+                type="text"
+                class="form-control form-control-sm"
+                placeholder="registry.example.com"
+                [value]="formHost()"
+                (input)="formHost.set($any($event.target).value)"
+            />
+            </div>
+            <div class="col-md-6">
+            <label class="form-label small fw-semibold">Username</label>
+            <input
+                type="text"
+                class="form-control form-control-sm"
+                [value]="formUser()"
+                (input)="formUser.set($any($event.target).value)"
+            />
+            </div>
+            <div class="col-md-6">
+            <label class="form-label small fw-semibold">
+                Password / token
+                @if (editingId()) {
+                <span class="text-muted fw-normal"
+                    >(leave blank to keep current)</span
+                >
+                }
+            </label>
+            <input
+                type="password"
+                class="form-control form-control-sm"
+                [value]="formPass()"
+                (input)="formPass.set($any($event.target).value)"
+            />
+            </div>
+        </div>
+
+        <!-- Visibility (admin only): global shared or personal -->
+        @if (authService.currentUser()?.is_admin) {
+            <div class="col-12">
+            <label class="form-label small fw-semibold">Visibility</label>
+            <div class="d-flex gap-3">
+                <div class="form-check">
+                <input
+                    class="form-check-input"
+                    type="radio"
+                    id="owner-personal"
+                    name="regOwner"
+                    value="personal"
+                    [checked]="formOwner() === 'personal'"
+                    (change)="formOwner.set('personal')"
+                />
+                <label class="form-check-label small" for="owner-personal">
+                    <i class="bi bi-person me-1"></i>Personal
+                    <span class="text-muted">(only you)</span>
+                </label>
+                </div>
+                <div class="form-check">
+                <input
+                    class="form-check-input"
+                    type="radio"
+                    id="owner-global"
+                    name="regOwner"
+                    value="global"
+                    [checked]="formOwner() === 'global'"
+                    (change)="formOwner.set('global')"
+                />
+                <label class="form-check-label small" for="owner-global">
+                    <i class="bi bi-globe me-1"></i>Global
+                    <span class="text-muted">(visible to all users)</span>
+                </label>
+                </div>
+            </div>
+            </div>
+        }
+
+        <!-- Test result -->
+        @if (testResult()) {
+            <div
+            class="alert py-2 small mb-2"
+            [class.alert-success]="
+                testResult()!.reachable && testResult()!.auth_ok
+            "
+            [class.alert-warning]="
+                testResult()!.reachable && !testResult()!.auth_ok
+            "
+            [class.alert-danger]="!testResult()!.reachable"
+            >
+            <i
+                class="bi me-1"
+                [class.bi-check-circle]="testResult()!.reachable"
+                [class.bi-x-circle]="!testResult()!.reachable"
+            ></i>
+            {{ testResult()!.message }}
+            </div>
+        }
+
+        <div class="d-flex gap-2">
+            <button
+            class="btn btn-sm btn-primary"
+            (click)="saveRegistry()"
+            [disabled]="savingRegistry()"
+            >
+            @if (savingRegistry()) {
+                <span class="spinner-border spinner-border-sm me-1"></span>
+            }
+            {{ editingId() ? "Update" : "Save" }}
+            </button>
+            <button
+            class="btn btn-sm btn-outline-secondary"
+            (click)="testNewConnection()"
+            [disabled]="testingNew()"
+            >
+            @if (testingNew()) {
+                <span class="spinner-border spinner-border-sm me-1"></span>
+            }
+            <i class="bi bi-plug me-1"></i>Test connection
+            </button>
+            <button
+            class="btn btn-sm btn-link text-muted ms-auto"
+            (click)="cancelForm()"
+            >
+            Cancel
+            </button>
+        </div>
+        </div>
+    }
+
+    <!-- Registry list -->
+    @if (registries().length === 0 && !showAddForm()) {
+        <div class="text-center py-4 text-muted">
+        <i class="bi bi-globe display-5 d-block mb-3 opacity-25"></i>
+        No external registries configured yet.
+        </div>
+    } @else {
+        <div class="border rounded overflow-hidden">
+        @for (reg of registries(); track reg.id) {
+            <div
+            class="d-flex align-items-center gap-3 px-3 py-2 border-bottom"
+            >
+            <div
+                class="rounded-2 bg-body-tertiary d-flex align-items-center justify-content-center"
+                style="
+                width: 38px;
+                height: 38px;
+                font-size: 18px;
+                flex-shrink: 0;
+                "
+            >
+                @if (reg.host.includes("docker.io")) {
+                🐳
+                } @else if (reg.host.includes("ghcr")) {
+                🐙
+                } @else {
+                🏢
+                }
+            </div>
+            <div class="flex-grow-1 min-w-0">
+                <div class="fw-semibold small">{{ reg.name }}</div>
+                <div
+                class="text-muted font-monospace"
+                style="font-size: 0.72rem"
+                >
+                {{ reg.host }}
+                @if (reg.username) {
+                    · {{ reg.username }}
+
+                    <span
+                    class="badge ms-1"
+                    [class.bg-primary-subtle]="reg.owner === 'global'"
+                    [class.text-primary]="reg.owner === 'global'"
+                    [class.bg-secondary-subtle]="reg.owner !== 'global'"
+                    [class.text-secondary]="reg.owner !== 'global'"
+                    style="font-size: 0.65rem"
+                    >
+                    @if (reg.owner === "global") {
+                        <i class="bi bi-globe me-1"></i>Global
+                    } @else {
+                        <i class="bi bi-person me-1"></i>{{ reg.owner }}
+                    }
+                    </span>
+                }
+                </div>
+            </div>
+            <div class="d-flex gap-1">
+                <button
+                class="btn btn-sm btn-outline-secondary"
+                (click)="openEditForm(reg)"
+                title="Edit"
+                >
+                <i class="bi bi-pencil"></i>
+                </button>
+                <button
+                class="btn btn-sm btn-outline-secondary"
+                (click)="testSavedRegistry(reg.id)"
+                [disabled]="testingRegistryId() === reg.id"
+                title="Test connection"
+                >
+                @if (testingRegistryId() === reg.id) {
+                    <span class="spinner-border spinner-border-sm"></span>
+                } @else {
+                    <i class="bi bi-plug"></i>
+                }
+                </button>
+                <button
+                class="btn btn-sm btn-outline-danger"
+                (click)="deleteRegistry(reg.id)"
+                title="Delete"
+                >
+                <i class="bi bi-trash"></i>
+                </button>
+            </div>
+            </div>
+        }
+        </div>
+    }
+    </div>
+</div>
