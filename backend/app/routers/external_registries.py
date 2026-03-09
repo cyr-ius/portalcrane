@@ -13,7 +13,7 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
-
+from ..services.job_service import jobs_list
 from ..config import Settings, get_settings, REGISTRY_URL, STAGING_DIR
 from ..services.external_registry_service import (
     build_target_path,
@@ -345,9 +345,7 @@ async def push_to_external(
             detail=f"OCI directory not found for job {payload.job_id}",
         )
 
-    from ..routers.staging import _jobs  # noqa: PLC0415
-
-    job = _jobs.get(payload.job_id)
+    job = jobs_list.get(payload.job_id)
     if not job:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Staging job not found"
