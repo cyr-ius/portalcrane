@@ -165,8 +165,6 @@ export class JobDetailComponent {
       .subscribe({
         next: () => {
           this.pushing.set(null);
-          // Trigger an immediate refresh so the PUSHING status appears without delay
-          this.jobSvc.loadJobs();
         },
         error: () => this.pushing.set(null),
       });
@@ -174,6 +172,7 @@ export class JobDetailComponent {
 
   deleteJob(jobId: string): void {
     this.jobSvc.deleteJob(jobId).subscribe({
+      // Do not wait for the timer, as this will disrupt the user experience.
       next: () => this.jobSvc.loadJobs(),
     });
   }
