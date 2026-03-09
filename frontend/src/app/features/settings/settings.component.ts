@@ -7,7 +7,6 @@ import {
   inject,
   OnInit
 } from "@angular/core";
-import { FormsModule } from "@angular/forms";
 import { Router } from "@angular/router";
 import { AuthService } from "../../core/services/auth.service";
 import { SettingsService } from "../../core/services/settings.service";
@@ -35,7 +34,6 @@ type SettingsTab =
 @Component({
   selector: "app-settings",
   imports: [
-    FormsModule,
     VulnConfigPanelComponent,
     OidcConfigPanel,
     AccountsConfigPanel,
