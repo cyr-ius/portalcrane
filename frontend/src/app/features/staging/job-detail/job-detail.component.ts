@@ -137,6 +137,7 @@ export class JobDetailComponent {
      * Angular re-creates this component during a @for re-render triggered
      * by the polling cycle. The spinner state is preserved across re-renders.
      */
+    this.jobSvc.clearRePushOverride(job.job_id);
     this.jobSvc.startPushing(job.job_id);
 
     const mode = this.getPushMode(job);

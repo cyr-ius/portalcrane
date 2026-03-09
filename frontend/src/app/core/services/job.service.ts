@@ -231,4 +231,8 @@ export class JobService {
       return bTime - aTime;
     });
   }
+
+  clearRePushOverride(jobId: string): void {
+    this._rePushOverrides.delete(jobId);
+  }
 }
