@@ -94,7 +94,7 @@ import { email, form, FormField, required, submit } from "@angular/forms/signals
 @Component({
   selector: 'app-user-profile',
   standalone: true,
-  imports: [CommonModule, FormField, ReactiveFormsModule],
+  imports: [CommonModule, FormField],
   templateUrl: './user-profile.component.html',
   styleUrl: './user-profile.component.css',
 })
