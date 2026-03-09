@@ -45,20 +45,22 @@ export interface PushOptions {
   external_registry_password?: string | null;
 }
 
-export const ACTIVE_STATUSES: JobStatus[] = [
+// FIX #4: Use Set<JobStatus> instead of Array for O(1) .has() lookups.
+// sortJobs() and displayProgress() call these on every polling cycle (every 3s).
+export const ACTIVE_STATUSES = new Set<JobStatus>([
   "pending",
   "pulling",
   "vuln_scanning",
   "pushing",
-];
+]);
 
-export const TERMINATE_STATUSES: JobStatus[] = [
+export const TERMINATE_STATUSES = new Set<JobStatus>([
   "scan_clean",
   "scan_skipped",
   "done",
   "scan_vulnerable",
   "failed",
-]
+]);
 
 @Injectable({ providedIn: "root" })
 export class JobService {
@@ -69,7 +71,7 @@ export class JobService {
   readonly jobs = this._jobs.asReadonly();
 
   setJobs(jobs: StagingJob[]) {
-    this._jobs.set(this.sortJobs(jobs))
+    this._jobs.set(this.sortJobs(jobs));
   }
 
   updateJob(job: StagingJob) {
@@ -80,8 +82,8 @@ export class JobService {
     this._jobs.update((jobs) =>
       jobs.map((j) =>
         j.job_id === job.job_id ? { ...j, status: "scan_clean" as const } : j,
-      )
-    )
+      ),
+    );
   }
 
   getJob(jobId: string): Observable<StagingJob> {
@@ -94,16 +96,16 @@ export class JobService {
 
   loadJobs() {
     this.listJobs().subscribe({
-      next: (jobs) => this.setJobs(jobs)
-    })
+      next: (jobs) => this.setJobs(jobs),
+    });
   }
 
   pushImage(
     options: PushOptions,
   ): Observable<{ message: string; job_id: string }> {
     return this.http.post<{ message: string; job_id: string }>(
-    `${this.BASE}/push`,
-    options,
+      `${this.BASE}/push`,
+      options,
     );
   }
 
@@ -113,9 +115,9 @@ export class JobService {
 
   sortJobs(jobs: StagingJob[]): StagingJob[] {
     return [...jobs].sort((a, b) => {
-      // Active jobs bubble to the top
-      const aActive = ACTIVE_STATUSES.includes(a.status) ? 0 : 1;
-      const bActive = ACTIVE_STATUSES.includes(b.status) ? 0 : 1;
+      // Active jobs bubble to the top — Set.has() is O(1)
+      const aActive = ACTIVE_STATUSES.has(a.status) ? 0 : 1;
+      const bActive = ACTIVE_STATUSES.has(b.status) ? 0 : 1;
       if (aActive !== bActive) return aActive - bActive;
 
       // Within the same group: newest first
@@ -124,5 +126,4 @@ export class JobService {
       return bTime - aTime;
     });
   }
-
 }

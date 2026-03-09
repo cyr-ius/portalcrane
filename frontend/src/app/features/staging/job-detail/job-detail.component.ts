@@ -179,7 +179,7 @@ export class JobDetailComponent {
   }
 
   displayProgress(job: StagingJob): number {
-    if (this.TERMINATE_STATUSES.includes(job.status)) {
+    if (this.TERMINATE_STATUSES.has(job.status)) {
       return 100;
     }
     return job.progress;
