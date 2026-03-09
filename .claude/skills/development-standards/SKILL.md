@@ -88,19 +88,18 @@ app/features/user/
 import { Component, input, output, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { signal, computed, effect } from '@angular/core';
-import { ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
+import { email, form, FormField, required, submit } from "@angular/forms/signals";
 
 // Standalone component - no module needed
 @Component({
   selector: 'app-user-profile',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule],
+  imports: [CommonModule, FormField, ReactiveFormsModule],
   templateUrl: './user-profile.component.html',
   styleUrl: './user-profile.component.css',
 })
 export class UserProfileComponent implements OnInit {
   // Injected services
-  private fb = inject(FormBuilder);
   private userService = inject(UserService);
 
   // Input signal (receives data from parent)
@@ -108,6 +107,9 @@ export class UserProfileComponent implements OnInit {
 
   // Output signal (sends data to parent)
   userSaved = output<User>();
+
+  // Error signal
+  readonly error = signal("");
 
   // Internal state using signals
   user = signal<User | null>(null);
@@ -120,17 +122,17 @@ export class UserProfileComponent implements OnInit {
     return usr ? `${usr.firstName} ${usr.lastName}` : 'Unknown';
   });
 
-  // Reactive form
-  userForm: FormGroup;
+  // Signal Forms
+  private readonly userInit = {email: '', phone: ''};
+  userModel = signal({...this.userInit});
+
+  userForm = form(this.userModel, (schemaPath) => {
+    required(schemaPath.email);
+    required(schemaPath.phone);
+    email(schemaPath.email);
+  })
 
   constructor() {
-    this.userForm = this.fb.group({
-      email: ['', [Validators.required, Validators.email]],
-      phone: ['', Validators.required],
-    });
-  }
-
-  ngOnInit(): void {
     // Load user when userId input changes
     effect(() => {
       const id = this.userId();
@@ -138,6 +140,7 @@ export class UserProfileComponent implements OnInit {
         this.loadUser(id);
       }
     });
+
   }
 
   private async loadUser(id: number): Promise<void> {
@@ -152,10 +155,18 @@ export class UserProfileComponent implements OnInit {
     }
   }
 
-  onSubmit(): void {
-    if (this.userForm.valid) {
-      this.userSaved.emit(this.userForm.value);
-    }
+  onSubmit(event: Event): void {
+    event.preventDefault();
+
+    sumibt(this.userForm, async (f) =>{
+      const formData = f().value()
+      try {
+        this.userSaved.emit(formData)
+      } catch (err: unknown) {
+        const httpErr = err as { error?: { detail?: string } };
+        this.error.set(httpErr.error?.detail ?? "Authentication failed");
+      }
+    })
   }
 }
 ```
@@ -276,79 +287,67 @@ export class ShoppingCartComponent {
 }
 ```
 
-### 5. Signal Forms (Formulaires Réactifs Simplifiés)
+### 5. Signal Forms
 
-Les Signal Forms simplifient la gestion des formulaires réactifs:
+Les Signal Forms simplifient la gestion des formulaires.
+Le template doit être dans un fichier dédié, exception dans ce chaitre pour des raisons pratiques d'explications
 
 ```typescript
-import { Component, FormBuilder, Validators } from '@angular/core';
-import { ReactiveFormsModule, FormGroup } from '@angular/forms';
+import { Component } from '@angular/core';
+import { form, email, FormField, required, submit } from "@angular/forms/signals";
 
 @Component({
   selector: 'app-registration-form',
   standalone: true,
-  imports: [ReactiveFormsModule],
-  templateUrl: './registration-form.component.html',
-  styleUrl: './registration-form.component.css',
+  imports: [FormRoot, FormField],
+  template: `
+    <form [formRoot]="registrationForm">
+      <input [formField]="registrationForm.username" />
+      <input type="email" [formField]="registrationForm.email" />
+      <input type="password" [formField]="registrationForm.password" />
+      <input type="password" [formField]="registrationForm.confirmPassword" />
+      <input type="checkbox" [formField]="registrationForm.acceptTerms" />
+      <button type="submit">Register</button>
+    </form>
+  `,
 })
 export class RegistrationFormComponent {
-  private fb = inject(FormBuilder);
 
-  // Using Signal Forms pattern
-  registrationForm: FormGroup;
+  private readonly registrationInit = {username: '', email: '', password: '', confirmPassword: '', acceptTerms: false}
 
-  constructor() {
-    this.registrationForm = this.fb.group({
-      username: ['', [Validators.required, Validators.minLength(3)]],
-      email: ['', [Validators.required, Validators.email]],
-      password: ['', [Validators.required, Validators.minLength(8)]],
-      confirmPassword: ['', Validators.required],
-      acceptTerms: [false, Validators.requiredTrue],
-    }, {
-      validators: this.passwordMatchValidator
-    });
-  }
+  registrationModel = signal({...this.registrationInit});
 
-  // Custom validator
-  private passwordMatchValidator(formGroup: FormGroup): { [key: string]: any } | null {
-    const password = formGroup.get('password')?.value;
-    const confirmPassword = formGroup.get('confirmPassword')?.value;
-
-    if (password !== confirmPassword) {
-      formGroup.get('confirmPassword')?.setErrors({ passwordMismatch: true });
-      return { passwordMismatch: true };
+  registrationForm = form(this.userModel, (schemaPath) => {
+      required(schemaPath.username);
+      required(schemaPath.email);
+      required(schemaPath.password);
+      required(schemaPath.confirmPassword);
+      required(schemaPath.acceptTerms);
+      email(schemaPath.email);
+      validate(schemaPath.confirmPassword, ({value, valueOf}) => {
+        const confirmPassword = value();
+        const password = valueOf(schemaPath.password);
+        if (confirmPassword !== password) {
+          return {
+            kind: 'passwordMismatch',
+            message: 'Passwords do not match',
+            };
+        }
+      });
+    },
+    {
+      submission: {
+        action: async (f) => this.submitToServer(f),
+      }
     }
-    return null;
+  )
+
+  private submitToServer(f: form) {
+    const formData = this.registrationForm().value();
+    console.log('Form submitted:', formData);
+    this.registrationForm().reset({...this.registrationInit})
   }
 
-  getErrorMessage(fieldName: string): string {
-    const control = this.registrationForm.get(fieldName);
-    if (!control || !control.errors) return '';
-
-    if (control.hasError('required')) return `${fieldName} is required`;
-    if (control.hasError('email')) return 'Invalid email format';
-    if (control.hasError('minlength')) {
-      return `Minimum ${control.errors['minlength'].requiredLength} characters`;
-    }
-    return 'Invalid input';
-  }
-
-  onSubmit(): void {
-    if (this.registrationForm.valid) {
-      const formData = this.registrationForm.value;
-      // Send to backend
-      console.log('Form submitted:', formData);
-    } else {
-      this.markFormGroupTouched(this.registrationForm);
-    }
-  }
-
-  private markFormGroupTouched(formGroup: FormGroup): void {
-    Object.keys(formGroup.controls).forEach(key => {
-      const control = formGroup.get(key);
-      control?.markAsTouched();
-    });
-  }
 }
 ```
 
