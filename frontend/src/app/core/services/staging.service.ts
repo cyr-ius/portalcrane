@@ -77,6 +77,8 @@ export interface OrphanOCIResult {
 @Injectable({ providedIn: "root" })
 export class StagingService {
   private readonly BASE = "/api/staging";
+  private readonly SYS_BASE = "/api/system";
+
   private http = inject(HttpClient);
 
   // ── Pull ──────────────────────────────────────────────────────────────────
@@ -108,12 +110,12 @@ export class StagingService {
   // ── Orphan cleanup ────────────────────────────────────────────────────────
 
   getOrphanOci(): Observable<OrphanOCIResult> {
-    return this.http.get<OrphanOCIResult>(`${this.BASE}/orphan-oci`);
+    return this.http.get<OrphanOCIResult>(`${this.SYS_BASE}/orphan-oci`);
   }
 
   purgeOrphanOci(): Observable<{ message: string; purged: string[] }> {
     return this.http.delete<{ message: string; purged: string[] }>(
-      `${this.BASE}/orphan-oci`,
+      `${this.SYS_BASE}/orphan-oci`,
     );
   }
 
@@ -136,12 +138,12 @@ export class StagingService {
         created: string;
       }[];
       count: number;
-    }>(`${this.BASE}/dangling-images`);
+    }>(`${this.SYS_BASE}/dangling-images`);
   }
 
   purgeDanglingImages(): Observable<{ message: string; output: string }> {
     return this.http.post<{ message: string; output: string }>(
-      `${this.BASE}/dangling-images/purge`,
+      `${this.SYS_BASE}/dangling-images/purge`,
       {},
     );
   }

@@ -16,6 +16,7 @@ from ..config import (
     TRIVY_DB_METADATA,
     TRIVY_SERVER_URL,
     REGISTRY_HOST,
+    Settings,
 )
 
 logger = logging.getLogger(__name__)
@@ -317,3 +318,63 @@ async def update_trivy_db() -> dict:
         "success": proc.returncode == 0,
         "output": stdout.decode() + stderr.decode(),
     }
+
+
+def parse_trivy_output(raw: bytes, severities: list[str]) -> dict:
+    """Parse Trivy JSON output and return a structured vuln_result dict."""
+    try:
+        data = json.loads(raw.decode())
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return {
+            "enabled": True,
+            "blocked": False,
+            "severities": severities,
+            "counts": {},
+            "vulnerabilities": [],
+            "total": 0,
+        }
+
+    vulns: list[dict] = []
+    counts: dict[str, int] = {}
+
+    for result in data.get("Results", []):
+        for v in result.get("Vulnerabilities") or []:
+            sev = v.get("Severity", "UNKNOWN").upper()
+            counts[sev] = counts.get(sev, 0) + 1
+            vulns.append(
+                {
+                    "id": v.get("VulnerabilityID", ""),
+                    "package": v.get("PkgName", ""),
+                    "installed_version": v.get("InstalledVersion", ""),
+                    "fixed_version": v.get("FixedVersion"),
+                    "severity": sev,
+                    "title": v.get("Title"),
+                    "cvss_score": (v.get("CVSS") or {}).get("nvd", {}).get("V3Score"),
+                    "target": result.get("Target", ""),
+                }
+            )
+
+    blocked = any(counts.get(s, 0) > 0 for s in severities)
+
+    return {
+        "enabled": True,
+        "blocked": blocked,
+        "severities": severities,
+        "counts": counts,
+        "vulnerabilities": vulns,
+        "total": len(vulns),
+    }
+
+
+def effective_vuln(settings: Settings, override: bool | None) -> bool:
+    """Return the effective vulnerability-scan flag for a given job."""
+    if override is not None:
+        return override
+    return settings.vuln_scan_enabled
+
+
+def effective_severities(settings: Settings, override: str | None) -> list[str]:
+    """Return the effective CVE severity list for a given job."""
+    if override is not None:
+        return [s.strip().upper() for s in override.split(",") if s.strip()]
+    return settings.vuln_severities
