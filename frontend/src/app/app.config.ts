@@ -17,5 +17,9 @@ export const appConfig: ApplicationConfig = {
     provideZonelessChangeDetection(),
     provideRouter(routes, withComponentInputBinding()),
     provideHttpClient(withInterceptors([authInterceptor])),
+    // NOTE: TrivyService.loadConfig() is intentionally NOT called here at bootstrap.
+    // The config is loaded on-demand in StagingComponent.ngOnInit() and
+    // VulnConfigPanelComponent.ngOnInit(). localStorage acts as cache between
+    // sessions. A global initializer would block the app startup unnecessarily.
   ],
 };

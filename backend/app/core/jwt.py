@@ -123,24 +123,22 @@ def require_admin(current_user: UserInfo = Depends(get_current_user)) -> UserInf
 
 
 def require_pull_access(current_user: UserInfo = Depends(get_current_user)) -> UserInfo:
-    """FastAPI dependency: raise 403 when the current user cannot pull images.
-
-    With the new folder-based model, pull access is verified by the registry
-    proxy directly. This dependency now only blocks non-authenticated users.
-    Kept for backward compatibility with routes that use it explicitly.
     """
-    if not current_user.is_admin:
-        pass
+    Ensures the user is authenticated.
+    NOTE: Pull access control is intentionally NOT enforced here.
+    All folder-based pull/push permissions are handled exclusively
+    by the registry proxy in registry_proxy.py (_authorize_registry_proxy).
+    This dependency exists only to require a valid JWT token.
+    """
     return current_user
 
 
 def require_push_access(current_user: UserInfo = Depends(get_current_user)) -> UserInfo:
-    """FastAPI dependency: raise 403 when the current user cannot push images.
-
-    With the new folder-based model, push access is verified by the registry
-    proxy directly. This dependency now only blocks non-authenticated users.
-    Kept for backward compatibility with routes that use it explicitly.
     """
-    if not current_user.is_admin:
-        pass
+    Ensures the user is authenticated.
+    NOTE: Push access control is intentionally NOT enforced here.
+    All folder-based pull/push permissions are handled exclusively
+    by the registry proxy in registry_proxy.py (_authorize_registry_proxy).
+    This dependency exists only to require a valid JWT token.
+    """
     return current_user
