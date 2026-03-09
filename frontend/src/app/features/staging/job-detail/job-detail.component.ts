@@ -13,24 +13,33 @@ export type PushMode = "local" | "external";
   styleUrl: "./job-detail.component.css",
 })
 export class JobDetailComponent {
-  job = input<StagingJob>()
+  job = input<StagingJob>();
 
   private authService = inject(AuthService);
-  private extRegistrySvc = inject(ExternalRegistryService)
-  private folderSvc = inject(FolderService)
-  jobSvc = inject(JobService)
+  private extRegistrySvc = inject(ExternalRegistryService);
+  private folderSvc = inject(FolderService);
+  jobSvc = inject(JobService);
 
-  readonly ACTIVE_STATUSES = ACTIVE_STATUSES
-  readonly TERMINATE_STATUSES = TERMINATE_STATUSES
+  readonly ACTIVE_STATUSES = ACTIVE_STATUSES;
+  readonly TERMINATE_STATUSES = TERMINATE_STATUSES;
 
-  pushing = signal<string | null>(null);
+  // These signals are keyed by job_id so they survive if Angular reuses
+  // this component instance for a different job (unlikely with track, but safe).
   pushTargets = signal<Record<string, string>>({});
   pushModes = signal<Record<string, PushMode>>({});
   pushExtRegistryId = signal<Record<string, string>>({});
 
-  readonly externalRegistries = computed<ExternalRegistry[]>(() => this.extRegistrySvc.externalRegistries())
+  readonly externalRegistries = computed<ExternalRegistry[]>(() => this.extRegistrySvc.externalRegistries());
   readonly isAdmin = computed(() => this.authService.currentUser()?.is_admin ?? false);
   readonly pushFolderOptions = computed(() => this.folderSvc.allowedPushFolders());
+
+  /**
+   * Delegate pushing state to the service so it survives @for re-renders.
+   * The template uses isPushing(job.job_id) instead of pushing() === job.job_id.
+   */
+  isPushing(jobId: string): boolean {
+    return this.jobSvc.pushingJobId() === jobId;
+  }
 
   getPushMode(job: StagingJob): PushMode {
     return this.pushModes()[job.job_id] ?? "local";
@@ -61,32 +70,16 @@ export class JobDetailComponent {
 
   /**
    * Compute the effective image name for a push to an external registry.
-   *
-   * When pushing to a saved external registry that has a declared username,
-   * the source namespace/username prefix is replaced by that registry username.
-   * The user's manual override (pushTargets img field) always takes precedence.
-   *
-   * Examples (no manual override, registry username = "myorg"):
-   *   "library/nginx"  → "myorg/nginx"
-   *   "someuser/myapp" → "myorg/myapp"
-   *   "nginx"          → "myorg/nginx"
-   *
-   * @param job       The staging job.
-   * @param rawImg    The raw source image name (job.image or user override).
-   * @param username  The target registry declared username (may be empty).
+   * User override always takes precedence over the computed name.
    */
   private computeExternalImageName(
     job: StagingJob,
     rawImg: string,
     username: string,
   ): string {
-    // If the user has explicitly typed an image name, never touch it
     const userOverriddenImg = this.getPushTarget(job, "img").trim();
     if (userOverriddenImg) return userOverriddenImg;
-
     if (!username) return rawImg;
-
-    // Strip the leading namespace segment, keep only the bare image name
     const bareName = rawImg.includes("/")
       ? rawImg.split("/").slice(1).join("/")
       : rawImg;
@@ -96,24 +89,19 @@ export class JobDetailComponent {
   getImageNamePlaceholder(job: StagingJob): string {
     const mode = this.getPushMode(job);
     const rawImg = job.image.trim();
-
     if (mode === "local") return rawImg;
-
     const regId = this.getExtRegistryId(job);
     const reg = this.externalRegistries().find((r) => r.id === regId);
     const username = reg?.username ?? "";
-
     return this.computeExternalImageName(job, rawImg, username);
   }
 
   pushPreview(job: StagingJob): string {
     const mode = this.getPushMode(job);
-    // Prefer explicit user input for folder, otherwise fall back to job.folder
     let folder = this.getPushTarget(job, "folder").trim();
     if (!folder && job.folder) {
       folder = job.folder;
     }
-
     const rawImg = (this.getPushTarget(job, "img") || job.image).trim();
     const tag = (this.getPushTarget(job, "tag") || job.tag).trim();
 
@@ -122,21 +110,34 @@ export class JobDetailComponent {
       return `localhost:5000/${path}:${tag}`;
     }
 
-    // ── External mode ──────────────────────────────────────────────────────────
     const regId = this.getExtRegistryId(job);
     const reg = this.externalRegistries().find((r) => r.id === regId);
     const host = reg
       ? reg.host
       : this.getPushTarget(job, "ext_host") || "<registry>";
     const username = reg?.username ?? "";
-
     const effectiveImg = this.computeExternalImageName(job, rawImg, username);
     const path = folder ? `${folder}/${effectiveImg}` : effectiveImg;
     return `${host}/${path}:${tag}`;
   }
 
   pushImage(job: StagingJob): void {
-    this.pushing.set(job.job_id);
+    /**
+     * FIX #1 — No flicker:
+     * startPushing() is called synchronously before the HTTP call.
+     * The UI moves to spinner state in the same change-detection cycle
+     * as the click event — no intermediate idle-button frame is rendered.
+     *
+     * We do NOT call clearPushing() in the next: callback.
+     * setJobs() in the polling loop (jobs-list) clears it automatically
+     * once the backend status moves away from "pending".
+     *
+     * FIX #2 — rePush works:
+     * Because pushingJobId lives in the service, it is not reset when
+     * Angular re-creates this component during a @for re-render triggered
+     * by the polling cycle. The spinner state is preserved across re-renders.
+     */
+    this.jobSvc.startPushing(job.job_id);
 
     const mode = this.getPushMode(job);
     const isExternal = mode === "external";
@@ -164,15 +165,18 @@ export class JobDetailComponent {
       })
       .subscribe({
         next: () => {
-          this.pushing.set(null);
+          // Intentionally empty: clearPushing() is handled by setJobs()
+          // in the polling cycle, not here, to avoid the flicker.
         },
-        error: () => this.pushing.set(null),
+        error: () => {
+          // On HTTP error: clear immediately so the button is re-enabled.
+          this.jobSvc.clearPushing(job.job_id);
+        },
       });
   }
 
   deleteJob(jobId: string): void {
     this.jobSvc.deleteJob(jobId).subscribe({
-      // Do not wait for the timer, as this will disrupt the user experience.
       next: () => this.jobSvc.loadJobs(),
     });
   }
@@ -185,7 +189,7 @@ export class JobDetailComponent {
   }
 
   allowRePush(job: StagingJob): void {
-    this.jobSvc.reUpdateJob(job)
+    this.jobSvc.reUpdateJob(job);
   }
 
   getStatusBadgeClass(status: string): string {
@@ -214,12 +218,11 @@ export class JobDetailComponent {
   }
 
   sourceRegistryIcon(host: string | null | undefined): string {
-    if (!host) return "🐳"; // Docker Hub
+    if (!host) return "🐳";
     if (host.includes("ghcr.io")) return "🐙";
     if (host.includes("quay.io")) return "🔴";
     if (host.includes("gcr.io") || host.includes("pkg.dev")) return "☁️";
     if (host.includes("amazonaws.com")) return "🟠";
     return "🏢";
   }
-
 }

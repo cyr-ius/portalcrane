@@ -46,7 +46,6 @@ export interface PushOptions {
 }
 
 // Use Set<JobStatus> for O(1) .has() lookups.
-// sortJobs() and displayProgress() call these on every polling cycle (every 3s).
 export const ACTIVE_STATUSES = new Set<JobStatus>([
   "pending",
   "pulling",
@@ -71,37 +70,85 @@ export class JobService {
   readonly jobs = this._jobs.asReadonly();
 
   /**
-   * Tracks job IDs whose status has been locally overridden to "scan_clean"
-   * by the "Push again" action. This set persists across polling cycles so
-   * that the push panel remains visible until the user actually triggers a
-   * new push (which transitions the backend status to "pushing" → "done").
+   * FIX #1 (flicker) + FIX #2 (rePush broken):
    *
-   * The override is cleared automatically in setJobs() once the backend
-   * reports a status other than "done" for that job (i.e. a new push
-   * pipeline has started).
+   * `pushingJobId` is a service-level signal that tracks which job is
+   * currently being submitted for push. Moving it out of JobDetailComponent
+   * (where it was a local signal) solves both bugs:
+   *
+   * - FLICKER: The component was calling `pushing.set(null)` in the HTTP
+   *   `next:` callback, which briefly re-enabled the Push button before
+   *   the next polling cycle brought back `status: "pushing"` from the
+   *   backend. Now the state is cleared only when the backend status
+   *   transitions, not on HTTP response.
+   *
+   * - REPUSH BROKEN: Angular's @for re-creates JobDetailComponent when the
+   *   job object reference changes (every 3 s polling cycle). A local signal
+   *   is reset to its initial value on each re-creation, losing the pushing
+   *   state and orphaning the HTTP subscribe. A service-level signal survives
+   *   component re-creation.
+   */
+  private readonly _pushingJobId = signal<string | null>(null);
+  readonly pushingJobId = this._pushingJobId.asReadonly();
+
+  /**
+   * Tracks job IDs whose status has been locally overridden to "scan_clean"
+   * by the "Push again" action.
    */
   private readonly _rePushOverrides = new Set<string>();
 
   /**
+   * Register a job as currently being pushed.
+   * Called synchronously before the HTTP request so the UI transitions
+   * atomically (no intermediate flash of the idle Push button).
+   */
+  startPushing(jobId: string): void {
+    this._pushingJobId.set(jobId);
+  }
+
+  /**
+   * Clear the pushing state for a given job.
+   * Called by setJobs() when the backend status moves away from the
+   * initial "pending" state (i.e. the backend has accepted the push),
+   * or immediately on HTTP error.
+   */
+  clearPushing(jobId: string): void {
+    if (this._pushingJobId() === jobId) {
+      this._pushingJobId.set(null);
+    }
+  }
+
+  /**
    * Replace the full job list with data from the backend.
-   * Locally overridden re-push statuses are reapplied so that the push
-   * panel stays visible across polling cycles.
-   *
-   * FIX #1 (audit): this is the only write path for the full list —
-   * no risk of duplicates here.
+   * - Reapplies re-push overrides so the push panel stays visible across polling cycles.
+   * - Clears pushingJobId once the backend acknowledges the push (status !== "pending").
    */
   setJobs(jobs: StagingJob[]): void {
     const merged = jobs.map((job) => {
       if (this._rePushOverrides.has(job.job_id)) {
-        // Backend still shows "done": keep the local scan_clean override
-        // so the push panel stays visible.
         if (job.status === "done") {
+          // Backend still shows "done": keep the local scan_clean override.
           return { ...job, status: "scan_clean" as const };
         }
-        // User triggered a new push: backend moved on (pushing / done / failed).
-        // Clear the override so we track the real status again.
+        // Backend moved on (pulling / vuln_scanning / pushing / failed):
+        // the new pipeline has started — clear the override.
         this._rePushOverrides.delete(job.job_id);
       }
+
+      /**
+       * FIX #1 — Clear pushingJobId when the backend confirms the push
+       * pipeline has started (status moves from pending to any other state).
+       * This is the single authoritative place to clear the pushing flag,
+       * replacing the previous approach of clearing it in the HTTP next:
+       * callback (which caused a brief idle-button flash).
+       */
+      if (
+        this._pushingJobId() === job.job_id &&
+        job.status !== "pending"
+      ) {
+        this._pushingJobId.set(null);
+      }
+
       return job;
     });
 
@@ -110,14 +157,6 @@ export class JobService {
 
   /**
    * Insert or update a single job without duplicating it.
-   *
-   * FIX #1 (audit): previous implementation used [job, ...jobs] which
-   * prepended unconditionally, creating a duplicate when the job already
-   * existed in the list.
-   *
-   * New logic:
-   *   - job_id exists → replace in-place then re-sort.
-   *   - job_id is new → prepend then re-sort.
    */
   updateJob(job: StagingJob): void {
     this._jobs.update((jobs) => {
@@ -140,7 +179,6 @@ export class JobService {
    * reports a status transition away from "done" (new push started).
    */
   reUpdateJob(job: StagingJob): void {
-    // Register override so polling does not revert it.
     this._rePushOverrides.add(job.job_id);
 
     this._jobs.update((jobs) =>
@@ -174,23 +212,20 @@ export class JobService {
   }
 
   deleteJob(jobId: string): Observable<{ message: string }> {
-    // Also clear any pending re-push override for the deleted job.
     this._rePushOverrides.delete(jobId);
+    // Also clear pushing state if this job was being pushed.
+    this.clearPushing(jobId);
     return this.http.delete<{ message: string }>(`${this.BASE}/jobs/${jobId}`);
   }
 
   /**
-   * Sort jobs: active jobs first, then by creation date descending (newest first).
-   * Uses Set.has() for O(1) status checks on every polling cycle.
+   * Sort jobs: active jobs first, then by creation date descending.
    */
   sortJobs(jobs: StagingJob[]): StagingJob[] {
     return [...jobs].sort((a, b) => {
-      // Active jobs bubble to the top
       const aActive = ACTIVE_STATUSES.has(a.status) ? 0 : 1;
       const bActive = ACTIVE_STATUSES.has(b.status) ? 0 : 1;
       if (aActive !== bActive) return aActive - bActive;
-
-      // Within the same group: newest first
       const aTime = a.created_at ? new Date(a.created_at).getTime() : 0;
       const bTime = b.created_at ? new Date(b.created_at).getTime() : 0;
       return bTime - aTime;

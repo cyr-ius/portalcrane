@@ -390,7 +390,7 @@
             class="btn btn-sm btn-success"
             (click)="pushImage(job()!)"
             [disabled]="
-            pushing() === job()!.job_id ||
+            isPushing(job()!.job_id) ||
             (getPushMode(job()!) === 'local' && (
                 (!isAdmin() &&
                 pushFolderOptions().length > 0 &&
@@ -403,7 +403,7 @@
             "
             type="button"
         >
-            @if (pushing() === job()!.job_id) {
+            @if (isPushing(job()!.job_id)) {
             <span
                 class="spinner-border spinner-border-sm me-1"
             ></span>
