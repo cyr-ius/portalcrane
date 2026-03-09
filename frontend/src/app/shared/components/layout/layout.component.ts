@@ -5,11 +5,11 @@
  */
 import { Component, inject, OnDestroy, OnInit, signal } from "@angular/core";
 import { RouterLink, RouterLinkActive, RouterOutlet } from "@angular/router";
+import { readBool } from "../../../core/helpers/storage";
 import { AuthService } from "../../../core/services/auth.service";
 import { ThemeService } from "../../../core/services/theme.service";
 import { AccountModalComponent } from "../account-modal/account-modal.component";
 import { SessionExpiredModalComponent } from "../session-expired-modal/session-expired-modal.component";
-import { readBool } from "../../../core/helpers/storage";
 
 // Breakpoint below which the sidebar auto-collapses (matches Bootstrap 'lg')
 const COLLAPSE_BREAKPOINT = 992;
@@ -69,7 +69,7 @@ export class LayoutComponent implements OnInit, OnDestroy {
     } else if (!this.userHasToggled()) {
       // Wide screen and user hasn't toggled: expand automatically
       const saved = localStorage.getItem(this.SIDEBAR_KEY);
-      this.sidebarCollapsed.set(saved === "true" ? true : false);
+      this.sidebarCollapsed.set(saved === "true");
     }
   }
 

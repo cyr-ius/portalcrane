@@ -9,7 +9,6 @@ import {
 } from "@angular/core";
 import { FormsModule } from "@angular/forms";
 import { Router } from "@angular/router";
-import { AboutService } from "../../core/services/about.service";
 import { AuthService } from "../../core/services/auth.service";
 import { SettingsService } from "../../core/services/settings.service";
 import { ThemeService } from "../../core/services/theme.service";
@@ -52,7 +51,6 @@ type SettingsTab =
 export class SettingsComponent implements OnInit {
   themeService = inject(ThemeService);
   authService = inject(AuthService);
-  aboutService = inject(AboutService);
   private router = inject(Router);
   private settingsSvc = inject(SettingsService)
 

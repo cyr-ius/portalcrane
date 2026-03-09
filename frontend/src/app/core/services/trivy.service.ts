@@ -1,4 +1,4 @@
-// frontend/src/app/shared/services/system.service.ts
+// frontend/src/app/shared/services/trivy.service.ts
 import { HttpClient } from "@angular/common/http";
 import { Injectable, computed, inject, signal } from "@angular/core";
 import { firstValueFrom, tap } from "rxjs";
