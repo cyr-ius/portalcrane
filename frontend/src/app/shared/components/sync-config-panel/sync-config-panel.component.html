@@ -1,223 +1,201 @@
-<!-- Sync form -->
+<!-- Portalcrane - Sync Configuration Panel -->
+<!-- MIGRATION: Source/destination/folder fields now use [formField] bindings -->
+
+<!-- ── New synchronisation form ──────────────────────────────────────────── -->
 <div class="card border-0 mb-3">
-    <div class="card-header border-0">
+  <div class="card-header border-0">
     <h6 class="fw-semibold mb-0">
-        <i class="bi bi-arrow-repeat me-2"></i>New synchronisation
+      <i class="bi bi-arrow-repeat me-2"></i>New synchronisation
     </h6>
-    </div>
-    <div class="card-body">
+  </div>
+  <div class="card-body">
     @if (registries().length === 0) {
-        <div class="alert alert-warning small">
+      <div class="alert alert-warning small">
         <i class="bi bi-exclamation-triangle me-1"></i>
         No external registries configured.
         <button
-            class="btn btn-link btn-sm p-0 ms-1"
-            (click)="settingsSvc.setTab('registries')"
+          class="btn btn-link btn-sm p-0 ms-1"
+          (click)="settingsSvc.setTab('registries')"
         >
-            Add one
+          Add one
         </button>
-        </div>
+      </div>
     } @else {
-        <div class="row g-3">
-        <!-- Source -->
+      <div class="row g-3">
+
+        <!-- Source local image -->
         <div class="col-md-6">
-            <label class="form-label small fw-semibold"
-            >Source (local image)</label
-            >
-            @if (loadingLocalImages()) {
+          <label class="form-label small fw-semibold">Source (local image)</label>
+          @if (loadingLocalImages()) {
             <div class="form-control form-control-sm placeholder-glow">
-                <span class="placeholder w-75"></span>
+              <span class="placeholder w-75"></span>
             </div>
-            } @else {
+          } @else {
             <select
-                class="form-select form-select-sm"
-                [value]="syncSource()"
-                (change)="syncSource.set($any($event.target).value)"
+              class="form-select form-select-sm"
+              [formField]="syncForm.source"
             >
-                <option value="(all)">(all images)</option>
-                @for (img of localImages(); track img) {
+              <option value="(all)">(all images)</option>
+              @for (img of localImages(); track img) {
                 <option [value]="img">{{ img }}</option>
-                }
+              }
             </select>
-            }
+          }
         </div>
 
         <!-- Destination registry -->
         <div class="col-md-6">
-            <label class="form-label small fw-semibold"
-            >Destination registry</label
-            >
-            <select
+          <label class="form-label small fw-semibold">Destination registry</label>
+          <select
             class="form-select form-select-sm"
-            [value]="syncDestId()"
-            (change)="syncDestId.set($any($event.target).value)"
-            >
+            [formField]="syncForm.destId"
+          >
             <option value="">— Select a registry —</option>
             @for (reg of registries(); track reg.id) {
-                <option [value]="reg.id">
-                {{ reg.name }} ({{ reg.host }})
-                </option>
+              <option [value]="reg.id">{{ reg.name }} ({{ reg.host }})</option>
             }
-            </select>
+          </select>
         </div>
 
         <!-- Folder prefix -->
         <div class="col-12">
-            <label class="form-label small fw-semibold">
+          <label class="form-label small fw-semibold">
             Destination folder prefix
             <span class="text-muted fw-normal">(optional)</span>
-            </label>
-            <input
+          </label>
+          <input
             type="text"
             class="form-control form-control-sm font-monospace"
             placeholder="e.g. prod/ or myorg/ — leave empty to use registry username"
-            [value]="syncFolder()"
-            (input)="syncFolder.set($any($event.target).value)"
-            />
-            <!--
-            FIX: Preview now calls getSyncPreview() which mirrors the backend
-            _rewrite_image_name_for_sync() logic: only the LAST path segment
-            of the source image is kept, prefixed with dest_folder or username.
+            [formField]="syncForm.folder"
+          />
+          <!--
+            Preview mirrors the backend _rewrite_image_name_for_sync() logic:
+            only the LAST path segment of the source image is kept, prefixed
+            with dest_folder or registry username.
             Example: "cyrius44/alpine/ansible:2.20.0" → "docker.io/cyrius44/ansible:2.20.0"
-            -->
-            @if (syncDestId()) {
+          -->
+          @if (syncModel().destId) {
             <div class="text-muted mt-1" style="font-size: 0.72rem">
-                <i class="bi bi-arrow-right me-1"></i>
-                Preview: <code>{{ getSyncPreview() }}</code>
+              <i class="bi bi-arrow-right me-1"></i>
+              Preview: <code>{{ getSyncPreview() }}</code>
             </div>
-            }
+          }
         </div>
-        </div>
+      </div>
 
-        <div class="d-flex gap-2 mt-3">
+      <div class="d-flex gap-2 mt-3">
         <button
-            class="btn btn-sm btn-primary"
-            (click)="startSync()"
-            [disabled]="startingSync() || !syncDestId()"
+          class="btn btn-sm btn-primary"
+          (click)="startSync()"
+          [disabled]="startingSync() || !syncForm().valid()"
         >
-            @if (startingSync()) {
+          @if (startingSync()) {
             <span class="spinner-border spinner-border-sm me-1"></span>
-            } @else {
+          } @else {
             <i class="bi bi-arrow-repeat me-1"></i>
-            }
-            Sync now
+          }
+          Sync now
         </button>
-        </div>
+      </div>
     }
-    </div>
+  </div>
 </div>
 
-<!-- Sync job history -->
+<!-- ── Sync job history ───────────────────────────────────────────────────── -->
 <div class="card border-0">
-    <div
-    class="card-header border-0 d-flex align-items-center justify-content-between"
-    >
+  <div class="card-header border-0 d-flex align-items-center justify-content-between">
     <h6 class="fw-semibold mb-0">
-        <i class="bi bi-clock-history me-2"></i>Sync history
+      <i class="bi bi-clock-history me-2"></i>Sync history
     </h6>
     <!--
-        Manual refresh button: also re-triggers the polling loop via loadSyncData().
-        Auto-polling runs every 3 s while any job is "running" (see TS component).
+      Manual refresh also re-triggers the polling loop via loadSyncData().
+      Auto-polling runs every 3 s while any job is "running" (see TS component).
     -->
     <button
-        class="btn btn-sm btn-outline-secondary"
-        (click)="loadSyncData()"
-        [disabled]="loadingSyncJobs()"
+      class="btn btn-sm btn-outline-secondary"
+      (click)="loadSyncData()"
+      [disabled]="loadingSyncJobs()"
     >
-        <i class="bi bi-arrow-clockwise"></i>
+      <i class="bi bi-arrow-clockwise"></i>
     </button>
-    </div>
-    <div class="card-body p-0">
+  </div>
+  <div class="card-body p-0">
     @if (loadingSyncJobs()) {
-        <div class="d-flex justify-content-center py-4">
+      <div class="d-flex justify-content-center py-4">
         <span class="spinner-border text-primary spinner-border-sm"></span>
-        </div>
+      </div>
     } @else if (syncJobs().length === 0) {
-        <div class="text-center py-4 text-muted small">No sync jobs yet.</div>
+      <div class="text-center py-4 text-muted small">No sync jobs yet.</div>
     } @else {
-        <div class="list-group list-group-flush">
+      <div class="list-group list-group-flush">
         @for (job of syncJobs(); track job.id) {
-            <div class="list-group-item px-3 py-2">
+          <div class="list-group-item px-3 py-2">
             <div class="d-flex align-items-start gap-2">
-                <!--
-                FIX: icon now includes colour class (text-info/success/warning/danger)
-                returned by syncStatusIcon() — spin animation for running jobs.
-                -->
-                <i
+              <!-- Status icon — spins while running -->
+              <i
                 class="bi mt-1"
                 [class]="syncStatusIcon(job.status)"
                 [class.spin]="job.status === 'running'"
-                ></i>
-                <div class="flex-grow-1 min-w-0">
+              ></i>
+              <div class="flex-grow-1 min-w-0">
                 <div class="d-flex flex-wrap align-items-center gap-1 mb-1">
-                    <code class="small bg-body-tertiary px-1 rounded">{{
-                    job.source
-                    }}</code>
-                    <i class="bi bi-arrow-right text-muted small"></i>
-                    <code
+                  <code class="small bg-body-tertiary px-1 rounded">{{ job.source }}</code>
+                  <i class="bi bi-arrow-right text-muted small"></i>
+                  <code
                     class="small bg-body-tertiary px-1 rounded text-truncate"
                     style="max-width: 220px"
-                    >
-                    {{ getRegistryHost(job.dest_registry_id)
-                    }}{{ job.dest_folder ? "/" + job.dest_folder : "" }}
-                    </code>
+                  >
+                    {{ getRegistryHost(job.dest_registry_id) }}{{ job.dest_folder ? "/" + job.dest_folder : "" }}
+                  </code>
                 </div>
 
                 <div class="d-flex align-items-center gap-2 flex-wrap">
-                    <span [class]="syncStatusBadge(job.status)">{{
-                    job.status
-                    }}</span>
-                    <span class="text-muted" style="font-size: 0.7rem">{{
-                    job.started_at | slice: 0 : 16
-                    }}</span>
+                  <span [class]="syncStatusBadge(job.status)">{{ job.status }}</span>
+                  <span class="text-muted" style="font-size: 0.7rem">{{ job.started_at | slice: 0 : 16 }}</span>
 
-                    <!-- Progress bar — visible while running -->
-                    @if (job.status === "running") {
-                    <span class="text-muted small">
-                        {{ job.images_done }}/{{ job.images_total }}
-                    </span>
-                    <div
-                        class="progress flex-grow-1"
-                        style="height: 4px; max-width: 100px"
-                    >
-                        <div
+                  <!-- Progress bar — visible while running -->
+                  @if (job.status === "running") {
+                    <span class="text-muted small">{{ job.images_done }}/{{ job.images_total }}</span>
+                    <div class="progress flex-grow-1" style="height: 4px; max-width: 100px">
+                      <div
                         class="progress-bar progress-bar-striped progress-bar-animated"
                         [style.width.%]="job.progress"
-                        ></div>
+                      ></div>
                     </div>
-                    }
+                  }
 
-                    <!-- Finished_at — shown once job is done -->
-                    @if (job.finished_at) {
+                  <!-- Finished_at — shown once job completes -->
+                  @if (job.finished_at) {
                     <span class="text-muted" style="font-size: 0.7rem">
-                        <i class="bi bi-flag me-1"></i>{{ job.finished_at | slice: 0 : 16 }}
+                      <i class="bi bi-flag me-1"></i>{{ job.finished_at | slice: 0 : 16 }}
                     </span>
-                    }
+                  }
                 </div>
 
-                <!-- Success message -->
+                <!-- Success / partial message -->
                 @if (job.status === "done" || job.status === "partial") {
-                    <div
+                  <div
                     class="mt-1"
                     style="font-size: 0.7rem"
                     [class.text-success]="job.status === 'done'"
                     [class.text-warning]="job.status === 'partial'"
-                    >
+                  >
                     <i class="bi bi-check-circle me-1"></i>{{ job.message }}
-                    </div>
+                  </div>
                 }
 
                 <!-- Error detail -->
                 @if (job.error) {
-                    <div class="text-danger mt-1" style="font-size: 0.7rem">
+                  <div class="text-danger mt-1" style="font-size: 0.7rem">
                     <i class="bi bi-exclamation-circle me-1"></i>{{ job.error }}
-                    </div>
+                  </div>
                 }
-                </div>
+              </div>
             </div>
-            </div>
+          </div>
         }
-        </div>
+      </div>
     }
-    </div>
+  </div>
 </div>
