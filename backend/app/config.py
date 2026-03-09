@@ -6,6 +6,7 @@ All settings loaded from environment variables
 import logging
 import os
 from pathlib import Path
+from urllib.parse import urlparse
 
 from pydantic import model_validator
 from pydantic_settings import BaseSettings
@@ -45,6 +46,7 @@ TRIVY_DB_METADATA = Path(TRIVY_CACHE_DIR) / "db" / "metadata.json"
 
 # Container registry URL (used for skopeo copy operations)
 REGISTRY_URL: str = "http://localhost:5000"
+REGISTRY_HOST: str = urlparse(REGISTRY_URL).netloc
 
 # HTTP client timeout for GitHub API calls (in seconds)
 HTTPX_TIMEOUT: float = 10.0

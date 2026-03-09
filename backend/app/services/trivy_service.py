@@ -9,14 +9,13 @@ import json
 import logging
 import re
 from datetime import datetime
-from urllib.parse import urlparse
 
 from ..config import (
-    REGISTRY_URL,
     TRIVY_BINARY,
     TRIVY_CACHE_DIR,
     TRIVY_DB_METADATA,
     TRIVY_SERVER_URL,
+    REGISTRY_HOST,
 )
 
 logger = logging.getLogger(__name__)
@@ -72,9 +71,7 @@ def _normalize_image_ref(image_ref: str) -> str:
     if has_host:
         return image_ref
 
-    # Derive local registry host from REGISTRY_URL (e.g. "http://localhost:5000")
-    registry_host = urlparse(REGISTRY_URL).netloc or "localhost:5000"
-    return f"{registry_host}/{image_ref}"
+    return f"{REGISTRY_HOST}/{image_ref}"
 
 
 async def get_trivy_db_info() -> dict:

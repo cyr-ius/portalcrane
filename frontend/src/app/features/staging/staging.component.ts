@@ -2,99 +2,62 @@
  * Portalcrane - Staging Component
  * Pull pipeline: source registry selection → image pull → CVE scan → push
  * (local or external registry with optional folder prefix).
- *
- * Changes:
- *  - Added pull source mode: "dockerhub" | "saved" | "adhoc"
- *  - New signals: pullSourceMode, pullSourceRegistryId, pullSourceHost,
- *    pullSourceUser, pullSourcePass
- *  - selectImage() now only fetches Docker Hub tags when source is Docker Hub
- *  - startPull() forwards the resolved source registry fields to the service
- *  - Job list now shows the source registry host badge
  */
 import {
   Component,
   computed,
-  DestroyRef,
   inject,
   OnInit,
-  signal,
+  signal
 } from "@angular/core";
-import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { RouterLink } from "@angular/router";
-import { switchMap, timer } from "rxjs";
 import { AppConfigService } from "../../core/services/app-config.service";
 import { AuthService } from "../../core/services/auth.service";
 import {
   ExternalRegistry,
-  ExternalRegistryService,
+  ExternalRegistryService
 } from "../../core/services/external-registry.service";
-import { RegistryService } from "../../core/services/registry.service";
+import { FolderService } from "../../core/services/folder.service";
+import { JobService } from "../../core/services/job.service";
 import {
-  ACTIVE_STATUSES,
   DockerHubResult,
-  StagingJob,
-  StagingService,
-  TERMINATE_STATUSES,
+  StagingService
 } from "../../core/services/staging.service";
+import { JobsListComponent } from "./jobs-list/jobs-list.component";
 
 
-/** Push destination modes. */
-export type PushMode = "local" | "external";
-
-/**
- * Pull source modes:
- *  - "dockerhub" → Docker Hub (default, uses saved Hub credentials)
- *  - "saved"     → a saved external registry selected by ID
- *  - "adhoc"     → ad-hoc host + optional credentials entered manually
- */
 export type PullSourceMode = "dockerhub" | "saved" | "adhoc";
 
 @Component({
   selector: "app-staging",
-  imports: [RouterLink],
+  imports: [RouterLink, JobsListComponent],
   templateUrl: "./staging.component.html",
   styleUrl: "./staging.component.css",
 })
 export class StagingComponent implements OnInit {
   private staging = inject(StagingService);
-  private externalRegistryService = inject(ExternalRegistryService);
-  private registry = inject(RegistryService);
-  private destroyRef = inject(DestroyRef);
+  private extRegistrySvc = inject(ExternalRegistryService);
   private authService = inject(AuthService);
+  private jobSvc = inject(JobService);
+  private folderSvc = inject(FolderService)
   readonly configService = inject(AppConfigService);
 
-  // ── Job list ───────────────────────────────────────────────────────────────
-  jobs = signal<StagingJob[]>([]);
+  readonly externalRegistries = computed<ExternalRegistry[]>(() => this.extRegistrySvc.externalRegistries())
 
-  readonly ACTIVE_STATUSES = ACTIVE_STATUSES
-  readonly TERMINATE_STATUSES = TERMINATE_STATUSES
-
-  // ── Docker Hub search ──────────────────────────────────────────────────────
   searchQuery = signal("");
   searchResults = signal<DockerHubResult[]>([]);
   searching = signal(false);
 
-  // ── Pull form — image & tag ────────────────────────────────────────────────
   pullImage = signal("");
   pullTag = signal("latest");
   availableTags = signal<string[]>([]);
   pulling = signal(false);
-
-  // ── Pull form — source registry ────────────────────────────────────────────
   pullSourceMode = signal<PullSourceMode>("dockerhub");
   pullSourceRegistryId = signal<string>("");
   pullSourceHost = signal<string>("");
   pullSourceUser = signal<string>("");
   pullSourcePass = signal<string>("");
 
-  // ── Push state ─────────────────────────────────────────────────────────────
-  pushing = signal<string | null>(null);
-  pushTargets = signal<Record<string, string>>({});
-  pushModes = signal<Record<string, PushMode>>({});
-  pushExtRegistryId = signal<Record<string, string>>({});
-
-  // ── External registries (used for both pull source and push destination) ───
-  externalRegistries = signal<ExternalRegistry[]>([]);
   readonly globalRegistries = computed(() =>
     this.externalRegistries().filter((r) => r.owner === "global"),
   );
@@ -102,23 +65,12 @@ export class StagingComponent implements OnInit {
     this.externalRegistries().filter((r) => r.owner !== "global"),
   );
 
-  // ── Folder permission helpers ──────────────────────────────────────────────
-
-  /** True when the current user has admin privileges. */
   readonly isAdmin = computed(
     () => this.authService.currentUser()?.is_admin ?? false,
   );
 
-  /** Folders the current user may pull from (local registry only). */
-  allowedPullFolders = signal<string[]>([]);
-
-  /** Folders the current user may push to (local registry only). */
-  allowedPushFolders = signal<string[]>([]);
-
-  /** Display host of the local registry (hard-coded for now). */
   readonly localRegistryHost = "localhost:5000";
 
-  /** True when pull source is the local registry based on current inputs. */
   readonly isPullingFromLocal = computed(() => {
     if (this.pullSourceMode() === "adhoc") {
       return this.pullSourceHost() === this.localRegistryHost;
@@ -132,13 +84,12 @@ export class StagingComponent implements OnInit {
     return false;
   });
 
-  /** Warning message when the pull image is outside allowed folders. */
   readonly pullFolderWarning = computed(() => {
     if (!this.isPullingFromLocal()) return "";
     const img = this.pullImage().trim();
     if (!img) return "";
     const prefix = img.includes("/") ? img.split("/")[0] : img;
-    const allowed = this.allowedPullFolders();
+    const allowed = this.folderSvc.allowedPullFolders();
     if (
       !this.isAdmin() &&
       allowed.length > 0 &&
@@ -149,14 +100,10 @@ export class StagingComponent implements OnInit {
     return "";
   });
 
-  // ── Computed helpers ───────────────────────────────────────────────────────
-
-  /** True when the search panel should be visible (only for Docker Hub source). */
   readonly showDockerHubSearch = computed(
     () => this.pullSourceMode() === "dockerhub",
   );
 
-  /** Display label for the currently selected pull source. */
   readonly pullSourceLabel = computed(() => {
     switch (this.pullSourceMode()) {
       case "saved": {
@@ -172,60 +119,13 @@ export class StagingComponent implements OnInit {
     }
   });
 
-  // ── Lifecycle ──────────────────────────────────────────────────────────────
+  readonly pushFolderOptions = computed(() => this.folderSvc.allowedPushFolders());
 
   ngOnInit(): void {
-    // Single unified polling loop — no separate loadJobs() call to avoid
-    // the race condition where two concurrent responses could overwrite each other.
-    this.startJobsAutoRefresh();
-    this.loadExternalRegistries();
-    this.loadFolderPermissions();
+    this.extRegistrySvc.loadRegistries();
+    this.folderSvc.loadPermissions();
   }
 
-  /** Load pullable and pushable folders for the current user. */
-  private loadFolderPermissions(): void {
-    this.registry.getMyFolders().subscribe({
-      next: (folders) => this.allowedPullFolders.set(folders),
-    });
-    this.registry.getPushableFolders().subscribe({
-      next: (folders) => this.allowedPushFolders.set(folders),
-    });
-  }
-
-  /** Options used in the folder dropdown when pushing. */
-  readonly pushFolderOptions = computed(() => this.allowedPushFolders());
-
-  // ── Auto-refresh ───────────────────────────────────────────────────────────
-
-  private startJobsAutoRefresh(): void {
-    timer(200, 3000)
-      .pipe(
-        switchMap(() => this.staging.listJobs()),
-        takeUntilDestroyed(this.destroyRef),
-      )
-      .subscribe((jobs) => this.jobs.set(StagingService.sortJobs(jobs)));
-  }
-
-  // ── Data loading ───────────────────────────────────────────────────────────
-
-  loadJobs(): void {
-    this.staging.listJobs().subscribe({
-      next: (jobs) => this.jobs.set(StagingService.sortJobs(jobs)),
-    });
-  }
-
-  loadExternalRegistries(): void {
-    this.externalRegistryService.listRegistries().subscribe({
-      next: (regs) => this.externalRegistries.set(regs),
-    });
-  }
-
-  // ── Pull source mode ───────────────────────────────────────────────────────
-
-  /**
-   * Switch the pull source mode and reset related fields.
-   * Clears search results and available tags when leaving Docker Hub mode.
-   */
   setPullSourceMode(mode: PullSourceMode): void {
     this.pullSourceMode.set(mode);
     this.pullSourceRegistryId.set("");
@@ -238,12 +138,6 @@ export class StagingComponent implements OnInit {
     this.pullTag.set("latest");
   }
 
-  // ── Docker Hub search ──────────────────────────────────────────────────────
-
-  /**
-   * Triggered on every keystroke in the search input.
-   * Clears results when the query is empty; otherwise calls the API.
-   */
   onSearch(): void {
     const q = this.searchQuery().trim();
     if (!q) {
@@ -260,19 +154,10 @@ export class StagingComponent implements OnInit {
     });
   }
 
-  /**
-   * Called when the user clicks the explicit Search button.
-   * Identical behaviour to onSearch but kept separate for semantic clarity.
-   */
   searchDockerHub(): void {
     this.onSearch();
   }
 
-  /**
-   * Select an image from the Docker Hub search results.
-   * Clears the results list and immediately loads the available tags.
-   * Only active when pull source mode is "dockerhub".
-   */
   selectImage(name: string): void {
     this.pullImage.set(name);
     // Do NOT clear searchResults — the list must remain displayed
@@ -289,8 +174,6 @@ export class StagingComponent implements OnInit {
       });
     }
   }
-
-  // ── Pull ───────────────────────────────────────────────────────────────────
 
   startPull(): void {
     if (!this.pullImage()) return;
@@ -323,8 +206,7 @@ export class StagingComponent implements OnInit {
       })
       .subscribe({
         next: (job) => {
-          // Prepend the new job immediately — the polling loop will keep it updated
-          this.jobs.update((jobs) => StagingService.sortJobs([job, ...jobs]));
+          this.jobSvc.updateJob(job)
           this.pulling.set(false);
           this.pullImage.set("");
           this.pullTag.set("latest");
@@ -334,228 +216,12 @@ export class StagingComponent implements OnInit {
       });
   }
 
-  // ── Push helpers ───────────────────────────────────────────────────────────
-
-  getPushMode(job: StagingJob): PushMode {
-    return this.pushModes()[job.job_id] ?? "local";
-  }
-
-  setPushMode(job: StagingJob, mode: PushMode): void {
-    this.pushModes.update((m) => ({ ...m, [job.job_id]: mode }));
-  }
-
-  getExtRegistryId(job: StagingJob): string {
-    return this.pushExtRegistryId()[job.job_id] ?? "";
-  }
-
-  setExtRegistryId(job: StagingJob, id: string): void {
-    this.pushExtRegistryId.update((m) => ({ ...m, [job.job_id]: id }));
-  }
-
-  getPushTarget(job: StagingJob, field: string): string {
-    return this.pushTargets()[`${job.job_id}_${field}`] ?? "";
-  }
-
-  updatePushTarget(job: StagingJob, field: string, value: string): void {
-    this.pushTargets.update((t) => ({
-      ...t,
-      [`${job.job_id}_${field}`]: value,
-    }));
-  }
-
-  /**
-   * Compute the effective image name for a push to an external registry.
-   *
-   * When pushing to a saved external registry that has a declared username,
-   * the source namespace/username prefix is replaced by that registry username.
-   * The user's manual override (pushTargets img field) always takes precedence.
-   *
-   * Examples (no manual override, registry username = "myorg"):
-   *   "library/nginx"  → "myorg/nginx"
-   *   "someuser/myapp" → "myorg/myapp"
-   *   "nginx"          → "myorg/nginx"
-   *
-   * @param job       The staging job.
-   * @param rawImg    The raw source image name (job.image or user override).
-   * @param username  The target registry declared username (may be empty).
-   */
-  private computeExternalImageName(
-    job: StagingJob,
-    rawImg: string,
-    username: string,
-  ): string {
-    // If the user has explicitly typed an image name, never touch it
-    const userOverriddenImg = this.getPushTarget(job, "img").trim();
-    if (userOverriddenImg) return userOverriddenImg;
-
-    if (!username) return rawImg;
-
-    // Strip the leading namespace segment, keep only the bare image name
-    const bareName = rawImg.includes("/")
-      ? rawImg.split("/").slice(1).join("/")
-      : rawImg;
-    return `${username}/${bareName}`;
-  }
-
-  /**
-   * Return the placeholder text for the "Image name" input in the push panel.
-   * Mirrors pushPreview() logic so the hint always matches the preview path.
-   */
-  getImageNamePlaceholder(job: StagingJob): string {
-    const mode = this.getPushMode(job);
-    const rawImg = job.image.trim();
-
-    if (mode === "local") return rawImg;
-
-    const regId = this.getExtRegistryId(job);
-    const reg = this.externalRegistries().find((r) => r.id === regId);
-    const username = reg?.username ?? "";
-
-    return this.computeExternalImageName(job, rawImg, username);
-  }
-
-  /**
-   * Compute the full target image reference for preview in the template.
-   * Reflects current push mode, folder, image name, tag and registry.
-   *
-   * When pushing to an external registry with a declared username,
-   * the original namespace/username prefix of the source image is replaced
-   * by the username of the target registry account.
-   * Example: "library/nginx" pushed to ghcr.io (user "myorg") → "ghcr.io/myorg/nginx"
-   * Example: "nginx" pushed to ghcr.io (user "myorg")         → "ghcr.io/myorg/nginx"
-   */
-  pushPreview(job: StagingJob): string {
-    const mode = this.getPushMode(job);
-    // Prefer explicit user input for folder, otherwise fall back to job.folder
-    let folder = this.getPushTarget(job, "folder").trim();
-    if (!folder && job.folder) {
-      folder = job.folder;
-    }
-
-    const rawImg = (this.getPushTarget(job, "img") || job.image).trim();
-    const tag = (this.getPushTarget(job, "tag") || job.tag).trim();
-
-    if (mode === "local") {
-      const path = folder ? `${folder}/${rawImg}` : rawImg;
-      return `localhost:5000/${path}:${tag}`;
-    }
-
-    // ── External mode ──────────────────────────────────────────────────────────
-    const regId = this.getExtRegistryId(job);
-    const reg = this.externalRegistries().find((r) => r.id === regId);
-    const host = reg
-      ? reg.host
-      : this.getPushTarget(job, "ext_host") || "<registry>";
-    const username = reg?.username ?? "";
-
-    const effectiveImg = this.computeExternalImageName(job, rawImg, username);
-    const path = folder ? `${folder}/${effectiveImg}` : effectiveImg;
-    return `${host}/${path}:${tag}`;
-  }
-
-  // ── Push ───────────────────────────────────────────────────────────────────
-
-  pushImage(job: StagingJob): void {
-    this.pushing.set(job.job_id);
-
-    const mode = this.getPushMode(job);
-    const isExternal = mode === "external";
-    const regId = this.getExtRegistryId(job) || null;
-
-    this.staging
-      .pushImage({
-        job_id: job.job_id,
-        target_image: this.getPushTarget(job, "img") || null,
-        target_tag: this.getPushTarget(job, "tag") || null,
-        folder: this.getPushTarget(job, "folder") || null,
-        external_registry_id: isExternal ? regId : null,
-        external_registry_host:
-          isExternal && !regId
-            ? this.getPushTarget(job, "ext_host") || null
-            : null,
-        external_registry_username:
-          isExternal && !regId
-            ? this.getPushTarget(job, "ext_user") || null
-            : null,
-        external_registry_password:
-          isExternal && !regId
-            ? this.getPushTarget(job, "ext_pass") || null
-            : null,
-      })
-      .subscribe({
-        next: () => {
-          this.pushing.set(null);
-          // Trigger an immediate refresh so the PUSHING status appears without delay
-          this.loadJobs();
-        },
-        error: () => this.pushing.set(null),
-      });
-  }
-
-  // ── Delete ─────────────────────────────────────────────────────────────────
-
-  deleteJob(jobId: string): void {
-    this.staging.deleteJob(jobId).subscribe({
-      next: () => this.loadJobs(),
-    });
-  }
-
-  // ── Template helpers ───────────────────────────────────────────────────────
-
-  /**
-   * Return the display progress for a job.
-   * scan_clean / scan_skipped are terminal "ready" states — force 100 %
-   * regardless of what the backend reported.
-   */
-  displayProgress(job: StagingJob): number {
-    if (TERMINATE_STATUSES.includes(job.status)) {
-      return 100;
-    }
-    return job.progress;
-  }
-
-  /**
-   * Allow re-pushing a completed job by resetting its local status to
-   * scan_clean so the push form becomes visible again.
-   * This is a client-side only change — the backend job stays at "done".
-   */
-  allowRePush(job: StagingJob): void {
-    this.jobs.update((jobs) =>
-      jobs.map((j) =>
-        j.job_id === job.job_id ? { ...j, status: "scan_clean" as const } : j,
-      ),
-    );
-  }
-
-  /** Return the Bootstrap badge CSS classes for a given job status. */
-  getStatusBadgeClass(status: string): string {
-    const map: Record<string, string> = {
-      pending: "badge bg-secondary-subtle text-secondary",
-      pulling: "badge bg-info-subtle text-info",
-      scan_skipped: "badge bg-secondary-subtle text-secondary",
-      vuln_scanning: "badge bg-warning-subtle text-warning",
-      scan_clean: "badge bg-success-subtle text-success",
-      scan_vulnerable: "badge bg-danger text-white",
-      pushing: "badge bg-primary-subtle text-primary",
-      done: "badge bg-success text-white",
-      failed: "badge bg-danger text-white",
-    };
-    return map[status] ?? "badge bg-secondary";
-  }
-
-  /** Format large numbers as K / M for star and pull counts. */
   formatCount(n: number): string {
     if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
     if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
     return `${n}`;
   }
 
-  /** Return the CVE count for a given severity level on a job. */
-  getCveCount(job: StagingJob, severity: string): number {
-    return job.vuln_result?.counts?.[severity] ?? 0;
-  }
-
-  /** Return the icon emoji for a pull source registry host. */
   sourceRegistryIcon(host: string | null | undefined): string {
     if (!host) return "🐳"; // Docker Hub
     if (host.includes("ghcr.io")) return "🐙";

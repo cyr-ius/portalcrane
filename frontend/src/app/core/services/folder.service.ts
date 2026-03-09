@@ -1,6 +1,7 @@
 import { HttpClient } from "@angular/common/http";
-import { inject, Injectable } from "@angular/core";
+import { inject, Injectable, signal } from "@angular/core";
 import { Observable } from "rxjs";
+import { RegistryService } from "./registry.service";
 
 export interface UserSummary {
   id: string;
@@ -24,13 +25,24 @@ export interface Folder {
 @Injectable({ providedIn: "root" })
 export class FolderService {
     private readonly http = inject(HttpClient);
+    private registry = inject(RegistryService);
 
-    /** Fetch user */
+    allowedPullFolders = signal<string[]>([]);
+    allowedPushFolders = signal<string[]>([]);
+
     getUserSummaries(): Observable<UserSummary[]> {
         return this.http.get<UserSummary[]>("/api/auth/users")
     }
 
-    /** Fetch the folder list from the backend. */
+    loadPermissions() {
+        this.registry.getMyFolders().subscribe({
+        next: (folders) => this.allowedPullFolders.set(folders),
+        });
+        this.registry.getPushableFolders().subscribe({
+        next: (folders) => this.allowedPushFolders.set(folders),
+        });
+    }
+
     getFolders(): Observable<Folder[]> {
         return this.http.get<Folder[]>("/api/folders");
     }

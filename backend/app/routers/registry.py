@@ -24,7 +24,7 @@ from fastapi import (
 )
 from pydantic import BaseModel
 
-from ..config import DATA_DIR, REGISTRY_URL, Settings, get_settings
+from ..config import DATA_DIR, REGISTRY_URL, REGISTRY_HOST, Settings, get_settings
 from ..core.jwt import (
     UserInfo,
     require_admin,
@@ -387,12 +387,9 @@ async def ping_registry(
 async def rename_image(
     repository: str = Query(..., description="Source repository name"),
     request: RenameImageRequest = Body(...),
-    settings: Settings = Depends(get_settings),
     current_user: UserInfo = Depends(require_push_access),
 ):
     """Retag an image to a new repository/name using skopeo copy."""
-    from urllib.parse import urlparse
-
     _ensure_folder_permission(
         current_user=current_user,
         image_path=repository,
@@ -404,9 +401,8 @@ async def rename_image(
         is_pull=False,
     )
 
-    registry_host = urlparse(REGISTRY_URL).netloc
-    source = f"docker://{registry_host}/{repository}:{request.new_tag}"
-    dest = f"docker://{registry_host}/{request.new_repository}:{request.new_tag}"
+    source = f"docker://{REGISTRY_HOST}/{repository}:{request.new_tag}"
+    dest = f"docker://{REGISTRY_HOST}/{request.new_repository}:{request.new_tag}"
 
     tls_flags = (
         ["--src-tls-verify=false", "--dest-tls-verify=false"]
@@ -621,14 +617,12 @@ async def purge_empty_repositories(
 @router.post("/images/copy")
 async def copy_image(
     request: CopyImageRequest,
-    settings: Settings = Depends(get_settings),
     current_user: UserInfo = Depends(get_current_user),
 ):
     """
     Copy an image to a new repository path via skopeo.
     Non-admins must have push access on the destination folder.
     """
-    from urllib.parse import urlparse
 
     _ensure_folder_permission(
         current_user=current_user,
@@ -641,12 +635,11 @@ async def copy_image(
         is_pull=False,
     )
 
-    registry_host = urlparse(REGISTRY_URL).netloc
     dest_tag = request.dest_tag or request.source_tag
     source = (
-        f"docker://{registry_host}/{request.source_repository}:{request.source_tag}"
+        f"docker://{REGISTRY_HOST}/{request.source_repository}:{request.source_tag}"
     )
-    dest = f"docker://{registry_host}/{request.dest_repository}:{dest_tag}"
+    dest = f"docker://{REGISTRY_HOST}/{request.dest_repository}:{dest_tag}"
 
     tls_flags = (
         ["--src-tls-verify=false", "--dest-tls-verify=false"]

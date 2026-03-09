@@ -26,6 +26,7 @@ from ..config import (
     DOCKERHUB_API_URL,
     HTTPX_TIMEOUT,
     REGISTRY_URL,
+    REGISTRY_HOST,
     STAGING_DIR,
     TRIVY_CACHE_DIR,
     TRIVY_SERVER_URL,
@@ -234,13 +235,6 @@ def _build_dockerhub_auth(username: str) -> httpx.BasicAuth | None:
         username,
     )
     return None
-
-
-def _resolve_push_host() -> str:
-    """Resolve the registry push host from the configured REGISTRY_URL."""
-    from urllib.parse import urlparse
-
-    return urlparse(REGISTRY_URL).netloc
 
 
 def _build_external_target_image(image: str, username: str) -> str:
@@ -555,10 +549,9 @@ async def run_push_pipeline(
         _jobs[job_id]["progress"] = 100
         return
 
-    push_host = _resolve_push_host()
     # include folder prefix if provided
     image_path = f"{folder}/{target_image}" if folder else target_image
-    dest = f"docker://{push_host}/{image_path}:{target_tag}"
+    dest = f"docker://{REGISTRY_HOST}/{image_path}:{target_tag}"
 
     skopeo_env = {**os.environ, **settings.env_proxy}
 
@@ -588,7 +581,7 @@ async def run_push_pipeline(
 
         _jobs[job_id]["status"] = JobStatus.DONE
         _jobs[job_id]["message"] = (
-            f"✅ Successfully pushed to {push_host}/{target_image}:{target_tag}"
+            f"✅ Successfully pushed to {folder + '/' if folder else ''}{target_image}:{target_tag}"
         )
         _jobs[job_id]["progress"] = 100
         _jobs[job_id]["target_image"] = target_image
@@ -626,15 +619,7 @@ async def pull_image(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
 
-    # If pulling from the local registry, enforce folder-based pull permissions
-    # (a user could otherwise specify localhost:5000 manually and bypass the
-    # proxy's access control).  display_host is either a hostname or None
-    # (Docker Hub).  We compare with the local registry host derived from
-    # REGISTRY_URL.
-    from urllib.parse import urlparse
-
-    local_host = urlparse(REGISTRY_URL).netloc
-    if display_host and display_host == local_host:
+    if display_host and display_host == REGISTRY_HOST:
         # folder check uses image name (no tag)
         if not is_admin_user(current_user.username, settings):
             access = check_folder_access(

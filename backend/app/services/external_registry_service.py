@@ -26,7 +26,7 @@ from pathlib import Path
 
 import httpx
 
-from ..config import DATA_DIR, Settings
+from ..config import DATA_DIR, Settings, REGISTRY_HOST
 
 logger = logging.getLogger(__name__)
 
@@ -529,7 +529,6 @@ async def run_sync_job(
 
     # Resolve local registry network details before spawning the async task
     src_tls_verify = local_registry_url.startswith("https://")
-    local_host = urlparse(local_registry_url).netloc  # e.g. "localhost:5000"
 
     _sync_jobs[job_id] = {
         "id": job_id,
@@ -576,7 +575,7 @@ async def run_sync_job(
                     # FIX: build docker:// source reference from the local registry.
                     # The previous code called skopeo_push(oci_dir="") which produced
                     # "oci::latest" and caused "open index.json: no such file or directory".
-                    src_ref = f"docker://{local_host}/{img}:{tag}"
+                    src_ref = f"docker://{REGISTRY_HOST}/{img}:{tag}"
 
                     # Rewrite destination image name to replace the local namespace
                     # with the destination folder or username.

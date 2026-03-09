@@ -3,7 +3,7 @@
  * HTTP client for the /api/external endpoints.
  */
 import { HttpClient } from "@angular/common/http";
-import { inject, Injectable } from "@angular/core";
+import { inject, Injectable, signal } from "@angular/core";
 import { Observable } from "rxjs";
 
 // ── Models ────────────────────────────────────────────────────────────────────
@@ -78,26 +78,27 @@ export interface SyncPayload {
   dest_folder?: string | null;
 }
 
-// ── Service ───────────────────────────────────────────────────────────────────
-
 @Injectable({ providedIn: "root" })
 export class ExternalRegistryService {
   private readonly BASE = "/api/external";
   private http = inject(HttpClient);
 
-  // ── Registry CRUD ──────────────────────────────────────────────────────────
+  externalRegistries = signal<ExternalRegistry[]>([]);
 
-  /** List all external registries visible to the current user. */
   listRegistries(): Observable<ExternalRegistry[]> {
     return this.http.get<ExternalRegistry[]>(`${this.BASE}/registries`);
   }
 
-  /** Create a new external registry entry. */
+  loadRegistries() {
+    this.listRegistries().subscribe({
+      next: (regs) => this.externalRegistries.set(regs)
+    })
+  }
+
   createRegistry(payload: CreateRegistryPayload): Observable<ExternalRegistry> {
     return this.http.post<ExternalRegistry>(`${this.BASE}/registries`, payload);
   }
 
-  /** Update an existing registry entry. */
   updateRegistry(
     id: string,
     payload: UpdateRegistryPayload,
@@ -108,12 +109,10 @@ export class ExternalRegistryService {
     );
   }
 
-  /** Delete a registry entry. */
   deleteRegistry(id: string): Observable<void> {
     return this.http.delete<void>(`${this.BASE}/registries/${id}`);
   }
 
-  /** Test connectivity to an unsaved registry. */
   testConnection(
     host: string,
     username: string,
@@ -129,7 +128,6 @@ export class ExternalRegistryService {
     );
   }
 
-  /** Test connectivity to a saved registry. */
   testSaved(id: string): Observable<ConnectionTestResult> {
     return this.http.post<ConnectionTestResult>(
       `${this.BASE}/registries/${id}/test`,
