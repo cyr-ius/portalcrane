@@ -10,7 +10,7 @@ import { ScanResult, TRIVY_SEVERITIES, TRIVY_TIMEOUT_OPTIONS, TrivyDbInfo, Trivy
 })
 export class VulnConfigPanelComponent implements OnInit {
   private registryService = inject(RegistryService);
-  trivySvc = inject(TrivyService)
+  readonly trivySvc = inject(TrivyService)
 
   trivyDb = signal<TrivyDbInfo | null>(null);
   updatingDb = signal(false);
