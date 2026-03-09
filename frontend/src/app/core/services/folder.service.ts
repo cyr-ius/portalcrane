@@ -27,8 +27,12 @@ export class FolderService {
     private readonly http = inject(HttpClient);
     private registry = inject(RegistryService);
 
-    allowedPullFolders = signal<string[]>([]);
-    allowedPushFolders = signal<string[]>([]);
+    private _allowedPullFolders = signal<string[]>([]);
+    readonly allowedPullFolders = this._allowedPullFolders.asReadonly();
+
+    private _allowedPushFolders = signal<string[]>([]);
+    readonly allowedPushFolders = this._allowedPushFolders.asReadonly();
+
 
     getUserSummaries(): Observable<UserSummary[]> {
         return this.http.get<UserSummary[]>("/api/auth/users")
@@ -36,10 +40,10 @@ export class FolderService {
 
     loadPermissions() {
         this.registry.getMyFolders().subscribe({
-        next: (folders) => this.allowedPullFolders.set(folders),
+        next: (folders) => this._allowedPullFolders.set(folders),
         });
         this.registry.getPushableFolders().subscribe({
-        next: (folders) => this.allowedPushFolders.set(folders),
+        next: (folders) => this._allowedPushFolders.set(folders),
         });
     }
 

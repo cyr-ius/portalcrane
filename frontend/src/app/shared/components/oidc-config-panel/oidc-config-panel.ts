@@ -20,16 +20,10 @@ import { OidcService } from "../../../core/services/oidc.service";
 export class OidcConfigPanel implements OnInit {
   private readonly oidc = inject(OidcService);
 
-  // ── State signals ──────────────────────────────────────────────────────────
   readonly loading = signal(false);
   readonly saved = signal(false);
   readonly error = signal<string | null>(null);
-
-  /** Whether the client_secret field is shown in plaintext. */
   readonly showSecret = signal(false);
-
-  // ── Signal form ────────────────────────────────────────────────────────────
-
   readonly oidcModel = signal<OidcAdminSettings>({
     enabled: false,
     issuer: "",
@@ -41,7 +35,7 @@ export class OidcConfigPanel implements OnInit {
     scope: "openid profile email",
   });
 
-  readonly oidcForm = form(this.oidcModel, (p) => {
+  oidcForm = form(this.oidcModel, (p) => {
     required(p.issuer);
     required(p.client_id);
     required(p.redirect_uri);

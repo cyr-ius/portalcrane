@@ -1278,32 +1278,6 @@
   </nav>
   <!-- Add inside app.component.html, at the root level -->
   <app-session-expired-modal />
-
-  @if (configService.configLoadError()) {
-    <div
-      class="alert alert-warning alert-dismissible d-flex align-items-center gap-2 mb-0 rounded-0 border-0 border-bottom"
-      role="alert"
-      style="font-size: 0.875rem"
-    >
-      <i class="bi bi-exclamation-triangle-fill flex-shrink-0"></i>
-      <span>
-        Server configuration could not be loaded at startup. Vulnerability scan
-        settings may be using local defaults.
-        <a
-          routerLink="/settings"
-          class="alert-link"
-          title="Retry in Settings"
-        >Open Settings to retry.</a>
-      </span>
-      <button
-        type="button"
-        class="btn-close ms-auto"
-        (click)="configService.markConfigLoadFailed(); $event.stopPropagation()"
-        aria-label="Dismiss"
-      ></button>
-    </div>
-  }
-
   <!-- Main content -->
   <main class="main-content flex-grow-1 overflow-auto">
     <router-outlet />

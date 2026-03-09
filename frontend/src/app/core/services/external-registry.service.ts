@@ -13,12 +13,7 @@ export interface ExternalRegistry {
   name: string;
   host: string;
   username: string;
-  /** Always "••••••••" when returned from the API. */
   password: string;
-  /**
-   * "global" → visible to all users (admin-created).
-   * Any other value → personal registry, visible only to that user and admins.
-   */
   owner: string;
   created_at: string;
 }
@@ -28,7 +23,6 @@ export interface CreateRegistryPayload {
   host: string;
   username?: string;
   password?: string;
-  /** "global" for shared registries (admin only). Omit for personal. */
   owner?: string;
 }
 
@@ -83,7 +77,8 @@ export class ExternalRegistryService {
   private readonly BASE = "/api/external";
   private http = inject(HttpClient);
 
-  externalRegistries = signal<ExternalRegistry[]>([]);
+  private _externalRegistries = signal<ExternalRegistry[]>([]);
+  readonly externalRegistries = this._externalRegistries.asReadonly();
 
   listRegistries(): Observable<ExternalRegistry[]> {
     return this.http.get<ExternalRegistry[]>(`${this.BASE}/registries`);
@@ -91,7 +86,7 @@ export class ExternalRegistryService {
 
   loadRegistries() {
     this.listRegistries().subscribe({
-      next: (regs) => this.externalRegistries.set(regs)
+      next: (regs) => this._externalRegistries.set(regs)
     })
   }
 
@@ -135,8 +130,6 @@ export class ExternalRegistryService {
     );
   }
 
-  // ── Sync ───────────────────────────────────────────────────────────────────
-
   listSyncJobs(): Observable<SyncJob[]> {
     return this.http.get<SyncJob[]>(`${this.BASE}/sync/jobs`);
   }
@@ -149,4 +142,5 @@ export class ExternalRegistryService {
       payload,
     );
   }
+
 }

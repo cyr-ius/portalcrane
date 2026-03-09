@@ -63,20 +63,21 @@ export const TERMINATE_STATUSES: JobStatus[] = [
 @Injectable({ providedIn: "root" })
 export class JobService {
   private readonly BASE = "/api/staging";
-
   private http = inject(HttpClient);
-  jobs = signal<StagingJob[]>([]);
+
+  private _jobs = signal<StagingJob[]>([]);
+  readonly jobs = this._jobs.asReadonly();
 
   setJobs(jobs: StagingJob[]) {
-    this.jobs.set(this.sortJobs(jobs))
+    this._jobs.set(this.sortJobs(jobs))
   }
 
   updateJob(job: StagingJob) {
-    this.jobs.update((jobs) => this.sortJobs([job, ...jobs]));
+    this._jobs.update((jobs) => this.sortJobs([job, ...jobs]));
   }
 
   reUpdateJob(job: StagingJob) {
-    this.jobs.update((jobs) =>
+    this._jobs.update((jobs) =>
       jobs.map((j) =>
         j.job_id === job.job_id ? { ...j, status: "scan_clean" as const } : j,
       )

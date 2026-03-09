@@ -10,9 +10,6 @@ import {
 import { FormsModule } from "@angular/forms";
 import { Router } from "@angular/router";
 import { AboutService } from "../../core/services/about.service";
-import {
-  AppConfigService
-} from "../../core/services/app-config.service";
 import { AuthService } from "../../core/services/auth.service";
 import { SettingsService } from "../../core/services/settings.service";
 import { ThemeService } from "../../core/services/theme.service";
@@ -55,7 +52,6 @@ type SettingsTab =
 export class SettingsComponent implements OnInit {
   themeService = inject(ThemeService);
   authService = inject(AuthService);
-  configService = inject(AppConfigService);
   aboutService = inject(AboutService);
   private router = inject(Router);
   private settingsSvc = inject(SettingsService)
@@ -66,9 +62,6 @@ export class SettingsComponent implements OnInit {
     if (!this.authService.currentUser()?.is_admin) {
       this.router.navigate(["/dashboard"]);
       return;
-    }
-    if (!this.configService.serverConfig()) {
-      this.configService.loadConfig().subscribe();
     }
   }
 

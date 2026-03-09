@@ -1,12 +1,6 @@
 import { Component, computed, inject, OnInit, signal } from "@angular/core";
-import {
-  AppConfigService,
-  TRIVY_SEVERITIES,
-  TRIVY_TIMEOUT_OPTIONS,
-  TrivySeverity,
-} from "../../../core/services/app-config.service";
 import { RegistryService } from "../../../core/services/registry.service";
-import { ScanResult, TrivyDbInfo, TrivyService } from "../../../core/services/trivy.service";
+import { ScanResult, TRIVY_SEVERITIES, TRIVY_TIMEOUT_OPTIONS, TrivyDbInfo, TrivyService, TrivySeverity } from "../../../core/services/trivy.service";
 
 @Component({
   selector: "app-vuln-config-panel",
@@ -15,9 +9,8 @@ import { ScanResult, TrivyDbInfo, TrivyService } from "../../../core/services/tr
   styleUrl: "./vuln-config-panel.component.css",
 })
 export class VulnConfigPanelComponent implements OnInit {
-  configService = inject(AppConfigService);
   private registryService = inject(RegistryService);
-  private scan = inject(TrivyService)
+  trivySvc = inject(TrivyService)
 
   trivyDb = signal<TrivyDbInfo | null>(null);
   updatingDb = signal(false);
@@ -46,13 +39,14 @@ export class VulnConfigPanelComponent implements OnInit {
   readonly severities = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "UNKNOWN"];
 
   ngOnInit(): void {
+    this.trivySvc.loadConfig().subscribe();
     this.refreshTrivyDb();
     this.loadRegistryImages();
   }
 
   async refreshTrivyDb(): Promise<void> {
     try {
-      this.trivyDb.set(await this.scan.getTrivyDbInfo());
+      this.trivyDb.set(await this.trivySvc.getTrivyDbInfo());
     } catch {
       this.trivyDb.set(null);
     }
@@ -116,7 +110,7 @@ export class VulnConfigPanelComponent implements OnInit {
   }
 
   getSevBtnClass(sev: TrivySeverity): string {
-    const active = this.configService.vulnSeverities().includes(sev);
+    const active = this.trivySvc.vulnSeverities().includes(sev);
     const colorMap: Record<TrivySeverity, string> = {
       CRITICAL: active ? "btn-danger" : "btn-outline-danger",
       HIGH: active ? "btn-danger" : "btn-outline-danger",
@@ -130,7 +124,7 @@ export class VulnConfigPanelComponent implements OnInit {
   async updateTrivyDb(): Promise<void> {
     this.updatingDb.set(true);
     try {
-      await this.scan.updateTrivyDb();
+      await this.trivySvc.updateTrivyDb();
       await this.refreshTrivyDb();
     } finally {
       this.updatingDb.set(false);
@@ -151,7 +145,7 @@ export class VulnConfigPanelComponent implements OnInit {
     this.scanning.set(true);
     this.scanResult.set(null);
     try {
-      const result = await this.scan.scanImage(
+      const result = await this.trivySvc.scanImage(
         this.imageToScan(),
         this.severityFilter(),
         this.ignoreUnfixed(),

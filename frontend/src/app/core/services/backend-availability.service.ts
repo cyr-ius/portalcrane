@@ -39,7 +39,8 @@ export class BackendAvailabilityService {
   private restoreUrl = "/";
 
   /** True while the backend is considered unreachable. */
-  readonly backendUnavailable = signal(false);
+  private  _backendUnavailable = signal(false);
+  readonly backendUnavailable = this._backendUnavailable.asReadonly();
 
   constructor() {
     // Perform a single health-check immediately after the service is created.
@@ -63,7 +64,7 @@ export class BackendAvailabilityService {
       }
     }
 
-    this.backendUnavailable.set(true);
+    this._backendUnavailable.set(true);
 
     if (this.router.url !== "/backend-unavailable") {
       this.router.navigateByUrl("/backend-unavailable");
@@ -131,15 +132,12 @@ export class BackendAvailabilityService {
       )
       .subscribe((isHealthy) => {
         if (!isHealthy) return;
-
-        // Backend is back — clear the flag and restore the previous page.
-        this.backendUnavailable.set(false);
+        this._backendUnavailable.set(false);
         this.stopHealthChecks();
         this.router.navigateByUrl(this.restoreUrl || "/");
       });
   }
 
-  /** Cancel the recovery poll. */
   private stopHealthChecks(): void {
     this.healthCheckSubscription?.unsubscribe();
     this.healthCheckSubscription = null;

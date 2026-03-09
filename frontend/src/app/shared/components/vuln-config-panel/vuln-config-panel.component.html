@@ -266,12 +266,12 @@
         type="checkbox"
         role="switch"
         id="vulnOverride"
-        [checked]="configService.vulnOverride()"
-        (change)="configService.setVulnOverride($any($event.target).checked)"
+        [checked]="trivySvc.vulnOverride()"
+        (change)="trivySvc.setVulnOverride($any($event.target).checked)"
       />
     </div>
 
-    @if (configService.vulnOverride()) {
+    @if (trivySvc.vulnOverride()) {
       <span
         class="badge bg-warning-subtle text-warning d-flex align-items-center gap-1"
       >
@@ -293,7 +293,7 @@
       a push to the registry.
     </p>
 
-    @if (configService.vulnOverride()) {
+    @if (trivySvc.vulnOverride()) {
       <!-- Enable / Disable toggle -->
       <div class="d-flex align-items-center justify-content-between mb-3">
         <div>
@@ -308,13 +308,13 @@
             type="checkbox"
             role="switch"
             id="vulnEnabled"
-            [checked]="configService.vulnEnabled()"
-            (change)="configService.setVulnEnabled($any($event.target).checked)"
+            [checked]="trivySvc.vulnEnabled()"
+            (change)="trivySvc.setVulnEnabled($any($event.target).checked)"
           />
         </div>
       </div>
 
-      @if (configService.vulnEnabled()) {
+      @if (trivySvc.vulnEnabled()) {
         <!-- Severities blocking policy -->
         <div class="mb-3">
           <label class="form-label small fw-semibold">
@@ -328,14 +328,14 @@
               <button
                 class="btn btn-sm sev-btn"
                 [class]="getSevBtnClass(sev)"
-                (click)="configService.toggleVulnSeverity(sev)"
+                (click)="trivySvc.toggleVulnSeverity(sev)"
                 [title]="'Toggle ' + sev"
               >
                 {{ sev }}
               </button>
             }
           </div>
-          @if (configService.vulnSeverities().length === 0) {
+          @if (trivySvc.vulnSeverities().length === 0) {
             <div class="text-danger small mt-1">
               <i class="bi bi-exclamation-triangle me-1"></i>
               Select at least one severity
@@ -357,9 +357,9 @@
               type="checkbox"
               role="switch"
               id="vulnIgnoreUnfixed"
-              [checked]="configService.vulnIgnoreUnfixed()"
+              [checked]="trivySvc.vulnIgnoreUnfixed()"
               (change)="
-                configService.setVulnIgnoreUnfixed($any($event.target).checked)
+                trivySvc.setVulnIgnoreUnfixed($any($event.target).checked)
               "
             />
           </div>
@@ -372,11 +372,11 @@
             @for (t of timeoutOptions; track t) {
               <button
                 class="btn btn-sm"
-                [class.btn-primary]="configService.vulnTimeout() === t"
+                [class.btn-primary]="trivySvc.vulnTimeout() === t"
                 [class.btn-outline-secondary]="
-                  configService.vulnTimeout() !== t
+                  trivySvc.vulnTimeout() !== t
                 "
-                (click)="configService.setVulnTimeout(t)"
+                (click)="trivySvc.setVulnTimeout(t)"
               >
                 {{ t }}
               </button>
@@ -387,7 +387,7 @@
     }
 
     <!-- Server defaults comparison -->
-    @if (configService.serverConfig(); as cfg) {
+    @if (trivySvc.vulnConfig(); as cfg) {
       <div class="text-muted mt-2" style="font-size: 0.75rem">
         <i class="bi bi-server me-1"></i>Server default:
         {{ cfg.vuln_scan_enabled ? "enabled" : "disabled" }} — Severities:

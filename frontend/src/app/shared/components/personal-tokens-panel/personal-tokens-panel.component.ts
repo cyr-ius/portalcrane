@@ -7,7 +7,6 @@
  * Integrated into the account modal drawer.
  */
 
-import { HttpClient } from "@angular/common/http";
 import { Component, inject, OnInit, signal } from "@angular/core";
 import { firstValueFrom } from "rxjs";
 

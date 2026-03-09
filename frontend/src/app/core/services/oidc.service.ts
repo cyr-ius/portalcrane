@@ -19,24 +19,24 @@ import {
   OidcPublicConfig,
 } from "../models/auth.models";
 
+export interface OidcConfig {
+  authority: string;
+  clientId: string;
+  clientSecret: string;
+  redirectUri: string;
+  postLogoutRedirectUri: string;
+  responseType: string;
+  scope: string;
+}
+
 @Injectable({ providedIn: "root" })
 export class OidcService {
   private readonly http = inject(HttpClient);
 
-  // ── Public config (used by the login page) ────────────────────────────────
-
-  /** Fetch the public OIDC configuration from the backend (no auth required). */
   getPublicConfig() {
     return this.http.get<OidcPublicConfig>("/api/oidc/config");
   }
 
-  // ── Authorization redirect ────────────────────────────────────────────────
-
-  /**
-   * Build the OIDC authorization URL from *config* and redirect the browser.
-   * A random CSRF state parameter is stored in sessionStorage so the callback
-   * component can verify it.
-   */
   redirectToProvider(config: OidcPublicConfig): void {
     if (!config.authorization_endpoint) return;
 
@@ -54,14 +54,6 @@ export class OidcService {
     window.location.href = `${config.authorization_endpoint}?${params}`;
   }
 
-  // ── Callback (code → local JWT) ───────────────────────────────────────────
-
-  /**
-   * Exchange the authorization code for a Portalcrane JWT.
-   * Returns an Observable<LoginResponse> that callers must subscribe to.
-   * The caller (OidcCallbackComponent) is responsible for storing the token
-   * via AuthService.
-   */
   exchangeCode(code: string, state: string) {
     const params = new URLSearchParams({ code, state });
     return this.http.post<LoginResponse>(
@@ -70,14 +62,10 @@ export class OidcService {
     );
   }
 
-  // ── Admin settings (settings page) ───────────────────────────────────────
-
-  /** Fetch the full OIDC settings (including client_secret) for the settings page. */
   getAdminSettings() {
     return this.http.get<OidcAdminSettings>("/api/oidc/settings");
   }
 
-  /** Persist OIDC settings overrides to the backend. */
   saveAdminSettings(payload: OidcAdminSettings) {
     return this.http.put<OidcAdminSettings>("/api/oidc/settings", payload);
   }

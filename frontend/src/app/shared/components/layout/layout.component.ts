@@ -5,11 +5,11 @@
  */
 import { Component, inject, OnDestroy, OnInit, signal } from "@angular/core";
 import { RouterLink, RouterLinkActive, RouterOutlet } from "@angular/router";
-import { AppConfigService } from "../../../core/services/app-config.service";
 import { AuthService } from "../../../core/services/auth.service";
 import { ThemeService } from "../../../core/services/theme.service";
 import { AccountModalComponent } from "../account-modal/account-modal.component";
 import { SessionExpiredModalComponent } from "../session-expired-modal/session-expired-modal.component";
+import { readBool } from "../../../core/helpers/storage";
 
 // Breakpoint below which the sidebar auto-collapses (matches Bootstrap 'lg')
 const COLLAPSE_BREAKPOINT = 992;
@@ -30,19 +30,12 @@ export class LayoutComponent implements OnInit, OnDestroy {
   auth = inject(AuthService);
   themeService = inject(ThemeService);
 
-  /** Exposed to the template to show the config-load-failed warning banner. */
-  readonly configService = inject(AppConfigService);
-
   private readonly SIDEBAR_KEY = "pc_sidebar_collapsed";
 
-  sidebarCollapsed = signal<boolean>(
-    localStorage.getItem(this.SIDEBAR_KEY) === "true",
-  );
+  sidebarCollapsed = signal<boolean>(readBool(this.SIDEBAR_KEY, false));
   themePickerOpen = signal(false);
   accountModalOpen = signal(false);
 
-  // Tracks whether the sidebar was manually toggled by the user.
-  // When true, automatic breakpoint logic will not override the user's choice.
   private userHasToggled = signal(false);
 
   private resizeObserver: ResizeObserver | null = null;

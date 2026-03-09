@@ -20,7 +20,8 @@ export interface AboutInfo {
 export class AboutService {
   private http = inject(HttpClient);
   /** Cached about information; null until first load. */
-  readonly info = signal<AboutInfo | null>(null);
+  private _info = signal<AboutInfo | null>(null);
+  readonly info = this._info.asReadonly();
 
   /** True while the HTTP request is in flight. */
   readonly loading = signal(false);
@@ -37,7 +38,7 @@ export class AboutService {
 
     this.http.get<AboutInfo>("/api/about").subscribe({
       next: (data) => {
-        this.info.set(data);
+        this._info.set(data);
         this.loading.set(false);
       },
       error: (err) => {

@@ -11,7 +11,6 @@ import {
   signal
 } from "@angular/core";
 import { RouterLink } from "@angular/router";
-import { AppConfigService } from "../../core/services/app-config.service";
 import { AuthService } from "../../core/services/auth.service";
 import {
   ExternalRegistry,
@@ -23,6 +22,7 @@ import {
   DockerHubResult,
   StagingService
 } from "../../core/services/staging.service";
+import { TrivyService } from "../../core/services/trivy.service";
 import { JobsListComponent } from "./jobs-list/jobs-list.component";
 
 
@@ -40,7 +40,7 @@ export class StagingComponent implements OnInit {
   private authService = inject(AuthService);
   private jobSvc = inject(JobService);
   private folderSvc = inject(FolderService)
-  readonly configService = inject(AppConfigService);
+  trivySvc= inject(TrivyService)
 
   readonly externalRegistries = computed<ExternalRegistry[]>(() => this.extRegistrySvc.externalRegistries())
 
@@ -122,6 +122,7 @@ export class StagingComponent implements OnInit {
   readonly pushFolderOptions = computed(() => this.folderSvc.allowedPushFolders());
 
   ngOnInit(): void {
+    this.trivySvc.loadConfig().subscribe();
     this.extRegistrySvc.loadRegistries();
     this.folderSvc.loadPermissions();
   }
@@ -197,11 +198,11 @@ export class StagingComponent implements OnInit {
           mode === "adhoc" ? this.pullSourcePass() || null : null,
 
         // Vulnerability scan overrides
-        vuln_scan_enabled_override: this.configService.vulnOverride()
-          ? this.configService.vulnEnabled()
+        vuln_scan_enabled_override: this.trivySvc.vulnOverride()
+          ? this.trivySvc.vulnEnabled()
           : null,
-        vuln_severities_override: this.configService.vulnOverride()
-          ? this.configService.vulnSeveritiesString()
+        vuln_severities_override: this.trivySvc.vulnOverride()
+          ? this.trivySvc.vulnSeveritiesString()
           : null,
       })
       .subscribe({

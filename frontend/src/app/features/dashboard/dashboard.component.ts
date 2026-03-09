@@ -14,7 +14,6 @@ import {
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { RouterLink } from "@angular/router";
 import { Subject, switchMap, takeWhile, timer } from "rxjs";
-import { AppConfigService } from "../../core/services/app-config.service";
 import { AuthService } from "../../core/services/auth.service";
 import {
   DashboardService,
@@ -37,7 +36,6 @@ export class DashboardComponent implements OnInit {
   private registryService = inject(RegistryService);
   private stagingService = inject(StagingService);
   private destroyRef = inject(DestroyRef);
-  readonly configService = inject(AppConfigService);
   readonly authService = inject(AuthService);
 
   stats = signal<DashboardStats | null>(null);

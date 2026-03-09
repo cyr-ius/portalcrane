@@ -17,10 +17,11 @@ type SettingsTab =
 })
 export class SettingsService {
 
-  activeTab = signal<SettingsTab>("vulnerabilities");
+  private _activeTab = signal<SettingsTab>("vulnerabilities");
+  readonly activeTab = this._activeTab.asReadonly();
 
   setTab(tab: SettingsTab) {
-    this.activeTab.set(tab);
+    this._activeTab.set(tab);
   }
 
 }

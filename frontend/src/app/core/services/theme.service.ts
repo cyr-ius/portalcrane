@@ -1,4 +1,4 @@
-import { Injectable, signal, effect } from "@angular/core";
+import { effect, Injectable, signal } from "@angular/core";
 
 export type Theme = "light" | "dark" | "auto";
 
@@ -6,9 +6,10 @@ export type Theme = "light" | "dark" | "auto";
 export class ThemeService {
   private readonly THEME_KEY = "pc_theme";
 
-  readonly theme = signal<Theme>(
+  private _theme = signal<Theme>(
     (localStorage.getItem(this.THEME_KEY) as Theme) || "auto",
   );
+  readonly theme = this._theme.asReadonly();
 
   constructor() {
     // Apply theme on change
@@ -27,7 +28,7 @@ export class ThemeService {
   }
 
   setTheme(theme: Theme) {
-    this.theme.set(theme);
+    this._theme.set(theme);
     localStorage.setItem(this.THEME_KEY, theme);
   }
 

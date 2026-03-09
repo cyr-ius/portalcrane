@@ -314,23 +314,23 @@
             <!-- Active scan config summary (read-only, driven by Settings) -->
             <div class="scan-summary d-flex gap-2 flex-wrap mb-3">
               @let vulnOn =
-                configService.vulnOverride()
-                  ? configService.vulnEnabled()
-                  : (configService.serverConfig()?.vuln_scan_enabled ?? true);
+                trivySvc.vulnOverride()
+                  ? trivySvc.vulnEnabled()
+                  : (trivySvc.vulnConfig()?.vuln_scan_enabled ?? true);
               @let severities =
-                configService.vulnOverride()
-                  ? configService.vulnSeverities()
+                trivySvc.vulnOverride()
+                  ? trivySvc.vulnSeverities()
                   : (
-                      configService.serverConfig()?.vuln_scan_severities ??
+                      trivySvc.vulnConfig()?.vuln_scan_severities ??
                       "CRITICAL,HIGH"
                     ).split(",");
 
               <span
                 class="badge"
-                [class.bg-success-subtle]="configService.vulnEnabled()"
-                [class.text-success]="configService.vulnEnabled()"
-                [class.bg-secondary-subtle]="!configService.vulnEnabled()"
-                [class.text-secondary]="!configService.vulnEnabled()"
+                [class.bg-success-subtle]="trivySvc.vulnEnabled()"
+                [class.text-success]="trivySvc.vulnEnabled()"
+                [class.bg-secondary-subtle]="!trivySvc.vulnEnabled()"
+                [class.text-secondary]="!trivySvc.vulnEnabled()"
               >
                 <i class="bi bi-bug me-1"></i>
                 Trivy {{ vulnOn ? "ON" : "OFF" }}

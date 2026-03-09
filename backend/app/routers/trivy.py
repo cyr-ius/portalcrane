@@ -1,5 +1,7 @@
 from fastapi import APIRouter, HTTPException, Query, Depends
+from pydantic import BaseModel
 
+from ..config import Settings, get_settings
 from ..services.trivy_service import (
     get_trivy_db_info,
     has_explicit_tag_or_digest,
@@ -9,6 +11,15 @@ from ..services.trivy_service import (
 from ..core.jwt import UserInfo, require_admin, get_current_user
 
 router = APIRouter()
+
+
+class VulnConfig(BaseModel):
+    """Non-sensitive application configuration exposed to the frontend."""
+
+    vuln_scan_enabled: bool
+    vuln_scan_severities: str
+    vuln_ignore_unfixed: bool
+    vuln_scan_timeout: str
 
 
 @router.get("/db")
@@ -50,3 +61,20 @@ async def scan(
     if not result.get("success"):
         raise HTTPException(status_code=500, detail=result.get("error"))
     return result
+
+
+@router.get("/state", response_model=VulnConfig)
+async def get_public_config(
+    settings: Settings = Depends(get_settings),
+    _: UserInfo = Depends(require_admin),
+):
+    """
+    Return the non-sensitive subset of the server configuration.
+    Used by the frontend to initialise defaults for scan toggles.
+    """
+    return VulnConfig(
+        vuln_scan_enabled=settings.vuln_scan_enabled,
+        vuln_scan_severities=settings.vuln_scan_severities,
+        vuln_ignore_unfixed=settings.vuln_ignore_unfixed,
+        vuln_scan_timeout=settings.vuln_scan_timeout,
+    )
