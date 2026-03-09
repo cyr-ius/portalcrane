@@ -1,9 +1,8 @@
-<!-- folders-config-panel.component.html -->
+<!-- Portalcrane - Folders Configuration Panel -->
+<!-- MIGRATION: folderForm and permForm now use [formField] bindings -->
 
 <div class="card border-0">
-  <div
-    class="card-header border-0 d-flex align-items-center justify-content-between"
-  >
+  <div class="card-header border-0 d-flex align-items-center justify-content-between">
     <h6 class="fw-semibold mb-0">
       <i class="bi bi-folder2-open me-2"></i>Registry Folders
     </h6>
@@ -15,58 +14,59 @@
   </div>
 
   <div class="card-body">
-    <!-- Create form -->
+
+    <!-- ── Create folder form ─────────────────────────────────────────────── -->
     @if (showCreateForm()) {
-      <div
-        class="border border-primary-subtle rounded p-3 mb-3 bg-primary-subtle bg-opacity-10"
-      >
+      <div class="border border-primary-subtle rounded p-3 mb-3 bg-primary-subtle bg-opacity-10">
         <h6 class="fw-semibold mb-3 text-primary">New folder</h6>
+
         @if (createError()) {
           <div class="alert alert-danger py-2 small">{{ createError() }}</div>
         }
+
         <div class="row g-2 mb-2">
+          <!-- Name (required) -->
           <div class="col-md-4">
             <label class="form-label small fw-semibold">Name</label>
             <input
               type="text"
               class="form-control form-control-sm font-monospace"
               placeholder="e.g. production"
-              [value]="newName()"
-              (input)="newName.set($any($event.target).value)"
+              [formField]="folderForm.name"
             />
           </div>
+
+          <!-- Description (optional) -->
           <div class="col-md-8">
             <label class="form-label small fw-semibold">Description</label>
             <input
               type="text"
               class="form-control form-control-sm"
               placeholder="Optional description"
-              [value]="newDescription()"
-              (input)="newDescription.set($any($event.target).value)"
+              [formField]="folderForm.description"
             />
           </div>
         </div>
+
         <div class="d-flex gap-2">
           <button
             class="btn btn-sm btn-primary"
             (click)="createFolder()"
-            [disabled]="!canCreate() || creating()"
+            [disabled]="!folderForm().valid() || creating()"
           >
             @if (creating()) {
               <span class="spinner-border spinner-border-sm me-1"></span>
             }
             Create
           </button>
-          <button
-            class="btn btn-sm btn-link text-muted"
-            (click)="cancelCreate()"
-          >
+          <button class="btn btn-sm btn-link text-muted" (click)="cancelCreate()">
             Cancel
           </button>
         </div>
       </div>
     }
 
+    <!-- Loading / error / empty states -->
     @if (loading()) {
       <div class="text-center py-4">
         <span class="spinner-border spinner-border-sm text-muted"></span>
@@ -80,10 +80,11 @@
       </div>
     }
 
-    <!-- Folder list -->
+    <!-- ── Folder list ─────────────────────────────────────────────────────── -->
     @for (folder of folders(); track folder.id) {
       <div class="border rounded mb-2 overflow-hidden">
-        <!-- Folder header row -->
+
+        <!-- Folder header row (accordion toggle) -->
         <div
           class="d-flex align-items-center gap-3 px-3 py-2 bg-body-secondary"
           style="cursor: pointer"
@@ -101,15 +102,14 @@
           <span class="badge bg-secondary-subtle text-secondary ms-auto">
             {{ folder.permissions.length }} user(s)
           </span>
-          <span class="text-muted small">{{
-            formatDate(folder.created_at)
-          }}</span>
+          <span class="text-muted small">{{ formatDate(folder.created_at) }}</span>
         </div>
 
-        <!-- Expanded detail -->
+        <!-- Expanded detail section -->
         @if (expandedId() === folder.id) {
           <div class="px-3 py-2">
-            <!-- Description edit -->
+
+            <!-- Description edit (bare signal — not a full form, single field) -->
             @if (editingDescId() === folder.id) {
               <div class="d-flex gap-2 mb-3 align-items-center">
                 <input
@@ -158,7 +158,7 @@
               </div>
             }
 
-            <!-- Permissions table -->
+            <!-- Permissions header -->
             <div class="d-flex align-items-center justify-content-between mb-2">
               <span class="fw-semibold small">
                 <i class="bi bi-key me-1"></i>User permissions
@@ -173,16 +173,15 @@
               }
             </div>
 
-            <!-- Add permission form -->
+            <!-- ── Add permission form (Signal Form) ────────────────────── -->
             @if (addPermFolderId() === folder.id) {
               <div class="border rounded p-2 mb-2 bg-body-secondary">
+
                 @if (permError()) {
-                  <div class="alert alert-danger py-1 small mb-2">
-                    {{ permError() }}
-                  </div>
+                  <div class="alert alert-danger py-1 small mb-2">{{ permError() }}</div>
                 }
 
-                <!-- Datalist for existing usernames (users() populated at init) -->
+                <!-- Datalist for existing usernames -->
                 <datalist id="users-datalist">
                   @for (u of users(); track u.id) {
                     <option [value]="u.username">{{ u.username }}</option>
@@ -190,29 +189,27 @@
                 </datalist>
 
                 <div class="row g-2 align-items-end">
+
+                  <!-- Username (formField + datalist) -->
                   <div class="col-md-4">
-                    <label class="form-label small fw-semibold mb-1"
-                      >Username</label
-                    >
+                    <label class="form-label small fw-semibold mb-1">Username</label>
                     <input
                       type="text"
                       class="form-control form-control-sm"
                       placeholder="Select or type a username"
                       list="users-datalist"
-                      [value]="addPermUsername()"
-                      (input)="addPermUsername.set($any($event.target).value)"
+                      [formField]="permForm.username"
                     />
                   </div>
+
+                  <!-- Can pull -->
                   <div class="col-auto">
                     <div class="form-check mb-0">
                       <input
                         class="form-check-input"
                         type="checkbox"
                         [id]="'perm-pull-' + folder.id"
-                        [checked]="addPermCanPull()"
-                        (change)="
-                          addPermCanPull.set($any($event.target).checked)
-                        "
+                        [formField]="permForm.canPull"
                       />
                       <label
                         class="form-check-label small"
@@ -222,16 +219,15 @@
                       </label>
                     </div>
                   </div>
+
+                  <!-- Can push -->
                   <div class="col-auto">
                     <div class="form-check mb-0">
                       <input
                         class="form-check-input"
                         type="checkbox"
                         [id]="'perm-push-' + folder.id"
-                        [checked]="addPermCanPush()"
-                        (change)="
-                          addPermCanPush.set($any($event.target).checked)
-                        "
+                        [formField]="permForm.canPush"
                       />
                       <label
                         class="form-check-label small"
@@ -241,11 +237,13 @@
                       </label>
                     </div>
                   </div>
+
+                  <!-- Submit / cancel -->
                   <div class="col-auto d-flex gap-1">
                     <button
                       class="btn btn-primary btn-sm"
                       (click)="savePerm(folder.id)"
-                      [disabled]="!canAddPerm() || savingPerm()"
+                      [disabled]="!permForm().valid() || savingPerm()"
                     >
                       @if (savingPerm()) {
                         <span class="spinner-border spinner-border-sm"></span>
@@ -283,23 +281,14 @@
                   @for (perm of folder.permissions; track perm.username) {
                     <tr>
                       <td>
-                        <span class="fw-semibold font-monospace small">
-                          {{ perm.username }}
-                        </span>
+                        <span class="fw-semibold font-monospace small">{{ perm.username }}</span>
                       </td>
                       <td class="text-center">
                         <input
                           class="form-check-input"
                           type="checkbox"
                           [checked]="perm.can_pull"
-                          (change)="
-                            updatePerm(
-                              folder.id,
-                              perm.username,
-                              $any($event.target).checked,
-                              perm.can_push
-                            )
-                          "
+                          (change)="updatePerm(folder.id, perm.username, $any($event.target).checked, perm.can_push)"
                         />
                       </td>
                       <td class="text-center">
@@ -307,14 +296,7 @@
                           class="form-check-input"
                           type="checkbox"
                           [checked]="perm.can_push"
-                          (change)="
-                            updatePerm(
-                              folder.id,
-                              perm.username,
-                              perm.can_pull,
-                              $any($event.target).checked
-                            )
-                          "
+                          (change)="updatePerm(folder.id, perm.username, perm.can_pull, $any($event.target).checked)"
                         />
                       </td>
                       <td class="text-end">
@@ -331,9 +313,11 @@
                 </tbody>
               </table>
             }
+
           </div>
         }
       </div>
     }
+
   </div>
 </div>
