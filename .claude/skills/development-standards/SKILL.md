@@ -93,7 +93,6 @@ import { email, form, FormField, required, submit } from "@angular/forms/signals
 // Standalone component - no module needed
 @Component({
   selector: 'app-user-profile',
-  standalone: true,
   imports: [CommonModule, FormField],
   templateUrl: './user-profile.component.html',
   styleUrl: './user-profile.component.css',
@@ -2007,7 +2006,6 @@ async def create_user(
 - [ ] Services utilisant `inject()` pour l'injection de dépendances
 - [ ] État géré avec `signal()` et `computed()`
 - [ ] Formulaires avec `Signal Forms`
-- [ ] Component `standalone: true`
 - [ ] Pas d'imports circulaires
 
 **Pour les changements FastAPI:**
