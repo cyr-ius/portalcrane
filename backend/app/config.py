@@ -3,6 +3,7 @@ Portalcrane - Application Configuration
 All settings loaded from environment variables
 """
 
+from functools import lru_cache
 import logging
 import os
 from pathlib import Path
@@ -156,6 +157,7 @@ class Settings(BaseSettings):
         return self
 
 
+@lru_cache
 def get_settings() -> Settings:
     """Get cached application settings."""
     return Settings()
