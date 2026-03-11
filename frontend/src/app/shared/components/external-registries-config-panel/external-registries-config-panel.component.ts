@@ -2,8 +2,9 @@
  * Portalcrane - ExternalRegistriesConfigPanelComponent
  * Admin settings panel to manage global and personal external registries.
  *
- * MIGRATION: Registry add/edit form now uses Angular Signal Forms (form / FormField)
- * instead of bare signal-per-field bindings with manual payload assembly.
+ * Change: use_tls + tls_verify fields added to the registry form model.
+ * tls_verify is only shown when use_tls is enabled.
+ * Both are forwarded in create/update payloads and to testConnection().
  */
 import { Component, inject, OnInit, signal } from "@angular/core";
 import { form, FormField, required, submit } from "@angular/forms/signals";
@@ -26,6 +27,17 @@ interface RegistryFormModel {
   password: string;
   /** "global" (admin-visible to all) or "personal" (current user only). */
   owner: "global" | "personal";
+  /**
+   * When false, all connections use plain HTTP — no TLS handshake at all.
+   * Useful for registries running on http:// behind a private network.
+   */
+  use_tls: boolean;
+  /**
+   * Only relevant when use_tls is true.
+   * When false, the TLS certificate is accepted without verification
+   * (e.g. for self-signed certificates on HTTPS registries).
+   */
+  tls_verify: boolean;
 }
 
 @Component({
@@ -69,6 +81,8 @@ export class ExternalRegistriesConfigPanelComponent implements OnInit {
     username: "",
     password: "",
     owner: "personal",
+    use_tls: true,
+    tls_verify: true,
   };
 
   /** Reactive model backing the Signal Form. */
@@ -76,8 +90,7 @@ export class ExternalRegistriesConfigPanelComponent implements OnInit {
 
   /**
    * Signal Form definition.
-   * name and host are required; credentials are optional.
-   * owner is not validated (always has a default value).
+   * name and host are required; credentials and flags are optional.
    */
   readonly registryForm = form(this.registryModel, (p) => {
     required(p.name);
@@ -90,16 +103,16 @@ export class ExternalRegistriesConfigPanelComponent implements OnInit {
     this.loadRegistries();
   }
 
-  /** Fetch the full registry list from the backend. */
+  // ── Registry list ──────────────────────────────────────────────────────────
+
   loadRegistries(): void {
     this.extRegSvc.listRegistries().subscribe({
-      next: (regs) => this.registries.set(regs),
+      next: (list) => this.registries.set(list),
     });
   }
 
   // ── Form lifecycle ─────────────────────────────────────────────────────────
 
-  /** Open the form in create mode. */
   openAddForm(): void {
     this.editingId.set(null);
     this.registryModel.set({ ...this.registryInit });
@@ -108,33 +121,32 @@ export class ExternalRegistriesConfigPanelComponent implements OnInit {
     this.showAddForm.set(true);
   }
 
-  /** Open the form in edit mode, pre-filled with the existing registry values. */
   openEditForm(reg: ExternalRegistry): void {
     this.editingId.set(reg.id);
     this.registryModel.set({
       name: reg.name,
       host: reg.host,
       username: reg.username ?? "",
-      // Password is intentionally left blank — backend keeps current value when empty
+      // Password intentionally left blank — backend keeps current value if empty
       password: "",
       owner: reg.owner === "global" ? "global" : "personal",
+      // Preserve saved TLS settings; default to true for old entries
+      use_tls: reg.use_tls ?? true,
+      tls_verify: reg.tls_verify ?? true,
     });
     this.customHost.set("");
     this.testResult.set(null);
     this.showAddForm.set(true);
   }
 
-  /** Close and reset the form without saving. */
   cancelForm(): void {
     this.showAddForm.set(false);
-    this.editingId.set(null);
     this.customHost.set("");
     this.testResult.set(null);
   }
 
   // ── Preset helpers ─────────────────────────────────────────────────────────
 
-  /** Apply a known-registry preset to the host (and name if still empty). */
   selectPreset(preset: RegistryPreset): void {
     const host = this.normalizeHost(preset.host);
     this.registryModel.update((m) => ({
@@ -144,7 +156,6 @@ export class ExternalRegistriesConfigPanelComponent implements OnInit {
     }));
   }
 
-  /** Add a custom host to the preset list and apply it to the host field. */
   addCustomHostToPresets(): void {
     const host = this.normalizeHost(this.customHost());
     if (!host) return;
@@ -172,16 +183,20 @@ export class ExternalRegistriesConfigPanelComponent implements OnInit {
   /** Save (create or update) the registry via Signal Form submit. */
   saveRegistry(): void {
     submit(this.registryForm, async (f) => {
-      const { name, host, username, password, owner } = f().value();
+      const { name, host, username, password, owner, use_tls, tls_verify } = f().value();
       this.savingRegistry.set(true);
       this.testResult.set(null);
 
+      const useTls = use_tls ?? true;
       const payload = {
         name: name!,
         host: host!,
         username,
         password,
         owner: owner === "global" ? "global" : undefined,
+        use_tls: useTls,
+        // tls_verify is only meaningful when use_tls is true
+        tls_verify: useTls ? (tls_verify ?? true) : true,
       };
       const id = this.editingId();
       const request$ = id
@@ -207,22 +222,28 @@ export class ExternalRegistriesConfigPanelComponent implements OnInit {
     });
   }
 
-  /** Test the form's current host/username/password without saving. */
+  /** Test the form's current host/credentials/TLS settings without saving. */
   testNewConnection(): void {
-    const { host, username, password } = this.registryModel();
+    const { host, username, password, use_tls, tls_verify } = this.registryModel();
     this.testingNew.set(true);
     this.testResult.set(null);
 
-    this.extRegSvc.testConnection(host, username, password).subscribe({
-      next: (res) => {
-        this.testResult.set(res);
-        this.testingNew.set(false);
-      },
-      error: () => {
-        this.testResult.set({ reachable: false, auth_ok: false, message: "Test failed." });
-        this.testingNew.set(false);
-      },
-    });
+    this.extRegSvc
+      .testConnection(host, username, password, { use_tls: use_tls ?? true, tls_verify: tls_verify ?? true })
+      .subscribe({
+        next: (res) => {
+          this.testResult.set(res);
+          this.testingNew.set(false);
+        },
+        error: () => {
+          this.testResult.set({
+            reachable: false,
+            auth_ok: false,
+            message: "Test failed.",
+          });
+          this.testingNew.set(false);
+        },
+      });
   }
 
   /** Test an already-saved registry by id. */

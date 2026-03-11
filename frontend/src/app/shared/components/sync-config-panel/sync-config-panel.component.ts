@@ -1,15 +1,19 @@
 /**
  * Portalcrane - SyncConfigPanelComponent
- * Allows admins to trigger image synchronisations to external registries
- * and view the sync job history.
  *
- * MIGRATION: The sync "form" (source, destination, folder prefix) now uses
- * Angular Signal Forms (form / FormField) instead of bare signal-per-field
- * bindings with manual validation guards.
+ * Allows admins to trigger image synchronisations to/from external registries
+ * and view the sync/import job history.
  *
- * NOTE: syncDestId and syncSource are string selects (IDs / image names).
- * Since <select> values are always strings, [formField] works correctly here —
- * unlike numeric selects, no manual coercion is needed.
+ * Changes (Évolution 2):
+ *   - New ImportFormModel interface.
+ *   - New importModel signal + importForm Signal Form.
+ *   - New startImport() method calling ExternalRegistryService.startImport().
+ *   - getRegistryHost() now works for both source_registry_id (import) and
+ *     dest_registry_id (export) so the history list can resolve both.
+ *   - New jobDirectionLabel() / jobDirectionClass() helpers for direction badges.
+ *
+ * NOTE: All <select> values are strings; [formField] works correctly here
+ * without manual coercion.
  */
 import { SlicePipe } from "@angular/common";
 import { Component, DestroyRef, inject, OnInit, signal } from "@angular/core";
@@ -24,14 +28,18 @@ import {
 import { RegistryService } from "../../../core/services/registry.service";
 import { SettingsService } from "../../../core/services/settings.service";
 
-/** Shape of the sync trigger form model. */
+/** Shape of the export sync trigger form model. */
 interface SyncFormModel {
-  /** Local image reference, or "(all)" to sync everything. */
   source: string;
-  /** ID of the destination external registry. */
   destId: string;
-  /** Optional folder/namespace prefix on the destination. */
   folder: string;
+}
+
+/** Shape of the import form model (Évolution 2). */
+interface ImportFormModel {
+  sourceId: string;
+  image: string;
+  destFolder: string;
 }
 
 @Component({
@@ -53,32 +61,49 @@ export class SyncConfigPanelComponent implements OnInit {
   readonly localImages = signal<string[]>([]);
   readonly loadingLocalImages = signal(false);
   readonly startingSync = signal(false);
+  readonly startingImport = signal(false);
   readonly loadingSyncJobs = signal(false);
 
   private readonly syncPollTrigger$ = new Subject<void>();
 
-  // ── Signal Form – sync trigger ─────────────────────────────────────────────
+  // ── Signal Form – export sync trigger ─────────────────────────────────────
 
-  /** Blank defaults; spread on reset to avoid shared-reference bugs. */
+  /** Blank defaults; spread on every form open to avoid shared-reference bugs. */
   private readonly syncInit: SyncFormModel = {
     source: "(all)",
     destId: "",
     folder: "",
   };
 
-  /** Reactive model backing the Signal Form. */
   readonly syncModel = signal<SyncFormModel>({ ...this.syncInit });
 
   /**
-   * Signal Form definition.
-   * destId is required (must choose a destination before syncing).
-   * source defaults to "(all)"; folder is optional.
+   * Signal Form definition for the export form.
+   * destId is required; source and folder have safe defaults.
    */
   readonly syncForm = form(this.syncModel, (p) => {
     required(p.destId);
   });
 
-  // ──────────────────────────────────────────────────────────────────────────
+  // ── Signal Form – import form (Évolution 2) ────────────────────────────────
+
+  private readonly importInit: ImportFormModel = {
+    sourceId: "",
+    image: "(all)",
+    destFolder: "",
+  };
+
+  readonly importModel = signal<ImportFormModel>({ ...this.importInit });
+
+  /**
+   * Signal Form definition for the import form.
+   * sourceId is required; image defaults to "(all)"; destFolder is optional.
+   */
+  readonly importForm = form(this.importModel, (p) => {
+    required(p.sourceId);
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────
 
   ngOnInit(): void {
     this.loadRegistries();
@@ -86,11 +111,10 @@ export class SyncConfigPanelComponent implements OnInit {
     this.loadSyncData();
   }
 
-  /** Set up auto-polling for sync job status (every 3 s while running). */
+  /** Set up auto-polling for job status (every 3 s while any job is running). */
   private setupSyncPolling(): void {
     this.syncPollTrigger$
       .pipe(
-        // Each new trigger cancels the previous poll cycle (switchMap)
         switchMap(() =>
           timer(0, 3000).pipe(
             switchMap(() => this.extRegSvc.listSyncJobs()),
@@ -107,16 +131,24 @@ export class SyncConfigPanelComponent implements OnInit {
   /** Fetch the list of configured external registries. */
   loadRegistries(): void {
     this.extRegSvc.listRegistries().subscribe({
-      next: (regs) => this.registries.set(regs),
+      next: (regs) => {
+        this.registries.set(regs);
+        // Pre-select first registry when none is selected yet
+        if (!this.syncModel().destId && regs.length > 0) {
+          this.syncModel.update((m) => ({ ...m, destId: regs[0].id }));
+        }
+        if (!this.importModel().sourceId && regs.length > 0) {
+          this.importModel.update((m) => ({ ...m, sourceId: regs[0].id }));
+        }
+      },
     });
   }
 
-  /** Refresh sync job history and reload local images for the source dropdown. */
+  /** Refresh job history and reload local images for the export source dropdown. */
   loadSyncData(): void {
     this.loadingSyncJobs.set(true);
     this.syncPollTrigger$.next();
 
-    // Load local images for the source dropdown
     this.loadingLocalImages.set(true);
     this.registrySvc.getImages(1, 200).subscribe({
       next: (data) => {
@@ -128,17 +160,14 @@ export class SyncConfigPanelComponent implements OnInit {
         }
         this.localImages.set(imgs);
         this.loadingLocalImages.set(false);
-
-        // Pre-select first registry when none is selected yet
-        if (!this.syncModel().destId && this.registries().length > 0) {
-          this.syncModel.update((m) => ({ ...m, destId: this.registries()[0].id }));
-        }
       },
       error: () => this.loadingLocalImages.set(false),
     });
   }
 
-  /** Submit the sync form via Signal Forms. */
+  // ── Export sync ────────────────────────────────────────────────────────────
+
+  /** Submit the export sync form via Signal Forms. */
   startSync(): void {
     submit(this.syncForm, async (f) => {
       const { source, destId, folder } = f().value();
@@ -153,6 +182,7 @@ export class SyncConfigPanelComponent implements OnInit {
         .subscribe({
           next: () => {
             this.startingSync.set(false);
+            this.syncModel.set({ ...this.syncInit });
             this.syncPollTrigger$.next();
           },
           error: () => this.startingSync.set(false),
@@ -160,23 +190,61 @@ export class SyncConfigPanelComponent implements OnInit {
     });
   }
 
+  // ── Import (Évolution 2) ───────────────────────────────────────────────────
+
+  /** Submit the import form via Signal Forms. */
+  startImport(): void {
+    submit(this.importForm, async (f) => {
+      const { sourceId, image, destFolder } = f().value();
+      this.startingImport.set(true);
+
+      this.extRegSvc
+        .startImport({
+          source_registry_id: sourceId!,
+          source_image: image ?? "(all)",
+          dest_folder: destFolder?.trim() || null,
+        })
+        .subscribe({
+          next: () => {
+            this.startingImport.set(false);
+            this.importModel.set({ ...this.importInit });
+            // Re-select first registry so the form stays usable
+            if (this.registries().length > 0) {
+              this.importModel.update((m) => ({
+                ...m,
+                sourceId: this.registries()[0].id,
+              }));
+            }
+            this.syncPollTrigger$.next();
+          },
+          error: () => this.startingImport.set(false),
+        });
+    });
+  }
+
   // ── Utility helpers ────────────────────────────────────────────────────────
 
-  /** Resolve a registry ID to its display host. */
-  getRegistryHost(registryId: string): string {
+  /** Resolve a registry ID to its display host (works for both import and export). */
+  getRegistryHost(registryId: string | null): string {
+    if (!registryId) return "(local)";
     return this.registries().find((r) => r.id === registryId)?.host ?? registryId;
   }
 
-  /** Resolve the currently selected destination registry host. */
+  /** Resolve the currently selected export destination registry host. */
   getSyncDestHost(): string {
     return this.registries().find((r) => r.id === this.syncModel().destId)?.host ?? "";
   }
 
+  /** Resolve the currently selected import source registry host. */
+  getImportSrcHost(): string {
+    return (
+      this.registries().find((r) => r.id === this.importModel().sourceId)?.host ?? ""
+    );
+  }
+
   /**
-   * Build a preview of the destination image reference, mirroring the backend's
-   * _rewrite_image_name_for_sync() logic: only the LAST path segment of the
-   * source is kept, prefixed with dest_folder or registry username.
-   * Example: "cyrius44/alpine/ansible:2.20.0" → "docker.io/cyrius44/ansible:2.20.0"
+   * Build a preview of the destination image reference for the export form,
+   * mirroring the backend _rewrite_image_name_for_sync() logic.
    */
   getSyncPreview(): string {
     const host = this.getSyncDestHost();
@@ -187,14 +255,12 @@ export class SyncConfigPanelComponent implements OnInit {
     const folder = this.syncModel().folder.trim();
     const source = this.syncModel().source;
 
-    // Folder prefix takes priority over username
     const ns = folder || username;
 
     if (source === "(all)") {
       return `${host}/${ns ? ns + "/" : ""}*`;
     }
 
-    // Extract the bare image name (last path segment before the ":" tag)
     const nameWithTag = source.includes("/") ? source.split("/").at(-1)! : source;
     const [imageName, tag] = nameWithTag.split(":");
     const tagSuffix = tag ? `:${tag}` : "";
@@ -203,7 +269,31 @@ export class SyncConfigPanelComponent implements OnInit {
     return `${host}/${destPath}${tagSuffix}`;
   }
 
-  /** Return the Bootstrap badge class for a given sync job status. */
+  /**
+   * Build a preview of the destination image in the local registry for the
+   * import form.  Leaf image name is kept; dest_folder is prepended when set.
+   */
+  getImportPreview(): string {
+    const srcHost = this.getImportSrcHost();
+    if (!srcHost) return "";
+
+    const image = this.importModel().image.trim();
+    const destFolder = this.importModel().destFolder.trim();
+
+    if (image === "(all)") {
+      return `${destFolder ? destFolder + "/" : ""}*`;
+    }
+
+    // "repo:tag" → leaf = "repo", tag = "tag"
+    const [repoWithPath, tagPart] = image.split(":");
+    const leaf = repoWithPath.split("/").at(-1) ?? repoWithPath;
+    const tagSuffix = tagPart ? `:${tagPart}` : "";
+    const destPath = destFolder ? `${destFolder}/${leaf}` : leaf;
+
+    return destPath + tagSuffix;
+  }
+
+  /** Bootstrap badge class for a sync/import job status. */
   syncStatusBadge(status: string): string {
     const map: Record<string, string> = {
       running: "badge bg-info-subtle text-info",
@@ -214,7 +304,7 @@ export class SyncConfigPanelComponent implements OnInit {
     return map[status] ?? "badge bg-secondary";
   }
 
-  /** Return the Bootstrap icon class for a given sync job status. */
+  /** Bootstrap icon class for a sync/import job status. */
   syncStatusIcon(status: string): string {
     const map: Record<string, string> = {
       running: "bi-arrow-repeat text-info",
@@ -223,5 +313,23 @@ export class SyncConfigPanelComponent implements OnInit {
       error: "bi-x-circle text-danger",
     };
     return map[status] ?? "bi-circle";
+  }
+
+  /**
+   * Human-readable label for the job direction badge (Évolution 2).
+   * "export" → "↑ Export"   (local → external)
+   * "import" → "↓ Import"   (external → local)
+   */
+  jobDirectionLabel(job: SyncJob): string {
+    return job.direction === "import" ? "↓ Import" : "↑ Export";
+  }
+
+  /**
+   * Bootstrap badge class for the job direction badge (Évolution 2).
+   */
+  jobDirectionClass(job: SyncJob): string {
+    return job.direction === "import"
+      ? "badge bg-secondary-subtle text-secondary border"
+      : "badge bg-primary-subtle text-primary border";
   }
 }

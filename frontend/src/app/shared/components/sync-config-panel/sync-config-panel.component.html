@@ -1,11 +1,24 @@
 <!-- Portalcrane - Sync Configuration Panel -->
-<!-- MIGRATION: Source/destination/folder fields now use [formField] bindings -->
+<!--
+  Évolution 2: a second form card has been added below the existing
+  "New synchronisation" (local → external) card.
+  The new "Import from external registry" card covers the reverse
+  direction (external → local).
 
-<!-- ── New synchronisation form ──────────────────────────────────────────── -->
+  The job history list now shows a direction badge per entry:
+    ↑ Export  = local → external
+    ↓ Import  = external → local
+
+  All form bindings use [formField] (Angular Signal Forms).
+  Auto-polling runs every 3 s while any job is "running" (see TS component).
+-->
+
+<!-- ── Export: local → external (existing form) ──────────────────────────── -->
 <div class="card border-0 mb-3">
   <div class="card-header border-0">
     <h6 class="fw-semibold mb-0">
-      <i class="bi bi-arrow-repeat me-2"></i>New synchronisation
+      <i class="bi bi-arrow-up-circle me-2 text-primary"></i>
+      Export — local registry → external
     </h6>
   </div>
   <div class="card-body">
@@ -73,7 +86,6 @@
             Preview mirrors the backend _rewrite_image_name_for_sync() logic:
             only the LAST path segment of the source image is kept, prefixed
             with dest_folder or registry username.
-            Example: "cyrius44/alpine/ansible:2.20.0" → "docker.io/cyrius44/ansible:2.20.0"
           -->
           @if (syncModel().destId) {
             <div class="text-muted mt-1" style="font-size: 0.72rem">
@@ -93,24 +105,121 @@
           @if (startingSync()) {
             <span class="spinner-border spinner-border-sm me-1"></span>
           } @else {
-            <i class="bi bi-arrow-repeat me-1"></i>
+            <i class="bi bi-arrow-up-circle me-1"></i>
           }
-          Sync now
+          Export now
         </button>
       </div>
     }
   </div>
 </div>
 
-<!-- ── Sync job history ───────────────────────────────────────────────────── -->
+<!-- ── Import: external → local (Évolution 2) ────────────────────────────── -->
+<div class="card border-0 mb-3">
+  <div class="card-header border-0">
+    <h6 class="fw-semibold mb-0">
+      <i class="bi bi-arrow-down-circle me-2 text-secondary"></i>
+      Import — external registry → local
+    </h6>
+  </div>
+  <div class="card-body">
+    @if (registries().length === 0) {
+      <div class="alert alert-warning small">
+        <i class="bi bi-exclamation-triangle me-1"></i>
+        No external registries configured.
+        <button
+          class="btn btn-link btn-sm p-0 ms-1"
+          (click)="settingsSvc.setTab('registries')"
+        >
+          Add one
+        </button>
+      </div>
+    } @else {
+      <div class="row g-3">
+
+        <!-- Source external registry -->
+        <div class="col-md-6">
+          <label class="form-label small fw-semibold">Source registry</label>
+          <select
+            class="form-select form-select-sm"
+            [formField]="importForm.sourceId"
+          >
+            <option value="">— Select a registry —</option>
+            @for (reg of registries(); track reg.id) {
+              <option [value]="reg.id">{{ reg.name }} ({{ reg.host }})</option>
+            }
+          </select>
+        </div>
+
+        <!-- Source image -->
+        <div class="col-md-6">
+          <label class="form-label small fw-semibold">
+            Source image
+            <span class="text-muted fw-normal">(or "(all)")</span>
+          </label>
+          <input
+            type="text"
+            class="form-control form-control-sm font-monospace"
+            placeholder="e.g. myorg/nginx:1.27 or (all)"
+            [formField]="importForm.image"
+          />
+          <div class="form-text" style="font-size: 0.7rem">
+            Use <code>(all)</code> to import the full catalog of the source registry.
+          </div>
+        </div>
+
+        <!-- Destination folder in local registry -->
+        <div class="col-12">
+          <label class="form-label small fw-semibold">
+            Destination folder
+            <span class="text-muted fw-normal">(optional)</span>
+          </label>
+          <input
+            type="text"
+            class="form-control form-control-sm font-monospace"
+            placeholder="e.g. imported/ — leave empty to store at root"
+            [formField]="importForm.destFolder"
+          />
+          <!--
+            Preview mirrors the backend run_import_job() logic:
+            leaf image name is kept; dest_folder is prepended when set.
+          -->
+          @if (importModel().sourceId) {
+            <div class="text-muted mt-1" style="font-size: 0.72rem">
+              <i class="bi bi-arrow-right me-1"></i>
+              Preview → local: <code>{{ getImportPreview() }}</code>
+            </div>
+          }
+        </div>
+      </div>
+
+      <div class="d-flex gap-2 mt-3">
+        <button
+          class="btn btn-sm btn-secondary"
+          (click)="startImport()"
+          [disabled]="startingImport() || !importForm().valid()"
+        >
+          @if (startingImport()) {
+            <span class="spinner-border spinner-border-sm me-1"></span>
+          } @else {
+            <i class="bi bi-arrow-down-circle me-1"></i>
+          }
+          Import now
+        </button>
+      </div>
+    }
+  </div>
+</div>
+
+<!-- ── Sync / Import job history ─────────────────────────────────────────── -->
 <div class="card border-0">
   <div class="card-header border-0 d-flex align-items-center justify-content-between">
     <h6 class="fw-semibold mb-0">
-      <i class="bi bi-clock-history me-2"></i>Sync history
+      <i class="bi bi-clock-history me-2"></i>Job history
     </h6>
     <!--
-      Manual refresh also re-triggers the polling loop via loadSyncData().
-      Auto-polling runs every 3 s while any job is "running" (see TS component).
+      Manual refresh re-triggers the polling loop via loadSyncData().
+      Auto-polling runs every 3 s while any job is "running".
     -->
     <button
       class="btn btn-sm btn-outline-secondary"
@@ -126,7 +235,7 @@
         <span class="spinner-border text-primary spinner-border-sm"></span>
       </div>
     } @else if (syncJobs().length === 0) {
-      <div class="text-center py-4 text-muted small">No sync jobs yet.</div>
+      <div class="text-center py-4 text-muted small">No jobs yet.</div>
     } @else {
       <div class="list-group list-group-flush">
         @for (job of syncJobs(); track job.id) {
@@ -139,24 +248,51 @@
                 [class.spin]="job.status === 'running'"
               ></i>
               <div class="flex-grow-1 min-w-0">
+
+                <!-- Direction badge + source/dest summary (Évolution 2) -->
                 <div class="d-flex flex-wrap align-items-center gap-1 mb-1">
-                  <code class="small bg-body-tertiary px-1 rounded">{{ job.source }}</code>
-                  <i class="bi bi-arrow-right text-muted small"></i>
-                  <code
-                    class="small bg-body-tertiary px-1 rounded text-truncate"
-                    style="max-width: 220px"
-                  >
-                    {{ getRegistryHost(job.dest_registry_id) }}{{ job.dest_folder ? "/" + job.dest_folder : "" }}
-                  </code>
+                  <!-- Direction badge -->
+                  <span [class]="jobDirectionClass(job)">
+                    {{ jobDirectionLabel(job) }}
+                  </span>
+
+                  @if (job.direction === 'export') {
+                    <!-- Export: local image → external registry -->
+                    <code class="small bg-body-tertiary px-1 rounded">{{ job.source }}</code>
+                    <i class="bi bi-arrow-right text-muted small"></i>
+                    <code
+                      class="small bg-body-tertiary px-1 rounded text-truncate"
+                      style="max-width: 220px"
+                    >
+                      {{ getRegistryHost(job.dest_registry_id) }}{{ job.dest_folder ?
+                        "/" + job.dest_folder : "" }}
+                    </code>
+                  } @else {
+                    <!-- Import: external registry → local folder -->
+                    <code
+                      class="small bg-body-tertiary px-1 rounded text-truncate"
+                      style="max-width: 220px"
+                    >
+                      {{ getRegistryHost(job.source_registry_id) }}/{{ job.source }}
+                    </code>
+                    <i class="bi bi-arrow-right text-muted small"></i>
+                    <code class="small bg-body-tertiary px-1 rounded">
+                      local{{ job.dest_folder ? "/" + job.dest_folder : "" }}
+                    </code>
+                  }
                 </div>
 
                 <div class="d-flex align-items-center gap-2 flex-wrap">
                   <span [class]="syncStatusBadge(job.status)">{{ job.status }}</span>
-                  <span class="text-muted" style="font-size: 0.7rem">{{ job.started_at | slice: 0 : 16 }}</span>
+                  <span class="text-muted" style="font-size: 0.7rem">
+                    {{ job.started_at | slice: 0 : 16 }}
+                  </span>
 
                   <!-- Progress bar — visible while running -->
                   @if (job.status === "running") {
-                    <span class="text-muted small">{{ job.images_done }}/{{ job.images_total }}</span>
+                    <span class="text-muted small">
+                      {{ job.images_done }}/{{ job.images_total }}
+                    </span>
                     <div class="progress flex-grow-1" style="height: 4px; max-width: 100px">
                       <div
                         class="progress-bar progress-bar-striped progress-bar-animated"

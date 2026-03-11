@@ -1,17 +1,20 @@
 """
 Portalcrane - External Registry Service
 Manages the list of external registries and exposes skopeo-based
-push and synchronisation helpers.
+push, synchronisation, browse and import helpers.
 
-Changes vs original:
-  - Each registry now has an "owner" field: "global" or a username.
-  - get_registries(owner) returns global registries + the user's own registries.
-  - Only admins can create global registries (enforced at the router level).
-  - [FIX] run_sync_job: replaced skopeo_push(oci_dir="") with skopeo_sync_image()
-    which uses docker:// transport on both sides.  The old call produced:
-      oci::latest → "open index.json: no such file or directory"
-  - [FIX] Namespace rewriting in sync: local image namespace is replaced by
-    dest_folder or dest_username so skopeo pushes to the correct namespace.
+Changes:
+  - tls_verify field: each registry stores whether TLS certificate
+    verification should be enforced (defaults True).
+  - [NEW] browse_external_images() — list repositories from an external
+    registry via its HTTP v2 API (Évolution 1).
+  - [NEW] browse_external_tags()   — list tags of a repo from an external
+    registry (Évolution 1).
+  - [NEW] run_import_job()         — mirror of run_sync_job() with src/dest
+    reversed (external → local).  direction="import" stored in job dict
+    (Évolution 2).
+  - run_sync_job() jobs now carry direction="export" so the UI can show
+    direction badges in the history list (Évolution 2).
 """
 
 import asyncio
@@ -57,26 +60,32 @@ def _save_registries(registries: list[dict]) -> None:
 
 
 def _redact(r: dict) -> dict:
-    """Return a copy of the registry dict with the password redacted."""
-    return {**r, "password": "••••••••" if r.get("password") else ""}
+    """Return a copy of the registry dict with the password redacted.
+
+    tls_verify and use_tls are preserved as-is; defaults applied for old entries
+    that predate these fields.
+    """
+    return {
+        **r,
+        "password": "••••••••" if r.get("password") else "",
+        "use_tls": r.get("use_tls", True),
+        "tls_verify": r.get("tls_verify", True),
+    }
 
 
 def get_registries(owner: str | None = None) -> list[dict]:
     """
     Return saved external registries (passwords redacted).
 
-    When *owner* is provided (non-admin user), only global registries and
-    the user's own registries are returned.
-    When *owner* is None (admin), all registries are returned.
+    When *owner* is provided only global + owner registries are returned.
+    When *owner* is None (admin) all registries are returned.
     """
     registries = _load_registries()
     logger.debug(
         "External registry list requested (owner=%s, total=%d)", owner, len(registries)
     )
     if owner is None:
-        # Admin: return everything
         return [_redact(r) for r in registries]
-    # Regular user: global entries + own entries
     return [
         _redact(r) for r in registries if r.get("owner", "global") in ("global", owner)
     ]
@@ -86,19 +95,16 @@ def get_registry_by_id(registry_id: str) -> dict | None:
     """Return a registry by ID (with real password for internal use)."""
     for r in _load_registries():
         if r["id"] == registry_id:
-            logger.debug(
-                "External registry found by id=%s (host=%s, owner=%s)",
-                registry_id,
-                r.get("host"),
-                r.get("owner", "global"),
-            )
+            if "use_tls" not in r:
+                r["use_tls"] = True
+            if "tls_verify" not in r:
+                r["tls_verify"] = True
             return r
-    logger.debug("External registry not found by id=%s", registry_id)
     return None
 
 
 def _normalize_registry_host(host: str) -> str:
-    """Normalise a registry host (strip scheme, path and trailing slash)."""
+    """Normalise a registry host string to bare hostname:port (no protocol, no path)."""
     value = (host or "").strip().lower()
     if not value:
         return ""
@@ -107,14 +113,24 @@ def _normalize_registry_host(host: str) -> str:
     return value.split("/", 1)[0].strip("/")
 
 
+def _build_registry_base_url(host: str, use_tls: bool = True) -> str:
+    """
+    Build the base URL for a registry host string.
+
+    When the host already contains a scheme (http:// or https://) it is used
+    as-is so callers who stored the full URL are unaffected.
+    When *use_tls* is False the scheme is http://, otherwise https://.
+    """
+    if "://" in host:
+        return host.rstrip("/")
+    scheme = "https" if use_tls else "http"
+    return f"{scheme}://{host}"
+
+
 def find_registry_credentials_for_host(host: str, owner: str) -> tuple[str, str] | None:
     """Return (username, password) for matching host from owner registries, then global."""
     target = _normalize_registry_host(host)
     if not target:
-        logger.debug(
-            "External registry credential lookup skipped: empty normalized host (input=%s)",
-            host,
-        )
         return None
 
     registries = _load_registries()
@@ -131,29 +147,12 @@ def find_registry_credentials_for_host(host: str, owner: str) -> tuple[str, str]
         and _normalize_registry_host(r.get("host", "")) == target
     ]
 
-    logger.debug(
-        "External registry credential lookup host=%s owner=%s (owner_matches=%d, global_matches=%d)",
-        target,
-        owner,
-        len(owner_matches),
-        len(global_matches),
-    )
-
     for match in [*owner_matches, *global_matches]:
         username = (match.get("username") or "").strip()
         password = match.get("password") or ""
         if username and password:
-            logger.debug(
-                "External registry credentials resolved host=%s using owner=%s registry_owner=%s",
-                target,
-                owner,
-                match.get("owner", "global"),
-            )
             return username, password
 
-    logger.debug(
-        "External registry credentials not found host=%s owner=%s", target, owner
-    )
     return None
 
 
@@ -163,12 +162,17 @@ def create_registry(
     username: str,
     password: str,
     owner: str = "global",
+    use_tls: bool = True,
+    tls_verify: bool = True,
 ) -> dict:
     """
     Create and persist a new external registry entry.
 
-    *owner* is "global" for admin-created shared registries, or a username
-    for personal registries accessible only to that user.
+    *use_tls*    — when False, all HTTP connections use plain http://.
+                   When True (default), https:// is used.
+    *tls_verify* — only relevant when use_tls is True; controls whether the
+                   TLS certificate is validated.  Set to False for self-signed
+                   certificates on HTTPS registries.
     """
     registries = _load_registries()
     entry = {
@@ -178,12 +182,19 @@ def create_registry(
         "username": username,
         "password": password,
         "owner": owner,
+        "use_tls": use_tls,
+        "tls_verify": tls_verify,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     registries.append(entry)
     _save_registries(registries)
     logger.debug(
-        "External registry created id=%s host=%s owner=%s", entry["id"], host, owner
+        "External registry created id=%s host=%s owner=%s use_tls=%s tls_verify=%s",
+        entry["id"],
+        host,
+        owner,
+        use_tls,
+        tls_verify,
     )
     return _redact(entry)
 
@@ -195,8 +206,10 @@ def update_registry(
     username: str | None,
     password: str | None,
     owner: str | None = None,
+    use_tls: bool | None = None,
+    tls_verify: bool | None = None,
 ) -> dict | None:
-    """Update an existing registry entry. Returns updated entry or None if not found."""
+    """Update an existing registry entry. use_tls/tls_verify only changed when explicitly supplied."""
     registries = _load_registries()
     for r in registries:
         if r["id"] == registry_id:
@@ -210,15 +223,20 @@ def update_registry(
                 r["password"] = password
             if owner is not None:
                 r["owner"] = owner
+            if use_tls is not None:
+                r["use_tls"] = use_tls
+            if tls_verify is not None:
+                r["tls_verify"] = tls_verify
             _save_registries(registries)
             logger.debug(
-                "External registry updated id=%s host=%s owner=%s",
+                "External registry updated id=%s host=%s owner=%s use_tls=%s tls_verify=%s",
                 registry_id,
                 r.get("host"),
                 r.get("owner", "global"),
+                r.get("use_tls", True),
+                r.get("tls_verify", True),
             )
             return _redact(r)
-    logger.debug("External registry update target not found id=%s", registry_id)
     return None
 
 
@@ -227,10 +245,8 @@ def delete_registry(registry_id: str) -> bool:
     registries = _load_registries()
     new_list = [r for r in registries if r["id"] != registry_id]
     if len(new_list) == len(registries):
-        logger.debug("External registry delete target not found id=%s", registry_id)
         return False
     _save_registries(new_list)
-    logger.debug("External registry deleted id=%s", registry_id)
     return True
 
 
@@ -241,38 +257,38 @@ def delete_registries_for_owner(owner: str) -> int:
     deleted_count = len(registries) - len(new_list)
     if deleted_count:
         _save_registries(new_list)
-        logger.debug(
-            "External registries deleted for owner=%s count=%d", owner, deleted_count
-        )
     return deleted_count
 
 
 # ── Connectivity test ─────────────────────────────────────────────────────────
 
 
-async def test_registry_connection(host: str, username: str, password: str) -> dict:
+async def test_registry_connection(
+    host: str,
+    username: str,
+    password: str,
+    use_tls: bool = True,
+    tls_verify: bool = True,
+) -> dict:
     """
     Probe the registry /v2/ endpoint to check reachability and credentials.
+
+    *use_tls*    — when False, connects over plain HTTP (http://).
+    *tls_verify* — only relevant when use_tls is True; set to False for
+                   self-signed certificates.
+
     Returns {"reachable": bool, "auth_ok": bool, "message": str}.
     """
-    url_base = host if "://" in host else f"https://{host}"
-    logger.debug(
-        "Testing external registry connectivity host=%s auth=%s",
-        host,
-        bool(username and password),
-    )
-    url = f"{url_base.rstrip('/')}/v2/"
+    base_url = _build_registry_base_url(host, use_tls=use_tls)
+    url = f"{base_url}/v2/"
+    # httpx verify= only applies to HTTPS; for HTTP it is ignored
+    verify = tls_verify if use_tls else False
     auth = (username, password) if username and password else None
     try:
         async with httpx.AsyncClient(
-            timeout=10, verify=False, follow_redirects=True
+            timeout=10, verify=verify, follow_redirects=True
         ) as client:
             resp = await client.get(url, auth=auth)
-        logger.debug(
-            "External registry connectivity response host=%s status=%s",
-            host,
-            resp.status_code,
-        )
         if resp.status_code in (200, 401):
             auth_ok = resp.status_code == 200 or (resp.status_code == 401 and not auth)
             return {
@@ -294,14 +310,156 @@ async def test_registry_connection(host: str, username: str, password: str) -> d
         return {"reachable": False, "auth_ok": False, "message": "Connection failed"}
 
 
+# ── Browse external registry (Évolution 1) ───────────────────────────────────
+
+
+async def browse_external_images(
+    registry_id: str,
+    search: str | None = None,
+    page: int = 1,
+    page_size: int = 20,
+) -> dict:
+    """
+    List repositories available in an external registry using /v2/_catalog.
+
+    Authentication and TLS settings are read from the saved registry entry.
+    Returns a paginated dict compatible with the local PaginatedImages shape:
+      { items, total, page, page_size, total_pages, error }
+
+    Docker Hub does not expose /v2/_catalog publicly; for that host an empty
+    result is returned with an explanatory error message.
+    """
+    registry = get_registry_by_id(registry_id)
+    if not registry:
+        raise ValueError(f"Registry {registry_id} not found")
+
+    host = registry["host"]
+    username = registry.get("username", "")
+    password = registry.get("password", "")
+    use_tls = registry.get("use_tls", True)
+    tls_verify = registry.get("tls_verify", True)
+
+    normalized = _normalize_registry_host(host)
+    if normalized in {"docker.io", "index.docker.io", "registry-1.docker.io"}:
+        logger.debug("browse_external_images: Docker Hub catalog not supported")
+        return {
+            "items": [],
+            "total": 0,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": 1,
+            "error": (
+                "Docker Hub does not support registry catalog browsing via /v2/_catalog."
+            ),
+        }
+
+    base_url = _build_registry_base_url(host, use_tls=use_tls)
+    verify = tls_verify if use_tls else False
+    auth = (username, password) if username and password else None
+
+    try:
+        async with httpx.AsyncClient(
+            timeout=30, verify=verify, follow_redirects=True
+        ) as client:
+            resp = await client.get(f"{base_url}/v2/_catalog?n=1000", auth=auth)
+            resp.raise_for_status()
+            repositories: list[str] = resp.json().get("repositories", [])
+    except httpx.HTTPStatusError as exc:
+        logger.warning("browse_external_images catalog error: %s", exc)
+        return {
+            "items": [],
+            "total": 0,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": 1,
+            "error": f"Registry returned HTTP {exc.response.status_code}",
+        }
+    except Exception as exc:
+        logger.warning("browse_external_images connection error: %s", exc)
+        return {
+            "items": [],
+            "total": 0,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": 1,
+            "error": str(exc),
+        }
+
+    if search:
+        repositories = [r for r in repositories if search.lower() in r.lower()]
+
+    total = len(repositories)
+    total_pages = max(1, (total + page_size - 1) // page_size)
+    start = (page - 1) * page_size
+    page_repos = repositories[start : start + page_size]
+
+    async def _fetch_tags(repo: str) -> list[str]:
+        try:
+            async with httpx.AsyncClient(
+                timeout=15, verify=verify, follow_redirects=True
+            ) as client:
+                r = await client.get(f"{base_url}/v2/{repo}/tags/list", auth=auth)
+                if r.status_code == 200:
+                    return r.json().get("tags") or []
+        except Exception:
+            pass
+        return []
+
+    tags_results = await asyncio.gather(*[_fetch_tags(repo) for repo in page_repos])
+
+    items = [
+        {"name": repo, "tags": tags, "tag_count": len(tags), "total_size": 0}
+        for repo, tags in zip(page_repos, tags_results)
+    ]
+
+    return {
+        "items": items,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": total_pages,
+        "error": None,
+    }
+
+
+async def browse_external_tags(registry_id: str, repository: str) -> dict:
+    """
+    List tags for a specific repository in an external registry.
+    Returns {"repository": str, "tags": list[str]}.
+    """
+    registry = get_registry_by_id(registry_id)
+    if not registry:
+        raise ValueError(f"Registry {registry_id} not found")
+
+    host = registry["host"]
+    username = registry.get("username", "")
+    password = registry.get("password", "")
+    use_tls = registry.get("use_tls", True)
+    tls_verify = registry.get("tls_verify", True)
+
+    base_url = _build_registry_base_url(host, use_tls=use_tls)
+    verify = tls_verify if use_tls else False
+    auth = (username, password) if username and password else None
+
+    try:
+        async with httpx.AsyncClient(
+            timeout=15, verify=verify, follow_redirects=True
+        ) as client:
+            resp = await client.get(f"{base_url}/v2/{repository}/tags/list", auth=auth)
+            resp.raise_for_status()
+            tags = resp.json().get("tags") or []
+    except Exception as exc:
+        logger.warning("browse_external_tags error repo=%s: %s", repository, exc)
+        tags = []
+
+    return {"repository": repository, "tags": tags}
+
+
 # ── Validation helpers ────────────────────────────────────────────────────────
 
 
 def validate_folder_path(folder: str) -> str | None:
-    """
-    Validate an optional folder/prefix path for image storage.
-    Returns the sanitised path or raises ValueError on invalid input.
-    """
+    """Validate an optional folder/prefix path. Returns sanitised path or raises ValueError."""
     if not folder:
         return None
     if ".." in folder.split("/"):
@@ -322,16 +480,8 @@ def build_target_path(
     path = f"{folder}/{image_name}" if folder else image_name
     normalized_host = _normalize_registry_host(registry_host)
 
-    # Docker Hub push expects docker://<namespace>/<image>:<tag> without host.
     if normalized_host in {"docker.io", "index.docker.io", "registry-1.docker.io"}:
-        dest_ref = f"docker://{path}:{tag}"
-        logger.debug(
-            "Docker Hub destination normalized host=%s original_host=%s dest=%s",
-            normalized_host,
-            registry_host,
-            dest_ref,
-        )
-        return dest_ref
+        return f"docker://{path}:{tag}"
 
     return f"docker://{registry_host}/{path}:{tag}"
 
@@ -345,20 +495,9 @@ async def skopeo_push(
     dest_username: str,
     dest_password: str,
     settings: Settings,
-    tls_verify: bool = False,
+    tls_verify: bool = True,
 ) -> tuple[bool, str]:
-    """
-    Push an OCI layout directory to a registry using skopeo.
-
-    Used by the Staging pipeline (Pull -> Scan -> Push to local or external
-    registry).  The source is always a local OCI directory produced by a
-    previous skopeo pull step.
-
-    NOTE: do NOT call this with oci_dir="" — use skopeo_sync_image() instead
-    for registry-to-registry copies (Sync feature).
-
-    Returns (success, message).
-    """
+    """Push an OCI layout directory to a registry using skopeo copy."""
     cmd = [
         "skopeo",
         "copy",
@@ -369,12 +508,6 @@ async def skopeo_push(
     cmd += [f"oci:{oci_dir}:latest", dest_ref]
 
     env = {**os.environ, **settings.env_proxy}
-    logger.debug(
-        "Running skopeo push to external registry dest=%s auth=%s",
-        dest_ref,
-        bool(dest_username and dest_password),
-    )
-
     proc = await asyncio.create_subprocess_exec(
         *cmd,
         stdout=asyncio.subprocess.PIPE,
@@ -396,17 +529,13 @@ async def skopeo_sync_image(
     src_username: str = "",
     src_password: str = "",
     src_tls_verify: bool = False,
-    dest_tls_verify: bool = False,
+    dest_tls_verify: bool = True,
 ) -> tuple[bool, str]:
     """
     Copy an image between two docker:// registries using skopeo copy.
 
-    Used by the Sync feature (Settings -> Sync).  Both source and destination
-    use the docker:// transport — no intermediate OCI directory needed.
-    This avoids the "oci::latest: open index.json" error that occurs when
-    skopeo_push is called with an empty oci_dir.
-
-    Returns (success, message).
+    Used by both export (local→external) and import (external→local) jobs.
+    No intermediate OCI directory is needed.
     """
     cmd = [
         "skopeo",
@@ -421,10 +550,8 @@ async def skopeo_sync_image(
     cmd += [src_ref, dest_ref]
 
     env = {**os.environ, **settings.env_proxy}
-
-    # Log command with credentials masked
     logger.debug(
-        "skopeo sync: %s",
+        "skopeo copy: %s",
         " ".join(
             "***" if i > 0 and cmd[i - 1] in ("--src-creds", "--dest-creds") else a
             for i, a in enumerate(cmd)
@@ -453,48 +580,21 @@ def _rewrite_image_name_for_sync(
 ) -> str:
     """
     Rewrite the image repository name for the destination registry.
-
-    External registries (Docker Hub, GHCR …) use a flat two-level namespace:
-      <username>/<image>
-
-    Local images may carry multiple path segments (e.g. "cyrius44/alpine/ansible",
-    "production/infra/nginx").  Only the LAST segment is the real image name —
-    all intermediate segments are local organisational namespaces that must be
-    dropped when syncing to an external registry.
-
-    This mirrors the behaviour of _build_external_target_image() in staging.py
-    which uses  image.split("/")[-1]  to extract the bare image name.
-
-    Resolution order:
-      1. dest_folder set  → "<dest_folder>/<leaf>"
-      2. dest_username    → "<dest_username>/<leaf>"
-      3. fallback         → keep image name unchanged
-
-    Examples
-    --------
-    img="cyrius44/alpine/ansible", dest_username="cyrius44" -> "cyrius44/ansible"
-    img="infra/nginx",             dest_username="alice"    -> "alice/nginx"
-    img="nginx",                   dest_username="alice"    -> "alice/nginx"
-    img="a/b/c",                   dest_folder="myorg"      -> "myorg/c"
+    Only the LAST path segment (leaf) is kept; all intermediate segments are dropped.
     """
-    # Always use the last segment as the bare image name — strip all namespaces
     leaf = img.split("/")[-1]
-
     if dest_folder:
         return f"{dest_folder}/{leaf}"
-
     if dest_username:
         return f"{dest_username}/{leaf}"
-
-    # No rewrite target — return the leaf alone (no namespace)
     return leaf
 
 
-# ── Sync jobs ─────────────────────────────────────────────────────────────────
+# ── Sync / Import jobs ────────────────────────────────────────────────────────
 
 
 def list_sync_jobs() -> list[dict]:
-    """Return all sync jobs sorted by start time descending."""
+    """Return all sync/import jobs sorted by start time descending."""
     jobs = list(_sync_jobs.values())
     jobs.sort(key=lambda j: j.get("started_at", ""), reverse=True)
     return jobs
@@ -508,15 +608,10 @@ async def run_sync_job(
     settings: Settings,
 ) -> str:
     """
-    Start an asynchronous sync job and return the job ID immediately.
+    Start an asynchronous export job (local → external) and return the job ID.
 
-    Copies images from the local registry to an external registry using
-    skopeo copy with docker:// transport on both sides.
-    No intermediate OCI directory is used.
-
-    Namespace rewriting:
-      The local image namespace (first path segment) is replaced by dest_folder
-      (priority) or dest_username via _rewrite_image_name_for_sync().
+    Copies images from the local registry to an external registry via skopeo.
+    The job dict carries direction="export" for display in the history list.
     """
     job_id = str(uuid.uuid4())
     registry = get_registry_by_id(dest_registry_id)
@@ -526,13 +621,14 @@ async def run_sync_job(
     dest_host = registry["host"]
     dest_username = registry.get("username", "")
     dest_password = registry.get("password", "")
-
-    # Resolve local registry network details before spawning the async task
+    dest_tls_verify = registry.get("tls_verify", True)
     src_tls_verify = local_registry_url.startswith("https://")
 
     _sync_jobs[job_id] = {
         "id": job_id,
+        "direction": "export",  # local → external
         "source": source_image,
+        "source_registry_id": None,
         "dest_registry_id": dest_registry_id,
         "dest_folder": dest_folder,
         "status": "running",
@@ -547,14 +643,12 @@ async def run_sync_job(
 
     async def _run() -> None:
         try:
-            # Fetch the full list of repositories from the local registry catalog
             catalog_url = f"{local_registry_url}/v2/_catalog?n=1000"
             async with httpx.AsyncClient(timeout=30) as client:
                 resp = await client.get(catalog_url)
                 resp.raise_for_status()
                 all_images = resp.json().get("repositories", [])
 
-            # Filter to the requested source image when not syncing everything
             images = (
                 all_images
                 if source_image == "(all)"
@@ -572,52 +666,29 @@ async def run_sync_job(
                     )
 
                 for tag in tags:
-                    # FIX: build docker:// source reference from the local registry.
-                    # The previous code called skopeo_push(oci_dir="") which produced
-                    # "oci::latest" and caused "open index.json: no such file or directory".
                     src_ref = f"docker://{REGISTRY_HOST}/{img}:{tag}"
-
-                    # Rewrite destination image name to replace the local namespace
-                    # with the destination folder or username.
                     dest_image = _rewrite_image_name_for_sync(
                         img=img,
                         dest_folder=dest_folder,
                         dest_username=dest_username,
                     )
-
-                    # build_target_path handles Docker Hub host normalisation.
-                    # Pass None as folder: _rewrite_image_name_for_sync already
-                    # embedded dest_folder when applicable, avoiding double-prefix.
                     dest_ref = build_target_path(None, dest_image, tag, dest_host)
-
-                    logger.info(
-                        "Sync job %s: %s -> %s",
-                        job_id,
-                        src_ref,
-                        dest_ref,
-                    )
 
                     ok, msg = await skopeo_sync_image(
                         src_ref=src_ref,
                         dest_ref=dest_ref,
-                        # Local registry has no auth internally
                         src_username="",
                         src_password="",
                         dest_username=dest_username,
                         dest_password=dest_password,
                         settings=settings,
                         src_tls_verify=src_tls_verify,
-                        dest_tls_verify=False,
+                        dest_tls_verify=dest_tls_verify,
                     )
-
                     if not ok:
                         errors.append(f"{img}:{tag} — {msg}")
                         logger.warning(
-                            "Sync job %s: failed %s:%s — %s",
-                            job_id,
-                            img,
-                            tag,
-                            msg,
+                            "Export job %s: failed %s:%s — %s", job_id, img, tag, msg
                         )
 
                 _sync_jobs[job_id]["images_done"] += 1
@@ -631,10 +702,148 @@ async def run_sync_job(
             )
             _sync_jobs[job_id]["error"] = "\n".join(errors) if errors else None
         except Exception as exc:
-            logger.exception("Sync job %s failed: %s", job_id, exc)
+            logger.exception("Export job %s failed: %s", job_id, exc)
             _sync_jobs[job_id]["status"] = "error"
             _sync_jobs[job_id]["error"] = str(exc)
             _sync_jobs[job_id]["message"] = f"Sync failed: {exc}"
+        finally:
+            _sync_jobs[job_id]["finished_at"] = datetime.now(timezone.utc).isoformat()
+            _sync_jobs[job_id]["progress"] = 100
+
+    import asyncio as _asyncio
+
+    _asyncio.create_task(_run())
+    return job_id
+
+
+async def run_import_job(
+    source_registry_id: str,
+    source_image: str,
+    dest_folder: str | None,
+    local_registry_url: str,
+    settings: Settings,
+) -> str:
+    """
+    Start an asynchronous import job (external → local) and return the job ID.
+
+    Mirrors run_sync_job() with source and destination inverted:
+      - source: docker://<external_host>/<image>:<tag>  with external credentials
+      - dest:   docker://<REGISTRY_HOST>/<dest_folder>/<leaf>:<tag>  (local registry)
+
+    The leaf image name (last path segment) is preserved; dest_folder is prepended.
+    The job dict carries direction="import" for display in the history list.
+    """
+    job_id = str(uuid.uuid4())
+    registry = get_registry_by_id(source_registry_id)
+    if not registry:
+        raise ValueError(f"Registry {source_registry_id} not found")
+
+    src_host = registry["host"]
+    src_username = registry.get("username", "")
+    src_password = registry.get("password", "")
+    src_tls_verify = registry.get("tls_verify", True)
+    dest_tls_verify = local_registry_url.startswith("https://")
+
+    _sync_jobs[job_id] = {
+        "id": job_id,
+        "direction": "import",  # external → local
+        "source": source_image,
+        "source_registry_id": source_registry_id,
+        "dest_registry_id": None,
+        "dest_folder": dest_folder,
+        "status": "running",
+        "started_at": datetime.now(timezone.utc).isoformat(),
+        "finished_at": None,
+        "message": "Import started",
+        "error": None,
+        "progress": 0,
+        "images_total": 0,
+        "images_done": 0,
+    }
+
+    async def _run() -> None:
+        try:
+            base_url = _build_registry_base_url(src_host)
+            auth = (
+                (src_username, src_password) if src_username and src_password else None
+            )
+
+            # Resolve the list of repositories to import
+            if source_image == "(all)":
+                async with httpx.AsyncClient(
+                    timeout=30, verify=src_tls_verify, follow_redirects=True
+                ) as client:
+                    resp = await client.get(f"{base_url}/v2/_catalog?n=1000", auth=auth)
+                    resp.raise_for_status()
+                    images: list[str] = resp.json().get("repositories", [])
+            else:
+                images = [source_image.split(":")[0]]
+
+            _sync_jobs[job_id]["images_total"] = len(images)
+
+            errors: list[str] = []
+            for img in images:
+                # Use the specified tag when source_image carries one
+                if source_image != "(all)" and ":" in source_image:
+                    tags = [source_image.split(":", 1)[1]]
+                else:
+                    async with httpx.AsyncClient(
+                        timeout=15, verify=src_tls_verify, follow_redirects=True
+                    ) as client:
+                        tr = await client.get(
+                            f"{base_url}/v2/{img}/tags/list", auth=auth
+                        )
+                        tags = (
+                            tr.json().get("tags") or [] if tr.status_code == 200 else []
+                        )
+
+                for tag in tags:
+                    src_ref = (
+                        f"docker://{_normalize_registry_host(src_host)}/{img}:{tag}"
+                    )
+
+                    # Keep the leaf image name; apply dest_folder prefix if given
+                    leaf = img.split("/")[-1]
+                    dest_image = f"{dest_folder}/{leaf}" if dest_folder else leaf
+                    dest_ref = f"docker://{REGISTRY_HOST}/{dest_image}:{tag}"
+
+                    logger.info("Import job %s: %s -> %s", job_id, src_ref, dest_ref)
+
+                    ok, msg = await skopeo_sync_image(
+                        src_ref=src_ref,
+                        dest_ref=dest_ref,
+                        src_username=src_username,
+                        src_password=src_password,
+                        dest_username="",
+                        dest_password="",
+                        settings=settings,
+                        src_tls_verify=src_tls_verify,
+                        dest_tls_verify=dest_tls_verify,
+                    )
+
+                    if not ok:
+                        errors.append(f"{img}:{tag} — {msg}")
+                        logger.warning(
+                            "Import job %s: failed %s:%s — %s", job_id, img, tag, msg
+                        )
+
+                _sync_jobs[job_id]["images_done"] += 1
+                _sync_jobs[job_id]["progress"] = int(
+                    100 * _sync_jobs[job_id]["images_done"] / max(len(images), 1)
+                )
+
+            _sync_jobs[job_id]["status"] = "partial" if errors else "done"
+            _sync_jobs[job_id]["message"] = (
+                f"Completed with {len(errors)} error(s)"
+                if errors
+                else "Import complete"
+            )
+            _sync_jobs[job_id]["error"] = "\n".join(errors) if errors else None
+        except Exception as exc:
+            logger.exception("Import job %s failed: %s", job_id, exc)
+            _sync_jobs[job_id]["status"] = "error"
+            _sync_jobs[job_id]["error"] = str(exc)
+            _sync_jobs[job_id]["message"] = f"Import failed: {exc}"
         finally:
             _sync_jobs[job_id]["finished_at"] = datetime.now(timezone.utc).isoformat()
             _sync_jobs[job_id]["progress"] = 100

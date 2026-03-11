@@ -4,8 +4,8 @@
  * personal access tokens, and personal external registries.
  * Accessible to ALL authenticated users via the sidebar user zone.
  *
- * MIGRATION: Registry form now uses Angular Signal Forms (form / FormField)
- * instead of bare signal-per-field bindings.
+ * Change: tls_verify boolean field added to the registry form model so users
+ * can declare self-signed registries from their personal account panel.
  */
 import { Component, inject, OnInit, output, signal } from "@angular/core";
 import { form, FormField, required, submit } from "@angular/forms/signals";
@@ -27,6 +27,16 @@ interface RegistryFormModel {
   host: string;
   username: string;
   password: string;
+  /**
+   * When false, plain HTTP is used for all connections.
+   * Useful for private registries running without TLS.
+   */
+  use_tls: boolean;
+  /**
+   * Only relevant when use_tls is true.
+   * When false, the TLS certificate is not validated (self-signed allowed).
+   */
+  tls_verify: boolean;
 }
 
 @Component({
@@ -73,6 +83,8 @@ export class AccountModalComponent implements OnInit {
     host: "",
     username: "",
     password: "",
+    use_tls: true,
+    tls_verify: true,
   };
 
   /**
@@ -83,7 +95,7 @@ export class AccountModalComponent implements OnInit {
 
   /**
    * Signal Form definition.
-   * Only name and host are required; username/password are optional credentials.
+   * Only name and host are required; username/password/tls_verify are optional.
    */
   readonly registryForm = form(this.registryModel, (p) => {
     required(p.name);
@@ -126,6 +138,9 @@ export class AccountModalComponent implements OnInit {
       username: reg.username ?? "",
       // Password is intentionally left blank — backend keeps current value if empty
       password: "",
+      // Preserve saved TLS settings; default to true for old entries
+      use_tls: reg.use_tls ?? true,
+      tls_verify: reg.tls_verify ?? true,
     });
     this.customHost.set("");
     this.testResult.set(null);
@@ -141,13 +156,8 @@ export class AccountModalComponent implements OnInit {
 
   // ── Preset helpers ─────────────────────────────────────────────────────────
 
-  /**
-   * Apply a known-registry preset: fills host and optionally name
-   * when the name field is still empty.
-   */
   selectPreset(preset: RegistryPreset): void {
     const host = this.normalizeHost(preset.host);
-    // Patch only the affected fields via model update
     this.registryModel.update((m) => ({
       ...m,
       host,
@@ -155,10 +165,6 @@ export class AccountModalComponent implements OnInit {
     }));
   }
 
-  /**
-   * Add a custom host to the presets list so the user can click it next time,
-   * then apply it to the host field immediately.
-   */
   addCustomHostToPresets(): void {
     const host = this.normalizeHost(this.customHost());
     if (!host) return;
@@ -186,11 +192,19 @@ export class AccountModalComponent implements OnInit {
   /** Save (create or update) the registry via Signal Form submit. */
   saveRegistry(): void {
     submit(this.registryForm, async (f) => {
-      const { name, host, username, password } = f().value();
+      const { name, host, username, password, use_tls, tls_verify } = f().value();
       this.savingRegistry.set(true);
       this.testResult.set(null);
 
-      const payload = { name: name!, host: host!, username, password };
+      const useTls = use_tls ?? true;
+      const payload = {
+        name: name!,
+        host: host!,
+        username,
+        password,
+        use_tls: useTls,
+        tls_verify: useTls ? (tls_verify ?? true) : true,
+      };
       const id = this.editingId();
       const request$ = id
         ? this.extRegSvc.updateRegistry(id, payload)
@@ -214,14 +228,15 @@ export class AccountModalComponent implements OnInit {
     });
   }
 
-  /** Test the current host/username/password without saving. */
+  /** Test the current host/credentials/TLS settings without saving. */
   testNewRegistry(): void {
-    // Read values directly from the form model signal
-    const { host, username, password } = this.registryModel();
+    const { host, username, password, use_tls, tls_verify } = this.registryModel();
     this.testingNew.set(true);
     this.testResult.set(null);
 
-    this.extRegSvc.testConnection(host, username, password).subscribe({
+    this.extRegSvc
+      .testConnection(host, username, password, { use_tls: use_tls ?? true, tls_verify: tls_verify ?? true })
+      .subscribe({
       next: (result) => {
         this.testResult.set(result);
         this.testingNew.set(false);

@@ -1,5 +1,6 @@
 <!-- Portalcrane - Account Modal Drawer -->
 <!-- MIGRATION: Registry form fields now use [formField] instead of [value]/(input) -->
+<!-- NOTE: tls_verify checkbox uses manual binding (DOM returns boolean via $any()) -->
 
 <!-- ── Backdrop ───────────────────────────────────────────────────────────── -->
 <div class="account-backdrop" (click)="close.emit()"></div>
@@ -147,6 +148,62 @@
                   [formField]="registryForm.password"
                 />
               </div>
+
+              <!-- TLS settings -->
+              <!-- Manual binding: checkbox $event.target.checked is a boolean -->
+              <div class="col-12">
+
+                <!-- use_tls switch -->
+                <div class="form-check form-switch">
+                  <input
+                    class="form-check-input"
+                    type="checkbox"
+                    id="use-tls-personal"
+                    role="switch"
+                    [checked]="registryModel().use_tls"
+                    (change)="registryModel.update(m => ({ ...m, use_tls: $any($event.target).checked }))"
+                  />
+                  <label class="form-check-label small" for="use-tls-personal">
+                    <i class="bi bi-lock me-1"></i>Use TLS (HTTPS)
+                    <span class="text-muted fw-normal">
+                      — disable for plain HTTP registries
+                    </span>
+                  </label>
+                </div>
+
+                <!-- tls_verify switch — only visible when use_tls is on -->
+                @if (registryModel().use_tls) {
+                  <div class="form-check form-switch mt-2 ms-3">
+                    <input
+                      class="form-check-input"
+                      type="checkbox"
+                      id="tls-verify-personal"
+                      role="switch"
+                      [checked]="registryModel().tls_verify"
+                      (change)="registryModel.update(m => ({ ...m, tls_verify: $any($event.target).checked }))"
+                    />
+                    <label class="form-check-label small" for="tls-verify-personal">
+                      <i class="bi bi-shield-lock me-1"></i>Verify TLS certificate
+                      <span class="text-muted fw-normal">
+                        — disable for self-signed certificates
+                      </span>
+                    </label>
+                  </div>
+                  @if (!registryModel().tls_verify) {
+                    <div class="alert alert-warning py-1 px-2 small mt-1 mb-0 ms-3">
+                      <i class="bi bi-exclamation-triangle me-1"></i>
+                      Certificate verification disabled — use only on trusted networks.
+                    </div>
+                  }
+                }
+
+                @if (!registryModel().use_tls) {
+                  <div class="alert alert-warning py-1 px-2 small mt-1 mb-0">
+                    <i class="bi bi-exclamation-triangle me-1"></i>
+                    Plain HTTP — credentials will be transmitted unencrypted.
+                  </div>
+                }
+              </div>
             </div>
 
             <!-- Test result banner -->
@@ -204,21 +261,40 @@
         @if (registries().length === 0 && !showAddForm()) {
           <div class="text-center text-muted py-4">
             <i class="bi bi-globe display-6 d-block mb-2 opacity-25"></i>
-            <div class="small">No personal registries yet.</div>
+            <p class="small mb-0">No personal registries configured.</p>
           </div>
         }
 
         <!-- Registry list -->
         @for (reg of registries(); track reg.id) {
-          <div class="d-flex align-items-center gap-3 py-2 border-bottom">
-            <div class="registry-icon d-flex align-items-center justify-content-center rounded-2 bg-body-tertiary">
-              @if (reg.host.includes("docker.io")) { 🐳 }
-              @else if (reg.host.includes("ghcr")) { 🐙 }
-              @else { 🏢 }
-            </div>
-            <div class="flex-grow-1 min-w-0">
-              <div class="fw-semibold small">{{ reg.name }}</div>
-              <div class="text-muted font-monospace" style="font-size: 0.72rem">{{ reg.host }}</div>
+          <div class="border rounded p-2 mb-2 d-flex align-items-center gap-2">
+            <div class="flex-grow-1 min-width-0">
+              <div class="fw-semibold small text-truncate">{{ reg.name }}</div>
+              <div class="x-small text-muted font-monospace text-truncate">
+                {{ reg.host }}
+              </div>
+              <!-- TLS badge -->
+              <div class="mt-1">
+                @if (!reg.use_tls) {
+                  <span class="badge bg-danger-subtle text-danger"
+                        style="font-size: 0.65rem"
+                        title="Plain HTTP — no TLS">
+                    <i class="bi bi-unlock me-1"></i>HTTP
+                  </span>
+                } @else if (reg.tls_verify === false) {
+                  <span class="badge bg-warning-subtle text-warning"
+                        style="font-size: 0.65rem"
+                        title="HTTPS but certificate not verified">
+                    <i class="bi bi-shield-exclamation me-1"></i>HTTPS (unverified)
+                  </span>
+                } @else {
+                  <span class="badge bg-success-subtle text-success"
+                        style="font-size: 0.65rem"
+                        title="HTTPS with certificate verification">
+                    <i class="bi bi-shield-lock me-1"></i>HTTPS verified
+                  </span>
+                }
+              </div>
             </div>
             <div class="d-flex gap-1 flex-shrink-0">
               <button
@@ -238,17 +314,7 @@
             </div>
           </div>
         }
-
       </div>
     </div>
-
-  </div><!-- /body -->
-
-  <!-- ── Footer ─────────────────────────────────────────────────────────── -->
-  <div class="account-drawer-footer p-3 border-top">
-    <button class="btn btn-outline-danger w-100" (click)="authService.logout()">
-      <i class="bi bi-box-arrow-right me-2"></i>Logout
-    </button>
   </div>
-
 </div>

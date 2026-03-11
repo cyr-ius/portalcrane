@@ -1,6 +1,18 @@
 /**
  * Portalcrane - Images List Component
+ *
  * Displays registry images in flat list or hierarchical folder tree view.
+ *
+ * Changes (Évolution 1):
+ *   - New signal selectedSource: 'local' | string (external registry ID).
+ *   - When an external registry is selected the component calls
+ *     RegistryService.getExternalImages() instead of getImages().
+ *   - In external mode:
+ *     • The list is read-only (delete / copy / retag actions are hidden).
+ *     • Sort, tag-filter chips and pagination still work.
+ *     • A read-only badge appears in the toolbar.
+ *   - External registries are loaded once at init via ExternalRegistryService.
+ *   - Switching source resets pagination and search.
  */
 import {
   Component,
@@ -15,8 +27,13 @@ import { FormsModule } from "@angular/forms";
 import { Router } from "@angular/router";
 import { debounceTime, distinctUntilChanged, Subject } from "rxjs";
 import { AuthService } from "../../../core/services/auth.service";
+import {
+  ExternalRegistry,
+  ExternalRegistryService,
+} from "../../../core/services/external-registry.service";
 import { FolderService } from "../../../core/services/folder.service";
 import {
+  ExternalPaginatedImages,
   ImageInfo,
   PaginatedImages,
   RegistryService,
@@ -40,6 +57,13 @@ interface FolderNode {
   images: ImageInfo[];
 }
 
+/**
+ * Identifier for the image source.
+ * 'local' means the embedded Portalcrane registry.
+ * Any other string is the ID of a saved external registry.
+ */
+type SourceId = "local" | string;
+
 @Component({
   selector: "app-images-list",
   imports: [FormsModule],
@@ -49,8 +73,9 @@ interface FolderNode {
 export class ImagesListComponent implements OnInit {
   private registry = inject(RegistryService);
   private router = inject(Router);
-  private readonly folderSvc = inject(FolderService)
+  private readonly folderSvc = inject(FolderService);
   private readonly authService = inject(AuthService);
+  private readonly extRegSvc = inject(ExternalRegistryService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly VIEW_MODE_KEY = "pc_images_view_mode";
 
@@ -61,7 +86,31 @@ export class ImagesListComponent implements OnInit {
   pageSize = 20;
   searchQuery = "";
 
+  /** Non-null error message returned by the external browse endpoint. */
+  browseError = signal<string | null>(null);
+
   private readonly searchQuery$ = new Subject<string>();
+
+  // ── Source selection (Évolution 1) ─────────────────────────────────────────
+
+  /** 'local' or a saved external registry ID. */
+  readonly selectedSource = signal<SourceId>("local");
+
+  /** All registries visible to the current user, loaded once at init. */
+  readonly externalRegistries = signal<ExternalRegistry[]>([]);
+
+  /** True when an external registry is currently selected. */
+  readonly isExternalSource = computed(
+    () => this.selectedSource() !== "local",
+  );
+
+  /** Display name of the active source for the toolbar badge. */
+  readonly activeSourceLabel = computed(() => {
+    const src = this.selectedSource();
+    if (src === "local") return "Local Registry";
+    const reg = this.externalRegistries().find((r) => r.id === src);
+    return reg ? reg.name : src;
+  });
 
   // ── View mode ──────────────────────────────────────────────────────────────
   viewMode = signal<ViewMode>(
@@ -84,8 +133,8 @@ export class ImagesListComponent implements OnInit {
   copyDestTag = signal("");
   copying = signal(false);
   copyMessage = signal<string | null>(null);
-  isAdmin = computed(() => this.authService.currentUser()?.is_admin ?? false);
   sourceTagOptions = signal<string[]>([]);
+  isAdmin = computed(() => this.authService.currentUser()?.is_admin ?? false);
 
   // ── Delete modal state ─────────────────────────────────────────────────────
   deleteTarget = signal<ImageInfo | null>(null);
@@ -96,6 +145,9 @@ export class ImagesListComponent implements OnInit {
     const items = this.data()?.items ?? [];
     const allowed = this.allowedFolders();
     const isAdmin = this.authService.currentUser()?.is_admin ?? false;
+
+    // In external mode there is no folder filtering
+    if (this.isExternalSource()) return items;
 
     // Empty allowedFolders means admin or no folders configured → no filter
     if (isAdmin || allowed.length === 0) return items;
@@ -134,7 +186,6 @@ export class ImagesListComponent implements OnInit {
       list.push(img);
       map.set(folder, list);
     }
-    // Sort: (root) first, then alphabetically
     return [...map.entries()]
       .sort(([a], [b]) => {
         if (a === "(root)") return -1;
@@ -160,6 +211,12 @@ export class ImagesListComponent implements OnInit {
 
   ngOnInit(): void {
     this.setupSearchDebounce();
+
+    // Load external registries once for the source selector
+    this.extRegSvc.listRegistries().subscribe({
+      next: (regs) => this.externalRegistries.set(regs),
+    });
+
     // Load configured folder names first so folderTree grouping is accurate
     this.folderSvc.getFolderNames().subscribe({
       next: (names) => {
@@ -174,14 +231,9 @@ export class ImagesListComponent implements OnInit {
 
   /**
    * Wire the debounced search pipeline once at init.
-   *
-   * searchQuery$ receives the raw input string on every (ngModelChange) event.
-   * debounceTime(400) matches the previous setTimeout delay — the API call is
-   * deferred until the user stops typing for 400 ms.
-   * distinctUntilChanged skips duplicate values (e.g. user types "a", deletes
-   * it, retypes "a" before the debounce fires — only one HTTP call is made).
-   * takeUntilDestroyed(this.destroyRef) automatically unsubscribes when Angular
-   * destroys the component, preventing post-destruction loadImages() calls.
+   * debounceTime(400) defers the API call until typing stops.
+   * distinctUntilChanged skips duplicate values.
+   * takeUntilDestroyed unsubscribes on component destroy.
    */
   private setupSearchDebounce(): void {
     this.searchQuery$
@@ -210,31 +262,63 @@ export class ImagesListComponent implements OnInit {
     });
   }
 
+  // ── Source selection (Évolution 1) ─────────────────────────────────────────
+
+  /**
+   * Switch the active source (local or external registry).
+   * Resets pagination, search and browse error on every switch.
+   */
+  selectSource(sourceId: SourceId): void {
+    if (this.selectedSource() === sourceId) return;
+    this.selectedSource.set(sourceId);
+    this.currentPage.set(1);
+    this.searchQuery = "";
+    this.searchQuery$.next("");
+    this.browseError.set(null);
+    this.data.set(null);
+    this.loadImages();
+  }
+
   // ── Data loading ───────────────────────────────────────────────────────────
 
   loadImages(): void {
     this.loading.set(true);
-    this.registry
-      .getImages(this.currentPage(), this.pageSize, this.searchQuery)
-      .subscribe({
-        next: (data) => {
-          this.data.set(data);
-          // Expand all folders by default in tree mode
-          const allFolders = new Set(this.folderTree().map((n) => n.name));
-          this.expandedFolders.set(allFolders);
-          this.loading.set(false);
-        },
-        error: () => this.loading.set(false),
-      });
+    const src = this.selectedSource();
+
+    if (src === "local") {
+      // Standard local registry call
+      this.registry
+        .getImages(this.currentPage(), this.pageSize, this.searchQuery)
+        .subscribe({
+          next: (data) => {
+            this.data.set(data);
+            this.browseError.set(null);
+            const allFolders = new Set(this.folderTree().map((n) => n.name));
+            this.expandedFolders.set(allFolders);
+            this.loading.set(false);
+          },
+          error: () => this.loading.set(false),
+        });
+    } else {
+      // External registry browse (Évolution 1)
+      this.registry
+        .getExternalImages(src, this.currentPage(), this.pageSize, this.searchQuery)
+        .subscribe({
+          next: (data: ExternalPaginatedImages) => {
+            this.data.set(data);
+            this.browseError.set(data.error ?? null);
+            const allFolders = new Set(this.folderTree().map((n) => n.name));
+            this.expandedFolders.set(allFolders);
+            this.loading.set(false);
+          },
+          error: () => this.loading.set(false),
+        });
+    }
   }
 
   /**
    * Called on every (ngModelChange) from the search input.
-   * Feeds the debounce Subject — the actual loadImages() call is deferred
-   * by 400 ms via the pipeline set up in setupSearchDebounce().
-   *
-   * Template binding (unchanged):
-   *   [(ngModel)]="searchQuery" (ngModelChange)="onSearch()"
+   * Feeds the debounce Subject so the API call is deferred by 400 ms.
    */
   onSearch(): void {
     this.searchQuery$.next(this.searchQuery);
@@ -242,9 +326,7 @@ export class ImagesListComponent implements OnInit {
 
   /**
    * Called when the user clicks the clear (×) button.
-   * Resets immediately without debounce — explicit user action warrants
-   * instant feedback. Also emits the empty string into the Subject so
-   * any in-flight debounce timer is superseded.
+   * Resets immediately and supersedes any in-flight debounce timer.
    */
   clearSearch(): void {
     this.searchQuery = "";
@@ -329,8 +411,7 @@ export class ImagesListComponent implements OnInit {
    * Image display name inside its visual folder.
    * - No slash → show full name (e.g. "nginx")
    * - Known folder prefix → show only suffix (e.g. "sia/nginx" → "nginx")
-   * - Unknown prefix → show full name so the user sees "cyr-ius/wireguard-ui"
-   *   (it lives in root visually but the registry path must stay visible)
+   * - Unknown prefix → show full name (user sees "cyr-ius/wireguard-ui")
    */
   imageShortName(img: ImageInfo): string {
     const idx = img.name.indexOf("/");
@@ -349,17 +430,19 @@ export class ImagesListComponent implements OnInit {
   }
 
   canDeleteImage(image: ImageInfo): boolean {
+    if (this.isExternalSource()) return false;
     if (this.isAdmin()) return true;
     const folderName = this.folderNameForImage(image.name);
     return this.pushableFolders().includes(folderName);
   }
 
   canCopyImage(_image: ImageInfo): boolean {
+    if (this.isExternalSource()) return false;
     if (this.isAdmin()) return true;
     return this.pushableFolders().length > 0;
   }
 
-  // ── Pagination helpers ────────────────────────────────────────────────────
+  // ── Pagination helpers ─────────────────────────────────────────────────────
 
   /** Index of the first item displayed on the current page (1-based). */
   pageStart = computed(() => {
@@ -403,7 +486,6 @@ export class ImagesListComponent implements OnInit {
 
     this.copySource.set({ image, tag });
     this.sourceTagOptions.set(image.tags);
-    // Pre-fill with current name (without folder prefix)
     const shortName = image.name.includes("/")
       ? image.name.split("/").slice(1).join("/")
       : image.name;

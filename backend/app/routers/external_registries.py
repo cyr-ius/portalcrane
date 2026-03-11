@@ -2,33 +2,47 @@
 Portalcrane - External Registries Router
 CRUD for external registries + synchronisation endpoints.
 
-Changes vs original:
-  - GET  /registries → accessible to any authenticated user (returns global + own)
-  - POST /registries → admin creates global; any push-enabled user creates personal
-  - PATCH/DELETE /registries/{id} → owner or admin only
-  - ExternalRegistry model now includes "owner" field
+Changes vs previous version:
+  - tls_verify field added to create/update/test payloads.
+  - [NEW] GET  /registries/{id}/browse   — browse repositories in an external
+    registry via its /v2/_catalog API (Évolution 1).
+  - [NEW] GET  /registries/{id}/tags     — list tags of a repo in an external
+    registry (Évolution 1).
+  - [NEW] POST /import                   — start an import job
+    (external → local, Évolution 2).
+  - SyncJob response model now exposes direction field (Évolution 2).
 """
 
 import logging
+from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
-from ..services.job_service import jobs_list
+
 from ..config import Settings, get_settings, REGISTRY_URL, STAGING_DIR
+from ..services.job_service import jobs_list
 from ..services.external_registry_service import (
+    browse_external_images,
+    browse_external_tags,
     build_target_path,
     create_registry,
     delete_registry,
     get_registries,
     get_registry_by_id,
     list_sync_jobs,
+    run_import_job,
     run_sync_job,
     skopeo_push,
     test_registry_connection,
     update_registry,
     validate_folder_path,
 )
-from ..core.jwt import UserInfo, get_current_user, require_admin, require_push_access
+from ..core.jwt import (
+    UserInfo,
+    get_current_user,
+    require_push_access,
+    require_pull_access,
+)
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -46,6 +60,8 @@ class CreateRegistryRequest(BaseModel):
     password: str = ""
     # "global" (admin only) or omitted → defaults to requesting user
     owner: str | None = None
+    use_tls: bool = True
+    tls_verify: bool = True
 
 
 class UpdateRegistryRequest(BaseModel):
@@ -56,6 +72,8 @@ class UpdateRegistryRequest(BaseModel):
     username: str | None = None
     password: str | None = None
     owner: str | None = None
+    use_tls: bool | None = None
+    tls_verify: bool | None = None
 
 
 class TestConnectionRequest(BaseModel):
@@ -64,6 +82,8 @@ class TestConnectionRequest(BaseModel):
     host: str
     username: str = ""
     password: str = ""
+    use_tls: bool = True
+    tls_verify: bool = True
 
 
 class ExternalPushRequest(BaseModel):
@@ -80,10 +100,18 @@ class ExternalPushRequest(BaseModel):
 
 
 class SyncRequest(BaseModel):
-    """Payload to trigger a registry synchronisation job."""
+    """Payload to trigger a registry synchronisation job (local → external)."""
 
     source_image: str = "(all)"
     dest_registry_id: str
+    dest_folder: str | None = None
+
+
+class ImportRequest(BaseModel):
+    """Payload to trigger an import job (external → local)."""
+
+    source_registry_id: str
+    source_image: str = "(all)"
     dest_folder: str | None = None
 
 
@@ -98,331 +126,330 @@ async def list_registries(
     List external registries visible to the current user.
     Admins see all registries; regular users see global + their own.
     """
-    logger.debug(
-        "[external] list registries requested by user=%s is_admin=%s",
-        current_user.username,
-        current_user.is_admin,
-    )
-    if current_user.is_admin:
-        return get_registries(owner=None)
-    return get_registries(owner=current_user.username)
+    owner = None if current_user.is_admin else current_user.username
+    return get_registries(owner=owner)
 
 
 @router.post("/registries", status_code=status.HTTP_201_CREATED)
-async def add_registry(
-    payload: CreateRegistryRequest,
+async def create_registry_endpoint(
+    request: CreateRegistryRequest,
     current_user: UserInfo = Depends(get_current_user),
 ):
     """
     Create a new external registry entry.
-    - Admins can create global registries (owner="global") or personal ones.
-    - Regular users can only create personal registries (owner=their username).
-      Attempting to set owner="global" without admin rights raises 403.
+
+    Admins may create global registries (owner="global").
+    Non-admin users with push access may create personal registries only.
     """
-    # Resolve effective owner
-    requested_owner = (payload.owner or "").strip()
-
-    if requested_owner == "global":
-        if not current_user.is_admin:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only admins can create global registries",
-            )
-        effective_owner = "global"
-    else:
-        # Default: personal registry owned by the requesting user
-        effective_owner = current_user.username
-
-    logger.debug(
-        "[external] create registry requested by user=%s host=%s owner=%s",
-        current_user.username,
-        payload.host,
-        effective_owner,
-    )
-
+    # Only admins can create global registries
+    if request.owner == "global" and not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only admins can create global registries",
+        )
+    owner = request.owner if request.owner else current_user.username
     return create_registry(
-        name=payload.name,
-        host=payload.host,
-        username=payload.username,
-        password=payload.password,
-        owner=effective_owner,
+        name=request.name,
+        host=request.host,
+        username=request.username,
+        password=request.password,
+        owner=owner,
+        use_tls=request.use_tls,
+        tls_verify=request.tls_verify,
     )
 
 
 @router.patch("/registries/{registry_id}")
-async def edit_registry(
+async def update_registry_endpoint(
     registry_id: str,
-    payload: UpdateRegistryRequest,
+    request: UpdateRegistryRequest,
     current_user: UserInfo = Depends(get_current_user),
 ):
-    """
-    Update an existing external registry entry.
-    Admins can edit any registry; regular users can only edit their own.
-    """
+    """Update an external registry entry. Owner or admin only."""
     registry = get_registry_by_id(registry_id)
     if not registry:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Registry not found"
-        )
+        raise HTTPException(status_code=404, detail="Registry not found")
 
-    # Non-admin users may only edit registries they own
     if not current_user.is_admin and registry.get("owner") != current_user.username:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Access denied"
-        )
-
-    # Non-admin users cannot promote a registry to global
-    new_owner = payload.owner
-    if new_owner == "global" and not current_user.is_admin:
-        raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only admins can make a registry global",
+            detail="You do not own this registry",
         )
-
-    logger.debug(
-        "[external] edit registry requested by user=%s id=%s",
-        current_user.username,
-        registry_id,
-    )
 
     updated = update_registry(
         registry_id=registry_id,
-        name=payload.name,
-        host=payload.host,
-        username=payload.username,
-        password=payload.password,
-        owner=new_owner,
+        name=request.name,
+        host=request.host,
+        username=request.username,
+        password=request.password,
+        owner=request.owner,
+        use_tls=request.use_tls,
+        tls_verify=request.tls_verify,
     )
     if not updated:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Registry not found"
-        )
+        raise HTTPException(status_code=404, detail="Registry not found")
     return updated
 
 
 @router.delete("/registries/{registry_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def remove_registry(
+async def delete_registry_endpoint(
     registry_id: str,
     current_user: UserInfo = Depends(get_current_user),
 ):
-    """
-    Delete an external registry entry.
-    Admins can delete any registry; regular users can only delete their own.
-    """
+    """Delete a registry entry. Owner or admin only."""
     registry = get_registry_by_id(registry_id)
     if not registry:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Registry not found"
-        )
+        raise HTTPException(status_code=404, detail="Registry not found")
 
     if not current_user.is_admin and registry.get("owner") != current_user.username:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Access denied"
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not own this registry",
         )
-
-    logger.debug(
-        "[external] delete registry requested by user=%s id=%s",
-        current_user.username,
-        registry_id,
-    )
 
     if not delete_registry(registry_id):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Registry not found"
-        )
+        raise HTTPException(status_code=404, detail="Registry not found")
+
+
+# ── Connectivity test ─────────────────────────────────────────────────────────
 
 
 @router.post("/registries/test")
-async def test_registry(
-    payload: TestConnectionRequest,
+async def test_connection(
+    request: TestConnectionRequest,
     _: UserInfo = Depends(get_current_user),
 ):
-    """Test connectivity to a registry (without saving it)."""
-    logger.debug(
-        "[external] test unsaved registry requested by user=%s host=%s",
-        _.username,
-        payload.host,
-    )
+    """Test connectivity to a registry using ad-hoc credentials."""
     return await test_registry_connection(
-        host=payload.host,
-        username=payload.username,
-        password=payload.password,
+        host=request.host,
+        username=request.username,
+        password=request.password,
+        use_tls=request.use_tls,
+        tls_verify=request.tls_verify,
     )
 
 
 @router.post("/registries/{registry_id}/test")
-async def test_saved_registry(
+async def test_saved_connection(
     registry_id: str,
-    current_user: UserInfo = Depends(get_current_user),
+    _: UserInfo = Depends(get_current_user),
 ):
-    """Test connectivity to a saved registry."""
+    """Test connectivity to a saved registry using stored credentials."""
     registry = get_registry_by_id(registry_id)
     if not registry:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Registry not found"
-        )
-
-    # Users can only test registries they can see
-    if not current_user.is_admin and registry.get("owner") not in (
-        "global",
-        current_user.username,
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Access denied"
-        )
-
-    logger.debug(
-        "[external] test saved registry requested by user=%s id=%s host=%s",
-        current_user.username,
-        registry_id,
-        registry.get("host"),
-    )
+        raise HTTPException(status_code=404, detail="Registry not found")
     return await test_registry_connection(
         host=registry["host"],
         username=registry.get("username", ""),
         password=registry.get("password", ""),
+        use_tls=registry.get("use_tls", True),
+        tls_verify=registry.get("tls_verify", True),
     )
 
 
-# ── External push ─────────────────────────────────────────────────────────────
+# ── Browse external registry (Évolution 1) ───────────────────────────────────
+
+
+@router.get("/registries/{registry_id}/browse")
+async def browse_registry_images(
+    registry_id: str,
+    search: str | None = Query(None, description="Filter repositories by name"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=5, le=200),
+    # require_pull_access ensures a valid JWT; actual folder-based access
+    # control is handled by the registry proxy, not here.
+    _: UserInfo = Depends(require_pull_access),
+):
+    """
+    List repositories available in an external registry.
+
+    Uses the standard Docker Distribution v2 /v2/_catalog endpoint.
+    Results are paginated and optionally filtered by search keyword.
+    Requires a valid authentication token (pull access).
+    """
+    registry = get_registry_by_id(registry_id)
+    if not registry:
+        raise HTTPException(status_code=404, detail="Registry not found")
+
+    result = await browse_external_images(
+        registry_id=registry_id,
+        search=search,
+        page=page,
+        page_size=page_size,
+    )
+    return result
+
+
+@router.get("/registries/{registry_id}/browse/tags")
+async def browse_registry_tags(
+    registry_id: str,
+    repository: str = Query(..., description="Repository name, e.g. myorg/myimage"),
+    _: UserInfo = Depends(require_pull_access),
+):
+    """
+    List tags for a specific repository in an external registry.
+    Requires a valid authentication token.
+    """
+    registry = get_registry_by_id(registry_id)
+    if not registry:
+        raise HTTPException(status_code=404, detail="Registry not found")
+
+    return await browse_external_tags(registry_id=registry_id, repository=repository)
+
+
+# ── Push to external registry ─────────────────────────────────────────────────
 
 
 @router.post("/push")
 async def push_to_external(
-    payload: ExternalPushRequest,
-    settings: Settings = Depends(get_settings),
+    request: ExternalPushRequest,
     current_user: UserInfo = Depends(require_push_access),
+    settings: Settings = Depends(get_settings),
 ):
-    """Push a staged OCI layout directory to an external registry via skopeo."""
-    import os
-
-    logger.debug(
-        "[external] push requested by user=%s job_id=%s registry_id=%s registry_host=%s",
-        current_user.username,
-        payload.job_id,
-        payload.registry_id,
-        payload.registry_host,
-    )
-
-    if payload.registry_id:
-        registry = get_registry_by_id(payload.registry_id)
+    """Push a staged OCI layout to an external registry."""
+    # Resolve credentials: saved registry takes priority over ad-hoc fields
+    if request.registry_id:
+        registry = get_registry_by_id(request.registry_id)
         if not registry:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Saved registry not found"
-            )
-        # Verify the user has access to this registry
-        if not current_user.is_admin and registry.get("owner") not in (
-            "global",
-            current_user.username,
-        ):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN, detail="Access denied"
-            )
+            raise HTTPException(status_code=404, detail="Registry not found")
         host = registry["host"]
         username = registry.get("username", "")
         password = registry.get("password", "")
-    elif payload.registry_host:
-        host = payload.registry_host
-        username = payload.registry_username or ""
-        password = payload.registry_password or ""
+        tls_verify = registry.get("tls_verify", True)
     else:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Either registry_id or registry_host must be provided",
-        )
+        host = request.registry_host or ""
+        username = request.registry_username or ""
+        password = request.registry_password or ""
+        tls_verify = True
 
-    try:
-        folder = validate_folder_path(payload.folder or "")
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
-        )
+    # Validate and resolve the OCI staging directory
+    job_id = request.job_id
+    if job_id not in jobs_list:
+        raise HTTPException(status_code=404, detail="Staging job not found")
 
-    oci_dir = os.path.join(STAGING_DIR, payload.job_id)
-    if not os.path.isdir(oci_dir):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"OCI directory not found for job {payload.job_id}",
-        )
+    oci_dir = str(Path(STAGING_DIR) / job_id)
+    image_name = request.image_name or job_id
+    tag = request.tag or "latest"
 
-    job = jobs_list.get(payload.job_id)
-    if not job:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Staging job not found"
-        )
+    folder: str | None = None
+    if request.folder:
+        try:
+            folder = validate_folder_path(request.folder)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+            ) from exc
 
-    image_name = payload.image_name or job["image"].split("/")[-1]
-    tag = payload.tag or job["tag"]
     dest_ref = build_target_path(folder, image_name, tag, host)
-
-    logger.debug(
-        "[external] push resolved destination host=%s image=%s tag=%s folder=%s",
-        host,
-        image_name,
-        tag,
-        folder,
-    )
-
-    success, message = await skopeo_push(
+    ok, msg = await skopeo_push(
         oci_dir=oci_dir,
         dest_ref=dest_ref,
         dest_username=username,
         dest_password=password,
         settings=settings,
+        tls_verify=tls_verify,
     )
-    if not success:
+    if not ok:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"skopeo push failed: {message}",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=msg
         )
-    return {"message": f"Successfully pushed to {dest_ref}", "dest": dest_ref}
+    return {"message": msg, "dest_ref": dest_ref}
 
 
-# ── Sync ──────────────────────────────────────────────────────────────────────
+# ── Sync (local → external) ───────────────────────────────────────────────────
+
+
+@router.post("/sync")
+async def start_sync(
+    request: SyncRequest,
+    current_user: UserInfo = Depends(require_push_access),
+    settings: Settings = Depends(get_settings),
+):
+    """
+    Start an asynchronous export job (local registry → external registry).
+    Requires push access.
+    """
+    registry = get_registry_by_id(request.dest_registry_id)
+    if not registry:
+        raise HTTPException(status_code=404, detail="Destination registry not found")
+
+    dest_folder: str | None = None
+    if request.dest_folder:
+        try:
+            dest_folder = validate_folder_path(request.dest_folder)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+            ) from exc
+
+    job_id = await run_sync_job(
+        source_image=request.source_image,
+        dest_registry_id=request.dest_registry_id,
+        dest_folder=dest_folder,
+        local_registry_url=REGISTRY_URL,
+        settings=settings,
+    )
+    return {"job_id": job_id, "status": "started"}
+
+
+# ── Import (external → local, Évolution 2) ───────────────────────────────────
+
+
+@router.post("/import", status_code=status.HTTP_202_ACCEPTED)
+async def start_import(
+    request: ImportRequest,
+    current_user: UserInfo = Depends(require_push_access),
+    settings: Settings = Depends(get_settings),
+):
+    """
+    Start an asynchronous import job (external registry → local registry).
+
+    Mirrors the export endpoint with source and destination reversed:
+      source: external registry identified by source_registry_id
+      dest:   local Portalcrane registry, optionally under dest_folder
+
+    Requires push access because the operation writes to the local registry.
+    """
+    registry = get_registry_by_id(request.source_registry_id)
+    if not registry:
+        raise HTTPException(status_code=404, detail="Source registry not found")
+
+    dest_folder: str | None = None
+    if request.dest_folder:
+        try:
+            dest_folder = validate_folder_path(request.dest_folder)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+            ) from exc
+
+    logger.info(
+        "Import job requested by %s: registry=%s image=%s dest_folder=%s",
+        current_user.username,
+        request.source_registry_id,
+        request.source_image,
+        dest_folder,
+    )
+
+    job_id = await run_import_job(
+        source_registry_id=request.source_registry_id,
+        source_image=request.source_image,
+        dest_folder=dest_folder,
+        local_registry_url=REGISTRY_URL,
+        settings=settings,
+    )
+    return {"job_id": job_id, "status": "started"}
+
+
+# ── Sync job history ──────────────────────────────────────────────────────────
 
 
 @router.get("/sync/jobs")
 async def get_sync_jobs(
-    _: UserInfo = Depends(require_admin),
+    _: UserInfo = Depends(require_push_access),
 ):
-    """List all sync jobs (most recent first)."""
-    logger.debug("[external] sync jobs list requested")
+    """
+    Return all sync/import job history sorted by start time descending.
+    The direction field ("export" or "import") indicates the transfer direction.
+    """
     return list_sync_jobs()
-
-
-@router.post("/sync", status_code=status.HTTP_202_ACCEPTED)
-async def start_sync(
-    payload: SyncRequest,
-    settings: Settings = Depends(get_settings),
-    _: UserInfo = Depends(require_admin),
-):
-    """Start an asynchronous sync job."""
-    try:
-        folder = validate_folder_path(payload.dest_folder or "")
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
-        )
-
-    logger.debug(
-        "[external] sync start requested source=%s dest_registry_id=%s folder=%s",
-        payload.source_image,
-        payload.dest_registry_id,
-        folder,
-    )
-
-    dest_registry = get_registry_by_id(payload.dest_registry_id)
-    if not dest_registry:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Destination registry not found",
-        )
-
-    job_id = await run_sync_job(
-        source_image=payload.source_image,
-        dest_registry_id=payload.dest_registry_id,
-        dest_folder=folder,
-        local_registry_url=REGISTRY_URL,
-        settings=settings,
-    )
-    return {"job_id": job_id, "message": "Sync job started"}

@@ -4,6 +4,10 @@
   calls router.navigate(['/images/detail'], { queryParams: { repository: name } }).
   This avoids %2F encoding issues that occur when repository names containing
   slashes are placed in URL path segments and pass through reverse proxies.
+
+  Évolution 1: a source selector row has been added above the toolbar so the
+  user can browse an external registry in read-only mode.  Delete / copy /
+  retag actions are hidden when an external registry is selected.
 -->
 <div class="p-4">
   <!-- ── Page header ─────────────────────────────────────────────────────── -->
@@ -14,7 +18,58 @@
         Browse and manage your registry images
       </p>
     </div>
+    <!-- External-mode badge -->
+    @if (isExternalSource()) {
+      <span class="badge bg-info-subtle text-info border border-info-subtle px-3 py-2">
+        <i class="bi bi-globe me-1"></i>
+        External — {{ activeSourceLabel() }} — Read-only
+      </span>
+    }
   </div>
+
+  <!-- ── Source selector (Évolution 1) ──────────────────────────────────── -->
+  @if (externalRegistries().length > 0) {
+    <div class="card border-0 mb-3">
+      <div class="card-body py-2">
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+          <span class="text-muted small fw-semibold me-1">
+            <i class="bi bi-hdd-network me-1"></i>Source:
+          </span>
+
+          <!-- Local registry option -->
+          <button
+            class="btn btn-sm"
+            [class.btn-primary]="!isExternalSource()"
+            [class.btn-outline-secondary]="isExternalSource()"
+            (click)="selectSource('local')"
+          >
+            <i class="bi bi-hdd me-1"></i>Local Registry
+          </button>
+
+          <!-- One button per configured external registry -->
+          @for (reg of externalRegistries(); track reg.id) {
+            <button
+              class="btn btn-sm"
+              [class.btn-info]="selectedSource() === reg.id"
+              [class.btn-outline-secondary]="selectedSource() !== reg.id"
+              (click)="selectSource(reg.id)"
+              [title]="reg.host"
+            >
+              <i class="bi bi-globe me-1"></i>{{ reg.name }}
+            </button>
+          }
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- ── Browse error banner (Docker Hub or unreachable registry) ────────── -->
+  @if (browseError()) {
+    <div class="alert alert-warning d-flex align-items-center gap-2 mb-3">
+      <i class="bi bi-exclamation-triangle-fill"></i>
+      <span>{{ browseError() }}</span>
+    </div>
+  }
 
   <!-- ── Toolbar ─────────────────────────────────────────────────────────── -->
   <div class="card border-0 mb-3">
@@ -39,33 +94,35 @@
           </div>
         </div>
 
-        <!-- Tag count filter chips -->
-        <div class="col-auto d-flex gap-1">
-          <button
-            class="btn btn-sm"
-            [class.btn-primary]="tagFilter() === 'all'"
-            [class.btn-outline-secondary]="tagFilter() !== 'all'"
-            (click)="setTagFilter('all')"
-          >
-            All
-          </button>
-          <button
-            class="btn btn-sm"
-            [class.btn-warning]="tagFilter() === 'single'"
-            [class.btn-outline-secondary]="tagFilter() !== 'single'"
-            (click)="setTagFilter('single')"
-          >
-            <i class="bi bi-tag me-1"></i>Single tag
-          </button>
-          <button
-            class="btn btn-sm"
-            [class.btn-primary]="tagFilter() === 'multi'"
-            [class.btn-outline-secondary]="tagFilter() !== 'multi'"
-            (click)="setTagFilter('multi')"
-          >
-            <i class="bi bi-tags me-1"></i>Multi-tag
-          </button>
-        </div>
+        <!-- Tag count filter chips — hidden in external mode (no tag counts guaranteed) -->
+        @if (!isExternalSource()) {
+          <div class="col-auto d-flex gap-1">
+            <button
+              class="btn btn-sm"
+              [class.btn-primary]="tagFilter() === 'all'"
+              [class.btn-outline-secondary]="tagFilter() !== 'all'"
+              (click)="setTagFilter('all')"
+            >
+              All
+            </button>
+            <button
+              class="btn btn-sm"
+              [class.btn-warning]="tagFilter() === 'single'"
+              [class.btn-outline-secondary]="tagFilter() !== 'single'"
+              (click)="setTagFilter('single')"
+            >
+              <i class="bi bi-tag me-1"></i>Single tag
+            </button>
+            <button
+              class="btn btn-sm"
+              [class.btn-primary]="tagFilter() === 'multi'"
+              [class.btn-outline-secondary]="tagFilter() !== 'multi'"
+              (click)="setTagFilter('multi')"
+            >
+              <i class="bi bi-tags me-1"></i>Multi-tag
+            </button>
+          </div>
+        }
 
         <!-- View mode toggle -->
         <div class="col-auto">
@@ -118,7 +175,7 @@
       </div>
 
       <!-- Active filter summary -->
-      @if (tagFilter() !== "all") {
+      @if (tagFilter() !== "all" && !isExternalSource()) {
         <div class="mt-2 d-flex align-items-center gap-2">
           <span class="text-muted small">
             <i class="bi bi-funnel me-1"></i>
@@ -149,6 +206,8 @@
           <i class="bi bi-inbox display-4 d-block mb-3"></i>
           @if (tagFilter() !== "all") {
             No images match the current filter
+          } @else if (isExternalSource()) {
+            No repositories found in this registry
           } @else {
             No images found in the registry
           }
@@ -176,7 +235,7 @@
                 </th>
                 <th class="border-0 text-muted fw-semibold small">TAG LIST</th>
                 <th class="border-0 text-muted fw-semibold small text-end">
-                  ACTIONS
+                  @if (!isExternalSource()) { ACTIONS }
                 </th>
               </tr>
             </thead>
@@ -188,10 +247,11 @@
                       <div class="image-icon">
                         <i class="bi bi-box-seam"></i>
                       </div>
-                      <!-- Use button + goToDetail() to pass repository as queryParam -->
                       <button
                         class="btn btn-link p-0 fw-semibold text-decoration-none link-body-emphasis font-monospace small text-start"
                         (click)="goToDetail(image.name)"
+                        [title]="isExternalSource() ? 'View local details unavailable for external registries' : 'View details'"
+                        [disabled]="isExternalSource()"
                       >
                         {{ image.name }}
                       </button>
@@ -227,43 +287,44 @@
                     </div>
                   </td>
                   <td class="align-middle text-end">
-                    <div class="d-flex gap-1 justify-content-end">
-                      <!-- Use button + goToDetail() instead of routerLink with path param -->
-                      <button
-                        class="btn btn-sm btn-outline-primary"
-                        (click)="goToDetail(image.name)"
-                        title="View details"
-                      >
-                        <i class="bi bi-eye"></i>
-                      </button>
-                      <button
-                        class="btn btn-sm btn-outline-secondary"
-                        (click)="
-                          openCopyModal(image, image.tags[0] || 'latest');
-                          $event.stopPropagation()
-                        "
-                        [disabled]="!canCopyImage(image)"
-                        [title]="
-                          canCopyImage(image)
-                            ? 'Copy to another folder'
-                            : 'No push permission on any destination folder'
-                        "
-                      >
-                        <i class="bi bi-copy"></i>
-                      </button>
-                      <button
-                        class="btn btn-sm btn-outline-danger"
-                        (click)="confirmDeleteImage(image)"
-                        [disabled]="!canDeleteImage(image)"
-                        [title]="
-                          canDeleteImage(image)
-                            ? 'Delete ' + image.name
-                            : 'No push permission on this folder'
-                        "
-                      >
-                        <i class="bi bi-trash"></i>
-                      </button>
-                    </div>
+                    @if (!isExternalSource()) {
+                      <div class="d-flex gap-1 justify-content-end">
+                        <button
+                          class="btn btn-sm btn-outline-primary"
+                          (click)="goToDetail(image.name)"
+                          title="View details"
+                        >
+                          <i class="bi bi-eye"></i>
+                        </button>
+                        <button
+                          class="btn btn-sm btn-outline-secondary"
+                          (click)="
+                            openCopyModal(image, image.tags[0] || 'latest');
+                            $event.stopPropagation()
+                          "
+                          [disabled]="!canCopyImage(image)"
+                          [title]="
+                            canCopyImage(image)
+                              ? 'Copy to another folder'
+                              : 'No push permission on any destination folder'
+                          "
+                        >
+                          <i class="bi bi-copy"></i>
+                        </button>
+                        <button
+                          class="btn btn-sm btn-outline-danger"
+                          (click)="confirmDeleteImage(image)"
+                          [disabled]="!canDeleteImage(image)"
+                          [title]="
+                            canDeleteImage(image)
+                              ? 'Delete ' + image.name
+                              : 'No push permission on this folder'
+                          "
+                        >
+                          <i class="bi bi-trash"></i>
+                        </button>
+                      </div>
+                    }
                   </td>
                 </tr>
               }
@@ -310,7 +371,11 @@
       @if (folderTree().length === 0) {
         <div class="text-center py-5 text-muted">
           <i class="bi bi-inbox display-4 d-block mb-3"></i>
-          No images found in the registry
+          @if (isExternalSource()) {
+            No repositories found in this registry
+          } @else {
+            No images found in the registry
+          }
         </div>
       } @else {
         <div class="tree-view">
@@ -324,306 +389,246 @@
               <i
                 class="bi bi-chevron-right text-muted"
                 [style.transform]="
-                  isFolderExpanded(folder.name) ? 'rotate(90deg)' : 'rotate(0)'
+                  isFolderExpanded(folder.name)
+                    ? 'rotate(90deg)'
+                    : 'rotate(0deg)'
                 "
-                style="font-size: 0.75rem; transition: transform 0.15s"
+                style="transition: transform 0.15s"
               ></i>
               <i
-                class="bi text-warning"
-                [class.bi-folder2-open]="isFolderExpanded(folder.name)"
-                [class.bi-folder2]="!isFolderExpanded(folder.name)"
+                [class]="
+                  isFolderExpanded(folder.name)
+                    ? 'bi bi-folder2-open text-primary'
+                    : 'bi bi-folder2 text-muted'
+                "
               ></i>
-              <span class="fw-semibold small font-monospace text-body">
-                {{ folder.name === "(root)" ? "/ (root)" : folder.name }}
-              </span>
-              <span class="badge bg-secondary-subtle text-secondary ms-auto">
-                {{ folder.images.length }} image{{
-                  folder.images.length !== 1 ? "s" : ""
-                }}
-              </span>
+              <span class="fw-semibold small font-monospace">{{
+                folder.name
+              }}</span>
+              <span class="badge bg-secondary-subtle text-secondary ms-auto">{{
+                folder.images.length
+              }}</span>
             </div>
 
-            <!-- Image rows inside folder -->
+            <!-- Images in this folder -->
             @if (isFolderExpanded(folder.name)) {
               @for (image of folder.images; track image.name) {
                 <div
-                  class="image-row d-flex align-items-center justify-content-between px-3 py-2 border-bottom border-start border-3 ms-4"
-                  style="border-color: transparent !important"
-                  [style.borderLeftColor]="
-                    'var(--bs-primary-border-subtle) !important'
-                  "
+                  class="image-tree-row d-flex align-items-center gap-2 px-3 py-2 border-bottom"
+                  style="padding-left: 2.5rem !important"
                 >
-                  <div class="d-flex align-items-center gap-2">
-                    <div class="image-icon image-icon-sm">
-                      <i class="bi bi-box-seam"></i>
-                    </div>
-                    <div>
-                      <!-- Use button + goToDetail() instead of routerLink with path param -->
-                      <button
-                        class="btn btn-link p-0 fw-semibold text-decoration-none link-body-emphasis font-monospace small text-start"
-                        (click)="goToDetail(image.name)"
-                      >
-                        {{ imageShortName(image) }}
-                      </button>
-                      <div class="d-flex flex-wrap gap-1 mt-1">
-                        @for (tag of image.tags.slice(0, 5); track tag) {
-                          <span
-                            [class]="
-                              tag === 'latest'
-                                ? 'badge bg-success-subtle text-success font-monospace'
-                                : 'badge bg-secondary-subtle text-secondary font-monospace'
-                            "
-                            style="font-size: 0.65rem"
-                            >{{ tag === "latest" ? "★ " + tag : tag }}</span
-                          >
-                        }
-                        @if (image.tags.length > 5) {
-                          <span
-                            class="badge bg-secondary-subtle text-muted"
-                            style="font-size: 0.65rem"
-                          >
-                            +{{ image.tags.length - 5 }} more
-                          </span>
-                        }
-                      </div>
+                  <i class="bi bi-box-seam text-muted small"></i>
+                  <div class="flex-grow-1 min-w-0">
+                    <button
+                      class="btn btn-link p-0 fw-semibold text-decoration-none link-body-emphasis font-monospace small text-start"
+                      (click)="goToDetail(image.name)"
+                      [disabled]="isExternalSource()"
+                    >
+                      {{ imageShortName(image) }}
+                    </button>
+                    <div class="d-flex flex-wrap gap-1 mt-1">
+                      @for (tag of image.tags.slice(0, 5); track tag) {
+                        <span
+                          [class]="
+                            tag === 'latest'
+                              ? 'badge bg-success-subtle text-success font-monospace'
+                              : 'badge bg-secondary-subtle text-secondary font-monospace'
+                          "
+                          style="font-size: 0.65rem"
+                          >{{ tag === "latest" ? "★ " + tag : tag }}</span
+                        >
+                      }
+                      @if (image.tags.length > 5) {
+                        <span
+                          class="badge bg-secondary-subtle text-muted"
+                          style="font-size: 0.65rem"
+                        >
+                          +{{ image.tags.length - 5 }} more
+                        </span>
+                      }
                     </div>
                   </div>
                   <div class="d-flex align-items-center gap-2">
                     <span class="badge bg-primary-subtle text-primary">{{
                       image.tag_count
                     }}</span>
-                    <!-- Use button + goToDetail() instead of routerLink with path param -->
-                    <button
-                      class="btn btn-sm btn-outline-primary"
-                      (click)="goToDetail(image.name)"
-                      title="View details"
-                    >
-                      <i class="bi bi-eye"></i>
-                    </button>
-                    <button
-                      class="btn btn-sm btn-outline-secondary"
-                      (click)="
-                        openCopyModal(image, image.tags[0] || 'latest');
-                        $event.stopPropagation()
-                      "
-                      [disabled]="!canCopyImage(image)"
-                      [title]="
-                        canCopyImage(image)
-                          ? 'Copy to another folder'
-                          : 'No push permission on any destination folder'
-                      "
-                    >
-                      <i class="bi bi-copy"></i>
-                    </button>
-                    <button
-                      class="btn btn-sm btn-outline-danger"
-                      (click)="confirmDeleteImage(image)"
-                      [disabled]="!canDeleteImage(image)"
-                      [title]="
-                        canDeleteImage(image)
-                          ? 'Delete ' + image.name
-                          : 'No push permission on this folder'
-                      "
-                    >
-                      <i class="bi bi-trash"></i>
-                    </button>
+                    @if (!isExternalSource()) {
+                      <button
+                        class="btn btn-sm btn-outline-primary"
+                        (click)="goToDetail(image.name)"
+                        title="View details"
+                      >
+                        <i class="bi bi-eye"></i>
+                      </button>
+                      <button
+                        class="btn btn-sm btn-outline-secondary"
+                        (click)="
+                          openCopyModal(image, image.tags[0] || 'latest');
+                          $event.stopPropagation()
+                        "
+                        [disabled]="!canCopyImage(image)"
+                        [title]="
+                          canCopyImage(image)
+                            ? 'Copy to another folder'
+                            : 'No push permission on any destination folder'
+                        "
+                      >
+                        <i class="bi bi-copy"></i>
+                      </button>
+                      <button
+                        class="btn btn-sm btn-outline-danger"
+                        (click)="confirmDeleteImage(image)"
+                        [disabled]="!canDeleteImage(image)"
+                        [title]="
+                          canDeleteImage(image)
+                            ? 'Delete ' + image.name
+                            : 'No push permission on this folder'
+                        "
+                      >
+                        <i class="bi bi-trash"></i>
+                      </button>
+                    }
                   </div>
                 </div>
               }
             }
           }
         </div>
+
+        <!-- Tree view pagination -->
+        <div
+          class="card-footer border-0 d-flex align-items-center justify-content-between py-2"
+        >
+          <span class="text-muted small">
+            Showing {{ pageStart() }}–{{ pageEnd() }} of
+            {{ data()?.total }} images
+          </span>
+          <nav>
+            <ul class="pagination pagination-sm mb-0">
+              <li class="page-item" [class.disabled]="currentPage() === 1">
+                <button class="page-link" (click)="goToPage(currentPage() - 1)">
+                  <i class="bi bi-chevron-left"></i>
+                </button>
+              </li>
+              @for (p of pages(); track p) {
+                <li class="page-item" [class.active]="p === currentPage()">
+                  <button class="page-link" (click)="goToPage(p)">
+                    {{ p }}
+                  </button>
+                </li>
+              }
+              <li
+                class="page-item"
+                [class.disabled]="currentPage() === data()?.total_pages"
+              >
+                <button class="page-link" (click)="goToPage(currentPage() + 1)">
+                  <i class="bi bi-chevron-right"></i>
+                </button>
+              </li>
+            </ul>
+          </nav>
+        </div>
       }
     }
   </div>
 </div>
 
-<!-- ── Delete confirmation modal ─────────────────────────────────────────── -->
-@if (deleteTarget()) {
-  <div
-    class="modal d-block"
-    tabindex="-1"
-    style="background: rgba(0, 0, 0, 0.5)"
-  >
-    <div class="modal-dialog modal-dialog-centered">
-      <div class="modal-content">
-        <div class="modal-header border-0">
-          <h5 class="modal-title fw-bold text-danger">
-            <i class="bi bi-trash me-2"></i>Delete image
-          </h5>
-          <button
-            type="button"
-            class="btn-close"
-            (click)="deleteTarget.set(null)"
-          ></button>
-        </div>
-        <div class="modal-body">
-          <p>Are you sure you want to delete all tags of:</p>
-          <code class="text-danger">{{ deleteTarget()!.name }}</code>
-          <p class="mt-2 text-muted small">This action cannot be undone.</p>
-        </div>
-        <div class="modal-footer border-0">
-          <button
-            class="btn btn-outline-secondary"
-            (click)="deleteTarget.set(null)"
-          >
-            Cancel
-          </button>
-          <button
-            class="btn btn-danger"
-            (click)="deleteImage()"
-            [disabled]="deleting()"
-          >
-            @if (deleting()) {
-              <span class="spinner-border spinner-border-sm me-2"></span
-              >Deleting…
-            } @else {
-              <i class="bi bi-trash me-1"></i>Delete
-            }
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
-}
-
-<!-- ── Copy Image Modal ───────────────────────────────────────────────────── -->
+<!-- ── Copy modal ────────────────────────────────────────────────────────── -->
 @if (copySource()) {
   <div
-    class="modal d-block"
+    class="modal fade show d-block"
     tabindex="-1"
-    style="background: rgba(0, 0, 0, 0.4)"
+    style="background: rgba(0,0,0,.4)"
+    (click)="closeCopyModal()"
   >
-    <div class="modal-dialog modal-dialog-centered">
-      <div class="modal-content border-0 shadow">
-        <div class="modal-header border-0">
-          <h5 class="modal-title fw-semibold">
-            <i class="bi bi-copy me-2 text-primary"></i>Copy Image
+    <div class="modal-dialog" (click)="$event.stopPropagation()">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">
+            <i class="bi bi-copy me-2"></i>Copy image
           </h5>
           <button class="btn-close" (click)="closeCopyModal()"></button>
         </div>
         <div class="modal-body">
-          <!-- Source info -->
-          <div class="alert alert-secondary py-2 small mb-3">
-            <i class="bi bi-box-seam me-2"></i>
-            <strong>{{ copySource()!.image.name }}</strong>
-            <span
-              class="badge bg-secondary-subtle text-secondary ms-2 font-monospace"
+          <p class="text-muted small mb-3">
+            Source: <code>{{ copySource()?.image?.name }}:{{ copySource()?.tag }}</code>
+          </p>
+
+          <!-- Source tag selector -->
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Source tag</label>
+            <select
+              class="form-select form-select-sm"
+              [value]="copySource()?.tag"
+              (change)="copySource.update(s => s ? { ...s, tag: $any($event.target).value } : s)"
             >
-              {{ copySource()!.tag }}
-            </span>
+              @for (t of sourceTagOptions(); track t) {
+                <option [value]="t">{{ t }}</option>
+              }
+            </select>
           </div>
 
-          <!-- Destination folder -->
-          <div class="mb-3">
-            <label class="form-label small fw-semibold"
-              >Destination folder</label
-            >
-            @if (isAdmin()) {
-              <!-- Admin: free text input -->
-              <input
-                type="text"
-                class="form-control form-control-sm"
-                placeholder="e.g. infra (leave empty for root)"
-                [value]="copyDestFolder()"
-                (input)="copyDestFolder.set($any($event.target).value)"
-              />
-              <div class="form-text">Leave empty to copy to root.</div>
-            } @else {
-              <!-- Non-admin: only allowed folders -->
+          <div class="row g-2">
+            <div class="col-4">
+              <label class="form-label small fw-semibold">Dest folder</label>
               <select
                 class="form-select form-select-sm"
                 [value]="copyDestFolder()"
                 (change)="copyDestFolder.set($any($event.target).value)"
               >
-                <option value="">— select a folder —</option>
+                <option value="">(root)</option>
                 @for (f of pushableFolders(); track f) {
-                  <option [value]="f">{{ f }}</option>
-                }
-              </select>
-            }
-          </div>
-
-          @if (sourceTagOptions().length > 1) {
-            <div class="mb-3">
-              <label class="form-label small fw-semibold">Source tag</label>
-              <select
-                class="form-select form-select-sm"
-                [value]="copySource()!.tag"
-                (change)="
-                  copySource.set({
-                    image: copySource()!.image,
-                    tag: $any($event.target).value,
-                  })
-                "
-              >
-                @for (t of sourceTagOptions(); track t) {
-                  <option [value]="t">{{ t }}</option>
+                  @if (f !== '(root)') {
+                    <option [value]="f">{{ f }}</option>
+                  }
                 }
               </select>
             </div>
-          }
-
-          <!-- Destination name -->
-          <div class="mb-3">
-            <label class="form-label small fw-semibold">Image name</label>
-            <input
-              type="text"
-              class="form-control form-control-sm"
-              [value]="copyDestName()"
-              (input)="copyDestName.set($any($event.target).value)"
-            />
+            <div class="col-5">
+              <label class="form-label small fw-semibold">Image name</label>
+              <input
+                type="text"
+                class="form-control form-control-sm font-monospace"
+                [value]="copyDestName()"
+                (input)="copyDestName.set($any($event.target).value)"
+              />
+            </div>
+            <div class="col-3">
+              <label class="form-label small fw-semibold">Tag</label>
+              <input
+                type="text"
+                class="form-control form-control-sm font-monospace"
+                [value]="copyDestTag()"
+                (input)="copyDestTag.set($any($event.target).value)"
+              />
+            </div>
           </div>
 
-          <!-- Destination tag -->
-          <div class="mb-3">
-            <label class="form-label small fw-semibold">Tag</label>
-            <input
-              type="text"
-              class="form-control form-control-sm"
-              [value]="copyDestTag()"
-              (input)="copyDestTag.set($any($event.target).value)"
-            />
-          </div>
-
-          <!-- Preview -->
           @if (copyDestPreview()) {
-            <div class="alert alert-info py-2 small">
-              <i class="bi bi-arrow-right me-1"></i>
-              Destination: <code>{{ copyDestPreview() }}</code>
+            <div class="mt-2 text-muted small">
+              <i class="bi bi-arrow-right me-1"></i>Preview:
+              <code>{{ copyDestPreview() }}</code>
             </div>
           }
 
-          <!-- Result message -->
           @if (copyMessage()) {
             <div
-              class="alert py-2 small"
-              [class.alert-success]="
-                !copyMessage()!.toLowerCase().includes('fail')
-              "
-              [class.alert-danger]="
-                copyMessage()!.toLowerCase().includes('fail')
-              "
+              class="alert mt-3"
+              [class.alert-success]="!copying()"
+              [class.alert-danger]="copying()"
             >
               {{ copyMessage() }}
             </div>
           }
         </div>
-        <div class="modal-footer border-0">
-          <button
-            class="btn btn-outline-secondary btn-sm"
-            (click)="closeCopyModal()"
-          >
+        <div class="modal-footer">
+          <button class="btn btn-secondary btn-sm" (click)="closeCopyModal()">
             Cancel
           </button>
           <button
             class="btn btn-primary btn-sm"
             (click)="executeCopy()"
-            [disabled]="
-              copying() ||
-              !copyDestName().trim() ||
-              (!isAdmin() && !copyDestFolder())
-            "
+            [disabled]="copying() || !copyDestName().trim()"
           >
             @if (copying()) {
               <span class="spinner-border spinner-border-sm me-1"></span>
@@ -631,6 +636,54 @@
               <i class="bi bi-copy me-1"></i>
             }
             Copy
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ── Delete confirmation modal ─────────────────────────────────────────── -->
+@if (deleteTarget()) {
+  <div
+    class="modal fade show d-block"
+    tabindex="-1"
+    style="background: rgba(0,0,0,.4)"
+    (click)="deleteTarget.set(null)"
+  >
+    <div class="modal-dialog" (click)="$event.stopPropagation()">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title text-danger">
+            <i class="bi bi-trash me-2"></i>Delete image
+          </h5>
+          <button class="btn-close" (click)="deleteTarget.set(null)"></button>
+        </div>
+        <div class="modal-body">
+          <p>
+            Delete all tags of
+            <strong class="font-monospace">{{ deleteTarget()?.name }}</strong>?
+          </p>
+          <p class="text-danger small mb-0">This action cannot be undone.</p>
+        </div>
+        <div class="modal-footer">
+          <button
+            class="btn btn-secondary btn-sm"
+            (click)="deleteTarget.set(null)"
+          >
+            Cancel
+          </button>
+          <button
+            class="btn btn-danger btn-sm"
+            (click)="deleteImage()"
+            [disabled]="deleting()"
+          >
+            @if (deleting()) {
+              <span class="spinner-border spinner-border-sm me-1"></span>
+            } @else {
+              <i class="bi bi-trash me-1"></i>
+            }
+            Delete
           </button>
         </div>
       </div>
