@@ -12,6 +12,10 @@
  *     dest_registry_id (export) so the history list can resolve both.
  *   - New jobDirectionLabel() / jobDirectionClass() helpers for direction badges.
  *
+ * Fix: getSyncPreview() now mirrors the corrected _rewrite_image_name_for_sync()
+ *   backend logic: full source path is preserved when no folder/username is set,
+ *   so "editeur/nginx" stays "editeur/nginx" instead of being truncated to "nginx".
+ *
  * NOTE: All <select> values are strings; [formField] works correctly here
  * without manual coercion.
  */
@@ -243,8 +247,19 @@ export class SyncConfigPanelComponent implements OnInit {
   }
 
   /**
-   * Build a preview of the destination image reference for the export form,
-   * mirroring the backend _rewrite_image_name_for_sync() logic.
+   * Build a preview of the destination image reference for the export form.
+   *
+   * Mirrors the backend _rewrite_image_name_for_sync() logic (fixed version):
+   *
+   *   1. dest_folder set → folder + leaf only
+   *      "editeur/nginx" + folder="prod" → "prod/nginx"
+   *
+   *   2. No folder, dest_username set → username + leaf (Docker Hub compat)
+   *      "editeur/nginx" + username="jdoe" → "jdoe/nginx"
+   *
+   *   3. No folder, no username → preserve the FULL source path
+   *      "editeur/nginx" → "editeur/nginx"  ✓ (was wrongly truncated to "nginx")
+   *      "nginx"         → "nginx"
    */
   getSyncPreview(): string {
     const host = this.getSyncDestHost();
@@ -255,23 +270,36 @@ export class SyncConfigPanelComponent implements OnInit {
     const folder = this.syncModel().folder.trim();
     const source = this.syncModel().source;
 
-    const ns = folder || username;
-
     if (source === "(all)") {
+      const ns = folder || username;
       return `${host}/${ns ? ns + "/" : ""}*`;
     }
 
-    const nameWithTag = source.includes("/") ? source.split("/").at(-1)! : source;
-    const [imageName, tag] = nameWithTag.split(":");
+    // Split tag from the full "repo/path:tag" source string
+    const colonIdx = source.lastIndexOf(":");
+    const repoPath = colonIdx >= 0 ? source.slice(0, colonIdx) : source;
+    const tag = colonIdx >= 0 ? source.slice(colonIdx + 1) : "";
     const tagSuffix = tag ? `:${tag}` : "";
-    const destPath = ns ? `${ns}/${imageName}` : imageName;
+    const leaf = repoPath.split("/").at(-1)!;
+
+    let destPath: string;
+    if (folder) {
+      // Rule 1: explicit folder replaces namespace, keeps leaf only
+      destPath = `${folder}/${leaf}`;
+    } else if (username) {
+      // Rule 2: Docker Hub compat — username + leaf
+      destPath = `${username}/${leaf}`;
+    } else {
+      // Rule 3 (FIX): no override → keep the full source path
+      destPath = repoPath;
+    }
 
     return `${host}/${destPath}${tagSuffix}`;
   }
 
   /**
    * Build a preview of the destination image in the local registry for the
-   * import form.  Leaf image name is kept; dest_folder is prepended when set.
+   * import form. Leaf image name is kept; dest_folder is prepended when set.
    */
   getImportPreview(): string {
     const srcHost = this.getImportSrcHost();
@@ -324,12 +352,10 @@ export class SyncConfigPanelComponent implements OnInit {
     return job.direction === "import" ? "↓ Import" : "↑ Export";
   }
 
-  /**
-   * Bootstrap badge class for the job direction badge (Évolution 2).
-   */
+  /** Bootstrap badge class for the job direction badge (Évolution 2). */
   jobDirectionClass(job: SyncJob): string {
     return job.direction === "import"
-      ? "badge bg-secondary-subtle text-secondary border"
-      : "badge bg-primary-subtle text-primary border";
+      ? "badge bg-secondary-subtle text-secondary"
+      : "badge bg-primary-subtle text-primary";
   }
 }

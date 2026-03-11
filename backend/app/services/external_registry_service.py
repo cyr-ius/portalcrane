@@ -602,14 +602,15 @@ def _rewrite_image_name_for_sync(
 ) -> str:
     """
     Rewrite the image repository name for the destination registry.
-    Only the LAST path segment (leaf) is kept; all intermediate segments are dropped.
     """
     leaf = img.split("/")[-1]
     if dest_folder:
+        # Explicit folder: replace namespace, keep only leaf
         return f"{dest_folder}/{leaf}"
     if dest_username:
+        # Docker Hub / username-scoped registry: leaf under username
         return f"{dest_username}/{leaf}"
-    return leaf
+    return img
 
 
 # ── Sync / Import jobs ────────────────────────────────────────────────────────

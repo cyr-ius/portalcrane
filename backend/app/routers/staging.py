@@ -108,9 +108,14 @@ def _resolve_pull_source(
     from the pull request.
 
     Returns:
-        src_ref      : full skopeo docker:// reference  (e.g. "docker://ghcr.io/org/image:tag")
-        src_creds    : list of skopeo --src-creds args  (may be empty)
-        display_host : human-readable registry host for storage in the job  (None = Docker Hub)
+        src_ref      : full skopeo docker:// reference
+        src_creds    : list of skopeo flags (--src-tls-verify and optionally --src-creds)
+        display_host : human-readable registry host for storage in the job (None = Docker Hub)
+
+    FIX: for saved and ad-hoc external registries, --src-tls-verify is now
+    included in src_creds based on the registry's use_tls / tls_verify fields.
+    Previously the flag was never set, causing skopeo to default to HTTPS even
+    for plain-HTTP registries (use_tls=False).
     """
     image = request.image
     tag = request.tag
@@ -118,16 +123,32 @@ def _resolve_pull_source(
     # ── 1. Saved external registry ────────────────────────────────────────────
     if request.source_registry_id:
         from .external_registries import get_registry_by_id
+        from ..services.external_registry_service import _skopeo_tls_verify
 
         registry = get_registry_by_id(request.source_registry_id)
         if not registry:
             raise ValueError(f"Source registry not found: {request.source_registry_id}")
+
         host = registry["host"].rstrip("/")
         username = registry.get("username", "")
         password = registry.get("password", "")
+        use_tls = registry.get("use_tls", True)
+        tls_verify = registry.get("tls_verify", True)
+        src_tls_verify = _skopeo_tls_verify(use_tls, tls_verify)
+
         src_ref = f"docker://{host}/{image}:{tag}"
-        src_creds = (
-            ["--src-creds", f"{username}:{password}"] if username and password else []
+        src_creds = [f"--src-tls-verify={'true' if src_tls_verify else 'false'}"]
+        if username and password:
+            src_creds += ["--src-creds", f"{username}:{password}"]
+
+        _logger.debug(
+            "Pull source resolved: saved registry id=%s host=%s use_tls=%s tls_verify=%s "
+            "→ --src-tls-verify=%s",
+            request.source_registry_id,
+            host,
+            use_tls,
+            tls_verify,
+            src_tls_verify,
         )
         return src_ref, src_creds, host
 
@@ -136,10 +157,31 @@ def _resolve_pull_source(
         host = request.source_registry_host.rstrip("/")
         username = request.source_registry_username or ""
         password = request.source_registry_password or ""
-        src_ref = f"docker://{host}/{image}:{tag}"
-        src_creds = (
-            ["--src-creds", f"{username}:{password}"] if username and password else []
-        )
+
+        # For ad-hoc registries the caller has no use_tls field, but the host
+        # itself may carry a scheme (http:// or https://).  When the host starts
+        # with http:// we know TLS should be disabled; otherwise we leave it at
+        # the skopeo default (true).  Strip the scheme before building src_ref.
+        if host.startswith("http://"):
+            bare_host = host[len("http://") :]
+            src_ref = f"docker://{bare_host}/{image}:{tag}"
+            src_creds = ["--src-tls-verify=false"]
+            _logger.debug(
+                "Pull source resolved: ad-hoc HTTP registry host=%s → --src-tls-verify=false",
+                bare_host,
+            )
+        elif host.startswith("https://"):
+            bare_host = host[len("https://") :]
+            src_ref = f"docker://{bare_host}/{image}:{tag}"
+            src_creds = ["--src-tls-verify=true"]
+        else:
+            # No scheme provided: keep as-is, use skopeo default (HTTPS)
+            src_ref = f"docker://{host}/{image}:{tag}"
+            src_creds = []
+
+        if username and password:
+            src_creds += ["--src-creds", f"{username}:{password}"]
+
         return src_ref, src_creds, host
 
     # ── 3. Default: Docker Hub ─────────────────────────────────────────────────
@@ -269,10 +311,16 @@ async def push_image(
             host = registry["host"]
             username = registry.get("username", "")
             password = registry.get("password", "")
+            use_tls = registry.get("use_tls", True)
+            tls_verify = registry.get("tls_verify", True)
+            from ..services.external_registry_service import _skopeo_tls_verify
+
+            effective_tls_verify = _skopeo_tls_verify(use_tls, tls_verify)
         else:
             host = request.external_registry_host or ""
             username = request.external_registry_username or ""
             password = request.external_registry_password or ""
+            effective_tls_verify = True
 
         external_target_image = _build_external_target_image(target_image, username)
         _logger.debug(
@@ -292,6 +340,7 @@ async def push_image(
             dest_username=username,
             dest_password=password,
             settings=settings,
+            tls_verify=effective_tls_verify,
         )
         if success:
             job["status"] = JobStatus.DONE
@@ -306,8 +355,7 @@ async def push_image(
         return {"message": message, "job_id": request.job_id}
 
     # Before scheduling local push, verify push permission for the
-    # requested folder/image combination.  ``target_image`` already includes
-    # the requested image name; ``folder`` may be empty.
+    # requested folder/image combination.
     if not is_admin_user(current_user.username, settings):
         full_path = f"{folder}/{target_image}" if folder else target_image
         access = check_folder_access(current_user.username, full_path, is_pull=False)
@@ -317,36 +365,104 @@ async def push_image(
                 detail="Folder access denied: push permission required",
             )
 
-    # Default: push to the local embedded registry
     background_tasks.add_task(
         run_push_pipeline,
         request.job_id,
         target_image,
         target_tag,
         settings,
-        request.folder,
+        folder,
     )
     return {"message": "Push started", "job_id": request.job_id}
 
 
+# ─── Search ────────────────────────────────────────────────────────────────────
+
+
+@router.get("/search/dockerhub")
+async def search_dockerhub(
+    q: str,
+    page: int = 1,
+    current_user: UserInfo = Depends(require_pull_access),
+):
+    """Search Docker Hub images."""
+    auth = _build_dockerhub_auth(current_user.username)
+    params = {"q": q, "page": page, "page_size": 25}
+    try:
+        async with httpx.AsyncClient(
+            timeout=HTTPX_TIMEOUT, follow_redirects=True
+        ) as client:
+            resp = await client.get(
+                f"{DOCKERHUB_API_URL}/search/repositories/",
+                params=params,
+                auth=auth,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Docker Hub search failed: {exc}",
+        )
+
+    results = [
+        DockerHubSearchResult(
+            name=r.get("repo_name", ""),
+            description=r.get("short_description", ""),
+            star_count=r.get("star_count", 0),
+            pull_count=r.get("pull_count", 0),
+            is_official=r.get("is_official", False),
+            is_automated=r.get("is_automated", False),
+        )
+        for r in data.get("results", [])
+    ]
+    return {"results": results, "count": data.get("count", len(results))}
+
+
+@router.get("/dockerhub/tags/{image:path}")
+async def get_dockerhub_tags(
+    image: str,
+    current_user: UserInfo = Depends(require_pull_access),
+):
+    """Fetch available tags for a Docker Hub image."""
+    auth = _build_dockerhub_auth(current_user.username)
+    namespace, name = image.split("/", 1) if "/" in image else ("library", image)
+    url = f"{DOCKERHUB_API_URL}/repositories/{namespace}/{name}/tags/"
+    try:
+        async with httpx.AsyncClient(
+            timeout=HTTPX_TIMEOUT, follow_redirects=True
+        ) as client:
+            resp = await client.get(url, params={"page_size": 50}, auth=auth)
+            resp.raise_for_status()
+            data = resp.json()
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Docker Hub tags fetch failed: {exc}",
+        )
+
+    tags = [r["name"] for r in data.get("results", []) if r.get("name")]
+    return {"image": image, "tags": tags}
+
+
+# ─── Staging job status ────────────────────────────────────────────────────────
+
+
 @router.get("/jobs", response_model=list[StagingJob])
-async def listjobs_list(current_user: UserInfo = Depends(require_pull_access)):
-    """
-    List staging jobs.
-    Admins see all jobs; regular users see only their own.
-    """
-    jobs = list(jobs_list.values())
-    if not current_user.is_admin:
-        jobs = [j for j in jobs if j.get("owner") == current_user.username]
-    return [StagingJob(**j) for j in jobs]
+async def list_jobs(current_user: UserInfo = Depends(require_pull_access)):
+    """Return all staging jobs visible to the current user."""
+    if current_user.is_admin:
+        return [StagingJob(**j) for j in jobs_list.values()]
+    return [
+        StagingJob(**j)
+        for j in jobs_list.values()
+        if j.get("owner") == current_user.username
+    ]
 
 
 @router.get("/jobs/{job_id}", response_model=StagingJob)
-async def get_job(
-    job_id: str,
-    current_user: UserInfo = Depends(require_pull_access),
-):
-    """Get a single staging job by ID."""
+async def get_job(job_id: str, current_user: UserInfo = Depends(require_pull_access)):
+    """Return a specific staging job."""
     if job_id not in jobs_list:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Job not found"
@@ -361,10 +477,9 @@ async def get_job(
 
 @router.delete("/jobs/{job_id}")
 async def delete_job(
-    job_id: str,
-    current_user: UserInfo = Depends(require_pull_access),
+    job_id: str, current_user: UserInfo = Depends(require_pull_access)
 ):
-    """Delete a staging job and its OCI directory."""
+    """Delete a staging job and its OCI layout directory."""
     if job_id not in jobs_list:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Job not found"
@@ -378,73 +493,9 @@ async def delete_job(
     try:
         oci_dir = safe_job_path(job_id)
         if oci_dir.exists():
-            shutil.rmtree(oci_dir, ignore_errors=True)
-    except ValueError:
-        pass
+            shutil.rmtree(oci_dir)
+    except Exception as exc:
+        _logger.warning("Failed to delete OCI dir for job %s: %s", job_id, exc)
 
     del jobs_list[job_id]
     return {"message": f"Job {job_id} deleted"}
-
-
-# ─── Docker Hub search & tags ─────────────────────────────────────────────────
-
-
-@router.get("/search/dockerhub")
-async def search_dockerhub(
-    q: str,
-    page: int = 1,
-    current_user: UserInfo = Depends(require_pull_access),
-):
-    """Search Docker Hub for images matching the given query."""
-    auth = _build_dockerhub_auth(current_user.username)
-    _logger.debug(
-        "Docker Hub search request user=%s query=%s page=%s auth=%s",
-        current_user.username,
-        q,
-        page,
-        "authenticated" if auth else "anonymous",
-    )
-    url = f"{DOCKERHUB_API_URL}/search/repositories/?query={q}&page={page}&page_size=25"
-    async with httpx.AsyncClient(timeout=HTTPX_TIMEOUT) as client:
-        resp = await client.get(url, auth=auth)
-    if resp.status_code != 200:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Docker Hub search failed",
-        )
-    data = resp.json()
-    results = [
-        {
-            "name": r.get("repo_name", ""),
-            "description": r.get("short_description", ""),
-            "star_count": r.get("star_count", 0),
-            "pull_count": r.get("pull_count", 0),
-            "is_official": r.get("is_official", False),
-            "is_automated": r.get("is_automated", False),
-        }
-        for r in data.get("results", [])
-    ]
-    return {"results": results, "count": data.get("count", 0)}
-
-
-@router.get("/dockerhub/tags/{image:path}")
-async def get_dockerhub_tags(
-    image: str,
-    current_user: UserInfo = Depends(require_pull_access),
-):
-    """Fetch available tags for a Docker Hub image."""
-    auth = _build_dockerhub_auth(current_user.username)
-    _logger.debug(
-        "Docker Hub tags request user=%s image=%s auth=%s",
-        current_user.username,
-        image,
-        "authenticated" if auth else "anonymous",
-    )
-    namespace, name = image.split("/", 1) if "/" in image else ("library", image)
-    url = f"{DOCKERHUB_API_URL}/repositories/{namespace}/{name}/tags/?page_size=50&ordering=last_updated"
-    async with httpx.AsyncClient(timeout=HTTPX_TIMEOUT) as client:
-        resp = await client.get(url, auth=auth)
-    if resp.status_code != 200:
-        return {"image": image, "tags": ["latest"]}
-    tags = [t["name"] for t in resp.json().get("results", [])]
-    return {"image": image, "tags": tags or ["latest"]}
