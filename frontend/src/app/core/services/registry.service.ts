@@ -23,6 +23,18 @@ export interface ImageInfo {
   total_size: number;
 }
 
+/**
+ * A single layer entry inside an ImageDetail manifest.
+ * Additional fields from the OCI/Docker manifest (mediaType, urls…) are
+ * captured by the index signature so the object stays extensible without
+ * breaking strict property access in Angular templates.
+ */
+export interface ImageLayer {
+  digest: string;
+  size: number;
+  mediaType?: string;
+}
+
 /** Detailed image metadata returned by the tag-detail endpoint. */
 export interface ImageDetail {
   name: string;
@@ -32,7 +44,7 @@ export interface ImageDetail {
   created: string;
   architecture: string;
   os: string;
-  layers: Record<string, unknown>[];
+  layers: ImageLayer[];
   labels: Record<string, string>;
   env: string[];
   cmd: string[];
