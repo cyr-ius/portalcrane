@@ -1,223 +1,315 @@
 /**
- * Portalcrane - External Registry Service (Angular)
+ * Portalcrane - RegistryService
  *
- * Changes:
- *   - tls_verify added to ExternalRegistry, CreateRegistryPayload and
- *     UpdateRegistryPayload (previous patch).
- *   - [NEW] ImportRequest interface (Évolution 2).
- *   - [NEW] startImport() method — POST /api/external/import (Évolution 2).
- *   - SyncJob now exposes a direction field ("export" | "import") so the
- *     history list can display directional badges (Évolution 2).
+ * Angular service for all local registry API calls:
+ * images, tags, folders, garbage collection, copy, delete, retag.
+ *
+ * NOTE: This file also exports the shared interfaces (ImageInfo, ImageDetail,
+ * PaginatedImages, ExternalPaginatedImages, GCStatus) that are consumed by
+ * dashboard, images-list, image-detail, sync-config-panel,
+ * vuln-config-panel and folder.service.
  */
-import { HttpClient } from "@angular/common/http";
-import { inject, Injectable, signal } from "@angular/core";
+import { HttpClient, HttpParams } from "@angular/common/http";
+import { inject, Injectable } from "@angular/core";
 import { Observable } from "rxjs";
 
-/** A saved external registry entry (password is redacted by the backend). */
-export interface ExternalRegistry {
-  id: string;
+// ── Shared interfaces ──────────────────────────────────────────────────────
+
+/** Basic image / repository information returned by the list endpoint. */
+export interface ImageInfo {
   name: string;
-  host: string;
-  username: string;
-  password: string;
-  owner: string;
-  /** When false, plain HTTP is used — no TLS at all. Defaults to true. */
-  use_tls: boolean;
-  /** Only relevant when use_tls is true. False = skip cert validation. Defaults to true. */
-  tls_verify: boolean;
-  created_at: string;
+  tags: string[];
+  tag_count: number;
+  total_size: number;
 }
 
-/** Payload for creating a new external registry. */
-export interface CreateRegistryPayload {
+/** Detailed image metadata returned by the tag-detail endpoint. */
+export interface ImageDetail {
   name: string;
-  host: string;
-  username?: string;
-  password?: string;
-  owner?: string;
-  use_tls?: boolean;
-  tls_verify?: boolean;
+  tag: string;
+  digest: string;
+  size: number;
+  created: string;
+  architecture: string;
+  os: string;
+  layers: Record<string, unknown>[];
+  labels: Record<string, string>;
+  env: string[];
+  cmd: string[];
+  entrypoint: string[];
+  exposed_ports: Record<string, unknown>;
 }
 
-/** Payload for updating an existing external registry (all fields optional). */
-export interface UpdateRegistryPayload {
-  name?: string;
-  host?: string;
-  username?: string;
-  password?: string;
-  owner?: string;
-  use_tls?: boolean;
-  tls_verify?: boolean;
-}
-
-/** Payload to trigger an export sync job (local → external). */
-export interface SyncRequest {
-  source_image: string;
-  dest_registry_id: string;
-  dest_folder?: string | null;
+/** Paginated response for the local registry image list. */
+export interface PaginatedImages {
+  items: ImageInfo[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+  /** Present only when browsing an external registry — null for local. */
+  error?: string | null;
 }
 
 /**
- * Payload to trigger an import job (external → local).
- * Évolution 2: mirrors SyncRequest with source/destination swapped.
+ * Paginated response when browsing an external registry.
+ * Extends PaginatedImages with an explicit error field so callers
+ * can distinguish a partial result from a hard failure.
  */
-export interface ImportRequest {
-  source_registry_id: string;
-  source_image: string;
-  dest_folder?: string | null;
-}
-
-/**
- * A sync or import job entry returned by GET /api/external/sync/jobs.
- *
- * direction "export" = local → external (sync)
- * direction "import" = external → local (import)
- */
-export interface SyncJob {
-  id: string;
-  /** Transfer direction: "export" for sync, "import" for import jobs. */
-  direction: "export" | "import";
-  source: string;
-  /** Source external registry ID (import jobs only). */
-  source_registry_id: string | null;
-  /** Destination external registry ID (export jobs only). */
-  dest_registry_id: string | null;
-  dest_folder: string | null;
-  status: "running" | "done" | "partial" | "error";
-  started_at: string;
-  finished_at: string | null;
-  message: string;
+export interface ExternalPaginatedImages extends PaginatedImages {
   error: string | null;
-  progress: number;
-  images_total: number;
-  images_done: number;
 }
+
+/** Garbage-collection job status returned by GET /api/gc and POST /api/gc. */
+export interface GCStatus {
+  status: string;
+  started_at: string | null;
+  finished_at: string | null;
+  output: string;
+  freed_bytes: number;
+  freed_human: string;
+  error: string | null;
+}
+
+// ── Service ────────────────────────────────────────────────────────────────
 
 @Injectable({ providedIn: "root" })
-export class ExternalRegistryService {
-  private readonly BASE = "/api/external";
+export class RegistryService {
+  private readonly BASE = "/api";
   private http = inject(HttpClient);
 
-  /**
-   * In-memory cache used by Staging, Images and other components.
-   * Write via _externalRegistries; read via the public readonly signal.
-   */
-  private _externalRegistries = signal<ExternalRegistry[]>([]);
-  readonly externalRegistries = this._externalRegistries.asReadonly();
-
-  // ── Registry CRUD ──────────────────────────────────────────────────────────
-
-  listRegistries(): Observable<ExternalRegistry[]> {
-    return this.http.get<ExternalRegistry[]>(`${this.BASE}/registries`);
-  }
+  // ── Image list ─────────────────────────────────────────────────────────────
 
   /**
-   * Load registries from the API and update the in-memory cache signal.
-   * Called at app init (staging component, images list, etc.).
+   * Fetch a paginated, optionally filtered list of local registry images.
+   *
+   * @param page      Page number (1-based).
+   * @param pageSize  Number of items per page.
+   * @param search    Optional search string to filter by repository name.
    */
-  loadRegistries(): void {
-    this.listRegistries().subscribe({
-      next: (regs) => this._externalRegistries.set(regs),
-    });
+  getImages(
+    page = 1,
+    pageSize = 20,
+    search = "",
+  ): Observable<PaginatedImages> {
+    let params = new HttpParams()
+      .set("page", page)
+      .set("page_size", pageSize);
+    if (search?.trim()) {
+      params = params.set("search", search.trim());
+    }
+    return this.http.get<PaginatedImages>(`${this.BASE}/images`, { params });
   }
 
-  createRegistry(payload: CreateRegistryPayload): Observable<ExternalRegistry> {
-    return this.http.post<ExternalRegistry>(`${this.BASE}/registries`, payload);
-  }
-
-  updateRegistry(
-    id: string,
-    payload: UpdateRegistryPayload,
-  ): Observable<ExternalRegistry> {
-    return this.http.patch<ExternalRegistry>(
-      `${this.BASE}/registries/${id}`,
-      payload,
+  /**
+   * Browse images from a saved external registry via the proxy endpoint.
+   *
+   * @param registryId  ID of the saved external registry.
+   * @param page        Page number (1-based).
+   * @param pageSize    Number of items per page.
+   * @param search      Optional search string.
+   */
+  getExternalImages(
+    registryId: string,
+    page = 1,
+    pageSize = 20,
+    search = "",
+  ): Observable<ExternalPaginatedImages> {
+    let params = new HttpParams()
+      .set("registry_id", registryId)
+      .set("page", page)
+      .set("page_size", pageSize);
+    if (search?.trim()) {
+      params = params.set("search", search.trim());
+    }
+    return this.http.get<ExternalPaginatedImages>(
+      `${this.BASE}/external/browse`,
+      { params },
     );
   }
 
-  deleteRegistry(id: string): Observable<void> {
-    return this.http.delete<void>(`${this.BASE}/registries/${id}`);
-  }
-
-  // ── Connectivity test ──────────────────────────────────────────────────────
+  // ── Tags ───────────────────────────────────────────────────────────────────
 
   /**
-   * Test connectivity to an unsaved registry.
+   * Fetch all tags for a repository.
    *
-   * @param host      Registry host (bare hostname or with http:// / https://)
-   * @param username  Optional username
-   * @param password  Optional password / token
-   * @param options   TLS options: use_tls (default true) and tls_verify (default true).
-   *                  tls_verify is only relevant when use_tls is true.
+   * @param repository  Repository name, e.g. "biocontainers/swarm".
    */
-  testConnection(
-    host: string,
-    username: string,
-    password: string,
-    options: { use_tls?: boolean; tls_verify?: boolean } = {},
-  ): Observable<{ reachable: boolean; auth_ok: boolean; message: string }> {
-    const { use_tls = true, tls_verify = true } = options;
-    return this.http.post<{
-      reachable: boolean;
-      auth_ok: boolean;
-      message: string;
-    }>(`${this.BASE}/registries/test`, {
-      host,
-      username,
-      password,
-      use_tls,
-      tls_verify,
-    });
-  }
-
-  testSavedConnection(
-    id: string,
-  ): Observable<{ reachable: boolean; auth_ok: boolean; message: string }> {
-    return this.http.post<{
-      reachable: boolean;
-      auth_ok: boolean;
-      message: string;
-    }>(`${this.BASE}/registries/${id}/test`, {});
-  }
-
-  /**
-   * Alias kept for backward compatibility with
-   * ExternalRegistriesConfigPanelComponent which calls testSaved(id).
-   */
-  testSaved(
-    id: string,
-  ): Observable<{ reachable: boolean; auth_ok: boolean; message: string }> {
-    return this.testSavedConnection(id);
-  }
-
-  // ── Sync (local → external) ────────────────────────────────────────────────
-
-  startSync(request: SyncRequest): Observable<{ job_id: string; status: string }> {
-    return this.http.post<{ job_id: string; status: string }>(
-      `${this.BASE}/sync`,
-      request,
+  getImageTags(
+    repository: string,
+  ): Observable<{ repository: string; tags: string[] }> {
+    const params = new HttpParams().set("repository", repository);
+    return this.http.get<{ repository: string; tags: string[] }>(
+      `${this.BASE}/images/tags`,
+      { params },
     );
   }
 
-  listSyncJobs(): Observable<SyncJob[]> {
-    return this.http.get<SyncJob[]>(`${this.BASE}/sync/jobs`);
+  /**
+   * Fetch detailed metadata for a specific image tag.
+   *
+   * @param repository  Repository name.
+   * @param tag         Tag name, e.g. "latest".
+   */
+  getTagDetail(repository: string, tag: string): Observable<ImageDetail> {
+    const params = new HttpParams()
+      .set("repository", repository)
+      .set("tag", tag);
+    return this.http.get<ImageDetail>(`${this.BASE}/images/tags/detail`, {
+      params,
+    });
   }
 
-  // ── Import (external → local, Évolution 2) ────────────────────────────────
+  /**
+   * Add a new tag to an existing image (retag via manifest copy).
+   *
+   * @param repository  Repository name.
+   * @param sourceTag   Existing tag to copy from.
+   * @param newTag      New tag name to create.
+   */
+  addTag(
+    repository: string,
+    sourceTag: string,
+    newTag: string,
+  ): Observable<{ message: string }> {
+    const params = new HttpParams().set("repository", repository);
+    return this.http.post<{ message: string }>(
+      `${this.BASE}/images/tags`,
+      { source_tag: sourceTag, new_tag: newTag },
+      { params },
+    );
+  }
 
   /**
-   * Start an asynchronous import job (external registry → local registry).
+   * Delete a specific tag from a repository.
    *
-   * POST /api/external/import — requires push access.
-   *
-   * @param request - { source_registry_id, source_image, dest_folder? }
+   * @param repository  Repository name.
+   * @param tag         Tag to delete.
    */
-  startImport(
-    request: ImportRequest,
-  ): Observable<{ job_id: string; status: string }> {
-    return this.http.post<{ job_id: string; status: string }>(
-      `${this.BASE}/import`,
-      request,
+  deleteTag(
+    repository: string,
+    tag: string,
+  ): Observable<{ message: string }> {
+    const params = new HttpParams()
+      .set("repository", repository)
+      .set("tag", tag);
+    return this.http.delete<{ message: string }>(
+      `${this.BASE}/images/tags`,
+      { params },
+    );
+  }
+
+  // ── Image management ───────────────────────────────────────────────────────
+
+  /**
+   * Delete all tags of an image (effectively deletes the repository).
+   *
+   * @param repository  Repository name to delete entirely.
+   */
+  deleteImage(repository: string): Observable<{ message: string }> {
+    const params = new HttpParams().set("repository", repository);
+    return this.http.delete<{ message: string }>(`${this.BASE}/images`, {
+      params,
+    });
+  }
+
+  /**
+   * Copy an image to a new repository path via skopeo.
+   *
+   * @param sourceRepository  Source repository name.
+   * @param sourceTag         Source tag name.
+   * @param destRepository    Destination repository path.
+   * @param destTag           Destination tag (defaults to sourceTag when omitted).
+   */
+  copyImage(
+    sourceRepository: string,
+    sourceTag: string,
+    destRepository: string,
+    destTag?: string,
+  ): Observable<{ message: string }> {
+    return this.http.post<{ message: string }>(`${this.BASE}/images/copy`, {
+      source_repository: sourceRepository,
+      source_tag: sourceTag,
+      dest_repository: destRepository,
+      dest_tag: destTag ?? null,
+    });
+  }
+
+  // ── Folders / access control ───────────────────────────────────────────────
+
+  /**
+   * Return the list of folder names the current user can pull from.
+   * Returns an empty array for admins (who have global access).
+   */
+  getMyFolders(): Observable<string[]> {
+    return this.http.get<string[]>(`${this.BASE}/folders/my-pull-folders`);
+  }
+
+  /**
+   * Return the list of folder names the current user can push to.
+   * Returns an empty array for admins (who have global access).
+   */
+  getPushableFolders(): Observable<string[]> {
+    return this.http.get<string[]>(`${this.BASE}/folders/my-push-folders`);
+  }
+
+  // ── Garbage collection ─────────────────────────────────────────────────────
+
+  /** Fetch the current garbage-collection job status. */
+  getGCStatus(): Observable<GCStatus> {
+    return this.http.get<GCStatus>(`${this.BASE}/gc`);
+  }
+
+  /**
+   * Start a garbage-collection run (admin only).
+   *
+   * @param dryRun  When true, runs a dry-run without actually deleting blobs.
+   */
+  startGarbageCollect(dryRun = false): Observable<GCStatus> {
+    return this.http.post<GCStatus>(
+      `${this.BASE}/gc`,
+      null,
+      { params: new HttpParams().set("dry_run", dryRun) },
+    );
+  }
+
+  // ── Ghost / empty repositories ─────────────────────────────────────────────
+
+  /**
+   * List repositories that have no tags (ghost / empty repositories).
+   * Admin-only endpoint.
+   */
+  getEmptyRepositories(): Observable<{
+    empty_repositories: string[];
+    count: number;
+  }> {
+    return this.http.get<{ empty_repositories: string[]; count: number }>(
+      `${this.BASE}/empty-repositories`,
+    );
+  }
+
+  /**
+   * Purge all empty repositories from the local filesystem.
+   * Admin-only endpoint.
+   */
+  purgeEmptyRepositories(): Observable<{
+    message: string;
+    purged: string[];
+    errors: { repo: string; error: string }[];
+  }> {
+    return this.http.delete<{
+      message: string;
+      purged: string[];
+      errors: { repo: string; error: string }[];
+    }>(`${this.BASE}/empty-repositories`);
+  }
+
+  // ── Registry ping ──────────────────────────────────────────────────────────
+
+  /** Check registry connectivity. */
+  ping(): Observable<{ status: string; url: string }> {
+    return this.http.get<{ status: string; url: string }>(
+      `${this.BASE}/ping`,
     );
   }
 }
