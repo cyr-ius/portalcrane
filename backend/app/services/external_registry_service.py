@@ -15,6 +15,9 @@ Changes:
     (Évolution 2).
   - run_sync_job() jobs now carry direction="export" so the UI can show
     direction badges in the history list (Évolution 2).
+  - [FIX] _skopeo_tls_verify() helper: properly derive --tls-verify flag
+    from both use_tls AND tls_verify fields. Previously only tls_verify was
+    checked, causing skopeo to attempt HTTPS on plain-HTTP registries.
 """
 
 import asyncio
@@ -125,6 +128,28 @@ def _build_registry_base_url(host: str, use_tls: bool = True) -> str:
         return host.rstrip("/")
     scheme = "https" if use_tls else "http"
     return f"{scheme}://{host}"
+
+
+def _skopeo_tls_verify(use_tls: bool, tls_verify: bool) -> bool:
+    """
+    Derive the boolean value for skopeo --src/dest-tls-verify.
+
+    The two registry fields have distinct semantics:
+      - use_tls    : whether the registry uses TLS at all (HTTP vs HTTPS)
+      - tls_verify : whether to validate the TLS certificate (self-signed)
+
+    Mapping:
+      use_tls=False              → plain HTTP → --tls-verify=false
+      use_tls=True, verify=False → HTTPS, skip cert check → --tls-verify=false
+      use_tls=True, verify=True  → normal HTTPS → --tls-verify=true
+
+    This fix resolves the "http: server gave HTTP response to HTTPS client"
+    error that occurred when skopeo received --dest-tls-verify=true for a
+    plain-HTTP registry (use_tls=False was ignored).
+    """
+    if not use_tls:
+        return False
+    return tls_verify
 
 
 def find_registry_credentials_for_host(host: str, owner: str) -> tuple[str, str] | None:
@@ -341,16 +366,13 @@ async def browse_external_images(
 
     normalized = _normalize_registry_host(host)
     if normalized in {"docker.io", "index.docker.io", "registry-1.docker.io"}:
-        logger.debug("browse_external_images: Docker Hub catalog not supported")
         return {
             "items": [],
             "total": 0,
             "page": page,
             "page_size": page_size,
             "total_pages": 1,
-            "error": (
-                "Docker Hub does not support registry catalog browsing via /v2/_catalog."
-            ),
+            "error": "Docker Hub does not expose a public catalog endpoint.",
         }
 
     base_url = _build_registry_base_url(host, use_tls=use_tls)
@@ -621,7 +643,15 @@ async def run_sync_job(
     dest_host = registry["host"]
     dest_username = registry.get("username", "")
     dest_password = registry.get("password", "")
-    dest_tls_verify = registry.get("tls_verify", True)
+    dest_use_tls = registry.get("use_tls", True)
+    dest_tls_verify_raw = registry.get("tls_verify", True)
+
+    # FIX: derive the skopeo --dest-tls-verify flag from BOTH use_tls and
+    # tls_verify. Previously only tls_verify was read, causing skopeo to
+    # attempt HTTPS on plain-HTTP registries (use_tls=False was ignored).
+    dest_tls_verify = _skopeo_tls_verify(dest_use_tls, dest_tls_verify_raw)
+
+    # The local registry is the source; use its URL scheme to decide TLS.
     src_tls_verify = local_registry_url.startswith("https://")
 
     _sync_jobs[job_id] = {
@@ -654,6 +684,7 @@ async def run_sync_job(
                 if source_image == "(all)"
                 else [i for i in all_images if source_image.split(":")[0] in i]
             )
+
             _sync_jobs[job_id]["images_total"] = len(images)
 
             errors: list[str] = []
@@ -741,7 +772,13 @@ async def run_import_job(
     src_host = registry["host"]
     src_username = registry.get("username", "")
     src_password = registry.get("password", "")
-    src_tls_verify = registry.get("tls_verify", True)
+    src_use_tls = registry.get("use_tls", True)
+    src_tls_verify_raw = registry.get("tls_verify", True)
+
+    # FIX: same fix as run_sync_job — derive --src-tls-verify from both
+    # use_tls and tls_verify so plain-HTTP source registries work correctly.
+    src_tls_verify = _skopeo_tls_verify(src_use_tls, src_tls_verify_raw)
+
     dest_tls_verify = local_registry_url.startswith("https://")
 
     _sync_jobs[job_id] = {
@@ -763,15 +800,19 @@ async def run_import_job(
 
     async def _run() -> None:
         try:
-            base_url = _build_registry_base_url(src_host)
+            # FIX: pass use_tls to _build_registry_base_url so the catalog
+            # HTTP request also uses http:// for plain-HTTP source registries.
+            base_url = _build_registry_base_url(src_host, use_tls=src_use_tls)
             auth = (
                 (src_username, src_password) if src_username and src_password else None
             )
+            # httpx verify= is only meaningful for HTTPS; False for HTTP.
+            httpx_verify = src_tls_verify_raw if src_use_tls else False
 
             # Resolve the list of repositories to import
             if source_image == "(all)":
                 async with httpx.AsyncClient(
-                    timeout=30, verify=src_tls_verify, follow_redirects=True
+                    timeout=30, verify=httpx_verify, follow_redirects=True
                 ) as client:
                     resp = await client.get(f"{base_url}/v2/_catalog?n=1000", auth=auth)
                     resp.raise_for_status()
@@ -788,7 +829,7 @@ async def run_import_job(
                     tags = [source_image.split(":", 1)[1]]
                 else:
                     async with httpx.AsyncClient(
-                        timeout=15, verify=src_tls_verify, follow_redirects=True
+                        timeout=15, verify=httpx_verify, follow_redirects=True
                     ) as client:
                         tr = await client.get(
                             f"{base_url}/v2/{img}/tags/list", auth=auth
