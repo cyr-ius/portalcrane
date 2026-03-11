@@ -2,10 +2,13 @@
  * Portalcrane - RegistryService
  *
  * Angular service for all local registry API calls:
- * images, tags, folders, garbage collection, copy, delete, retag.
+ * images, tags, garbage collection, copy, delete, retag.
+ *
+ * Folder access queries (/mine and /pushable) are delegated to
+ * /api/folders which is the correct backend prefix.
  *
  * NOTE: This file also exports the shared interfaces (ImageInfo, ImageDetail,
- * PaginatedImages, ExternalPaginatedImages, GCStatus) that are consumed by
+ * PaginatedImages, ExternalPaginatedImages, GCStatus, ImageLayer) consumed by
  * dashboard, images-list, image-detail, sync-config-panel,
  * vuln-config-panel and folder.service.
  */
@@ -25,9 +28,8 @@ export interface ImageInfo {
 
 /**
  * A single layer entry inside an ImageDetail manifest.
- * Additional fields from the OCI/Docker manifest (mediaType, urls…) are
- * captured by the index signature so the object stays extensible without
- * breaking strict property access in Angular templates.
+ * Using explicit named properties (not an index signature) so Angular
+ * templates can access layer.digest and layer.size directly without TS4111.
  */
 export interface ImageLayer {
   digest: string;
@@ -72,7 +74,7 @@ export interface ExternalPaginatedImages extends PaginatedImages {
   error: string | null;
 }
 
-/** Garbage-collection job status returned by GET /api/gc and POST /api/gc. */
+/** Garbage-collection job status returned by GET /api/registry/gc. */
 export interface GCStatus {
   status: string;
   started_at: string | null;
@@ -87,13 +89,23 @@ export interface GCStatus {
 
 @Injectable({ providedIn: "root" })
 export class RegistryService {
-  private readonly BASE = "/api";
+  /** Base URL for all local registry endpoints (main.py: prefix="/api/registry"). */
+  private readonly BASE = "/api/registry";
+
+  /** Base URL for folder permission endpoints (main.py: prefix="/api/folders"). */
+  private readonly FOLDERS = "/api/folders";
+
+  /** Base URL for external registry endpoints (main.py: prefix="/api/external"). */
+  private readonly EXTERNAL = "/api/external";
+
   private http = inject(HttpClient);
 
   // ── Image list ─────────────────────────────────────────────────────────────
 
   /**
    * Fetch a paginated, optionally filtered list of local registry images.
+   *
+   * Backend: GET /api/registry/images
    *
    * @param page      Page number (1-based).
    * @param pageSize  Number of items per page.
@@ -114,7 +126,9 @@ export class RegistryService {
   }
 
   /**
-   * Browse images from a saved external registry via the proxy endpoint.
+   * Browse images from a saved external registry.
+   *
+   * Backend: GET /api/external/registries/{id}/browse
    *
    * @param registryId  ID of the saved external registry.
    * @param page        Page number (1-based).
@@ -128,14 +142,13 @@ export class RegistryService {
     search = "",
   ): Observable<ExternalPaginatedImages> {
     let params = new HttpParams()
-      .set("registry_id", registryId)
       .set("page", page)
       .set("page_size", pageSize);
     if (search?.trim()) {
       params = params.set("search", search.trim());
     }
     return this.http.get<ExternalPaginatedImages>(
-      `${this.BASE}/external/browse`,
+      `${this.EXTERNAL}/registries/${registryId}/browse`,
       { params },
     );
   }
@@ -144,6 +157,8 @@ export class RegistryService {
 
   /**
    * Fetch all tags for a repository.
+   *
+   * Backend: GET /api/registry/images/tags?repository=…
    *
    * @param repository  Repository name, e.g. "biocontainers/swarm".
    */
@@ -160,6 +175,8 @@ export class RegistryService {
   /**
    * Fetch detailed metadata for a specific image tag.
    *
+   * Backend: GET /api/registry/images/tags/detail?repository=…&tag=…
+   *
    * @param repository  Repository name.
    * @param tag         Tag name, e.g. "latest".
    */
@@ -174,6 +191,8 @@ export class RegistryService {
 
   /**
    * Add a new tag to an existing image (retag via manifest copy).
+   *
+   * Backend: POST /api/registry/images/tags?repository=…
    *
    * @param repository  Repository name.
    * @param sourceTag   Existing tag to copy from.
@@ -194,6 +213,8 @@ export class RegistryService {
 
   /**
    * Delete a specific tag from a repository.
+   *
+   * Backend: DELETE /api/registry/images/tags?repository=…&tag=…
    *
    * @param repository  Repository name.
    * @param tag         Tag to delete.
@@ -216,6 +237,8 @@ export class RegistryService {
   /**
    * Delete all tags of an image (effectively deletes the repository).
    *
+   * Backend: DELETE /api/registry/images?repository=…
+   *
    * @param repository  Repository name to delete entirely.
    */
   deleteImage(repository: string): Observable<{ message: string }> {
@@ -227,6 +250,8 @@ export class RegistryService {
 
   /**
    * Copy an image to a new repository path via skopeo.
+   *
+   * Backend: POST /api/registry/images/copy
    *
    * @param sourceRepository  Source repository name.
    * @param sourceTag         Source tag name.
@@ -251,23 +276,31 @@ export class RegistryService {
 
   /**
    * Return the list of folder names the current user can pull from.
-   * Returns an empty array for admins (who have global access).
+   * Admins receive an empty list (meaning full access).
+   *
+   * Backend: GET /api/folders/mine
    */
   getMyFolders(): Observable<string[]> {
-    return this.http.get<string[]>(`${this.BASE}/folders/my-pull-folders`);
+    return this.http.get<string[]>(`${this.FOLDERS}/mine`);
   }
 
   /**
    * Return the list of folder names the current user can push to.
-   * Returns an empty array for admins (who have global access).
+   * Admins receive an empty list (meaning full access).
+   *
+   * Backend: GET /api/folders/pushable
    */
   getPushableFolders(): Observable<string[]> {
-    return this.http.get<string[]>(`${this.BASE}/folders/my-push-folders`);
+    return this.http.get<string[]>(`${this.FOLDERS}/pushable`);
   }
 
   // ── Garbage collection ─────────────────────────────────────────────────────
 
-  /** Fetch the current garbage-collection job status. */
+  /**
+   * Fetch the current garbage-collection job status.
+   *
+   * Backend: GET /api/registry/gc
+   */
   getGCStatus(): Observable<GCStatus> {
     return this.http.get<GCStatus>(`${this.BASE}/gc`);
   }
@@ -275,21 +308,21 @@ export class RegistryService {
   /**
    * Start a garbage-collection run (admin only).
    *
-   * @param dryRun  When true, runs a dry-run without actually deleting blobs.
+   * Backend: POST /api/registry/gc?dry_run=…
+   *
+   * @param dryRun  When true, runs without actually deleting blobs.
    */
   startGarbageCollect(dryRun = false): Observable<GCStatus> {
-    return this.http.post<GCStatus>(
-      `${this.BASE}/gc`,
-      null,
-      { params: new HttpParams().set("dry_run", dryRun) },
-    );
+    const params = new HttpParams().set("dry_run", dryRun);
+    return this.http.post<GCStatus>(`${this.BASE}/gc`, null, { params });
   }
 
   // ── Ghost / empty repositories ─────────────────────────────────────────────
 
   /**
    * List repositories that have no tags (ghost / empty repositories).
-   * Admin-only endpoint.
+   *
+   * Backend: GET /api/registry/empty-repositories
    */
   getEmptyRepositories(): Observable<{
     empty_repositories: string[];
@@ -302,7 +335,8 @@ export class RegistryService {
 
   /**
    * Purge all empty repositories from the local filesystem.
-   * Admin-only endpoint.
+   *
+   * Backend: DELETE /api/registry/empty-repositories
    */
   purgeEmptyRepositories(): Observable<{
     message: string;
@@ -318,7 +352,11 @@ export class RegistryService {
 
   // ── Registry ping ──────────────────────────────────────────────────────────
 
-  /** Check registry connectivity. */
+  /**
+   * Check registry connectivity.
+   *
+   * Backend: GET /api/registry/ping
+   */
   ping(): Observable<{ status: string; url: string }> {
     return this.http.get<{ status: string; url: string }>(
       `${this.BASE}/ping`,
