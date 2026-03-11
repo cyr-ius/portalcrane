@@ -1,8 +1,10 @@
 # 🐳 Portalcrane
 
-**Portalcrane** is a self-hosted Docker Registry Manager.
-It provides a modern, intuitive interface to browse, search, and manage images and tags,
-with a staging pipeline including vulnerability scanning.
+**Portalcrane** is a self-hosted Docker registry manager.
+It offers a modern and intuitive interface for browsing, searching, and managing images and tags,
+with a preparation process that includes vulnerability scanning.
+It also allows you to declare external registries and perform transfers between them.
+Portalcrane's internal registry allows you to organize images into directories. An RBAC model allows you to control image usage.
 
 <img width="1432" height="942" alt="image" src="https://github.com/user-attachments/assets/a6fa3b39-e603-4562-b784-2fb5483b795c" />
 
