@@ -228,8 +228,13 @@ export class ExternalRegistriesConfigPanelComponent implements OnInit {
     this.testingNew.set(true);
     this.testResult.set(null);
 
+    // testConnection 4th arg is tls_verify (boolean) in the current service.
+    // use_tls is forwarded via the payload inside the service when it is updated;
+    // here we pass tls_verify as the positional arg for backward compatibility.
+    // When use_tls is false, force tls_verify to false so skopeo/httpx use HTTP.
+    const effectiveTlsVerify = (use_tls ?? true) ? (tls_verify ?? true) : false;
     this.extRegSvc
-      .testConnection(host, username, password, { use_tls: use_tls ?? true, tls_verify: tls_verify ?? true })
+      .testConnection(host, username, password, { use_tls: use_tls ?? true, tls_verify: effectiveTlsVerify })
       .subscribe({
         next: (res) => {
           this.testResult.set(res);

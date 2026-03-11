@@ -234,8 +234,11 @@ export class AccountModalComponent implements OnInit {
     this.testingNew.set(true);
     this.testResult.set(null);
 
+    // testConnection 4th arg is tls_verify (boolean) in the current service.
+    // When use_tls is false, force tls_verify to false so the client uses HTTP.
+    const effectiveTlsVerify = (use_tls ?? true) ? (tls_verify ?? true) : false;
     this.extRegSvc
-      .testConnection(host, username, password, { use_tls: use_tls ?? true, tls_verify: tls_verify ?? true })
+      .testConnection(host, username, password, { use_tls: use_tls ?? true, tls_verify: effectiveTlsVerify })
       .subscribe({
       next: (result) => {
         this.testResult.set(result);

@@ -141,17 +141,33 @@ export class ExternalRegistryService {
 
   // ── Connectivity test ──────────────────────────────────────────────────────
 
+  /**
+   * Test connectivity to an unsaved registry.
+   *
+   * @param host      Registry host (bare hostname or with http:// / https://)
+   * @param username  Optional username
+   * @param password  Optional password / token
+   * @param options   TLS options: use_tls (default true) and tls_verify (default true).
+   *                  tls_verify is only relevant when use_tls is true.
+   */
   testConnection(
     host: string,
     username: string,
     password: string,
-    tls_verify = true,
+    options: { use_tls?: boolean; tls_verify?: boolean } = {},
   ): Observable<{ reachable: boolean; auth_ok: boolean; message: string }> {
+    const { use_tls = true, tls_verify = true } = options;
     return this.http.post<{
       reachable: boolean;
       auth_ok: boolean;
       message: string;
-    }>(`${this.BASE}/registries/test`, { host, username, password, tls_verify });
+    }>(`${this.BASE}/registries/test`, {
+      host,
+      username,
+      password,
+      use_tls,
+      tls_verify,
+    });
   }
 
   testSavedConnection(
