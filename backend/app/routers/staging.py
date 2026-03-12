@@ -387,24 +387,39 @@ async def search_dockerhub(
 ):
     """Search Docker Hub images."""
     auth = _build_dockerhub_auth(current_user.username)
-    params = {"q": q, "page": page, "page_size": 25}
+    # Docker Hub search has used both `q` and `query` over time depending on
+    # endpoint generation and account context. Send both keys for compatibility.
+    params = {"q": q, "query": q, "page": page, "page_size": 25}
     try:
         async with httpx.AsyncClient(
             timeout=HTTPX_TIMEOUT, follow_redirects=True
         ) as client:
-            resp = await client.get(
-                f"{DOCKERHUB_API_URL}/search/repositories/",
-                params=params,
-                auth=auth,
-            )
-
-            # Some Docker Hub accounts/tokens can trigger 401/403 on search.
-            # Fall back to anonymous mode so search stays functional.
-            if auth is not None and resp.status_code in {401, 403}:
-                resp = await client.get(
+            async def _search(req_auth: httpx.BasicAuth | None) -> httpx.Response:
+                return await client.get(
                     f"{DOCKERHUB_API_URL}/search/repositories/",
                     params=params,
+                    auth=req_auth,
                 )
+
+            resp = await _search(auth)
+
+            # Some Docker Hub accounts/tokens can trigger 401/403 on search,
+            # or return an empty payload despite a valid query.
+            # Fall back to anonymous mode so search stays functional.
+            if auth is not None:
+                should_retry_anonymous = resp.status_code in {401, 403}
+                if not should_retry_anonymous:
+                    try:
+                        payload = resp.json()
+                        raw_results = (
+                            payload.get("results") or payload.get("summaries") or []
+                        )
+                        should_retry_anonymous = len(raw_results) == 0
+                    except ValueError:
+                        should_retry_anonymous = False
+
+                if should_retry_anonymous:
+                    resp = await _search(None)
 
             resp.raise_for_status()
             data = resp.json()
