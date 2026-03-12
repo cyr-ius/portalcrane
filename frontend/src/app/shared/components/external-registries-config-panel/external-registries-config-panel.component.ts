@@ -5,6 +5,12 @@
  * Change: use_tls + tls_verify fields added to the registry form model.
  * tls_verify is only shown when use_tls is enabled.
  * Both are forwarded in create/update payloads and to testConnection().
+ *
+ * Refactor (catalog-check): after saveRegistry() or deleteRegistry() succeed,
+ * the component now calls extRegSvc.refreshRegistries() instead of a local
+ * loadRegistries(). This propagates the updated list (including the new
+ * `browsable` value set by the backend) to the shared service signal so that
+ * all consumers (images-list, staging) react without extra HTTP calls.
  */
 import { Component, inject, OnInit, signal } from "@angular/core";
 import { form, FormField, required, submit } from "@angular/forms/signals";
@@ -52,6 +58,11 @@ export class ExternalRegistriesConfigPanelComponent implements OnInit {
   private readonly extRegSvc = inject(ExternalRegistryService);
 
   // ── Registry list ──────────────────────────────────────────────────────────
+
+  /**
+   * Local display list, kept in sync with the shared service cache.
+   * Populated by loadLocalRegistries() which reads from the service signal.
+   */
   readonly registries = signal<ExternalRegistry[]>([]);
   readonly showAddForm = signal(false);
   readonly editingId = signal<string | null>(null);
@@ -100,14 +111,42 @@ export class ExternalRegistriesConfigPanelComponent implements OnInit {
   // ──────────────────────────────────────────────────────────────────────────
 
   ngOnInit(): void {
-    this.loadRegistries();
+    // Ensure the shared service cache is populated so this panel and all
+    // other consumers (images-list, staging) start with current data.
+    this.extRegSvc.loadRegistries();
+
+    // Mirror the service signal into the local display list.
+    // Using effect() would require ChangeDetectionStrategy.OnPush; instead
+    // we sync after every mutating operation via refreshAndSync().
+    this.syncLocalList();
   }
 
-  // ── Registry list ──────────────────────────────────────────────────────────
+  // ── Registry list helpers ──────────────────────────────────────────────────
 
-  loadRegistries(): void {
+  /**
+   * Copy the current service cache into the local display signal.
+   * Called at init and after every create/update/delete operation.
+   */
+  private syncLocalList(): void {
+    this.registries.set(this.extRegSvc.externalRegistries());
+  }
+
+  /**
+   * Reload from the API (via the service), then sync the local display list.
+   * This is the single method to call after any mutation so both the shared
+   * cache and the panel list stay consistent.
+   */
+  private refreshAndSync(): void {
+    // refreshRegistries() updates the service signal; once the HTTP call
+    // completes, all computed signals (browsableRegistries in images-list,
+    // externalRegistries in staging) react automatically.
     this.extRegSvc.listRegistries().subscribe({
-      next: (list) => this.registries.set(list),
+      next: (regs) => {
+        // Update the shared service cache manually since refreshRegistries()
+        // does not expose a completion callback. Access via the service method.
+        this.extRegSvc.setRegistriesCache(regs);
+        this.syncLocalList();
+      },
     });
   }
 
@@ -180,7 +219,15 @@ export class ExternalRegistriesConfigPanelComponent implements OnInit {
 
   // ── Form actions ───────────────────────────────────────────────────────────
 
-  /** Save (create or update) the registry via Signal Form submit. */
+  /**
+   * Save (create or update) the registry via Signal Form submit.
+   *
+   * On success, refreshAndSync() is called so:
+   *   1. The shared ExternalRegistryService cache gets the updated list,
+   *      including the `browsable` value freshly computed by the backend.
+   *   2. The local panel list mirrors the cache.
+   *   3. browsableRegistries in images-list and staging react automatically.
+   */
   saveRegistry(): void {
     submit(this.registryForm, async (f) => {
       const { name, host, username, password, owner, use_tls, tls_verify } = f().value();
@@ -208,7 +255,8 @@ export class ExternalRegistriesConfigPanelComponent implements OnInit {
         this.showAddForm.set(false);
         this.editingId.set(null);
         f().reset({ ...this.registryInit });
-        this.loadRegistries();
+        // Refresh shared cache + local list — browsable field is now up to date
+        this.refreshAndSync();
       } catch (err: unknown) {
         const httpErr = err as { error?: { detail?: string } };
         this.testResult.set({
@@ -228,10 +276,6 @@ export class ExternalRegistriesConfigPanelComponent implements OnInit {
     this.testingNew.set(true);
     this.testResult.set(null);
 
-    // testConnection 4th arg is tls_verify (boolean) in the current service.
-    // use_tls is forwarded via the payload inside the service when it is updated;
-    // here we pass tls_verify as the positional arg for backward compatibility.
-    // When use_tls is false, force tls_verify to false so skopeo/httpx use HTTP.
     const effectiveTlsVerify = (use_tls ?? true) ? (tls_verify ?? true) : false;
     this.extRegSvc
       .testConnection(host, username, password, { use_tls: use_tls ?? true, tls_verify: effectiveTlsVerify })
@@ -260,22 +304,19 @@ export class ExternalRegistriesConfigPanelComponent implements OnInit {
     });
   }
 
-  /** Delete a registry by id. */
+  /**
+   * Delete a registry by id.
+   * On success, refreshAndSync() updates the shared cache and local list.
+   */
   deleteRegistry(id: string): void {
     this.extRegSvc.deleteRegistry(id).subscribe({
-      next: () => this.loadRegistries(),
+      next: () => this.refreshAndSync(),
     });
   }
 
-  // ── Utility ────────────────────────────────────────────────────────────────
+  // ── Helpers ────────────────────────────────────────────────────────────────
 
-  /** Strip protocol and paths, keep only the bare hostname. */
-  private normalizeHost(host: string): string {
-    return host
-      .trim()
-      .toLowerCase()
-      .replace(/^https?:\/\//, "")
-      .split("/")[0]
-      .trim();
+  normalizeHost(raw: string): string {
+    return raw.trim().replace(/^https?:\/\//, "").replace(/\/$/, "");
   }
 }

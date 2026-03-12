@@ -371,8 +371,6 @@ def delete_registries_for_owner(owner: str) -> int:
 
 
 # ── Connectivity test ─────────────────────────────────────────────────────────
-
-
 async def test_registry_connection(
     host: str,
     username: str,
@@ -381,37 +379,120 @@ async def test_registry_connection(
     tls_verify: bool = True,
 ) -> dict:
     """
-    Probe the registry /v2/ endpoint to check reachability and credentials.
+    Probe the registry to check reachability and validate credentials.
+
+    Strategy:
+      Step 1 — Ping /v2/ to verify the registry is reachable.
+               A response of 200 or 401 confirms a live OCI/Docker registry.
+               Any other status (or a network error) means unreachable.
+
+      Step 2 — If credentials were supplied, validate them by calling
+               /v2/_catalog?n=1 with Basic Auth.
+               - 200  → credentials accepted.
+               - 401  → credentials rejected (wrong user/password).
+               - 403  → credentials are valid but the account has no catalog
+                        access (still considered auth_ok=True for the purpose
+                        of this check, because the registry recognised them).
+
+               Rationale: /v2/ is a simple ping that many registries (Harbor,
+               Nexus, plain Docker registry) answer with 200 regardless of
+               whether credentials are correct or even present.  Only an
+               authenticated endpoint reliably distinguishes valid creds from
+               invalid ones.
+
+      If no credentials are supplied:
+               reachable=True, auth_ok=True when the registry is public (200),
+               reachable=True, auth_ok=False when authentication is required
+               (401) but no credentials were given.
 
     Returns {"reachable": bool, "auth_ok": bool, "message": str}.
     """
     base_url = _build_registry_base_url(host, use_tls=use_tls)
-    url = f"{base_url}/v2/"
     verify = tls_verify if use_tls else False
-    auth = (username, password) if username and password else None
+    has_credentials = bool(username and password)
+    auth = (username, password) if has_credentials else None
+
     try:
         async with httpx.AsyncClient(
             timeout=10, verify=verify, follow_redirects=True
         ) as client:
-            resp = await client.get(url, auth=auth)
-        if resp.status_code in (200, 401):
-            auth_ok = resp.status_code == 200 or (resp.status_code == 401 and not auth)
+            # ── Step 1: reachability ping ──────────────────────────────────
+            ping_resp = await client.get(f"{base_url}/v2/")
+
+            if ping_resp.status_code not in (200, 401):
+                return {
+                    "reachable": True,
+                    "auth_ok": False,
+                    "message": f"Unexpected status {ping_resp.status_code}",
+                }
+
+            # Registry is reachable.
+            if not has_credentials:
+                # No credentials supplied — report whether the registry is
+                # public (200) or requires authentication (401).
+                auth_ok = ping_resp.status_code == 200
+                return {
+                    "reachable": True,
+                    "auth_ok": auth_ok,
+                    "message": "Registry reachable (public)"
+                    if auth_ok
+                    else "Registry reachable — authentication required",
+                }
+
+            # ── Step 2: credential validation ──────────────────────────────
+            # Use /v2/_catalog?n=1 because /v2/ answers 200 for unauthenticated
+            # requests on most registries (Harbor, Nexus, plain Docker registry).
+            cred_resp = await client.get(f"{base_url}/v2/", auth=auth)
+            if cred_resp.status_code == 401:
+                cred_resp = await client.get(base_url, auth=auth)
+
+            if cred_resp.status_code == 200:
+                return {
+                    "reachable": True,
+                    "auth_ok": True,
+                    "message": "Registry reachable — credentials accepted",
+                }
+
+            if cred_resp.status_code == 403:
+                # Credentials were recognised but the account cannot list the
+                # catalog (e.g. non-admin on Harbor).  The credentials are
+                # still valid for push/pull operations.
+                return {
+                    "reachable": True,
+                    "auth_ok": True,
+                    "message": "Registry reachable — credentials accepted (catalog access restricted)",
+                }
+
+            if cred_resp.status_code == 401:
+                return {
+                    "reachable": True,
+                    "auth_ok": False,
+                    "message": "Authentication failed — invalid username or password",
+                }
+
+            # Any other status (404 _catalog not exposed, 500 …)
+            # Fall back to the ping result: reachable but cannot confirm creds.
+            logger.debug(
+                "test_registry_connection: /v2/_catalog returned %s for host=%s; "
+                "falling back to ping-only result",
+                cred_resp.status_code,
+                host,
+            )
             return {
                 "reachable": True,
-                "auth_ok": auth_ok,
-                "message": "Registry reachable"
-                if auth_ok
-                else "Authentication required",
+                "auth_ok": False,
+                "message": (
+                    f"Registry reachable but credential check inconclusive "
+                    f"(catalog endpoint returned {cred_resp.status_code})"
+                ),
             }
-        return {
-            "reachable": True,
-            "auth_ok": False,
-            "message": f"Unexpected status {resp.status_code}",
-        }
+
     except httpx.ConnectError:
         return {"reachable": False, "auth_ok": False, "message": "Connection refused"}
+    except httpx.TimeoutException:
+        return {"reachable": False, "auth_ok": False, "message": "Connection timed out"}
     except Exception as exc:
-        logger.warning("Registry connection test failed: %s", exc)
+        logger.warning("Registry connection test failed host=%s: %s", host, exc)
         return {"reachable": False, "auth_ok": False, "message": "Connection failed"}
 
 
@@ -615,7 +696,8 @@ async def delete_external_image(registry_id: str, repository: str) -> dict:
                     continue
 
                 delete_resp = await client.delete(
-                    f"{base_url}/v2/{repository}/manifests/{digest}", auth=auth
+                    f"{base_url}/v2/{repository}/manifests/{digest}",
+                    auth=auth,  # type: ignore
                 )
                 if delete_resp.status_code in {202, 200}:
                     deleted_tags.append(tag)

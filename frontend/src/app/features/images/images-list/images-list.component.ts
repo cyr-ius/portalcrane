@@ -14,12 +14,19 @@
  *   - External registries are loaded once at init via ExternalRegistryService.
  *   - Switching source resets pagination and search.
  *
- * Changes (catalog availability check):
- *   - _loadBrowsableRegistries() replaces the direct listRegistries() call in
- *     ngOnInit. Each registry is probed via checkCatalog() in parallel using
- *     forkJoin; only registries returning available=true are kept in
- *     externalRegistries and shown in the source selector.
- *   - New signal checkingCatalog: boolean shows a spinner while probes run.
+ * Changes (catalog availability — refactor):
+ *   - _loadBrowsableRegistries() no longer calls GET catalog-check for every
+ *     registry on each page visit. The backend already probes /v2/_catalog
+ *     when a registry is created or updated and persists the result in the
+ *     `browsable` field. The component now reads ExternalRegistryService
+ *     .browsableRegistries (a computed signal filtering on browsable !== false)
+ *     after the shared registry cache is populated via a single listRegistries()
+ *     call.
+ *   - externalRegistries is now a computed signal (was a writable signal)
+ *     derived from the service cache so all components stay in sync.
+ *   - checkingCatalog is now only true for the brief GET /registries call
+ *     (not for N parallel catalog-check probes).
+ *   - Removed unused imports: forkJoin, of, catchError.
  */
 import {
   Component,
@@ -32,8 +39,7 @@ import {
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { FormsModule } from "@angular/forms";
 import { Router } from "@angular/router";
-import { debounceTime, distinctUntilChanged, forkJoin, of, Subject } from "rxjs";
-import { catchError } from "rxjs/operators";
+import { debounceTime, distinctUntilChanged, Subject } from "rxjs";
 import { AuthService } from "../../../core/services/auth.service";
 import {
   ExternalRegistry,
@@ -99,20 +105,26 @@ export class ImagesListComponent implements OnInit {
 
   private readonly searchQuery$ = new Subject<string>();
 
-  // ── Source selection (Évolution 1) ─────────────────────────────────────────
+  // ── Source selection ───────────────────────────────────────────────────────
 
   /** 'local' or a saved external registry ID. */
   readonly selectedSource = signal<SourceId>("local");
 
   /**
-   * External registries that passed the catalog availability check.
-   * Only these are shown in the source selector.
+   * External registries that support /v2/_catalog browsing.
+   *
+   * Computed from the shared ExternalRegistryService cache so that all
+   * consumers (Staging, Settings panel) stay in sync after a create/update/
+   * delete operation — no per-visit catalog-check HTTP calls are needed.
+   * The backend sets `browsable` when a registry is created or updated.
    */
-  readonly externalRegistries = signal<ExternalRegistry[]>([]);
+  readonly externalRegistries = computed<ExternalRegistry[]>(
+    () => this.extRegSvc.browsableRegistries(),
+  );
 
   /**
-   * True while the parallel catalog-availability probes are in flight.
-   * The source selector shows a spinner during this phase.
+   * True while the single GET /registries call is in flight.
+   * Replaced the previous "N parallel catalog-check probes" spinner.
    */
   readonly checkingCatalog = signal(false);
 
@@ -269,11 +281,12 @@ export class ImagesListComponent implements OnInit {
   ngOnInit(): void {
     this.setupSearchDebounce();
 
-    // Probe catalog availability for all registries in parallel;
-    // only browsable registries are shown in the source selector.
+    // Populate the shared registry cache then derive browsable registries
+    // from the persisted `browsable` field — no per-registry catalog-check
+    // HTTP calls are made here.
     this._loadBrowsableRegistries();
 
-    // Load configured folder names first so folderTree grouping is accurate
+    // Load configured folder names first so folderTree grouping is accurate.
     this.folderSvc.getFolderNames().subscribe({
       next: (names) => {
         this.configuredFolderNames.set(names);
@@ -283,47 +296,32 @@ export class ImagesListComponent implements OnInit {
     });
   }
 
-  // ── Catalog availability check ─────────────────────────────────────────────
+  // ── Browsable registries (refactored — no catalog-check HTTP calls) ────────
 
   /**
-   * Load all configured external registries then probe each one in parallel
-   * via GET /api/external/registries/{id}/catalog-check (5 s timeout, n=1).
-   * Only registries returning available=true are kept in externalRegistries.
-   * catchError per registry ensures one failure does not block the others.
+   * Populate the shared ExternalRegistryService cache with a single
+   * GET /api/external/registries call. The computed signal externalRegistries
+   * (which reads browsableRegistries from the service) then reflects the
+   * up-to-date browsable list automatically.
+   *
+   * If the cache is already populated (e.g. by the Staging component or the
+   * Settings panel at an earlier point in the session), the signal is already
+   * up to date and we skip the HTTP call entirely.
    */
   private _loadBrowsableRegistries(): void {
+    // Cache already warm — browsableRegistries computed signal is ready.
+    if (this.extRegSvc.externalRegistries().length > 0) {
+      return;
+    }
+
     this.checkingCatalog.set(true);
-
     this.extRegSvc.listRegistries().subscribe({
-      next: (allRegistries) => {
-        if (allRegistries.length === 0) {
-          this.externalRegistries.set([]);
-          this.checkingCatalog.set(false);
-          return;
-        }
-
-        const checks$ = allRegistries.map((reg) =>
-          this.extRegSvc.checkCatalog(reg.id).pipe(
-            catchError(() => of({ available: false, reason: "Request failed" })),
-          ),
-        );
-
-        forkJoin(checks$).subscribe({
-          next: (results) => {
-            const browsable = allRegistries.filter(
-              (_, idx) => results[idx].available,
-            );
-            this.externalRegistries.set(browsable);
-            this.checkingCatalog.set(false);
-          },
-          error: () => {
-            this.externalRegistries.set([]);
-            this.checkingCatalog.set(false);
-          },
-        });
+      next: (regs) => {
+        // Update the shared service cache so all consumers react.
+        this.extRegSvc.setRegistriesCache(regs);
+        this.checkingCatalog.set(false);
       },
       error: () => {
-        this.externalRegistries.set([]);
         this.checkingCatalog.set(false);
       },
     });
@@ -481,9 +479,10 @@ export class ImagesListComponent implements OnInit {
 
   goToDetail(imageName: string): void {
     if (this.isExternalSource()) {
-      const image = this.filteredItems().find((i) => i.name === imageName)
-        ?? this.accessibleItems().find((i) => i.name === imageName)
-        ?? null;
+      const image =
+        this.filteredItems().find((i) => i.name === imageName) ??
+        this.accessibleItems().find((i) => i.name === imageName) ??
+        null;
       this.viewTarget.set(image);
       return;
     }

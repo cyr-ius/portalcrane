@@ -8,6 +8,17 @@
  *   - Images source selector (images-list component)
  *   - Staging pull source selector (staging component)
  * Only registries with browsable === true appear in those selectors.
+ *
+ * Refactor (catalog-check removal from images-list):
+ *   - loadRegistries() is now the single entry point for populating the shared
+ *     cache. It fetches GET /api/external/registries and updates the
+ *     _externalRegistries signal so all consumers react automatically.
+ *   - browsableRegistries computed signal filters on browsable !== false;
+ *     components must use this signal instead of calling catalog-check
+ *     individually on each registry at display time.
+ *   - refreshRegistries() is a public alias of loadRegistries() intended for
+ *     use after create/update/delete operations in the config panel so the
+ *     shared cache stays in sync without requiring a page reload.
  */
 import { HttpClient } from "@angular/common/http";
 import { computed, inject, Injectable, signal } from "@angular/core";
@@ -115,6 +126,11 @@ export class ExternalRegistryService {
    * Use this signal in:
    *   - images-list source selector buttons
    *   - staging "saved registry" dropdown
+   *
+   * This replaces the previous pattern of calling catalog-check on each
+   * registry individually at display time. The backend persists the `browsable`
+   * field when registries are created or updated, so no extra HTTP calls are
+   * required here.
    */
   readonly browsableRegistries = computed<ExternalRegistry[]>(() =>
     this._externalRegistries().filter((r) => r.browsable !== false),
@@ -128,12 +144,40 @@ export class ExternalRegistryService {
 
   /**
    * Load registries from the API and update the in-memory cache signal.
-   * Called at app init (staging component, images list, etc.).
+   *
+   * Called at app init by consuming components (staging, images-list, etc.).
+   * After this call, browsableRegistries automatically reflects registries
+   * whose `browsable` field is true — no catalog-check calls are needed.
    */
   loadRegistries(): void {
     this.listRegistries().subscribe({
       next: (regs) => this._externalRegistries.set(regs),
     });
+  }
+
+
+  /**
+   * Directly update the in-memory registry cache signal.
+   * Called by components that already have the registry list (e.g. after
+   * listRegistries() returns) so they can push the data into the shared
+   * cache without a second HTTP call.
+   *
+   * @param regs  Full registry list returned by listRegistries().
+   */
+  setRegistriesCache(regs: ExternalRegistry[]): void {
+    this._externalRegistries.set(regs);
+  }
+
+  /**
+   * Refresh the shared registry cache after a create, update or delete
+   * operation. All components consuming externalRegistries or
+   * browsableRegistries will reactively update.
+   *
+   * Intended for use in ExternalRegistriesConfigPanelComponent after
+   * saveRegistry() or deleteRegistry() succeed.
+   */
+  refreshRegistries(): void {
+    this.loadRegistries();
   }
 
   createRegistry(payload: CreateRegistryPayload): Observable<ExternalRegistry> {
@@ -207,13 +251,10 @@ export class ExternalRegistryService {
    * Probe /v2/_catalog on a saved registry to determine whether it supports
    * catalog browsing.
    *
-   * Returns {available: boolean; reason: string}.
-   * available=true  → registry exposes a browsable catalog; shown in the
-   *                   Images source selector.
-   * available=false → catalog absent or inaccessible; hidden from selector.
-   *
-   * The backend uses a 5-second timeout (?n=1 probe) so this call is fast
-   * enough to run in parallel for all configured registries via forkJoin.
+   * This endpoint is kept for manual refresh use cases (e.g. a "refresh"
+   * button in the registry panel). It is no longer called automatically when
+   * the Images page loads — the `browsable` field persisted by the backend
+   * is used instead via the browsableRegistries computed signal.
    *
    * @param id  Saved external registry ID.
    */

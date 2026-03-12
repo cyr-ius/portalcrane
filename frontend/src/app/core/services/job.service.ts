@@ -1,3 +1,17 @@
+/**
+ * Portalcrane - JobService
+ *
+ * Manages the staging pipeline job list as a reactive singleton.
+ *
+ * Session isolation fix:
+ *   JobService is providedIn: 'root', meaning the _jobs signal persists
+ *   across user sessions in the same browser tab. Without an explicit reset,
+ *   a second user logging in would briefly see the previous user's jobs
+ *   (the 200 ms before the first polling cycle).
+ *
+ *   clearState() resets all mutable state and is called by AuthService
+ *   .clearSession() on every logout (local, OIDC, and session-expired 401).
+ */
 import { HttpClient } from "@angular/common/http";
 import { inject, Injectable, signal } from "@angular/core";
 import { Observable } from "rxjs";
@@ -97,6 +111,24 @@ export class JobService {
    */
   private readonly _rePushOverrides = new Set<string>();
 
+  // ── Session lifecycle ──────────────────────────────────────────────────────
+
+  /**
+   * Reset all mutable state to its initial value.
+   *
+   * Must be called by AuthService.clearSession() so that a new user logging
+   * in after a logout/expiry never sees stale jobs belonging to the previous
+   * session. JobService is providedIn: 'root' (singleton), so the signal
+   * would otherwise persist across sessions within the same browser tab.
+   */
+  clearState(): void {
+    this._jobs.set([]);
+    this._pushingJobId.set(null);
+    this._rePushOverrides.clear();
+  }
+
+  // ── Push lifecycle helpers ─────────────────────────────────────────────────
+
   /**
    * Register a job as currently being pushed.
    * Called synchronously before the HTTP request so the UI transitions
@@ -117,6 +149,8 @@ export class JobService {
       this._pushingJobId.set(null);
     }
   }
+
+  // ── Job list management ────────────────────────────────────────────────────
 
   /**
    * Replace the full job list with data from the backend.
@@ -188,6 +222,8 @@ export class JobService {
     );
   }
 
+  // ── HTTP calls ─────────────────────────────────────────────────────────────
+
   getJob(jobId: string): Observable<StagingJob> {
     return this.http.get<StagingJob>(`${this.BASE}/jobs/${jobId}`);
   }
@@ -218,8 +254,11 @@ export class JobService {
     return this.http.delete<{ message: string }>(`${this.BASE}/jobs/${jobId}`);
   }
 
+  // ── Sort helper ────────────────────────────────────────────────────────────
+
   /**
-   * Sort jobs: active jobs first, then by creation date descending.
+   * Sort jobs: active jobs first, then by creation date descending
+   * (most recent at the top of each group).
    */
   sortJobs(jobs: StagingJob[]): StagingJob[] {
     return [...jobs].sort((a, b) => {

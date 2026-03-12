@@ -6,6 +6,13 @@
  *   - reactive user and authentication state (signals)
  *
  * OIDC-specific logic (config fetch, redirect, callback) lives in OidcService.
+ *
+ * Session isolation fix:
+ *   clearSession() now calls jobService.clearState() so that singleton
+ *   services that cache user-scoped data are flushed on every logout.
+ *   Without this, a second user logging in after a logout would briefly
+ *   see the previous user's staging jobs (the ~200 ms before the first
+ *   polling cycle fires).
  */
 
 import { HttpClient } from "@angular/common/http";
@@ -14,6 +21,7 @@ import { Router } from "@angular/router";
 import { tap } from "rxjs";
 
 import { LoginResponse, UserInfo } from "../models/auth.models";
+import { JobService } from "./job.service";
 import { OidcService } from "./oidc.service";
 
 @Injectable({ providedIn: "root" })
@@ -21,6 +29,7 @@ export class AuthService {
   private readonly http = inject(HttpClient);
   private readonly router = inject(Router);
   private readonly oidcService = inject(OidcService);
+  private readonly jobService = inject(JobService);
 
   private readonly TOKEN_KEY = "pc_token";
   private readonly USER_KEY = "pc_user";
@@ -92,19 +101,31 @@ export class AuthService {
     });
   }
 
-  /** Remove token and user from memory and localStorage. */
+  /**
+   * Remove token and user from memory and localStorage.
+   *
+   * Also resets all singleton services that hold user-scoped state so that
+   * a subsequent login (same browser tab, different user) starts with a clean
+   * slate and never leaks data from the previous session.
+   *
+   * Called by:
+   *   - logout()         — explicit user action
+   *   - authInterceptor  — on any 401 response (session expired / invalid token)
+   */
   clearSession(): void {
     this._token.set(null);
     this._user.set(null);
     localStorage.removeItem(this.TOKEN_KEY);
     localStorage.removeItem(this.USER_KEY);
+
+    // Reset singleton service caches that contain user-scoped data.
+    this.jobService.clearState();
   }
 
   /** Return the current JWT token string (or null when not authenticated). */
   getToken(): string | null {
     return this._token();
   }
-
 
   /**
    * Store a JWT access token in memory and localStorage.
