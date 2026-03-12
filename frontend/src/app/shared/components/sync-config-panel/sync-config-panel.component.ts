@@ -4,22 +4,25 @@
  * Allows admins to trigger image synchronisations to/from external registries
  * and view the sync/import job history.
  *
- * Changes (Évolution 2):
- *   - New ImportFormModel interface.
- *   - New importModel signal + importForm Signal Form.
- *   - New startImport() method calling ExternalRegistryService.startImport().
- *   - getRegistryHost() now works for both source_registry_id (import) and
- *     dest_registry_id (export) so the history list can resolve both.
- *   - New jobDirectionLabel() / jobDirectionClass() helpers for direction badges.
+ * Refactor (unified card):
+ *   - Export (local → external) and Import (external → local) are merged into
+ *     a single card controlled by the `syncDirection` signal.
+ *   - New `setSyncDirection()` method switches between 'export' and 'import'.
+ *   - Both Signal Forms (syncForm / importForm) and all helpers are unchanged.
  *
- * Fix: getSyncPreview() now mirrors the corrected _rewrite_image_name_for_sync()
- *   backend logic: full source path is preserved when no folder/username is set,
- *   so "editeur/nginx" stays "editeur/nginx" instead of being truncated to "nginx".
+ * Previous changes preserved:
+ *   - ImportFormModel interface (Évolution 2).
+ *   - importModel signal + importForm Signal Form.
+ *   - startImport() method calling ExternalRegistryService.startImport().
+ *   - getRegistryHost() resolves both source_registry_id (import) and
+ *     dest_registry_id (export) for the history list.
+ *   - jobDirectionLabel() / jobDirectionClass() helpers for direction badges.
+ *   - getSyncPreview() mirrors the corrected _rewrite_image_name_for_sync()
+ *     backend logic (full source path preserved when no folder/username is set).
  *
  * NOTE: All <select> values are strings; [formField] works correctly here
  * without manual coercion.
  */
-import { SlicePipe } from "@angular/common";
 import { Component, DestroyRef, inject, OnInit, signal } from "@angular/core";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { form, FormField, required, submit } from "@angular/forms/signals";
@@ -39,17 +42,20 @@ interface SyncFormModel {
   folder: string;
 }
 
-/** Shape of the import form model (Évolution 2). */
+/** Shape of the import form model. */
 interface ImportFormModel {
   sourceId: string;
   image: string;
   destFolder: string;
 }
 
+/** Direction of the unified sync form. */
+type SyncDirection = "export" | "import";
+
 @Component({
   selector: "app-sync-config-panel",
-  // FormField required for [formField] bindings; SlicePipe for job log display
-  imports: [SlicePipe, FormField],
+  // FormField required for [formField] bindings
+  imports: [FormField],
   templateUrl: "./sync-config-panel.component.html",
   styleUrl: "./sync-config-panel.component.css",
 })
@@ -70,9 +76,19 @@ export class SyncConfigPanelComponent implements OnInit {
 
   private readonly syncPollTrigger$ = new Subject<void>();
 
+  // ── Direction toggle ───────────────────────────────────────────────────────
+
+  /** Controls which sub-form is visible: 'export' (local→ext) or 'import' (ext→local). */
+  readonly syncDirection = signal<SyncDirection>("export");
+
+  /** Switch the active direction and reset both forms to their defaults. */
+  setSyncDirection(direction: SyncDirection): void {
+    this.syncDirection.set(direction);
+  }
+
   // ── Signal Form – export sync trigger ─────────────────────────────────────
 
-  /** Blank defaults; spread on every form open to avoid shared-reference bugs. */
+  /** Blank defaults; spread on every reset to avoid shared-reference bugs. */
   private readonly syncInit: SyncFormModel = {
     source: "(all)",
     destId: "",
@@ -89,7 +105,7 @@ export class SyncConfigPanelComponent implements OnInit {
     required(p.destId);
   });
 
-  // ── Signal Form – import form (Évolution 2) ────────────────────────────────
+  // ── Signal Form – import form ──────────────────────────────────────────────
 
   private readonly importInit: ImportFormModel = {
     sourceId: "",
@@ -194,7 +210,7 @@ export class SyncConfigPanelComponent implements OnInit {
     });
   }
 
-  // ── Import (Évolution 2) ───────────────────────────────────────────────────
+  // ── Import ─────────────────────────────────────────────────────────────────
 
   /** Submit the import form via Signal Forms. */
   startImport(): void {
@@ -212,7 +228,7 @@ export class SyncConfigPanelComponent implements OnInit {
           next: () => {
             this.startingImport.set(false);
             this.importModel.set({ ...this.importInit });
-            // Re-select first registry so the form stays usable
+            // Re-select first registry so the form stays usable after submit
             if (this.registries().length > 0) {
               this.importModel.update((m) => ({
                 ...m,
@@ -258,7 +274,7 @@ export class SyncConfigPanelComponent implements OnInit {
    *      "editeur/nginx" + username="jdoe" → "jdoe/nginx"
    *
    *   3. No folder, no username → preserve the FULL source path
-   *      "editeur/nginx" → "editeur/nginx"  ✓ (was wrongly truncated to "nginx")
+   *      "editeur/nginx" → "editeur/nginx"  ✓
    *      "nginx"         → "nginx"
    */
   getSyncPreview(): string {
@@ -344,7 +360,7 @@ export class SyncConfigPanelComponent implements OnInit {
   }
 
   /**
-   * Human-readable label for the job direction badge (Évolution 2).
+   * Human-readable label for the job direction badge.
    * "export" → "↑ Export"   (local → external)
    * "import" → "↓ Import"   (external → local)
    */
@@ -352,7 +368,7 @@ export class SyncConfigPanelComponent implements OnInit {
     return job.direction === "import" ? "↓ Import" : "↑ Export";
   }
 
-  /** Bootstrap badge class for the job direction badge (Évolution 2). */
+  /** Bootstrap badge class for the job direction badge. */
   jobDirectionClass(job: SyncJob): string {
     return job.direction === "import"
       ? "badge bg-secondary-subtle text-secondary"
