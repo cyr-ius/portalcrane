@@ -18,6 +18,10 @@ Changes:
   - [FIX] _skopeo_tls_verify() helper: properly derive --tls-verify flag
     from both use_tls AND tls_verify fields. Previously only tls_verify was
     checked, causing skopeo to attempt HTTPS on plain-HTTP registries.
+  - [NEW] check_catalog_browsable() — probe /v2/_catalog to check whether
+    the registry supports listing repositories. The result is persisted in
+    the browsable field and exposed in the API response so the frontend can
+    hide non-browsable registries from the Images source selector.
 """
 
 import asyncio
@@ -65,14 +69,19 @@ def _save_registries(registries: list[dict]) -> None:
 def _redact(r: dict) -> dict:
     """Return a copy of the registry dict with the password redacted.
 
-    tls_verify and use_tls are preserved as-is; defaults applied for old entries
-    that predate these fields.
+    tls_verify, use_tls and browsable are preserved as-is; defaults applied
+    for old entries that predate these fields.
+
+    browsable defaults to True for backward compatibility: existing entries
+    continue to appear in source selectors until they are saved again, at
+    which point check_catalog_browsable() re-evaluates the field.
     """
     return {
         **r,
         "password": "••••••••" if r.get("password") else "",
         "use_tls": r.get("use_tls", True),
         "tls_verify": r.get("tls_verify", True),
+        "browsable": r.get("browsable", True),
     }
 
 
@@ -134,22 +143,63 @@ def _skopeo_tls_verify(use_tls: bool, tls_verify: bool) -> bool:
     """
     Derive the boolean value for skopeo --src/dest-tls-verify.
 
-    The two registry fields have distinct semantics:
-      - use_tls    : whether the registry uses TLS at all (HTTP vs HTTPS)
-      - tls_verify : whether to validate the TLS certificate (self-signed)
-
     Mapping:
-      use_tls=False              → plain HTTP → --tls-verify=false
-      use_tls=True, verify=False → HTTPS, skip cert check → --tls-verify=false
-      use_tls=True, verify=True  → normal HTTPS → --tls-verify=true
-
-    This fix resolves the "http: server gave HTTP response to HTTPS client"
-    error that occurred when skopeo received --dest-tls-verify=true for a
-    plain-HTTP registry (use_tls=False was ignored).
+      use_tls=False              -> plain HTTP -> --tls-verify=false
+      use_tls=True, verify=False -> HTTPS, skip cert check -> --tls-verify=false
+      use_tls=True, verify=True  -> normal HTTPS -> --tls-verify=true
     """
     if not use_tls:
         return False
     return tls_verify
+
+
+async def check_catalog_browsable(
+    host: str,
+    username: str,
+    password: str,
+    use_tls: bool = True,
+    tls_verify: bool = True,
+) -> bool:
+    """
+    Probe /v2/_catalog to determine whether this registry supports repository
+    listing (browsing).
+
+    Returns True when the endpoint responds with HTTP 200 or 401 (reachable
+    but authentication required — still a browse-capable registry).
+    Returns False when the registry is unreachable, returns an unexpected
+    status, or explicitly blocks /v2/_catalog (e.g. Docker Hub).
+
+    This result is stored in the `browsable` field of the registry entry so
+    the frontend can hide non-browsable registries from the Images source
+    selector without making additional requests.
+    """
+    # Docker Hub never exposes /v2/_catalog publicly
+    normalized = _normalize_registry_host(host)
+    if normalized in {"docker.io", "index.docker.io", "registry-1.docker.io"}:
+        logger.debug("check_catalog_browsable: Docker Hub — not browsable")
+        return False
+
+    base_url = _build_registry_base_url(host, use_tls=use_tls)
+    verify = tls_verify if use_tls else False
+    auth = (username, password) if username and password else None
+
+    try:
+        async with httpx.AsyncClient(
+            timeout=10, verify=verify, follow_redirects=True
+        ) as client:
+            resp = await client.get(f"{base_url}/v2/_catalog?n=1", auth=auth)
+        # 200 = OK, 401 = auth required but endpoint exists -> browsable
+        browsable = resp.status_code in (200, 401)
+        logger.debug(
+            "check_catalog_browsable host=%s status=%s browsable=%s",
+            host,
+            resp.status_code,
+            browsable,
+        )
+        return browsable
+    except Exception as exc:
+        logger.warning("check_catalog_browsable host=%s error: %s", host, exc)
+        return False
 
 
 def find_registry_credentials_for_host(host: str, owner: str) -> tuple[str, str] | None:
@@ -181,7 +231,7 @@ def find_registry_credentials_for_host(host: str, owner: str) -> tuple[str, str]
     return None
 
 
-def create_registry(
+async def create_registry(
     name: str,
     host: str,
     username: str,
@@ -194,11 +244,21 @@ def create_registry(
     Create and persist a new external registry entry.
 
     *use_tls*    — when False, all HTTP connections use plain http://.
-                   When True (default), https:// is used.
-    *tls_verify* — only relevant when use_tls is True; controls whether the
-                   TLS certificate is validated.  Set to False for self-signed
-                   certificates on HTTPS registries.
+    *tls_verify* — only relevant when use_tls is True; set to False for
+                   self-signed certificates.
+
+    The browsable field is set by probing /v2/_catalog so the frontend can
+    immediately filter out non-browsable registries in the Images source
+    selector and the Staging pull registry selector.
     """
+    browsable = await check_catalog_browsable(
+        host=host,
+        username=username,
+        password=password,
+        use_tls=use_tls,
+        tls_verify=tls_verify,
+    )
+
     registries = _load_registries()
     entry = {
         "id": str(uuid.uuid4()),
@@ -209,22 +269,25 @@ def create_registry(
         "owner": owner,
         "use_tls": use_tls,
         "tls_verify": tls_verify,
+        "browsable": browsable,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     registries.append(entry)
     _save_registries(registries)
     logger.debug(
-        "External registry created id=%s host=%s owner=%s use_tls=%s tls_verify=%s",
+        "External registry created id=%s host=%s owner=%s use_tls=%s "
+        "tls_verify=%s browsable=%s",
         entry["id"],
         host,
         owner,
         use_tls,
         tls_verify,
+        browsable,
     )
     return _redact(entry)
 
 
-def update_registry(
+async def update_registry(
     registry_id: str,
     name: str | None,
     host: str | None,
@@ -234,7 +297,13 @@ def update_registry(
     use_tls: bool | None = None,
     tls_verify: bool | None = None,
 ) -> dict | None:
-    """Update an existing registry entry. use_tls/tls_verify only changed when explicitly supplied."""
+    """
+    Update an existing registry entry.
+
+    use_tls/tls_verify are only changed when explicitly supplied.
+    browsable is re-evaluated whenever any connectivity-related field
+    (host, username, password, use_tls, tls_verify) changes.
+    """
     registries = _load_registries()
     for r in registries:
         if r["id"] == registry_id:
@@ -252,14 +321,30 @@ def update_registry(
                 r["use_tls"] = use_tls
             if tls_verify is not None:
                 r["tls_verify"] = tls_verify
+
+            # Re-check browsability when any connectivity parameter changes
+            connectivity_changed = any(
+                v is not None for v in [host, username, password, use_tls, tls_verify]
+            )
+            if connectivity_changed:
+                r["browsable"] = await check_catalog_browsable(
+                    host=r["host"],
+                    username=r.get("username", ""),
+                    password=r.get("password", ""),
+                    use_tls=r.get("use_tls", True),
+                    tls_verify=r.get("tls_verify", True),
+                )
+
             _save_registries(registries)
             logger.debug(
-                "External registry updated id=%s host=%s owner=%s use_tls=%s tls_verify=%s",
+                "External registry updated id=%s host=%s owner=%s use_tls=%s "
+                "tls_verify=%s browsable=%s",
                 registry_id,
                 r.get("host"),
                 r.get("owner", "global"),
                 r.get("use_tls", True),
                 r.get("tls_verify", True),
+                r.get("browsable"),
             )
             return _redact(r)
     return None
@@ -298,15 +383,10 @@ async def test_registry_connection(
     """
     Probe the registry /v2/ endpoint to check reachability and credentials.
 
-    *use_tls*    — when False, connects over plain HTTP (http://).
-    *tls_verify* — only relevant when use_tls is True; set to False for
-                   self-signed certificates.
-
     Returns {"reachable": bool, "auth_ok": bool, "message": str}.
     """
     base_url = _build_registry_base_url(host, use_tls=use_tls)
     url = f"{base_url}/v2/"
-    # httpx verify= only applies to HTTPS; for HTTP it is ignored
     verify = tls_verify if use_tls else False
     auth = (username, password) if username and password else None
     try:
@@ -347,12 +427,8 @@ async def browse_external_images(
     """
     List repositories available in an external registry using /v2/_catalog.
 
-    Authentication and TLS settings are read from the saved registry entry.
     Returns a paginated dict compatible with the local PaginatedImages shape:
       { items, total, page, page_size, total_pages, error }
-
-    Docker Hub does not expose /v2/_catalog publicly; for that host an empty
-    result is returned with an explanatory error message.
     """
     registry = get_registry_by_id(registry_id)
     if not registry:
@@ -555,9 +631,7 @@ async def skopeo_sync_image(
 ) -> tuple[bool, str]:
     """
     Copy an image between two docker:// registries using skopeo copy.
-
-    Used by both export (local→external) and import (external→local) jobs.
-    No intermediate OCI directory is needed.
+    Used by both export (local->external) and import (external->local) jobs.
     """
     cmd = [
         "skopeo",
@@ -602,13 +676,16 @@ def _rewrite_image_name_for_sync(
 ) -> str:
     """
     Rewrite the image repository name for the destination registry.
+
+    Rules (applied in order):
+      1. dest_folder supplied -> replace namespace with folder prefix
+      2. dest_username supplied -> prepend username (Docker Hub compat)
+      3. No override -> preserve the full source path including namespace
     """
     leaf = img.split("/")[-1]
     if dest_folder:
-        # Explicit folder: replace namespace, keep only leaf
         return f"{dest_folder}/{leaf}"
     if dest_username:
-        # Docker Hub / username-scoped registry: leaf under username
         return f"{dest_username}/{leaf}"
     return img
 
@@ -631,9 +708,7 @@ async def run_sync_job(
     settings: Settings,
 ) -> str:
     """
-    Start an asynchronous export job (local → external) and return the job ID.
-
-    Copies images from the local registry to an external registry via skopeo.
+    Start an asynchronous export job (local -> external) and return the job ID.
     The job dict carries direction="export" for display in the history list.
     """
     job_id = str(uuid.uuid4())
@@ -647,17 +722,12 @@ async def run_sync_job(
     dest_use_tls = registry.get("use_tls", True)
     dest_tls_verify_raw = registry.get("tls_verify", True)
 
-    # FIX: derive the skopeo --dest-tls-verify flag from BOTH use_tls and
-    # tls_verify. Previously only tls_verify was read, causing skopeo to
-    # attempt HTTPS on plain-HTTP registries (use_tls=False was ignored).
     dest_tls_verify = _skopeo_tls_verify(dest_use_tls, dest_tls_verify_raw)
-
-    # The local registry is the source; use its URL scheme to decide TLS.
     src_tls_verify = local_registry_url.startswith("https://")
 
     _sync_jobs[job_id] = {
         "id": job_id,
-        "direction": "export",  # local → external
+        "direction": "export",
         "source": source_image,
         "source_registry_id": None,
         "dest_registry_id": dest_registry_id,
@@ -720,19 +790,26 @@ async def run_sync_job(
                     if not ok:
                         errors.append(f"{img}:{tag} — {msg}")
                         logger.warning(
-                            "Export job %s: failed %s:%s — %s", job_id, img, tag, msg
+                            "Export job %s: failed %s:%s — %s",
+                            job_id,
+                            img,
+                            tag,
+                            msg,
                         )
 
                 _sync_jobs[job_id]["images_done"] += 1
                 _sync_jobs[job_id]["progress"] = int(
-                    100 * _sync_jobs[job_id]["images_done"] / max(len(images), 1)
+                    (_sync_jobs[job_id]["images_done"] / max(len(images), 1)) * 100
                 )
 
-            _sync_jobs[job_id]["status"] = "partial" if errors else "done"
-            _sync_jobs[job_id]["message"] = (
-                f"Completed with {len(errors)} error(s)" if errors else "Sync complete"
-            )
-            _sync_jobs[job_id]["error"] = "\n".join(errors) if errors else None
+            if errors:
+                _sync_jobs[job_id]["status"] = "partial"
+                _sync_jobs[job_id]["error"] = "\n".join(errors)
+                _sync_jobs[job_id]["message"] = f"Completed with {len(errors)} error(s)"
+            else:
+                _sync_jobs[job_id]["status"] = "done"
+                _sync_jobs[job_id]["message"] = "Sync completed successfully"
+
         except Exception as exc:
             logger.exception("Export job %s failed: %s", job_id, exc)
             _sync_jobs[job_id]["status"] = "error"
@@ -742,9 +819,7 @@ async def run_sync_job(
             _sync_jobs[job_id]["finished_at"] = datetime.now(timezone.utc).isoformat()
             _sync_jobs[job_id]["progress"] = 100
 
-    import asyncio as _asyncio
-
-    _asyncio.create_task(_run())
+    asyncio.create_task(_run())
     return job_id
 
 
@@ -756,13 +831,7 @@ async def run_import_job(
     settings: Settings,
 ) -> str:
     """
-    Start an asynchronous import job (external → local) and return the job ID.
-
-    Mirrors run_sync_job() with source and destination inverted:
-      - source: docker://<external_host>/<image>:<tag>  with external credentials
-      - dest:   docker://<REGISTRY_HOST>/<dest_folder>/<leaf>:<tag>  (local registry)
-
-    The leaf image name (last path segment) is preserved; dest_folder is prepended.
+    Start an asynchronous import job (external -> local) and return the job ID.
     The job dict carries direction="import" for display in the history list.
     """
     job_id = str(uuid.uuid4())
@@ -776,15 +845,12 @@ async def run_import_job(
     src_use_tls = registry.get("use_tls", True)
     src_tls_verify_raw = registry.get("tls_verify", True)
 
-    # FIX: same fix as run_sync_job — derive --src-tls-verify from both
-    # use_tls and tls_verify so plain-HTTP source registries work correctly.
     src_tls_verify = _skopeo_tls_verify(src_use_tls, src_tls_verify_raw)
-
     dest_tls_verify = local_registry_url.startswith("https://")
 
     _sync_jobs[job_id] = {
         "id": job_id,
-        "direction": "import",  # external → local
+        "direction": "import",
         "source": source_image,
         "source_registry_id": source_registry_id,
         "dest_registry_id": None,
@@ -801,16 +867,12 @@ async def run_import_job(
 
     async def _run() -> None:
         try:
-            # FIX: pass use_tls to _build_registry_base_url so the catalog
-            # HTTP request also uses http:// for plain-HTTP source registries.
             base_url = _build_registry_base_url(src_host, use_tls=src_use_tls)
             auth = (
                 (src_username, src_password) if src_username and src_password else None
             )
-            # httpx verify= is only meaningful for HTTPS; False for HTTP.
             httpx_verify = src_tls_verify_raw if src_use_tls else False
 
-            # Resolve the list of repositories to import
             if source_image == "(all)":
                 async with httpx.AsyncClient(
                     timeout=30, verify=httpx_verify, follow_redirects=True
@@ -825,7 +887,6 @@ async def run_import_job(
 
             errors: list[str] = []
             for img in images:
-                # Use the specified tag when source_image carries one
                 if source_image != "(all)" and ":" in source_image:
                     tags = [source_image.split(":", 1)[1]]
                 else:
@@ -839,17 +900,12 @@ async def run_import_job(
                             tr.json().get("tags") or [] if tr.status_code == 200 else []
                         )
 
+                dest_img = _rewrite_image_name_for_sync(
+                    img=img, dest_folder=dest_folder, dest_username=""
+                )
                 for tag in tags:
-                    src_ref = (
-                        f"docker://{_normalize_registry_host(src_host)}/{img}:{tag}"
-                    )
-
-                    # Keep the leaf image name; apply dest_folder prefix if given
-                    leaf = img.split("/")[-1]
-                    dest_image = f"{dest_folder}/{leaf}" if dest_folder else leaf
-                    dest_ref = f"docker://{REGISTRY_HOST}/{dest_image}:{tag}"
-
-                    logger.info("Import job %s: %s -> %s", job_id, src_ref, dest_ref)
+                    src_ref = build_target_path(None, img, tag, src_host)
+                    dest_ref = f"docker://{REGISTRY_HOST}/{dest_img}:{tag}"
 
                     ok, msg = await skopeo_sync_image(
                         src_ref=src_ref,
@@ -862,25 +918,31 @@ async def run_import_job(
                         src_tls_verify=src_tls_verify,
                         dest_tls_verify=dest_tls_verify,
                     )
-
                     if not ok:
                         errors.append(f"{img}:{tag} — {msg}")
                         logger.warning(
-                            "Import job %s: failed %s:%s — %s", job_id, img, tag, msg
+                            "Import job %s: failed %s:%s — %s",
+                            job_id,
+                            img,
+                            tag,
+                            msg,
                         )
 
                 _sync_jobs[job_id]["images_done"] += 1
                 _sync_jobs[job_id]["progress"] = int(
-                    100 * _sync_jobs[job_id]["images_done"] / max(len(images), 1)
+                    (_sync_jobs[job_id]["images_done"] / max(len(images), 1)) * 100
                 )
 
-            _sync_jobs[job_id]["status"] = "partial" if errors else "done"
-            _sync_jobs[job_id]["message"] = (
-                f"Completed with {len(errors)} error(s)"
-                if errors
-                else "Import complete"
-            )
-            _sync_jobs[job_id]["error"] = "\n".join(errors) if errors else None
+            if errors:
+                _sync_jobs[job_id]["status"] = "partial"
+                _sync_jobs[job_id]["error"] = "\n".join(errors)
+                _sync_jobs[job_id]["message"] = (
+                    f"Import completed with {len(errors)} error(s)"
+                )
+            else:
+                _sync_jobs[job_id]["status"] = "done"
+                _sync_jobs[job_id]["message"] = "Import completed successfully"
+
         except Exception as exc:
             logger.exception("Import job %s failed: %s", job_id, exc)
             _sync_jobs[job_id]["status"] = "error"
@@ -890,7 +952,5 @@ async def run_import_job(
             _sync_jobs[job_id]["finished_at"] = datetime.now(timezone.utc).isoformat()
             _sync_jobs[job_id]["progress"] = 100
 
-    import asyncio as _asyncio
-
-    _asyncio.create_task(_run())
+    asyncio.create_task(_run())
     return job_id

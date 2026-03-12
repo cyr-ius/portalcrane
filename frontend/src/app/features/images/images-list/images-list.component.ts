@@ -13,6 +13,13 @@
  *     • A read-only badge appears in the toolbar.
  *   - External registries are loaded once at init via ExternalRegistryService.
  *   - Switching source resets pagination and search.
+ *
+ * Changes (catalog availability check):
+ *   - _loadBrowsableRegistries() replaces the direct listRegistries() call in
+ *     ngOnInit. Each registry is probed via checkCatalog() in parallel using
+ *     forkJoin; only registries returning available=true are kept in
+ *     externalRegistries and shown in the source selector.
+ *   - New signal checkingCatalog: boolean shows a spinner while probes run.
  */
 import {
   Component,
@@ -25,7 +32,8 @@ import {
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { FormsModule } from "@angular/forms";
 import { Router } from "@angular/router";
-import { debounceTime, distinctUntilChanged, Subject } from "rxjs";
+import { debounceTime, distinctUntilChanged, forkJoin, of, Subject } from "rxjs";
+import { catchError } from "rxjs/operators";
 import { AuthService } from "../../../core/services/auth.service";
 import {
   ExternalRegistry,
@@ -96,8 +104,17 @@ export class ImagesListComponent implements OnInit {
   /** 'local' or a saved external registry ID. */
   readonly selectedSource = signal<SourceId>("local");
 
-  /** All registries visible to the current user, loaded once at init. */
+  /**
+   * External registries that passed the catalog availability check.
+   * Only these are shown in the source selector.
+   */
   readonly externalRegistries = signal<ExternalRegistry[]>([]);
+
+  /**
+   * True while the parallel catalog-availability probes are in flight.
+   * The source selector shows a spinner during this phase.
+   */
+  readonly checkingCatalog = signal(false);
 
   /** True when an external registry is currently selected. */
   readonly isExternalSource = computed(
@@ -207,15 +224,51 @@ export class ImagesListComponent implements OnInit {
         : "";
   });
 
+  // ── Pagination helpers ─────────────────────────────────────────────────────
+
+  /** Index of the first item displayed on the current page (1-based). */
+  pageStart = computed(() => {
+    const d = this.data();
+    if (!d) return 0;
+    return (d.page - 1) * d.page_size + 1;
+  });
+
+  /** Index of the last item displayed on the current page (1-based). */
+  pageEnd = computed(() => {
+    const d = this.data();
+    if (!d) return 0;
+    return Math.min(d.page * d.page_size, d.total);
+  });
+
+  /**
+   * Sliding window of page numbers to display in the pagination bar.
+   * Shows up to 5 pages centred around the current page (delta = 2).
+   */
+  pages = computed(() => {
+    const d = this.data();
+    if (!d) return [];
+    const total = d.total_pages;
+    const current = d.page;
+    const delta = 2;
+    const result: number[] = [];
+    for (
+      let i = Math.max(1, current - delta);
+      i <= Math.min(total, current + delta);
+      i++
+    ) {
+      result.push(i);
+    }
+    return result;
+  });
+
   // ── Lifecycle ──────────────────────────────────────────────────────────────
 
   ngOnInit(): void {
     this.setupSearchDebounce();
 
-    // Load external registries once for the source selector
-    this.extRegSvc.listRegistries().subscribe({
-      next: (regs) => this.externalRegistries.set(regs),
-    });
+    // Probe catalog availability for all registries in parallel;
+    // only browsable registries are shown in the source selector.
+    this._loadBrowsableRegistries();
 
     // Load configured folder names first so folderTree grouping is accurate
     this.folderSvc.getFolderNames().subscribe({
@@ -227,14 +280,54 @@ export class ImagesListComponent implements OnInit {
     });
   }
 
-  // ── Search debounce pipeline ───────────────────────────────────────────────
+  // ── Catalog availability check ─────────────────────────────────────────────
 
   /**
-   * Wire the debounced search pipeline once at init.
-   * debounceTime(400) defers the API call until typing stops.
-   * distinctUntilChanged skips duplicate values.
-   * takeUntilDestroyed unsubscribes on component destroy.
+   * Load all configured external registries then probe each one in parallel
+   * via GET /api/external/registries/{id}/catalog-check (5 s timeout, n=1).
+   * Only registries returning available=true are kept in externalRegistries.
+   * catchError per registry ensures one failure does not block the others.
    */
+  private _loadBrowsableRegistries(): void {
+    this.checkingCatalog.set(true);
+
+    this.extRegSvc.listRegistries().subscribe({
+      next: (allRegistries) => {
+        if (allRegistries.length === 0) {
+          this.externalRegistries.set([]);
+          this.checkingCatalog.set(false);
+          return;
+        }
+
+        const checks$ = allRegistries.map((reg) =>
+          this.extRegSvc.checkCatalog(reg.id).pipe(
+            catchError(() => of({ available: false, reason: "Request failed" })),
+          ),
+        );
+
+        forkJoin(checks$).subscribe({
+          next: (results) => {
+            const browsable = allRegistries.filter(
+              (_, idx) => results[idx].available,
+            );
+            this.externalRegistries.set(browsable);
+            this.checkingCatalog.set(false);
+          },
+          error: () => {
+            this.externalRegistries.set([]);
+            this.checkingCatalog.set(false);
+          },
+        });
+      },
+      error: () => {
+        this.externalRegistries.set([]);
+        this.checkingCatalog.set(false);
+      },
+    });
+  }
+
+  // ── Search debounce pipeline ───────────────────────────────────────────────
+
   private setupSearchDebounce(): void {
     this.searchQuery$
       .pipe(
@@ -262,12 +355,8 @@ export class ImagesListComponent implements OnInit {
     });
   }
 
-  // ── Source selection (Évolution 1) ─────────────────────────────────────────
+  // ── Source selection ───────────────────────────────────────────────────────
 
-  /**
-   * Switch the active source (local or external registry).
-   * Resets pagination, search and browse error on every switch.
-   */
   selectSource(sourceId: SourceId): void {
     if (this.selectedSource() === sourceId) return;
     this.selectedSource.set(sourceId);
@@ -286,7 +375,6 @@ export class ImagesListComponent implements OnInit {
     const src = this.selectedSource();
 
     if (src === "local") {
-      // Standard local registry call
       this.registry
         .getImages(this.currentPage(), this.pageSize, this.searchQuery)
         .subscribe({
@@ -300,7 +388,6 @@ export class ImagesListComponent implements OnInit {
           error: () => this.loading.set(false),
         });
     } else {
-      // External registry browse (Évolution 1)
       this.registry
         .getExternalImages(src, this.currentPage(), this.pageSize, this.searchQuery)
         .subscribe({
@@ -316,18 +403,10 @@ export class ImagesListComponent implements OnInit {
     }
   }
 
-  /**
-   * Called on every (ngModelChange) from the search input.
-   * Feeds the debounce Subject so the API call is deferred by 400 ms.
-   */
   onSearch(): void {
     this.searchQuery$.next(this.searchQuery);
   }
 
-  /**
-   * Called when the user clicks the clear (×) button.
-   * Resets immediately and supersedes any in-flight debounce timer.
-   */
   clearSearch(): void {
     this.searchQuery = "";
     this.searchQuery$.next("");
@@ -395,12 +474,8 @@ export class ImagesListComponent implements OnInit {
     this.expandedFolders.set(set);
   }
 
-  // ── Image name helpers ─────────────────────────────────────────────────────
+  // ── Image helpers ──────────────────────────────────────────────────────────
 
-  /**
-   * Navigate to the image detail page using queryParams.
-   * Avoids %2F encoding issues with reverse proxies.
-   */
   goToDetail(imageName: string): void {
     this.router.navigate(["/images/detail"], {
       queryParams: { repository: imageName },
@@ -411,7 +486,7 @@ export class ImagesListComponent implements OnInit {
    * Image display name inside its visual folder.
    * - No slash → show full name (e.g. "nginx")
    * - Known folder prefix → show only suffix (e.g. "sia/nginx" → "nginx")
-   * - Unknown prefix → show full name (user sees "cyr-ius/wireguard-ui")
+   * - Unknown prefix → show full name (e.g. "cyr-ius/wireguard-ui")
    */
   imageShortName(img: ImageInfo): string {
     const idx = img.name.indexOf("/");
@@ -442,49 +517,13 @@ export class ImagesListComponent implements OnInit {
     return this.pushableFolders().length > 0;
   }
 
-  // ── Pagination helpers ─────────────────────────────────────────────────────
-
-  /** Index of the first item displayed on the current page (1-based). */
-  pageStart = computed(() => {
-    const d = this.data();
-    if (!d) return 0;
-    return (d.page - 1) * d.page_size + 1;
-  });
-
-  /** Index of the last item displayed on the current page (1-based). */
-  pageEnd = computed(() => {
-    const d = this.data();
-    if (!d) return 0;
-    return Math.min(d.page * d.page_size, d.total);
-  });
-
-  /**
-   * Sliding window of page numbers to display in the pagination bar.
-   * Shows up to 5 pages centred around the current page (delta = 2).
-   */
-  pages = computed(() => {
-    const d = this.data();
-    if (!d) return [];
-    const total = d.total_pages;
-    const current = d.page;
-    const delta = 2;
-    const result: number[] = [];
-    for (
-      let i = Math.max(1, current - delta);
-      i <= Math.min(total, current + delta);
-      i++
-    ) {
-      result.push(i);
-    }
-    return result;
-  });
-
   // ── Copy modal ─────────────────────────────────────────────────────────────
 
   openCopyModal(image: ImageInfo, tag: string): void {
     if (!this.canCopyImage(image)) return;
 
     this.copySource.set({ image, tag });
+    // Use image.tags directly — no extra API call needed
     this.sourceTagOptions.set(image.tags);
     const shortName = image.name.includes("/")
       ? image.name.split("/").slice(1).join("/")
@@ -493,12 +532,6 @@ export class ImagesListComponent implements OnInit {
     this.copyDestTag.set(tag);
     this.copyDestFolder.set("");
     this.copyMessage.set(null);
-
-    if (!this.isAdmin() && this.pushableFolders().length === 0) {
-      this.copyMessage.set(
-        "No destination folder available with push permission.",
-      );
-    }
   }
 
   closeCopyModal(): void {
