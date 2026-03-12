@@ -59,7 +59,7 @@ docker run -d \
   -e ADMIN_PASSWORD=yourpassword \
   -e SECRET_KEY=your-secret-key \
   -v /portalcrane_data:/var/lib/portalcrane \
-  cyr-ius/portalcrane:latest
+  cyrius44/portalcrane:latest
 ```
 
 Open **http://localhost:8080** and log in with your admin credentials.
@@ -69,7 +69,7 @@ Open **http://localhost:8080** and log in with your admin credentials.
 ```yaml
 services:
   portalcrane:
-    image: cyr-ius/portalcrane:latest
+    image: cyrius44/portalcrane:latest
     container_name: portalcrane
     ports:
       - "8080:8080"
@@ -203,7 +203,7 @@ Administrators can define **folders** (image namespace prefixes, e.g. `productio
 All persistent data is stored in **/var/lib/portalcrane** inside the container. Mount a volume to this path to retain data across container restarts:
 
 ```
--v portalcrane_data:/var/lib/portalcrane
+-v /portalcrane_data:/var/lib/portalcrane
 ```
 
 Stored data includes: local users, OIDC configuration, folder permissions, external registries, audit logs, and the registry image data itself.
@@ -235,7 +235,7 @@ ng serve --port 4200 --proxy-config proxy.conf.json
 The GitHub Actions workflow (`.github/workflows/docker-publish.yml`) automatically:
 
 1. Builds a multi-arch image (`linux/amd64`, `linux/arm64`) on every push to `main` and on version tags
-2. Publishes to **Docker Hub** (`cyr-ius/portalcrane`) and **GHCR** (`ghcr.io/cyr-ius/portalcrane`)
+2. Publishes to **Docker Hub** (`cyrius44/portalcrane`) and **GHCR** (`ghcr.io/cyr-ius/portalcrane`)
 3. Updates the Docker Hub description from this README
 
 Image tags follow semantic versioning: `latest`, `edge`, `X`, `X.Y`, `X.Y.Z`, `sha-<commit>`.
