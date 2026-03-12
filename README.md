@@ -58,8 +58,8 @@ docker run -d \
   -e ADMIN_USERNAME=admin \
   -e ADMIN_PASSWORD=yourpassword \
   -e SECRET_KEY=your-secret-key \
-  -v portalcrane_data:/var/lib/portalcrane \
-  ghcr.io/cyr-ius/portalcrane:latest
+  -v /portalcrane_data:/var/lib/portalcrane \
+  cyr-ius/portalcrane:latest
 ```
 
 Open **http://localhost:8080** and log in with your admin credentials.
@@ -69,7 +69,7 @@ Open **http://localhost:8080** and log in with your admin credentials.
 ```yaml
 services:
   portalcrane:
-    image: ghcr.io/cyr-ius/portalcrane:latest
+    image: cyr-ius/portalcrane:latest
     container_name: portalcrane
     ports:
       - "8080:8080"
