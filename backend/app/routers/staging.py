@@ -397,6 +397,15 @@ async def search_dockerhub(
                 params=params,
                 auth=auth,
             )
+
+            # Some Docker Hub accounts/tokens can trigger 401/403 on search.
+            # Fall back to anonymous mode so search stays functional.
+            if auth is not None and resp.status_code in {401, 403}:
+                resp = await client.get(
+                    f"{DOCKERHUB_API_URL}/search/repositories/",
+                    params=params,
+                )
+
             resp.raise_for_status()
             data = resp.json()
     except Exception as exc:
@@ -405,16 +414,25 @@ async def search_dockerhub(
             detail=f"Docker Hub search failed: {exc}",
         )
 
+    raw_results = data.get("results") or data.get("summaries") or []
+
     results = [
         DockerHubSearchResult(
-            name=r.get("repo_name", ""),
-            description=r.get("short_description", ""),
+            name=(
+                r.get("repo_name")
+                or (
+                    f"{r.get('namespace')}/{r.get('name')}"
+                    if r.get("namespace") and r.get("name")
+                    else r.get("name", "")
+                )
+            ),
+            description=r.get("short_description") or r.get("description", ""),
             star_count=r.get("star_count", 0),
             pull_count=r.get("pull_count", 0),
             is_official=r.get("is_official", False),
             is_automated=r.get("is_automated", False),
         )
-        for r in data.get("results", [])
+        for r in raw_results
     ]
     return {"results": results, "count": data.get("count", len(results))}
 

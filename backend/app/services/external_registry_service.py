@@ -553,6 +553,89 @@ async def browse_external_tags(registry_id: str, repository: str) -> dict:
     return {"repository": repository, "tags": tags}
 
 
+async def delete_external_image(registry_id: str, repository: str) -> dict:
+    """
+    Delete all tags for a repository in an external registry.
+
+    For each tag we fetch its manifest digest then call DELETE
+    /v2/<repository>/manifests/<digest>.
+    """
+    registry = get_registry_by_id(registry_id)
+    if not registry:
+        raise ValueError(f"Registry {registry_id} not found")
+
+    host = registry["host"]
+    username = registry.get("username", "")
+    password = registry.get("password", "")
+    use_tls = registry.get("use_tls", True)
+    tls_verify = registry.get("tls_verify", True)
+
+    base_url = _build_registry_base_url(host, use_tls=use_tls)
+    verify = tls_verify if use_tls else False
+    auth = (username, password) if username and password else None
+
+    deleted_tags: list[str] = []
+    failed_tags: list[str] = []
+
+    async with httpx.AsyncClient(
+        timeout=20, verify=verify, follow_redirects=True
+    ) as client:
+        tags_resp = await client.get(f"{base_url}/v2/{repository}/tags/list", auth=auth)
+        tags_resp.raise_for_status()
+        tags = tags_resp.json().get("tags") or []
+
+        if not tags:
+            return {
+                "repository": repository,
+                "deleted_tags": [],
+                "failed_tags": [],
+                "message": "No tags found for this repository",
+            }
+
+        manifest_accept = ", ".join(
+            [
+                "application/vnd.oci.image.manifest.v1+json",
+                "application/vnd.docker.distribution.manifest.v2+json",
+                "application/vnd.docker.distribution.manifest.list.v2+json",
+            ]
+        )
+
+        for tag in tags:
+            try:
+                manifest_resp = await client.get(
+                    f"{base_url}/v2/{repository}/manifests/{tag}",
+                    auth=auth,
+                    headers={"Accept": manifest_accept},
+                )
+                manifest_resp.raise_for_status()
+
+                digest = manifest_resp.headers.get("Docker-Content-Digest")
+                if not digest:
+                    failed_tags.append(tag)
+                    continue
+
+                delete_resp = await client.delete(
+                    f"{base_url}/v2/{repository}/manifests/{digest}", auth=auth
+                )
+                if delete_resp.status_code in {202, 200}:
+                    deleted_tags.append(tag)
+                else:
+                    failed_tags.append(tag)
+            except Exception:
+                failed_tags.append(tag)
+
+    message = f"Deleted {len(deleted_tags)} tag(s)"
+    if failed_tags:
+        message += f", failed: {', '.join(failed_tags)}"
+
+    return {
+        "repository": repository,
+        "deleted_tags": deleted_tags,
+        "failed_tags": failed_tags,
+        "message": message,
+    }
+
+
 # ── Validation helpers ────────────────────────────────────────────────────────
 
 

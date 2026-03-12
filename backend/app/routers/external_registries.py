@@ -22,6 +22,7 @@ from ..services.job_service import jobs_list
 from ..services.external_registry_service import (
     browse_external_images,
     browse_external_tags,
+    delete_external_image,
     build_target_path,
     check_catalog_browsable,
     create_registry,
@@ -296,6 +297,24 @@ async def browse_registry_tags(
 
     return await browse_external_tags(registry_id=registry_id, repository=repository)
 
+
+
+
+@router.delete("/registries/{registry_id}/browse/image")
+async def delete_registry_image(
+    registry_id: str,
+    repository: str = Query(..., description="Repository name, e.g. myorg/myimage"),
+    _: UserInfo = Depends(require_push_access),
+):
+    """Delete all tags of a repository in an external registry."""
+    registry = get_registry_by_id(registry_id)
+    if not registry:
+        raise HTTPException(status_code=404, detail="Registry not found")
+
+    result = await delete_external_image(registry_id=registry_id, repository=repository)
+    if result.get("failed_tags") and not result.get("deleted_tags"):
+        raise HTTPException(status_code=502, detail=result.get("message", "Delete failed"))
+    return result
 
 @router.get("/registries/{registry_id}/catalog-check")
 async def catalog_check(

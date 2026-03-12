@@ -232,6 +232,42 @@ export class RegistryService {
     );
   }
 
+
+  /**
+   * Fetch tags for a repository from an external registry.
+   */
+  getExternalImageTags(
+    registryId: string,
+    repository: string,
+  ): Observable<{ repository: string; tags: string[] }> {
+    const params = new HttpParams().set("repository", repository);
+    return this.http.get<{ repository: string; tags: string[] }>(
+      `${this.EXTERNAL}/registries/${registryId}/browse/tags`,
+      { params },
+    );
+  }
+
+  /**
+   * Delete all tags of a repository from an external registry.
+   */
+  deleteExternalImage(
+    registryId: string,
+    repository: string,
+  ): Observable<{
+    repository: string;
+    deleted_tags: string[];
+    failed_tags: string[];
+    message: string;
+  }> {
+    const params = new HttpParams().set("repository", repository);
+    return this.http.delete<{
+      repository: string;
+      deleted_tags: string[];
+      failed_tags: string[];
+      message: string;
+    }>(`${this.EXTERNAL}/registries/${registryId}/browse/image`, { params });
+  }
+
   // ── Image management ───────────────────────────────────────────────────────
 
   /**
