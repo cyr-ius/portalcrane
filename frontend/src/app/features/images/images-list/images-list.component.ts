@@ -157,6 +157,9 @@ export class ImagesListComponent implements OnInit {
   deleteTarget = signal<ImageInfo | null>(null);
   deleting = signal(false);
 
+  // ── View modal state (external read-only details) ─────────────────────────
+  viewTarget = signal<ImageInfo | null>(null);
+
   // ── Accessible items (folder access filter applied once) ──────────────────
   accessibleItems = computed(() => {
     const items = this.data()?.items ?? [];
@@ -477,6 +480,14 @@ export class ImagesListComponent implements OnInit {
   // ── Image helpers ──────────────────────────────────────────────────────────
 
   goToDetail(imageName: string): void {
+    if (this.isExternalSource()) {
+      const image = this.filteredItems().find((i) => i.name === imageName)
+        ?? this.accessibleItems().find((i) => i.name === imageName)
+        ?? null;
+      this.viewTarget.set(image);
+      return;
+    }
+
     this.router.navigate(["/images/detail"], {
       queryParams: { repository: imageName },
     });
@@ -505,14 +516,14 @@ export class ImagesListComponent implements OnInit {
   }
 
   canDeleteImage(image: ImageInfo): boolean {
-    if (this.isExternalSource()) return false;
+    if (this.isExternalSource()) return this.isAdmin();
     if (this.isAdmin()) return true;
     const folderName = this.folderNameForImage(image.name);
     return this.pushableFolders().includes(folderName);
   }
 
   canCopyImage(_image: ImageInfo): boolean {
-    if (this.isExternalSource()) return false;
+    if (this.isExternalSource()) return this.isAdmin() || this.pushableFolders().length > 0;
     if (this.isAdmin()) return true;
     return this.pushableFolders().length > 0;
   }
@@ -523,13 +534,27 @@ export class ImagesListComponent implements OnInit {
     if (!this.canCopyImage(image)) return;
 
     this.copySource.set({ image, tag });
-    // Use image.tags directly — no extra API call needed
-    this.sourceTagOptions.set(image.tags);
-    // Preserve full source repository path by default (<editor>/<image>)
     this.copyDestName.set(image.name);
     this.copyDestTag.set(tag);
     this.copyDestFolder.set("");
     this.copyMessage.set(null);
+
+    if (this.isExternalSource()) {
+      const sourceId = this.selectedSource();
+      if (sourceId !== "local") {
+        this.registry.getExternalImageTags(sourceId, image.name).subscribe({
+          next: (res) => {
+            const tags = res.tags?.length ? res.tags : image.tags;
+            this.sourceTagOptions.set(tags);
+            this.copySource.update((s) => (s ? { ...s, tag: tags[0] ?? tag } : s));
+            this.copyDestTag.set(tags[0] ?? tag);
+          },
+          error: () => this.sourceTagOptions.set(image.tags),
+        });
+      }
+    } else {
+      this.sourceTagOptions.set(image.tags);
+    }
   }
 
   closeCopyModal(): void {
@@ -538,9 +563,39 @@ export class ImagesListComponent implements OnInit {
 
   executeCopy(): void {
     const src = this.copySource();
-    if (!src || !this.copyDestName().trim()) return;
+    if (!src) return;
+    if (!this.isExternalSource() && !this.copyDestName().trim()) return;
     this.copying.set(true);
     this.copyMessage.set(null);
+
+    if (this.isExternalSource()) {
+      const sourceRegistryId = this.selectedSource();
+      if (sourceRegistryId === "local") {
+        this.copying.set(false);
+        return;
+      }
+
+      const sourceImage = `${src.image.name}:${src.tag}`;
+      const destFolder = this.copyDestFolder().trim() || null;
+      this.extRegSvc
+        .startImport({
+          source_registry_id: sourceRegistryId,
+          source_image: sourceImage,
+          dest_folder: destFolder,
+        })
+        .subscribe({
+          next: (res) => {
+            this.copying.set(false);
+            this.copyMessage.set(`Import started (job ${res.job_id})`);
+            this.loadImages();
+          },
+          error: (err) => {
+            this.copying.set(false);
+            this.copyMessage.set(err?.error?.detail ?? "Import failed");
+          },
+        });
+      return;
+    }
 
     const destRepo = this.copyDestFolder().trim()
       ? `${this.copyDestFolder().trim()}/${this.copyDestName().trim()}`
@@ -577,6 +632,24 @@ export class ImagesListComponent implements OnInit {
     const target = this.deleteTarget();
     if (!target) return;
     this.deleting.set(true);
+
+    if (this.isExternalSource()) {
+      const sourceRegistryId = this.selectedSource();
+      if (sourceRegistryId === "local") {
+        this.deleting.set(false);
+        return;
+      }
+      this.registry.deleteExternalImage(sourceRegistryId, target.name).subscribe({
+        next: () => {
+          this.deleteTarget.set(null);
+          this.deleting.set(false);
+          this.loadImages();
+        },
+        error: () => this.deleting.set(false),
+      });
+      return;
+    }
+
     this.registry.deleteImage(target.name).subscribe({
       next: () => {
         this.deleteTarget.set(null);

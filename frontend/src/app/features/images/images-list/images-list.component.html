@@ -258,8 +258,7 @@
                       <button
                         class="btn btn-link p-0 fw-semibold text-decoration-none link-body-emphasis font-monospace small text-start"
                         (click)="goToDetail(image.name)"
-                        [title]="isExternalSource() ? 'View local details unavailable for external registries' : 'View details'"
-                        [disabled]="isExternalSource()"
+                        [title]="isExternalSource() ? 'View external details' : 'View details'"
                       >
                         {{ image.name }}
                       </button>
@@ -299,12 +298,7 @@
                       <button
                         class="btn btn-sm btn-outline-primary"
                         (click)="goToDetail(image.name)"
-                        [disabled]="isExternalSource()"
-                        [title]="
-                          isExternalSource()
-                            ? 'View details is only available for local images'
-                            : 'View details'
-                        "
+                        [title]="isExternalSource() ? 'View external details' : 'View details'"
                       >
                         <i class="bi bi-eye"></i>
                       </button>
@@ -317,10 +311,8 @@
                         [disabled]="!canCopyImage(image)"
                         [title]="
                           canCopyImage(image)
-                            ? 'Copy to another folder'
-                            : isExternalSource()
-                              ? 'Copy is not available while browsing an external registry'
-                              : 'No push permission on any destination folder'
+                            ? (isExternalSource() ? 'Import to local registry' : 'Copy to another folder')
+                            : 'No push permission on any destination folder'
                         "
                       >
                         <i class="bi bi-copy"></i>
@@ -331,10 +323,8 @@
                         [disabled]="!canDeleteImage(image)"
                         [title]="
                           canDeleteImage(image)
-                            ? 'Delete ' + image.name
-                            : isExternalSource()
-                              ? 'Delete is not available while browsing an external registry'
-                              : 'No push permission on this folder'
+                            ? (isExternalSource() ? 'Delete from external registry: ' + image.name : 'Delete ' + image.name)
+                            : 'No push permission on this folder'
                         "
                       >
                         <i class="bi bi-trash"></i>
@@ -437,7 +427,6 @@
                     <button
                       class="btn btn-link p-0 fw-semibold text-decoration-none link-body-emphasis font-monospace small text-start"
                       (click)="goToDetail(image.name)"
-                      [disabled]="isExternalSource()"
                     >
                       {{ imageShortName(image) }}
                     </button>
@@ -470,12 +459,7 @@
                     <button
                       class="btn btn-sm btn-outline-primary"
                       (click)="goToDetail(image.name)"
-                      [disabled]="isExternalSource()"
-                      [title]="
-                        isExternalSource()
-                          ? 'View details is only available for local images'
-                          : 'View details'
-                      "
+                      [title]="isExternalSource() ? 'View external details' : 'View details'"
                     >
                       <i class="bi bi-eye"></i>
                     </button>
@@ -488,10 +472,8 @@
                       [disabled]="!canCopyImage(image)"
                       [title]="
                         canCopyImage(image)
-                          ? 'Copy to another folder'
-                          : isExternalSource()
-                            ? 'Copy is not available while browsing an external registry'
-                            : 'No push permission on any destination folder'
+                          ? (isExternalSource() ? 'Import to local registry' : 'Copy to another folder')
+                          : 'No push permission on any destination folder'
                       "
                     >
                       <i class="bi bi-copy"></i>
@@ -502,10 +484,8 @@
                       [disabled]="!canDeleteImage(image)"
                       [title]="
                         canDeleteImage(image)
-                          ? 'Delete ' + image.name
-                          : isExternalSource()
-                            ? 'Delete is not available while browsing an external registry'
-                            : 'No push permission on this folder'
+                          ? (isExternalSource() ? 'Delete from external registry: ' + image.name : 'Delete ' + image.name)
+                          : 'No push permission on this folder'
                       "
                     >
                       <i class="bi bi-trash"></i>
@@ -555,6 +535,38 @@
   </div>
 </div>
 
+
+<!-- ── External view modal ──────────────────────────────────────────────── -->
+@if (viewTarget()) {
+  <div
+    class="modal fade show d-block"
+    tabindex="-1"
+    style="background: rgba(0,0,0,.4)"
+    (click)="viewTarget.set(null)"
+  >
+    <div class="modal-dialog" (click)="$event.stopPropagation()">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-eye me-2"></i>Image details</h5>
+          <button class="btn-close" (click)="viewTarget.set(null)"></button>
+        </div>
+        <div class="modal-body">
+          <p class="mb-2">Repository: <code>{{ viewTarget()?.name }}</code></p>
+          <p class="mb-2">Tags: <strong>{{ viewTarget()?.tag_count }}</strong></p>
+          <div class="d-flex flex-wrap gap-1">
+            @for (tag of (viewTarget()?.tags ?? []); track tag) {
+              <span class="badge bg-secondary-subtle text-secondary font-monospace">{{ tag }}</span>
+            }
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary btn-sm" (click)="viewTarget.set(null)">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+}
+
 <!-- ── Copy modal ────────────────────────────────────────────────────────── -->
 @if (copySource()) {
   <div
@@ -574,6 +586,9 @@
         <div class="modal-body">
           <p class="text-muted small mb-3">
             Source: <code>{{ copySource()?.image?.name }}:{{ copySource()?.tag }}</code>
+            @if (isExternalSource()) {
+              <br /><span class="text-info">Action: import this image tag to local registry</span>
+            }
           </p>
 
           <!-- Source tag selector -->
@@ -653,14 +668,14 @@
           <button
             class="btn btn-primary btn-sm"
             (click)="executeCopy()"
-            [disabled]="copying() || !copyDestName().trim()"
+            [disabled]="copying() || (!isExternalSource() && !copyDestName().trim())"
           >
             @if (copying()) {
               <span class="spinner-border spinner-border-sm me-1"></span>
             } @else {
               <i class="bi bi-copy me-1"></i>
             }
-            Copy
+            {{ isExternalSource() ? "Import" : "Copy" }}
           </button>
         </div>
       </div>
@@ -686,8 +701,14 @@
         </div>
         <div class="modal-body">
           <p>
+            @if (isExternalSource()) {
+            Delete repository
+            <strong class="font-monospace">{{ deleteTarget()?.name }}</strong>
+            from the external registry?
+          } @else {
             Delete all tags of
             <strong class="font-monospace">{{ deleteTarget()?.name }}</strong>?
+          }
           </p>
           <p class="text-danger small mb-0">This action cannot be undone.</p>
         </div>
