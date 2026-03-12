@@ -6,8 +6,7 @@
   slashes are placed in URL path segments and pass through reverse proxies.
 
   Évolution 1: a source selector row has been added above the toolbar so the
-  user can browse an external registry in read-only mode.  Delete / copy /
-  retag actions are hidden when an external registry is selected.
+  user can browse an external registry in read-only mode.
 -->
 <div class="p-4">
   <!-- ── Page header ─────────────────────────────────────────────────────── -->
@@ -244,7 +243,7 @@
                 </th>
                 <th class="border-0 text-muted fw-semibold small">TAG LIST</th>
                 <th class="border-0 text-muted fw-semibold small text-end">
-                  @if (!isExternalSource()) { ACTIONS }
+                  ACTIONS
                 </th>
               </tr>
             </thead>
@@ -296,44 +295,51 @@
                     </div>
                   </td>
                   <td class="align-middle text-end">
-                    @if (!isExternalSource()) {
-                      <div class="d-flex gap-1 justify-content-end">
-                        <button
-                          class="btn btn-sm btn-outline-primary"
-                          (click)="goToDetail(image.name)"
-                          title="View details"
-                        >
-                          <i class="bi bi-eye"></i>
-                        </button>
-                        <button
-                          class="btn btn-sm btn-outline-secondary"
-                          (click)="
-                            openCopyModal(image, image.tags[0] || 'latest');
-                            $event.stopPropagation()
-                          "
-                          [disabled]="!canCopyImage(image)"
-                          [title]="
-                            canCopyImage(image)
-                              ? 'Copy to another folder'
+                    <div class="d-flex gap-1 justify-content-end">
+                      <button
+                        class="btn btn-sm btn-outline-primary"
+                        (click)="goToDetail(image.name)"
+                        [disabled]="isExternalSource()"
+                        [title]="
+                          isExternalSource()
+                            ? 'View details is only available for local images'
+                            : 'View details'
+                        "
+                      >
+                        <i class="bi bi-eye"></i>
+                      </button>
+                      <button
+                        class="btn btn-sm btn-outline-secondary"
+                        (click)="
+                          openCopyModal(image, image.tags[0] || 'latest');
+                          $event.stopPropagation()
+                        "
+                        [disabled]="!canCopyImage(image)"
+                        [title]="
+                          canCopyImage(image)
+                            ? 'Copy to another folder'
+                            : isExternalSource()
+                              ? 'Copy is not available while browsing an external registry'
                               : 'No push permission on any destination folder'
-                          "
-                        >
-                          <i class="bi bi-copy"></i>
-                        </button>
-                        <button
-                          class="btn btn-sm btn-outline-danger"
-                          (click)="confirmDeleteImage(image)"
-                          [disabled]="!canDeleteImage(image)"
-                          [title]="
-                            canDeleteImage(image)
-                              ? 'Delete ' + image.name
+                        "
+                      >
+                        <i class="bi bi-copy"></i>
+                      </button>
+                      <button
+                        class="btn btn-sm btn-outline-danger"
+                        (click)="confirmDeleteImage(image)"
+                        [disabled]="!canDeleteImage(image)"
+                        [title]="
+                          canDeleteImage(image)
+                            ? 'Delete ' + image.name
+                            : isExternalSource()
+                              ? 'Delete is not available while browsing an external registry'
                               : 'No push permission on this folder'
-                          "
-                        >
-                          <i class="bi bi-trash"></i>
-                        </button>
-                      </div>
-                    }
+                        "
+                      >
+                        <i class="bi bi-trash"></i>
+                      </button>
+                    </div>
                   </td>
                 </tr>
               }
@@ -461,42 +467,49 @@
                     <span class="badge bg-primary-subtle text-primary">{{
                       image.tag_count
                     }}</span>
-                    @if (!isExternalSource()) {
-                      <button
-                        class="btn btn-sm btn-outline-primary"
-                        (click)="goToDetail(image.name)"
-                        title="View details"
-                      >
-                        <i class="bi bi-eye"></i>
-                      </button>
-                      <button
-                        class="btn btn-sm btn-outline-secondary"
-                        (click)="
-                          openCopyModal(image, image.tags[0] || 'latest');
-                          $event.stopPropagation()
-                        "
-                        [disabled]="!canCopyImage(image)"
-                        [title]="
-                          canCopyImage(image)
-                            ? 'Copy to another folder'
+                    <button
+                      class="btn btn-sm btn-outline-primary"
+                      (click)="goToDetail(image.name)"
+                      [disabled]="isExternalSource()"
+                      [title]="
+                        isExternalSource()
+                          ? 'View details is only available for local images'
+                          : 'View details'
+                      "
+                    >
+                      <i class="bi bi-eye"></i>
+                    </button>
+                    <button
+                      class="btn btn-sm btn-outline-secondary"
+                      (click)="
+                        openCopyModal(image, image.tags[0] || 'latest');
+                        $event.stopPropagation()
+                      "
+                      [disabled]="!canCopyImage(image)"
+                      [title]="
+                        canCopyImage(image)
+                          ? 'Copy to another folder'
+                          : isExternalSource()
+                            ? 'Copy is not available while browsing an external registry'
                             : 'No push permission on any destination folder'
-                        "
-                      >
-                        <i class="bi bi-copy"></i>
-                      </button>
-                      <button
-                        class="btn btn-sm btn-outline-danger"
-                        (click)="confirmDeleteImage(image)"
-                        [disabled]="!canDeleteImage(image)"
-                        [title]="
-                          canDeleteImage(image)
-                            ? 'Delete ' + image.name
+                      "
+                    >
+                      <i class="bi bi-copy"></i>
+                    </button>
+                    <button
+                      class="btn btn-sm btn-outline-danger"
+                      (click)="confirmDeleteImage(image)"
+                      [disabled]="!canDeleteImage(image)"
+                      [title]="
+                        canDeleteImage(image)
+                          ? 'Delete ' + image.name
+                          : isExternalSource()
+                            ? 'Delete is not available while browsing an external registry'
                             : 'No push permission on this folder'
-                        "
-                      >
-                        <i class="bi bi-trash"></i>
-                      </button>
-                    }
+                      "
+                    >
+                      <i class="bi bi-trash"></i>
+                    </button>
                   </div>
                 </div>
               }
@@ -580,18 +593,21 @@
           <div class="row g-2">
             <div class="col-4">
               <label class="form-label small fw-semibold">Dest folder</label>
-              <select
-                class="form-select form-select-sm"
+              <input
+                type="text"
+                class="form-control form-control-sm font-monospace"
+                list="pushableFoldersList"
+                placeholder="(root) or folder name"
                 [value]="copyDestFolder()"
-                (change)="copyDestFolder.set($any($event.target).value)"
-              >
-                <option value="">(root)</option>
+                (input)="copyDestFolder.set($any($event.target).value)"
+              />
+              <datalist id="pushableFoldersList">
                 @for (f of pushableFolders(); track f) {
                   @if (f !== '(root)') {
-                    <option [value]="f">{{ f }}</option>
+                    <option [value]="f"></option>
                   }
                 }
-              </select>
+              </datalist>
             </div>
             <div class="col-5">
               <label class="form-label small fw-semibold">Image name</label>
