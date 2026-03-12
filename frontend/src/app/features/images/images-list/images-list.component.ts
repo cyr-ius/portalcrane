@@ -525,10 +525,8 @@ export class ImagesListComponent implements OnInit {
     this.copySource.set({ image, tag });
     // Use image.tags directly — no extra API call needed
     this.sourceTagOptions.set(image.tags);
-    const shortName = image.name.includes("/")
-      ? image.name.split("/").slice(1).join("/")
-      : image.name;
-    this.copyDestName.set(shortName);
+    // Preserve full source repository path by default (<editor>/<image>)
+    this.copyDestName.set(image.name);
     this.copyDestTag.set(tag);
     this.copyDestFolder.set("");
     this.copyMessage.set(null);
