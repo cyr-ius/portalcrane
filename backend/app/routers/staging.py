@@ -394,6 +394,7 @@ async def search_dockerhub(
         async with httpx.AsyncClient(
             timeout=HTTPX_TIMEOUT, follow_redirects=True
         ) as client:
+
             async def _search(req_auth: httpx.BasicAuth | None) -> httpx.Response:
                 return await client.get(
                     f"{DOCKERHUB_API_URL}/search/repositories/",
