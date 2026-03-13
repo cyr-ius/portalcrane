@@ -1,6 +1,14 @@
+// frontend/src/app/shared/components/vuln-config-panel/vuln-config-panel.component.ts
 import { Component, computed, inject, OnInit, signal } from "@angular/core";
 import { RegistryService } from "../../../core/services/registry.service";
-import { ScanResult, TRIVY_SEVERITIES, TRIVY_TIMEOUT_OPTIONS, TrivyDbInfo, TrivyService, TrivySeverity } from "../../../core/services/trivy.service";
+import {
+  ScanResult,
+  TRIVY_SEVERITIES,
+  TRIVY_TIMEOUT_OPTIONS,
+  TrivyDbInfo,
+  TrivyService,
+  TrivySeverity,
+} from "../../../core/services/trivy.service";
 
 @Component({
   selector: "app-vuln-config-panel",
@@ -10,10 +18,14 @@ import { ScanResult, TRIVY_SEVERITIES, TRIVY_TIMEOUT_OPTIONS, TrivyDbInfo, Trivy
 })
 export class VulnConfigPanelComponent implements OnInit {
   private registryService = inject(RegistryService);
-  readonly trivySvc = inject(TrivyService)
+  readonly trivySvc = inject(TrivyService);
+
+  // ── Trivy DB ──────────────────────────────────────────────────────────────
 
   trivyDb = signal<TrivyDbInfo | null>(null);
   updatingDb = signal(false);
+
+  // ── Image scan ────────────────────────────────────────────────────────────
 
   selectedImage = signal("");
   selectedTag = signal("");
@@ -31,124 +43,91 @@ export class VulnConfigPanelComponent implements OnInit {
   readonly imageToScan = computed(() => {
     const image = this.selectedImage().trim();
     const tag = this.selectedTag().trim();
-    return image && tag ? `${image}:${tag}` : "";
+    return image && tag ? `localhost:5000/${image}:${tag}` : "";
   });
+
+  // ── Constants used in the template ───────────────────────────────────────
 
   readonly allSeverities = TRIVY_SEVERITIES;
   readonly timeoutOptions = TRIVY_TIMEOUT_OPTIONS;
-  readonly severities = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "UNKNOWN"];
+
+  // ── Lifecycle ─────────────────────────────────────────────────────────────
 
   ngOnInit(): void {
-    this.trivySvc.loadConfig().subscribe();
-    this.refreshTrivyDb();
+    this.loadTrivyDb();
     this.loadRegistryImages();
   }
 
-  async refreshTrivyDb(): Promise<void> {
+  // ── Trivy DB ──────────────────────────────────────────────────────────────
+
+  async loadTrivyDb(): Promise<void> {
     try {
       this.trivyDb.set(await this.trivySvc.getTrivyDbInfo());
     } catch {
-      this.trivyDb.set(null);
+      // Silently ignore — DB info is non-critical
     }
   }
 
-  loadRegistryImages(): void {
-    this.loadingImages.set(true);
-    this.registryService.getImages(1, 100).subscribe({
-      next: (res) => {
-        const images = (res.items || []).map((r) => r.name);
-        this.registryImages.set(images);
-
-        if (images.length === 0) {
-          this.selectedImage.set("");
-          this.selectedTag.set("");
-          this.availableTags.set([]);
-          this.loadingImages.set(false);
-          return;
-        }
-
-        const nextImage = this.selectedImage() || images[0];
-        this.selectedImage.set(nextImage);
-        this.loadTagsForImage(nextImage);
-        this.loadingImages.set(false);
-      },
-      error: () => {
-        this.loadingImages.set(false);
-        this.availableTags.set([]);
-      },
-    });
-  }
-
-  onImageChange(image: string): void {
-    this.selectedImage.set(image);
-    this.selectedTag.set("");
-    this.availableTags.set([]);
-    this.loadTagsForImage(image);
-  }
-
-  private loadTagsForImage(image: string): void {
-    if (!image) {
-      this.availableTags.set([]);
-      this.selectedTag.set("");
-      return;
-    }
-
-    this.loadingTags.set(true);
-    this.registryService.getImageTags(image).subscribe({
-      next: (res) => {
-        const tags = (res.tags || []).filter(Boolean);
-        this.availableTags.set(tags);
-        this.selectedTag.set(tags[0] ?? "");
-        this.loadingTags.set(false);
-      },
-      error: () => {
-        this.availableTags.set([]);
-        this.selectedTag.set("");
-        this.loadingTags.set(false);
-      },
-    });
-  }
-
-  getSevBtnClass(sev: TrivySeverity): string {
-    const active = this.trivySvc.vulnSeverities().includes(sev);
-    const colorMap: Record<TrivySeverity, string> = {
-      CRITICAL: active ? "btn-danger" : "btn-outline-danger",
-      HIGH: active ? "btn-danger" : "btn-outline-danger",
-      MEDIUM: active ? "btn-warning" : "btn-outline-warning",
-      LOW: active ? "btn-info" : "btn-outline-info",
-      UNKNOWN: active ? "btn-secondary" : "btn-outline-secondary",
-    };
-    return colorMap[sev];
-  }
-
-  async updateTrivyDb(): Promise<void> {
+  async updateDb(): Promise<void> {
+    if (this.updatingDb()) return;
     this.updatingDb.set(true);
     try {
       await this.trivySvc.updateTrivyDb();
-      await this.refreshTrivyDb();
+      await this.loadTrivyDb();
     } finally {
       this.updatingDb.set(false);
     }
   }
 
-  toggleSeverity(sev: string): void {
-    const current = this.severityFilter();
-    this.severityFilter.set(
-      current.includes(sev)
-        ? current.filter((s) => s !== sev)
-        : [...current, sev],
-    );
+  // ── Registry image/tag loading ────────────────────────────────────────────
+
+  loadRegistryImages(): void {
+    this.loadingImages.set(true);
+    // getImages() returns PaginatedImages — extract the items array
+    this.registryService.getImages(1, 100).subscribe({
+      next: (res) => {
+        this.registryImages.set(res.items.map((i) => i.name));
+        if (res.items.length > 0 && !this.selectedImage()) {
+          this.onImageSelected(res.items[0].name);
+        }
+        this.loadingImages.set(false);
+      },
+      error: () => this.loadingImages.set(false),
+    });
   }
 
+  onImageSelected(image: string): void {
+    this.selectedImage.set(image);
+    this.selectedTag.set("");
+    this.scanResult.set(null);
+    if (!image) return;
+
+    this.loadingTags.set(true);
+    // getImageTags() returns { repository, tags } — not a plain string[]
+    this.registryService.getImageTags(image).subscribe({
+      next: (res) => {
+        const tags = res.tags ?? [];
+        this.availableTags.set(tags);
+        if (tags.length > 0) this.selectedTag.set(tags[0]);
+        this.loadingTags.set(false);
+      },
+      error: () => this.loadingTags.set(false),
+    });
+  }
+
+  // ── Manual image scan ─────────────────────────────────────────────────────
+
   async runScan(): Promise<void> {
-    if (!this.imageToScan()) return;
+    const ref = this.imageToScan();
+    if (!ref || this.scanning()) return;
+
     this.scanning.set(true);
     this.scanResult.set(null);
     try {
       const result = await this.trivySvc.scanImage(
-        this.imageToScan(),
+        ref,
         this.severityFilter(),
-        this.ignoreUnfixed(),
+        this.ignoreUnfixed()
       );
       this.scanResult.set(result);
     } finally {
@@ -156,8 +135,33 @@ export class VulnConfigPanelComponent implements OnInit {
     }
   }
 
+  // ── Severity badge helpers ────────────────────────────────────────────────
+
+  getSevBtnClass(sev: TrivySeverity): string {
+    const active = this.trivySvc.vulnSeverities().includes(sev);
+    const map: Record<TrivySeverity, string> = {
+      CRITICAL: active ? "btn-danger" : "btn-outline-danger",
+      HIGH: active ? "btn-warning" : "btn-outline-warning",
+      MEDIUM: active ? "btn-primary" : "btn-outline-primary",
+      LOW: active ? "btn-info" : "btn-outline-info",
+      UNKNOWN: active ? "btn-secondary" : "btn-outline-secondary",
+    };
+    return map[sev] ?? "btn-outline-secondary";
+  }
+
+  severityBadgeClass(sev: string): string {
+    const map: Record<string, string> = {
+      CRITICAL: "badge bg-danger",
+      HIGH: "badge bg-warning text-dark",
+      MEDIUM: "badge bg-primary",
+      LOW: "badge bg-info text-dark",
+      UNKNOWN: "badge bg-secondary",
+    };
+    return map[sev.toUpperCase()] ?? "badge bg-secondary";
+  }
+
   getSeverityCount(sev: string): number {
-    return this.scanResult()?.summary?.[sev] ?? 0;
+    return this.scanResult()?.summary?.[sev.toUpperCase()] ?? 0;
   }
 
   formatUtcDate(value: string | null): string {
@@ -167,14 +171,4 @@ export class VulnConfigPanelComponent implements OnInit {
     return date.toLocaleString();
   }
 
-  severityBadgeClass(sev: string): string {
-    const map: Record<string, string> = {
-      CRITICAL: "badge bg-danger",
-      HIGH: "badge bg-warning text-dark",
-      MEDIUM: "badge bg-primary",
-      LOW: "badge bg-secondary",
-      UNKNOWN: "badge bg-light text-dark",
-    };
-    return map[sev] ?? "badge bg-light";
-  }
 }
