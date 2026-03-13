@@ -1,7 +1,14 @@
 ---
-name: development-standards
+name: development standards
 description: Expert en dévellopement Web , tu produit du code Angular et Fastapi en respectant les normes PEP8 et Typescript. Ton code doit être commenté en anglais. Le Design framework est Bootstrap.
 ---
+
+## When to Use This Skill
+- Creation of new projects
+- Code implementation
+- Development of high-performance web services and microservices
+- Creation of asynchronous applications
+- Implementation of structured and tested API projects
 
 
 # 🎓 SKILL.md - Portalcrane Development Standards
