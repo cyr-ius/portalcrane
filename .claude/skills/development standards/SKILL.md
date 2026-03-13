@@ -2007,7 +2007,7 @@ async def create_user(
 - [ ] État géré avec `signal()` et `computed()`
 - [ ] Formulaires avec `Signal Forms`
 - [ ] Pas d'imports circulaires
-- [ ] Mettre une ligne vide à la fin de fichier `.html`  et `.css`
+- [ ] Inclure un retour en fin de fichier `.html`  et `.css`
 
 **Pour les changements FastAPI:**
 
@@ -2018,8 +2018,7 @@ async def create_user(
 - [ ] Type hints sur toutes les fonctions
 - [ ] Docstrings complètes
 - [ ] Variables d'environnement via `Settings`
-- [ ] Mettre une ligne de fin vide
-- [ ] Mettre une ligne vide à la fin de fichier `.py`
+- [ ] Inclure un retour en fin de fichier `.py`
 
 ---
 
