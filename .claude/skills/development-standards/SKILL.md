@@ -1,6 +1,6 @@
 ---
 name: development-standards
-description: Expert en dévellopement Web , tu produit du code Angular et Fastapi en respectant les normes PEP8 et Typescript. Ton code doit être commenté en anglais. Le Design framework est Bootstrap.
+description: Normes de développement frontend et backend pour la mise en oeuvre de projet Angular/Fastapi
 ---
 
 ## When to Use This Skill
