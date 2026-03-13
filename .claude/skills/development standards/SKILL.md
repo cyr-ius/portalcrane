@@ -11,7 +11,7 @@ description: Expert en dévellopement Web , tu produit du code Angular et Fastap
 - Implementation of structured and tested API projects
 
 
-# 🎓 SKILL.md - Portalcrane Development Standards
+# 🎓 Portalcrane Development Standards
 
 ## Framework Technologies
 
@@ -2014,7 +2014,7 @@ async def create_user(
 - [ ] État géré avec `signal()` et `computed()`
 - [ ] Formulaires avec `Signal Forms`
 - [ ] Pas d'imports circulaires
-- [ ] Inclure un retour en fin de fichier `.html`  et `.css`
+- [ ] Assurez-vous que les fichiers `.html`  et `.css` se terminent par un saut de ligne.
 
 **Pour les changements FastAPI:**
 
@@ -2025,7 +2025,13 @@ async def create_user(
 - [ ] Type hints sur toutes les fonctions
 - [ ] Docstrings complètes
 - [ ] Variables d'environnement via `Settings`
-- [ ] Inclure un retour en fin de fichier `.py`
+- [ ] Assurez-vous que les fichiers `.py` se terminent par un saut de ligne.
+
+**Pour la documentation:**
+
+- [ ] Utiliser le standard markdown
+- [ ] Suffixer les fichiers avec l'extension `.md`
+- [ ] Assurez-vous que les fichiers se terminent par un saut de ligne.
 
 ---
 
@@ -2096,10 +2102,11 @@ Pour proposer des modifications aux normes:
 
 ## 📝 Historique des versions
 
-| Version | Date | Changements |
-|---------|------|------------|
-| 1.1.0 | 2026-03-07 | Ajout section pre-commit & erreurs courantes |
-| 1.0.0 | 2026-03-07 | Version initiale avec Angular 21 & FastAPI |
+| Version |    Date    |                   Changements                       |
+|---------|------------|-----------------------------------------------------|
+| 1.2.0   | 2026-03-13 | Ajout section documentation                         |
+| 1.1.0   | 2026-03-07 | Ajout section pre-commit & erreurs courantes        |
+| 1.0.0   | 2026-03-07 | Version initiale avec Angular 21 & FastAPI          |
 
 ---
 
