@@ -179,12 +179,7 @@ docker compose up -d
 | `OIDC_RESPONSE_TYPE`            | OIDC response type       | `code`                 |
 | `OIDC_SCOPE`                    | OIDC scopes              | `openid profile email` |
 
-### Docker Hub (optional — staging pipeline)
-
-| Variable             | Description                                 | Default |
-| -------------------- | ------------------------------------------- | ------- |
-| `DOCKERHUB_USERNAME` | Docker Hub username for authenticated pulls | —       |
-| `DOCKERHUB_PASSWORD` | Docker Hub password / access token          | —       |
+These values ​​can be overridden by the UI.
 
 ### Vulnerability Scanning (Trivy)
 
@@ -194,6 +189,8 @@ docker compose up -d
 | `VULN_SCAN_SEVERITIES` | Blocking severity levels (comma-separated)    | `CRITICAL,HIGH` |
 | `VULN_IGNORE_UNFIXED`  | Ignore CVEs with no available fix             | `false`         |
 | `VULN_SCAN_TIMEOUT`    | Trivy scan timeout                            | `5m`            |
+
+These values ​​can be overridden by the UI.
 
 ### HTTP Proxy (optional)
 
