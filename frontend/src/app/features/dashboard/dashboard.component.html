@@ -102,6 +102,7 @@
     </div>
 
     <!-- Health metrics row — data already loaded by ngOnInit, no extra requests -->
+    @if (authService.currentUser()?.is_admin) {
     <div class="row g-3 mb-4">
       <!-- Users & Admins card -->
       <div class="col-sm-6 col-lg-4">
@@ -248,6 +249,7 @@
         </div>
       </div>
     </div>
+    }
 
     <!-- Registry info & Quick Actions -->
     <div class="row g-3">
@@ -323,6 +325,7 @@
       </div>
 
       <!-- ── Maintenance Actions card (housekeeping operations) ── -->
+      @if (authService.currentUser()?.is_admin) {
       <div class="col-12">
         <div class="card border-0">
           <div class="card-header border-0 pb-0">
@@ -536,6 +539,7 @@
           </div>
         </div>
       </div>
+      }
     </div>
   </div>
 }

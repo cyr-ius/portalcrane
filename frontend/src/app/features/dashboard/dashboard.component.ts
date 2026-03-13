@@ -62,7 +62,10 @@ export class DashboardComponent implements OnInit {
 
   ngOnInit(): void {
     this.setupGCPolling();
-    this.refresh();
+    this.loadStats(this.stats() === null);   // ← identique à ce que refresh() faisait
+    this.registryService.getGCStatus().subscribe({ next: (s) => this.gcStatus.set(s) });
+    this.checkGhostRepos();    // ← appelé directement, sans guard
+    this.checkOrphanOci();     // ← appelé directement, sans guard
   }
 
   /**
