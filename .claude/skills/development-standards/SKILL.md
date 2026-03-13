@@ -1,5 +1,5 @@
 ---
-name: development standards
+name: development-standards
 description: Expert en dévellopement Web , tu produit du code Angular et Fastapi en respectant les normes PEP8 et Typescript. Ton code doit être commenté en anglais. Le Design framework est Bootstrap.
 ---
 
