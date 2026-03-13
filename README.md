@@ -10,6 +10,27 @@ Portalcrane's internal registry allows you to organize images into directories. 
 
 ---
 
+## Table of Contents
+
+- [Features](#features)
+- [Architecture](#architecture)
+- [Prerequisites](#prerequisites)
+- [Quick Start](#quick-start)
+- [Ports](#ports)
+- [Healthcheck](#healthcheck)
+- [Security Notes](#security-notes)
+- [Environment Variables](#environment-variables)
+- [Dashboard](#dashboard)
+- [User Management](#user-management)
+- [Folder-Based Access Control](#folder-based-access-control)
+- [Staging Pipeline](#staging-pipeline)
+- [External Registries & Sync](#external-registries--sync)
+- [Data Persistence](#data-persistence)
+- [Development](#development)
+- [CI / CD](#ci--cd)
+- [Screenshots](#screenshots)
+- [License](#license)
+
 ## Features
 
 - 🎨 Modern UI with light / dark / auto themes
@@ -47,6 +68,11 @@ Portalcrane's internal registry allows you to organize images into directories. 
 
 ---
 
+## Prerequisites
+
+- Docker 24+ (or compatible)
+- Docker Compose v2 (optional, for compose usage)
+
 ## Quick Start
 
 ### Docker CLI
@@ -76,7 +102,7 @@ services:
     environment:
       - ADMIN_USERNAME=admin
       - ADMIN_PASSWORD=changeme
-      - SECRET_KEY=change-this-secret-key-in-production
+      - SECRET_KEY=your-secret-key
     volumes:
       - portalcrane_data:/var/lib/portalcrane
     restart: unless-stopped
@@ -85,7 +111,44 @@ volumes:
   portalcrane_data:
 ```
 
+### Usage
+
+Access the web interface (`http(s)://<ip or name>:8080`) to control, pull or push your images
+or directly with Docker commands
+
+```bash
+docker login portalcrane:8080
+docker pull <image>:<tag>
+docker push <image>:<tag>
+docker logout
+```
+
+For full access without authentication, set the REGISTRY_PROXY_AUTH_ENABLED variable to `false`
+
+
+### Docker Compose (dev stack, from this repo)
+
+This stack builds the local image.
+
+```bash
+docker compose up -d
+```
+
 ---
+
+## Ports
+
+- `8080` — Portalcrane UI + API + Internal registry
+
+## Healthcheck
+
+`GET /api/health` returns a JSON status payload.
+
+## Security Notes
+
+- `SECRET_KEY` must be set to a non-default value or the app will refuse to start.
+- Always change `ADMIN_PASSWORD` on first launch.
+- If you expose the UI publicly, enable HTTPS at the reverse proxy level.
 
 ## Environment Variables
 
@@ -146,6 +209,12 @@ volumes:
 | ------------------ | ----------------------------------------------- | ------- |
 | `LOG_LEVEL`        | Log level (`DEBUG`, `INFO`, `WARNING`, `ERROR`) | `INFO`  |
 | `AUDIT_MAX_EVENTS` | Maximum number of audit events retained on disk | `100`   |
+
+### Storage (debug)
+
+| Variable   | Description                                     | Default              |
+| ---------- | ----------------------------------------------- | -------------------- |
+| `DATA_DIR` | Base data directory inside the container        | `/var/lib/portalcrane` |
 
 ---
 
@@ -234,7 +303,7 @@ ng serve --port 4200 --proxy-config proxy.conf.json
 
 The GitHub Actions workflow (`.github/workflows/docker-publish.yml`) automatically:
 
-1. Builds a multi-arch image (`linux/amd64`, `linux/arm64`) on every push to `main` and on version tags
+1. Builds a image (`linux/amd64`) on every push to `main` and on version tags
 2. Publishes to **Docker Hub** (`cyrius44/portalcrane`) and **GHCR** (`ghcr.io/cyr-ius/portalcrane`)
 3. Updates the Docker Hub description from this README
 
