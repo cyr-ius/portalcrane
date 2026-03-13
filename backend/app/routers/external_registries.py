@@ -171,6 +171,14 @@ async def update_registry_endpoint(
     """
     Update an external registry entry. Owner or admin only.
 
+    Owner resolution follows the same rule as creation:
+      - request.owner == "global"  → stored as "global" (admin only)
+      - request.owner == anything else (including "personal" sent by the UI)
+        → stored as current_user.username
+
+    This ensures that switching global → personal always persists the correct
+    username, not the literal string "personal".
+
     browsable is re-evaluated whenever any connectivity-related field changes
     (host, username, password, use_tls, tls_verify).
     """
@@ -178,20 +186,40 @@ async def update_registry_endpoint(
     if not registry:
         raise HTTPException(status_code=404, detail="Registry not found")
 
+    # Permission check: must be owner or admin
     if not current_user.is_admin and registry.get("owner") != current_user.username:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You do not own this registry",
         )
 
-    # await because update_registry may re-probe /v2/_catalog (async I/O)
+    # Only admins may promote a registry to global
+    if request.owner == "global" and not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only admins can make a registry global",
+        )
+
+    # Resolve the requested owner value:
+    #   "global"        → keep "global"
+    #   "personal" / *  → resolve to the current user's username
+    #   None            → no ownership change (pass None to update_registry)
+    resolved_owner: str | None
+    if request.owner is None:
+        resolved_owner = None  # no change requested
+    elif request.owner == "global":
+        resolved_owner = "global"
+    else:
+        # Any non-global value (e.g. "personal") means "assign to current user"
+        resolved_owner = current_user.username
+
     updated = await update_registry(
         registry_id=registry_id,
         name=request.name,
         host=request.host,
         username=request.username,
         password=request.password,
-        owner=request.owner,
+        owner=resolved_owner,
         use_tls=request.use_tls,
         tls_verify=request.tls_verify,
     )
@@ -298,8 +326,6 @@ async def browse_registry_tags(
     return await browse_external_tags(registry_id=registry_id, repository=repository)
 
 
-
-
 @router.delete("/registries/{registry_id}/browse/image")
 async def delete_registry_image(
     registry_id: str,
@@ -313,8 +339,11 @@ async def delete_registry_image(
 
     result = await delete_external_image(registry_id=registry_id, repository=repository)
     if result.get("failed_tags") and not result.get("deleted_tags"):
-        raise HTTPException(status_code=502, detail=result.get("message", "Delete failed"))
+        raise HTTPException(
+            status_code=502, detail=result.get("message", "Delete failed")
+        )
     return result
+
 
 @router.get("/registries/{registry_id}/catalog-check")
 async def catalog_check(

@@ -240,7 +240,7 @@ export class ExternalRegistriesConfigPanelComponent implements OnInit {
         host: host!,
         username,
         password,
-        owner: owner === "global" ? "global" : undefined,
+        owner: owner === "global" ? "global" : "personal",
         use_tls: useTls,
         // tls_verify is only meaningful when use_tls is true
         tls_verify: useTls ? (tls_verify ?? true) : true,
