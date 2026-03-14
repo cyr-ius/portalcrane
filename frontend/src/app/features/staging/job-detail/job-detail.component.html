@@ -23,7 +23,7 @@
         <span [class]="getStatusBadgeClass(job()!.status)">{{
         job()!.status
         }}</span>
-        <!-- FIX 4: cross icon (bi-x-lg) replaces bi-trash -->
+        <!-- cross icon -->
         <button
         class="btn btn-sm btn-outline-danger p-0"
         style="width: 1.6rem; height: 1.6rem; line-height: 1"
@@ -60,7 +60,7 @@
     <!-- Message -->
     <div class="text-muted small mb-2">{{ job()!.message }}</div>
 
-    <!-- FIX 2: scan_vulnerable → CVE table replaces push panel -->
+    <!-- scan_vulnerable → CVE table replaces push panel -->
     @if (job()!.status === "scan_vulnerable" && job()!.vuln_result) {
     <div class="mt-2 pt-2 border-top">
         <!-- Header: blocked notice + severity badges -->
@@ -169,7 +169,7 @@
     }
 
     <!-- Push panel — only when scan passed or was skipped -->
-    <!-- FIX 2: scan_vulnerable intentionally excluded -->
+    <!-- scan_vulnerable intentionally excluded -->
     @if (
     job()!.status === "scan_clean" ||
     job()!.status === "scan_skipped"
