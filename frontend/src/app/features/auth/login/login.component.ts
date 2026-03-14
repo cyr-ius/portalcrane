@@ -14,10 +14,11 @@ import { OidcPublicConfig } from "../../../core/models/auth.models";
 import { AuthService } from "../../../core/services/auth.service";
 import { OidcService } from "../../../core/services/oidc.service";
 import { ThemeService } from "../../../core/services/theme.service";
+import { AppLogo } from "../../../shared/components/app-logo/app-logo";
 
 @Component({
   selector: "app-login",
-  imports: [SlicePipe, FormField],
+  imports: [SlicePipe, FormField, AppLogo],
   templateUrl: "./login.component.html",
   styleUrl: "./login.component.css",
 })

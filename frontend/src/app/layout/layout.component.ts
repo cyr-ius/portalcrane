@@ -9,6 +9,7 @@ import { readBool } from "../core/helpers/storage";
 import { AuthService } from "../core/services/auth.service";
 import { ThemeService } from "../core/services/theme.service";
 import { AccountModalComponent } from "../shared/components/account-modal/account-modal.component";
+import { AppLogo } from "../shared/components/app-logo/app-logo";
 import { SessionExpiredModalComponent } from "../shared/components/session-expired-modal/session-expired-modal.component";
 
 
@@ -23,6 +24,7 @@ const COLLAPSE_BREAKPOINT = 992;
     RouterLinkActive,
     SessionExpiredModalComponent,
     AccountModalComponent,
+    AppLogo
   ],
   templateUrl: "./layout.component.html",
   styleUrl: "./layout.component.css",
