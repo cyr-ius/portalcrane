@@ -1,77 +1,70 @@
 <!-- Portalcrane - OIDC Configuration Panel -->
-<div class="card border-0 mb-3">
-  <div class="card-header border-0 d-flex align-items-center gap-2">
-    <i class="bi bi-shield-lock text-primary"></i>
-    <h5 class="mb-0 fw-semibold">OIDC Configuration</h5>
-    <button
-      class="btn btn-sm btn-outline-secondary ms-auto"
-      (click)="load()"
-      [disabled]="loading()"
-      title="Reload from server"
-    >
-      <i class="bi bi-arrow-clockwise" [class.spin]="loading()"></i>
-    </button>
+
+<!-- ── Global feedback ───────────────────────────────────────────────────── -->
+@if (error()) {
+  <div class="alert alert-danger py-2 small mb-3">{{ error() }}</div>
+}
+@if (saved()) {
+  <div class="alert alert-success py-2 small mb-3">
+    <i class="bi bi-check-circle me-1"></i>Configuration saved successfully.
   </div>
+}
 
-  <div class="card-body">
-    <!-- Loading skeleton -->
-    @if (loading()) {
-    <div class="d-flex align-items-center gap-2 text-muted">
-      <span class="spinner-border spinner-border-sm"></span>
-      Loading OIDC settings…
-    </div>
-    } @if (!loading()) {
+@if (loading()) {
+  <div class="text-center py-5 text-muted">
+    <span class="spinner-border spinner-border-sm me-2"></span>Loading network settings…
+  </div>
+} @else {
 
-    <!-- Error banner -->
-    @if (error()) {
-    <div class="alert alert-danger d-flex align-items-center gap-2 py-2">
-      <i class="bi bi-exclamation-triangle-fill"></i>
-      {{ error() }}
-    </div>
-    }
+  <!-- ══════════════════════════════════════════════════════════════════════ -->
+  <!-- CARD 1 — OIDC                                                          -->
+  <!-- ══════════════════════════════════════════════════════════════════════ -->
 
-    <!-- Success banner -->
-    @if (saved()) {
-    <div class="alert alert-success d-flex align-items-center gap-2 py-2">
-      <i class="bi bi-check-circle-fill"></i>
-      OIDC configuration saved successfully.
-    </div>
-    }
-
-    <!-- Enable toggle -->
-    <div
-      class="mb-4 p-3 rounded border"
-      [class.border-primary]="oidcForm.enabled().value()"
-      [class.bg-primary-subtle]="oidcForm.enabled().value()"
-    >
-      <div class="form-check form-switch d-flex align-items-center gap-3 mb-0">
-        <input
-          class="form-check-input"
-          type="checkbox"
-          role="switch"
-          id="oidcEnabled"
-          (change)="onEnabledToggle($event)"
-          style="width: 2.5em; height: 1.3em"
-          [formField]="oidcForm.enabled"
-        />
-        <label class="form-check-label fw-semibold" for="oidcEnabled">
-          Enable OIDC Authentication
-        </label>
-        @if (oidcForm.enabled().value()) {
-        <span class="badge bg-success ms-auto">Active</span>
-        } @else {
-        <span class="badge bg-secondary ms-auto">Disabled</span>
-        }
-      </div>
-      @if (oidcForm.enabled().value()) {
-      <div class="text-muted small mt-2">
+<div class="card border-0 mb-3">
+  <div class="card-header border-0 d-flex align-items-center justify-content-between">
+    <div>
+      <h6 class="fw-semibold mb-0">
+        <i class="bi bi-shield-lock text-primary me-2"></i>OIDC Configuration
+      </h6>
+      <div class="text-muted small mt-1">
         <i class="bi bi-info-circle me-1"></i>
         Users will be able to log in via your OIDC provider on the login page.
         The env-based admin login remains available as a fallback.
       </div>
-      }
     </div>
 
+      <!-- Active state badge -->
+      @if (oidcForm.enabled().value()) {
+        <span
+          class="badge bg-warning-subtle text-warning d-flex align-items-center gap-1 ms-auto"
+        >
+          <i class="bi bi-pencil-fill" style="font-size: 0.6rem"></i>
+          Custom
+        </span>
+      } @else {
+        <span
+          class="badge bg-secondary-subtle text-secondary d-flex align-items-center gap-1 ms-auto"
+        >
+          <i class="bi bi-server" style="font-size: 0.6rem"></i>
+          From env
+        </span>
+      }
+
+      <!-- Enabled toggle -->
+      <div class="form-check form-switch mb-0 ms-2 me-2">
+        <input
+          class="form-check-input"
+          type="checkbox"
+          id="oidcEnabled"
+          [formField]="oidcForm.enabled"
+          (change)="onEnabledToggle($event)"
+        />
+        <label class="form-check-label small" for="oidcEnabled">
+        </label>
+      </div>
+  </div>
+
+  <div class="card-body">
     <!-- OIDC fields — only shown when enabled -->
     @if (oidcForm.enabled().value()) {
     <div class="row g-3">
@@ -199,22 +192,21 @@
         />
       </div>
     </div>
-    }
 
-    <!-- Save button -->
-    <div class="d-flex justify-content-end mt-4">
+    <!-- Actions -->
+    <div class="d-flex gap-2 mt-3 flex-wrap">
       <button
-        class="btn btn-primary d-flex align-items-center gap-2"
+        class="btn btn-primary btn-sm"
         (click)="save()"
-        [disabled]="!oidcForm().valid()"
+        [disabled]="!oidcForm.enabled().value() || !oidcForm().valid()"
       >
         @if (oidcForm().submitting()) {
-        <span class="spinner-border spinner-border-sm"></span>
-        Saving… } @else {
-        <i class="bi bi-floppy-fill"></i>
-        Save OIDC Settings }
+        <span class="spinner-border spinner-border-sm me-1"></span>
+        Saving… }
+        <i class="bi bi-floppy-fill me-1"></i>Save OIDC Settings
       </button>
     </div>
+    }
 
     <!-- Info note -->
     <div class="alert alert-info d-flex gap-2 mt-3 py-2 small">
@@ -226,7 +218,6 @@
         values saved here.
       </div>
     </div>
-
-    }
   </div>
 </div>
+}

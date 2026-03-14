@@ -1,13 +1,15 @@
-<!-- Portalcrane - Folders Configuration Panel -->
-<!-- MIGRATION: folderForm and permForm now use [formField] bindings -->
-
-<div class="card border-0">
+<div class="card border-0 mb-3">
   <div class="card-header border-0 d-flex align-items-center justify-content-between">
-    <h6 class="fw-semibold mb-0">
-      <i class="bi bi-folder2-open me-2"></i>Registry Folders
-    </h6>
+    <div>
+      <h6 class="fw-semibold mb-0">
+        <i class="bi bi-folder2-open text-primary me-2"></i>Registry Folders
+      </h6>
+      <div class="text-muted small mt-1">
+      Creating directories allows you to organize images and assign permissions to users.
+      </div>
+    </div>
     @if (!showCreateForm()) {
-      <button class="btn btn-sm btn-primary" (click)="openCreateForm()">
+      <button class="btn btn-sm btn-outline-primary" (click)="openCreateForm()">
         <i class="bi bi-plus-lg me-1"></i>New folder
       </button>
     }

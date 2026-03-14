@@ -1,8 +1,10 @@
-<!-- ── Trivy DB status ──────────────────────────────────────────────────── -->
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<!-- CARD 1 — HTrivy DB status                                              -->
+<!-- ══════════════════════════════════════════════════════════════════════ -->
 <div class="card border-0 mb-3">
   <div class="card-header border-0">
     <h6 class="fw-semibold mb-0">
-      <i class="bi bi-database me-2"></i>Trivy Vulnerability Database
+      <i class="bi bi-database text-primary me-2"></i>Trivy Vulnerability Database
     </h6>
   </div>
   <div class="card-body">
@@ -66,11 +68,13 @@
   </div>
 </div>
 
-<!-- ── Manual scan ──────────────────────────────────────────────────────── -->
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<!-- CARD 2 — Manual scan                                                   -->
+<!-- ══════════════════════════════════════════════════════════════════════ -->
 <div class="card border-0 mb-3">
   <div class="card-header border-0">
     <h6 class="fw-semibold mb-0">
-      <i class="bi bi-shield-check me-2"></i>Manual Image Scan
+      <i class="bi bi-shield-check text-primary me-2"></i>Manual Image Scan
     </h6>
   </div>
   <div class="card-body">
@@ -250,13 +254,15 @@
   </div>
 </div>
 
-<!-- ── Vulnerability Scanner override ─────────────────────────────────────── -->
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<!-- CARD 3 — Vulnerability Scanner override                                -->
+<!-- ══════════════════════════════════════════════════════════════════════ -->
 <div class="card border-0 mb-3">
   <div
     class="card-header border-0 d-flex align-items-center justify-content-between"
   >
     <h6 class="fw-semibold mb-0">
-      <i class="bi bi-shield-exclamation me-2"></i>Vulnerability Scanner (Trivy)
+      <i class="bi bi-shield-exclamation text-primary me-2"></i>Vulnerability Scanner (Trivy)
     </h6>
 
     <!-- Saving spinner: visible while PUT/DELETE /override is in-flight -->
@@ -269,57 +275,37 @@
       </span>
     }
 
-    <!-- Saved confirmation badge: visible 3 s after a successful save -->
-    @if (trivySvc.saved()) {
-      <span
-        class="badge bg-success-subtle text-success d-flex align-items-center gap-1 ms-auto me-2"
-      >
-        <i class="bi bi-check-circle-fill" style="font-size: 0.6rem"></i>
-        Saved — applied to all users
-      </span>
-    }
+      <!-- Active state badge -->
+      @if (trivySvc.vulnOverride()) {
+        <span
+          class="badge bg-warning-subtle text-warning d-flex align-items-center gap-1 ms-auto"
+        >
+          <i class="bi bi-pencil-fill" style="font-size: 0.6rem"></i>
+          Custom
+        </span>
+      } @else {
+        <span
+          class="badge bg-secondary-subtle text-secondary d-flex align-items-center gap-1 ms-auto"
+        >
+          <i class="bi bi-server" style="font-size: 0.6rem"></i>
+          From env
+        </span>
+      }
 
-    <!-- Lock icon + label -->
-    @if (!trivySvc.saving() && !trivySvc.saved()) {
-      <span
-        class="badge bg-info-subtle text-info d-flex align-items-center gap-1 ms-auto me-3"
-      >
-        <i class="bi bi-lock-fill" style="font-size: 0.6rem"></i>
-        Vulnerability override
-      </span>
-    }
-
-    <!-- Override toggle switch -->
-    <div class="form-check form-switch mb-0 me-2">
-      <input
-        class="form-check-input"
-        type="checkbox"
-        role="switch"
-        id="vulnOverride"
-        [checked]="trivySvc.vulnOverride()"
-        [disabled]="trivySvc.saving()"
-        (change)="trivySvc.setVulnOverride($any($event.target).checked)"
-      />
-    </div>
-
-    <!-- Active state badge -->
-    @if (trivySvc.vulnOverride()) {
-      <span
-        class="badge bg-warning-subtle text-warning d-flex align-items-center gap-1"
-      >
-        <i class="bi bi-pencil-fill" style="font-size: 0.6rem"></i>
-        Custom
-      </span>
-    } @else {
-      <span
-        class="badge bg-secondary-subtle text-secondary d-flex align-items-center gap-1"
-      >
-        <i class="bi bi-server" style="font-size: 0.6rem"></i>
-        From env
-      </span>
-    }
+      <!-- Enabled toggle -->
+      <div class="form-check form-switch mb-0 ms-2 me-2">
+        <input
+          class="form-check-input"
+          type="checkbox"
+          id="vulnOverride"
+          [checked]="trivySvc.vulnOverride()"
+          [disabled]="trivySvc.saving()"
+          (change)="trivySvc.setVulnOverride($any($event.target).checked)"
+        />
+        <label class="form-check-label small" for="vulnOverride">
+        </label>
+      </div>
   </div>
-
   <div class="card-body">
     <!-- Save error alert -->
     @if (trivySvc.saveError()) {

@@ -1,36 +1,12 @@
 <!-- Portalcrane - Sync Configuration Panel -->
 <div class="card border-0 mb-3">
   <div class="card-header border-0 d-flex align-items-center justify-content-between">
-    <h6 class="fw-semibold mb-0">
-      <i class="bi bi-arrow-left-right me-2 text-primary"></i>
-      New synchronisation
-    </h6>
+    <div>
+      <h6 class="fw-semibold mb-0">
+        <i class="bi bi-arrow-left-right text-primary me-2"></i>New synchronisation
+      </h6>
+      <div class="text-muted small mt-1">
 
-    <!-- Direction toggle: Export ↑ / Import ↓ -->
-    <div class="btn-group btn-group-sm" role="group" aria-label="Sync direction">
-      <button
-        type="button"
-        class="btn"
-        [class.btn-primary]="syncDirection() === 'export'"
-        [class.btn-outline-secondary]="syncDirection() !== 'export'"
-        (click)="setSyncDirection('export')"
-      >
-        <i class="bi bi-arrow-up-circle me-1"></i>Export
-      </button>
-      <button
-        type="button"
-        class="btn"
-        [class.btn-primary]="syncDirection() === 'import'"
-        [class.btn-outline-secondary]="syncDirection() !== 'import'"
-        (click)="setSyncDirection('import')"
-      >
-        <i class="bi bi-arrow-down-circle me-1"></i>Import
-      </button>
-    </div>
-  </div>
-
-  <!-- Direction caption -->
-  <div class="px-3 pb-0 pt-1">
     @if (syncDirection() === 'export') {
       <span class="text-muted small">
         <i class="bi bi-hdd me-1"></i>Local registry
@@ -44,6 +20,31 @@
         <i class="bi bi-hdd me-1"></i>Local registry
       </span>
     }
+
+      </div>
+    </div>
+
+    <!-- Direction toggle: Export ↑ / Import ↓ -->
+    <div class="btn-group btn-group-sm" role="group" aria-label="Sync direction">
+      <button
+        type="button"
+        class="btn btn-outline-primary"
+        [class.btn-outline-primary]="syncDirection() === 'export'"
+        [class.btn-outline-secondary]="syncDirection() !== 'export'"
+        (click)="setSyncDirection('export')"
+      >
+        <i class="bi bi-arrow-up-circle me-1"></i>Export
+      </button>
+      <button
+        type="button"
+        class="btn btn-outline-primary"
+        [class.btn-outline-primary]="syncDirection() === 'import'"
+        [class.btn-outline-secondary]="syncDirection() !== 'import'"
+        (click)="setSyncDirection('import')"
+      >
+        <i class="bi bi-arrow-down-circle me-1"></i>Import
+      </button>
+    </div>
   </div>
 
   <div class="card-body">
