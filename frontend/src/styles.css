@@ -229,3 +229,13 @@ router-outlet + * {
     transform: translateY(0);
   }
 }
+
+.spin {
+  display: inline-block; /* required: transform has no effect on inline elements */
+  animation: pc-spin 1s linear infinite;
+}
+
+@keyframes pc-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}

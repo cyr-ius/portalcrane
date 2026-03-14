@@ -46,15 +46,6 @@
   word-break: break-all;
 }
 
-/* ── Spin animation (shared by Refresh button icon and Orphan OCI refresh) ── */
-.spin {
-  animation: spin 1s linear infinite;
-}
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to   { transform: rotate(360deg); }
-}
-
 /* ── Stat cards visual feedback during manual refresh ───────────────────── */
 /*
  * Applied to the row wrapper [class.stat-cards-refreshing]="refreshing()".

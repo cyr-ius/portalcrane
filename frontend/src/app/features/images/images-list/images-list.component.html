@@ -176,8 +176,9 @@
             class="btn btn-sm btn-outline-secondary"
             (click)="loadImages()"
             title="Refresh"
+            [disabled]="loading()"
           >
-            <i class="bi bi-arrow-clockwise"></i>
+            <i class="bi bi-arrow-clockwise" [class.spin]="loading()"></i>
           </button>
         </div>
       </div>
