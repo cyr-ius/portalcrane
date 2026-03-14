@@ -1,0 +1,6 @@
+/* Portalcrane - Network Config Panel Styles */
+
+fieldset[disabled] {
+  opacity: 0.55;
+  pointer-events: none;
+}

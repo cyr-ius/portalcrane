@@ -71,6 +71,15 @@
     <li class="nav-item">
       <button
         class="nav-link"
+        [class.active]="activeTab() === 'network'"
+        (click)="setTab('network')"
+      >
+        <i class="bi bi-hdd-network me-1"></i>Network
+      </button>
+    </li>
+    <li class="nav-item">
+      <button
+        class="nav-link"
         [class.active]="activeTab() === 'about'"
         (click)="setTab('about')"
       >
@@ -127,6 +136,13 @@
   <!-- ═══════════════════════════════════════════════════════════════════════ -->
   @if (activeTab() === "folders") {
     <app-folders-config-panel />
+  }
+
+  <!-- ═══════════════════════════════════════════════════════════════════════ -->
+  <!-- TAB: Network (Proxy + Syslog)                                          -->
+  <!-- ═══════════════════════════════════════════════════════════════════════ -->
+  @if (activeTab() === "network") {
+    <app-network-config-panel />
   }
 
   <!-- ═══════════════════════════════════════════════════════════════════════ -->

@@ -1,7 +1,7 @@
 import { Injectable, signal } from '@angular/core';
 
 /** Tabs available in the Settings page. */
-type SettingsTab =
+export type SettingsTab =
   | "vulnerabilities"
   | "accounts"
   | "folders"
@@ -9,6 +9,7 @@ type SettingsTab =
   | "sync"
   | "audit"
   | "oidc"
+  | "network"
   | "about";
 
 

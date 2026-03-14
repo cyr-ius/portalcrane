@@ -1,0 +1,458 @@
+<!-- Portalcrane - Network Config Panel -->
+
+<!-- ── Global feedback ───────────────────────────────────────────────────── -->
+@if (error()) {
+  <div class="alert alert-danger py-2 small mb-3">{{ error() }}</div>
+}
+@if (saved()) {
+  <div class="alert alert-success py-2 small mb-3">
+    <i class="bi bi-check-circle me-1"></i>Configuration saved successfully.
+  </div>
+}
+
+@if (loading()) {
+  <div class="text-center py-5 text-muted">
+    <span class="spinner-border spinner-border-sm me-2"></span>Loading network settings…
+  </div>
+} @else {
+
+  <!-- ══════════════════════════════════════════════════════════════════════ -->
+  <!-- CARD 1 — HTTP/HTTPS Proxy                                              -->
+  <!-- ══════════════════════════════════════════════════════════════════════ -->
+  <div class="card border-0 mb-3">
+    <div class="card-header border-0 d-flex align-items-center justify-content-between">
+      <div>
+        <h6 class="fw-semibold mb-0">
+          <i class="bi bi-hdd-network text-primary me-2"></i>HTTP / HTTPS Proxy
+        </h6>
+        <div class="text-muted small mt-1">
+          Override the container OS proxy environment variables at runtime.
+          Affects Docker Hub API calls, OIDC discovery, and skopeo operations.
+        </div>
+      </div>
+
+      <!-- Active state badge -->
+      @if (proxyForm().proxy_override) {
+        <span
+          class="badge bg-warning-subtle text-warning d-flex align-items-center gap-1 ms-auto"
+        >
+          <i class="bi bi-pencil-fill" style="font-size: 0.6rem"></i>
+          Custom
+        </span>
+      } @else {
+        <span
+          class="badge bg-secondary-subtle text-secondary d-flex align-items-center gap-1 ms-auto"
+        >
+          <i class="bi bi-server" style="font-size: 0.6rem"></i>
+          From env
+        </span>
+      }
+
+      <!-- Override toggle -->
+      <div class="form-check form-switch mb-0 ms-2 me-2">
+        <input
+          class="form-check-input"
+          type="checkbox"
+          id="proxyOverrideToggle"
+          [checked]="proxyForm().proxy_override"
+          (change)="toggleProxyOverride($any($event.target).checked)"
+        />
+        <label class="form-check-label small" for="proxyOverrideToggle"></label>
+      </div>
+
+    </div>
+
+    <div class="card-body">
+      <!-- Info banner when override is off -->
+      @if (!proxyForm().proxy_override) {
+        <div class="alert alert-info py-2 small mb-3">
+          <i class="bi bi-info-circle me-1"></i>
+          Using container environment variables
+          (<code>HTTP_PROXY</code>, <code>HTTPS_PROXY</code>, <code>NO_PROXY</code>).
+          Enable the override above to customize values.
+        </div>
+      }
+
+      <fieldset [disabled]="!proxyForm().proxy_override">
+        <div class="row g-3">
+
+          <!-- HTTP Proxy -->
+          <div class="col-md-6">
+            <label class="form-label small fw-semibold" for="httpProxy">
+              HTTP Proxy
+            </label>
+            <input
+              id="httpProxy"
+              type="text"
+              class="form-control form-control-sm font-monospace"
+              placeholder="http://proxy.corp:3128"
+              [value]="proxyForm().http_proxy"
+              (input)="updateProxy({ http_proxy: $any($event.target).value })"
+            />
+          </div>
+
+          <!-- HTTPS Proxy -->
+          <div class="col-md-6">
+            <label class="form-label small fw-semibold" for="httpsProxy">
+              HTTPS Proxy
+            </label>
+            <input
+              id="httpsProxy"
+              type="text"
+              class="form-control form-control-sm font-monospace"
+              placeholder="http://proxy.corp:3128"
+              [value]="proxyForm().https_proxy"
+              (input)="updateProxy({ https_proxy: $any($event.target).value })"
+            />
+          </div>
+
+          <!-- No Proxy -->
+          <div class="col-12">
+            <label class="form-label small fw-semibold" for="noProxy">
+              No Proxy
+              <span class="text-muted fw-normal">(comma-separated hosts)</span>
+            </label>
+            <input
+              id="noProxy"
+              type="text"
+              class="form-control form-control-sm font-monospace"
+              placeholder="localhost,127.0.0.1,registry.local"
+              [value]="proxyForm().no_proxy"
+              (input)="updateProxy({ no_proxy: $any($event.target).value })"
+            />
+          </div>
+
+          <!-- Proxy credentials -->
+          <div class="col-12">
+            <div class="border rounded p-3 bg-body-tertiary">
+              <div class="small fw-semibold mb-2">
+                <i class="bi bi-key me-1"></i>Proxy Authentication
+                <span class="text-muted fw-normal">
+                  (credentials are embedded in the proxy URL)
+                </span>
+              </div>
+              <div class="row g-2">
+                <div class="col-md-5">
+                  <input
+                    type="text"
+                    class="form-control form-control-sm"
+                    placeholder="Username"
+                    autocomplete="off"
+                    [value]="proxyForm().proxy_username"
+                    (input)="updateProxy({ proxy_username: $any($event.target).value })"
+                  />
+                </div>
+                <div class="col-md-5">
+                  <div class="input-group input-group-sm">
+                    <input
+                      [type]="showProxyPassword() ? 'text' : 'password'"
+                      class="form-control form-control-sm"
+                      placeholder="Password"
+                      autocomplete="new-password"
+                      [value]="proxyForm().proxy_password"
+                      (input)="updateProxy({ proxy_password: $any($event.target).value })"
+                    />
+                    <button
+                      class="btn btn-outline-secondary btn-sm"
+                      type="button"
+                      (click)="showProxyPassword.set(!showProxyPassword())"
+                      [title]="showProxyPassword() ? 'Hide password' : 'Show password'"
+                    >
+                      <i class="bi" [class.bi-eye]="!showProxyPassword()" [class.bi-eye-slash]="showProxyPassword()"></i>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </fieldset>
+
+      <!-- Actions -->
+      <div class="d-flex gap-2 mt-3">
+        <button
+          class="btn btn-primary btn-sm"
+          (click)="saveProxy()"
+          [disabled]="saving() || !proxyForm().proxy_override"
+        >
+          @if (saving()) {
+            <span class="spinner-border spinner-border-sm me-1"></span>
+          }
+          <i class="bi bi-floppy me-1"></i>Save Proxy Settings
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════════════ -->
+  <!-- CARD 2 — Syslog Forwarding                                            -->
+  <!-- ══════════════════════════════════════════════════════════════════════ -->
+  <div class="card border-0 mb-3">
+    <div class="card-header border-0 d-flex align-items-center justify-content-between">
+      <div>
+        <h6 class="fw-semibold mb-0">
+          <i class="bi bi-broadcast text-primary me-2"></i>Syslog Forwarding
+        </h6>
+        <div class="text-muted small mt-1">
+          Forward audit logs and/or Uvicorn access logs to a remote syslog server.
+          Supports UDP (RFC 3164/5424), TCP plain, and TCP+TLS (RFC 5425).
+          Authentication is available for TCP-based connections (RFC 6587).
+        </div>
+      </div>
+
+      <!-- Enabled toggle -->
+      <div class="form-check form-switch ms-3 mb-0">
+        <input
+          class="form-check-input"
+          type="checkbox"
+          id="syslogEnabled"
+          [checked]="syslogForm().enabled"
+          (change)="onSyslogEnabledToggle($any($event.target).checked)"
+        />
+        <label class="form-check-label small" for="syslogEnabled"></label>
+      </div>
+    </div>
+
+    <div class="card-body">
+      <fieldset [disabled]="!syslogForm().enabled">
+        <div class="row g-3">
+
+          <!-- Server host -->
+          <div class="col-md-8">
+            <label class="form-label small fw-semibold" for="syslogHost">
+              Syslog Server Host
+            </label>
+            <input
+              id="syslogHost"
+              type="text"
+              class="form-control form-control-sm font-monospace"
+              placeholder="syslog.corp.example.com"
+              [value]="syslogForm().host"
+              (input)="updateSyslog({ host: $any($event.target).value })"
+            />
+          </div>
+
+          <!-- Port -->
+          <div class="col-md-4">
+            <label class="form-label small fw-semibold" for="syslogPort">
+              Port
+            </label>
+            <input
+              id="syslogPort"
+              type="number"
+              class="form-control form-control-sm"
+              min="1"
+              max="65535"
+              [value]="syslogForm().port"
+              (input)="updateSyslog({ port: +$any($event.target).value })"
+            />
+          </div>
+
+          <!-- Protocol -->
+          <div class="col-md-6">
+            <label class="form-label small fw-semibold" for="syslogProtocol">
+              Transport Protocol
+            </label>
+            <select
+              id="syslogProtocol"
+              class="form-select form-select-sm"
+              [value]="syslogForm().protocol"
+              (change)="updateSyslog({ protocol: $any($event.target).value })"
+            >
+              <option value="udp">UDP — RFC 3164 / 5424 (no auth, no TLS)</option>
+              <option value="tcp">TCP — RFC 5424 plain text</option>
+              <option value="tcp+tls">TCP + TLS — RFC 5425 encrypted</option>
+            </select>
+          </div>
+
+          <!-- RFC variant -->
+          <div class="col-md-6">
+            <label class="form-label small fw-semibold" for="syslogRfc">
+              Message Format
+            </label>
+            <select
+              id="syslogRfc"
+              class="form-select form-select-sm"
+              [value]="syslogForm().rfc"
+              (change)="updateSyslog({ rfc: $any($event.target).value })"
+            >
+              <option value="rfc5424">RFC 5424 (structured, recommended)</option>
+              <option value="rfc3164">RFC 3164 (BSD legacy format)</option>
+            </select>
+          </div>
+
+          <!-- Log channels -->
+          <div class="col-12">
+            <div class="small fw-semibold mb-2">Log Channels to Forward</div>
+            <div class="d-flex gap-4">
+              <div class="form-check">
+                <input
+                  class="form-check-input"
+                  type="checkbox"
+                  id="forwardAudit"
+                  [checked]="syslogForm().forward_audit"
+                  (change)="updateSyslog({ forward_audit: $any($event.target).checked })"
+                />
+                <label class="form-check-label small" for="forwardAudit">
+                  <i class="bi bi-journal-text me-1"></i>Audit logs
+                </label>
+              </div>
+              <div class="form-check">
+                <input
+                  class="form-check-input"
+                  type="checkbox"
+                  id="forwardUvicorn"
+                  [checked]="syslogForm().forward_uvicorn"
+                  (change)="updateSyslog({ forward_uvicorn: $any($event.target).checked })"
+                />
+                <label class="form-check-label small" for="forwardUvicorn">
+                  <i class="bi bi-terminal me-1"></i>Uvicorn access logs
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <!-- TLS options — only when tcp+tls -->
+          @if (tlsAvailable()) {
+            <div class="col-12">
+              <div class="border rounded p-3 bg-body-tertiary">
+                <div class="small fw-semibold mb-2">
+                  <i class="bi bi-shield-lock me-1"></i>TLS Options
+                  <span class="badge bg-info-subtle text-info ms-1">RFC 5425</span>
+                </div>
+                <div class="row g-2">
+                  <div class="col-12">
+                    <div class="form-check">
+                      <input
+                        class="form-check-input"
+                        type="checkbox"
+                        id="tlsVerify"
+                        [checked]="syslogForm().tls_verify"
+                        (change)="updateSyslog({ tls_verify: $any($event.target).checked })"
+                      />
+                      <label class="form-check-label small" for="tlsVerify">
+                        Verify server certificate
+                      </label>
+                    </div>
+                  </div>
+                  <div class="col-12">
+                    <label class="form-label small" for="tlsCaCert">
+                      CA Certificate path
+                      <span class="text-muted">(optional, inside container)</span>
+                    </label>
+                    <input
+                      id="tlsCaCert"
+                      type="text"
+                      class="form-control form-control-sm font-monospace"
+                      placeholder="/etc/ssl/certs/my-ca.pem"
+                      [value]="syslogForm().tls_ca_cert"
+                      (input)="updateSyslog({ tls_ca_cert: $any($event.target).value })"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          }
+
+          <!-- Authentication — only when TCP (RFC 6587) -->
+          @if (authAvailable()) {
+            <div class="col-12">
+              <div class="border rounded p-3 bg-body-tertiary">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                  <div class="small fw-semibold">
+                    <i class="bi bi-key me-1"></i>Authentication
+                    <span class="badge bg-secondary-subtle text-secondary ms-1">RFC 6587 / RELP</span>
+                  </div>
+                  <div class="form-check form-switch mb-0">
+                    <input
+                      class="form-check-input"
+                      type="checkbox"
+                      id="authEnabled"
+                      [checked]="syslogForm().auth_enabled"
+                      (change)="updateSyslog({ auth_enabled: $any($event.target).checked })"
+                    />
+                    <label class="form-check-label small" for="authEnabled">Enable</label>
+                  </div>
+                </div>
+
+                @if (syslogForm().auth_enabled) {
+                  <div class="row g-2">
+                    <div class="col-md-5">
+                      <input
+                        type="text"
+                        class="form-control form-control-sm"
+                        placeholder="Username"
+                        autocomplete="off"
+                        [value]="syslogForm().auth_username"
+                        (input)="updateSyslog({ auth_username: $any($event.target).value })"
+                      />
+                    </div>
+                    <div class="col-md-5">
+                      <div class="input-group input-group-sm">
+                        <input
+                          [type]="showSyslogPassword() ? 'text' : 'password'"
+                          class="form-control form-control-sm"
+                          placeholder="Password"
+                          autocomplete="new-password"
+                          [value]="syslogForm().auth_password"
+                          (input)="updateSyslog({ auth_password: $any($event.target).value })"
+                        />
+                        <button
+                          class="btn btn-outline-secondary btn-sm"
+                          type="button"
+                          (click)="showSyslogPassword.set(!showSyslogPassword())"
+                          [title]="showSyslogPassword() ? 'Hide password' : 'Show password'"
+                        >
+                          <i class="bi" [class.bi-eye]="!showSyslogPassword()" [class.bi-eye-slash]="showSyslogPassword()"></i>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                }
+              </div>
+            </div>
+          }
+        </div>
+      </fieldset>
+
+      <!-- Test result banner -->
+      @if (testResult()) {
+        <div
+          class="alert py-2 small mt-3 mb-0"
+          [class.alert-success]="testResult()!.success"
+          [class.alert-danger]="!testResult()!.success"
+        >
+          <i class="bi me-1"
+            [class.bi-check-circle]="testResult()!.success"
+            [class.bi-exclamation-triangle]="!testResult()!.success"
+          ></i>
+          {{ testResult()!.message }}
+        </div>
+      }
+
+      <!-- Actions -->
+      <div class="d-flex gap-2 mt-3 flex-wrap">
+        <button
+          class="btn btn-primary btn-sm"
+          (click)="saveSyslog()"
+          [disabled]="saving() || !syslogForm().enabled"
+        >
+          @if (saving()) {
+            <span class="spinner-border spinner-border-sm me-1"></span>
+          }
+          <i class="bi bi-floppy me-1"></i>Save Syslog Settings
+        </button>
+
+        @if (syslogForm().enabled) {
+          <button
+            class="btn btn-outline-secondary btn-sm"
+            (click)="testSyslog()"
+            [disabled]="saving() || !syslogForm().host"
+          >
+            <i class="bi bi-send me-1"></i>Send Test Message
+          </button>
+        }
+      </div>
+    </div>
+  </div>
+}
