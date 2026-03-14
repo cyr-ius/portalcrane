@@ -175,6 +175,33 @@ def migrate_root_folder(users: list[dict]) -> None:
     _save_folders(folders)
 
 
+def ensure_root_folder_exists() -> None:
+    """
+    Ensure the __root__ folder always exists at startup.
+
+    Creates it with an empty permissions list if it is absent.
+    This prevents the situation where an admin does not know to create it
+    manually in order to grant access to images in the root namespace.
+
+    Safe to call multiple times — does nothing when __root__ is already present.
+    Called at application startup via main.py lifespan, after migrate_root_folder.
+    """
+    folders = _load_folders()
+
+    if any(f["name"] == ROOT_FOLDER_NAME for f in folders):
+        return  # Already present — nothing to do
+
+    root_entry = {
+        "id": str(uuid.uuid4()),
+        "name": ROOT_FOLDER_NAME,
+        "description": "Default namespace — covers images with no folder prefix (e.g. nginx, ubuntu)",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "permissions": [],
+    }
+    folders.append(root_entry)
+    _save_folders(folders)
+
+
 # ─── Public helpers used by registry_proxy and registry routers ───────────────
 
 

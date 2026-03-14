@@ -30,6 +30,7 @@ from .routers import (
     system,
     trivy,
 )
+from .routers.folders import ensure_root_folder_exists
 from .services.proxy_service import (
     apply_proxy_to_os_environ,
     apply_syslog_config,
@@ -94,6 +95,7 @@ async def lifespan(app: FastAPI):
     proxy_cfg = resolve_proxy_settings(settings)
     apply_proxy_to_os_environ(proxy_cfg)
     apply_syslog_config(resolve_syslog_settings())
+    ensure_root_folder_exists()
     db_task = asyncio.create_task(_trivy_db_updater_loop())
     yield
     db_task.cancel()

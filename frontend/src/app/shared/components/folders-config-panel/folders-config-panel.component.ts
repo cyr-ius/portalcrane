@@ -1,15 +1,25 @@
 /**
  * Portalcrane - Folders Configuration Panel
  *
- * MIGRATION: Two forms now use Angular Signal Forms (form / FormField):
+ * Displays and manages registry folders (path prefixes) with per-user permissions.
+ *
+ * Special handling for the __root__ folder:
+ *  - Always present (created automatically at backend startup).
+ *  - Displayed with a distinct visual style and a descriptive label.
+ *  - Cannot be deleted — the delete button is hidden for this folder.
+ *  - Description edit is still allowed so admins can customise the label.
+ *
+ * Forms use Angular Signal Forms (form / FormField):
  *   1. folderForm  — create a new folder (name + description)
  *   2. permForm    — add a user permission to a folder (username + can_pull + can_push)
- * Previously these used bare signal-per-field bindings with manual guards.
  */
 import { Component, inject, OnInit, signal } from "@angular/core";
 import { form, FormField, required, submit } from "@angular/forms/signals";
 import { firstValueFrom } from "rxjs";
 import { Folder, FolderService, UserSummary } from "../../../core/services/folder.service";
+
+/** Reserved name for the root namespace folder. */
+const ROOT_FOLDER_NAME = "__root__";
 
 /** Shape of the folder creation form model. */
 interface FolderFormModel {
@@ -103,7 +113,13 @@ export class FoldersConfigPanel implements OnInit {
     this.error.set(null);
     this.folderSvc.getFolders().subscribe({
       next: (folders) => {
-        this.folders.set(folders);
+        // Sort: __root__ always first, then alphabetical
+        const sorted = [...folders].sort((a, b) => {
+          if (a.name === ROOT_FOLDER_NAME) return -1;
+          if (b.name === ROOT_FOLDER_NAME) return 1;
+          return a.name.localeCompare(b.name);
+        });
+        this.folders.set(sorted);
         this.loading.set(false);
       },
       error: (err) => {
@@ -119,6 +135,16 @@ export class FoldersConfigPanel implements OnInit {
       next: (users) => this.users.set(users),
       error: () => this.users.set([]), // Silently ignore when not admin
     });
+  }
+
+  // ── Root folder helpers ────────────────────────────────────────────────────
+
+  /**
+   * Returns true when the given folder is the reserved __root__ folder.
+   * Used in the template to conditionally hide destructive actions.
+   */
+  isRootFolder(folder: Folder): boolean {
+    return folder.name === ROOT_FOLDER_NAME;
   }
 
   // ── Create folder ──────────────────────────────────────────────────────────
@@ -147,7 +173,15 @@ export class FoldersConfigPanel implements OnInit {
             description?.trim() ?? "",
           ),
         );
-        this.folders.update((list) => [...list, folder]);
+        // Insert new folder in alphabetical order (after __root__)
+        this.folders.update((list) => {
+          const updated = [...list, folder].sort((a, b) => {
+            if (a.name === ROOT_FOLDER_NAME) return -1;
+            if (b.name === ROOT_FOLDER_NAME) return 1;
+            return a.name.localeCompare(b.name);
+          });
+          return updated;
+        });
         this.showCreateForm.set(false);
         f().reset({ ...this.folderInit });
       } catch (err: unknown) {

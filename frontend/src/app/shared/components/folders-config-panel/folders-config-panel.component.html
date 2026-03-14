@@ -5,7 +5,7 @@
         <i class="bi bi-folder2-open text-primary me-2"></i>Registry Folders
       </h6>
       <div class="text-muted small mt-1">
-      Creating directories allows you to organize images and assign permissions to users.
+        Creating directories allows you to organize images and assign permissions to users.
       </div>
     </div>
     @if (!showCreateForm()) {
@@ -84,241 +84,476 @@
 
     <!-- ── Folder list ─────────────────────────────────────────────────────── -->
     @for (folder of folders(); track folder.id) {
-      <div class="border rounded mb-2 overflow-hidden">
 
-        <!-- Folder header row (accordion toggle) -->
-        <div
-          class="d-flex align-items-center gap-3 px-3 py-2 bg-body-secondary"
-          style="cursor: pointer"
-          (click)="toggleExpand(folder.id)"
-        >
-          <i
-            class="bi"
-            [class.bi-chevron-right]="expandedId() !== folder.id"
-            [class.bi-chevron-down]="expandedId() === folder.id"
-          ></i>
-          <span class="fw-semibold font-monospace">{{ folder.name }}</span>
-          @if (folder.description) {
-            <span class="text-muted small">{{ folder.description }}</span>
-          }
-          <span class="badge bg-secondary-subtle text-secondary ms-auto">
-            {{ folder.permissions.length }} user(s)
-          </span>
-          <span class="text-muted small">{{ formatDate(folder.created_at) }}</span>
-        </div>
+      <!-- ── __root__ folder — special system card ─────────────────────────── -->
+      @if (isRootFolder(folder)) {
+        <div class="border border-warning-subtle rounded mb-2 overflow-hidden">
 
-        <!-- Expanded detail section -->
-        @if (expandedId() === folder.id) {
-          <div class="px-3 py-2">
-
-            <!-- Description edit (bare signal — not a full form, single field) -->
-            @if (editingDescId() === folder.id) {
-              <div class="d-flex gap-2 mb-3 align-items-center">
-                <input
-                  type="text"
-                  class="form-control form-control-sm"
-                  [value]="editDesc()"
-                  (input)="editDesc.set($any($event.target).value)"
-                />
-                <button
-                  class="btn btn-sm btn-primary"
-                  (click)="saveDesc(folder.id)"
-                  [disabled]="savingDesc()"
-                >
-                  @if (savingDesc()) {
-                    <span class="spinner-border spinner-border-sm"></span>
-                  } @else {
-                    Save
-                  }
-                </button>
-                <button
-                  class="btn btn-sm btn-outline-secondary"
-                  (click)="cancelEditDesc()"
-                >
-                  Cancel
-                </button>
-              </div>
-            } @else {
-              <div class="d-flex gap-2 mb-3">
-                <button
-                  class="btn btn-sm btn-outline-secondary"
-                  (click)="startEditDesc(folder)"
-                >
-                  <i class="bi bi-pencil me-1"></i>Edit description
-                </button>
-                <button
-                  class="btn btn-sm btn-outline-danger ms-auto"
-                  (click)="deleteFolder(folder.id)"
-                  [disabled]="deletingId() === folder.id"
-                >
-                  @if (deletingId() === folder.id) {
-                    <span class="spinner-border spinner-border-sm"></span>
-                  } @else {
-                    <i class="bi bi-trash me-1"></i>Delete folder
-                  }
-                </button>
-              </div>
+          <!-- Root folder header -->
+          <div
+            class="d-flex align-items-center gap-3 px-3 py-2 bg-warning-subtle"
+            style="cursor: pointer"
+            (click)="toggleExpand(folder.id)"
+          >
+            <i
+              class="bi"
+              [class.bi-chevron-right]="expandedId() !== folder.id"
+              [class.bi-chevron-down]="expandedId() === folder.id"
+            ></i>
+            <!-- House icon to distinguish __root__ visually -->
+            <i class="bi bi-house-door-fill text-warning"></i>
+            <span class="fw-semibold">Root namespace</span>
+            <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle">
+              system
+            </span>
+            @if (folder.description) {
+              <span class="text-muted small">{{ folder.description }}</span>
             }
+            <span class="badge bg-secondary-subtle text-secondary ms-auto">
+              {{ folder.permissions.length }} user(s)
+            </span>
+            <span class="text-muted small">{{ formatDate(folder.created_at) }}</span>
+          </div>
 
-            <!-- Permissions header -->
-            <div class="d-flex align-items-center justify-content-between mb-2">
-              <span class="fw-semibold small">
-                <i class="bi bi-key me-1"></i>User permissions
+          <!-- Root folder — info banner explaining its purpose -->
+          <div class="px-3 pt-2">
+            <div class="alert alert-warning py-2 small mb-2 d-flex align-items-start gap-2">
+              <i class="bi bi-info-circle-fill mt-1 flex-shrink-0"></i>
+              <span>
+                This folder controls access to images with <strong>no namespace prefix</strong>
+                (e.g. <code>nginx</code>, <code>ubuntu</code>) and to images whose prefix does not
+                match any configured folder.
+                It is created automatically and <strong>cannot be deleted</strong>.
               </span>
-              @if (addPermFolderId() !== folder.id) {
-                <button
-                  class="btn btn-outline-primary btn-sm"
-                  (click)="openAddPerm(folder.id)"
-                >
-                  <i class="bi bi-person-plus me-1"></i>Add user
-                </button>
-              }
             </div>
+          </div>
 
-            <!-- ── Add permission form (Signal Form) ────────────────────── -->
-            @if (addPermFolderId() === folder.id) {
-              <div class="border rounded p-2 mb-2 bg-body-secondary">
+          <!-- Expanded detail section -->
+          @if (expandedId() === folder.id) {
+            <div class="px-3 py-2">
 
-                @if (permError()) {
-                  <div class="alert alert-danger py-1 small mb-2">{{ permError() }}</div>
+              <!-- Description edit -->
+              @if (editingDescId() === folder.id) {
+                <div class="d-flex gap-2 mb-3 align-items-center">
+                  <input
+                    type="text"
+                    class="form-control form-control-sm"
+                    [value]="editDesc()"
+                    (input)="editDesc.set($any($event.target).value)"
+                  />
+                  <button
+                    class="btn btn-sm btn-primary"
+                    (click)="saveDesc(folder.id)"
+                    [disabled]="savingDesc()"
+                  >
+                    @if (savingDesc()) {
+                      <span class="spinner-border spinner-border-sm"></span>
+                    } @else {
+                      Save
+                    }
+                  </button>
+                  <button
+                    class="btn btn-sm btn-outline-secondary"
+                    (click)="cancelEditDesc()"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              } @else {
+                <!-- No delete button for __root__ -->
+                <div class="d-flex gap-2 mb-3">
+                  <button
+                    class="btn btn-sm btn-outline-secondary"
+                    (click)="startEditDesc(folder)"
+                  >
+                    <i class="bi bi-pencil me-1"></i>Edit description
+                  </button>
+                </div>
+              }
+
+              <!-- Permissions header -->
+              <div class="d-flex align-items-center justify-content-between mb-2">
+                <span class="fw-semibold small">
+                  <i class="bi bi-key me-1"></i>User permissions
+                </span>
+                @if (addPermFolderId() !== folder.id) {
+                  <button
+                    class="btn btn-outline-primary btn-sm"
+                    (click)="openAddPerm(folder.id)"
+                  >
+                    <i class="bi bi-person-plus me-1"></i>Add user
+                  </button>
                 }
+              </div>
 
-                <!-- Datalist for existing usernames -->
-                <datalist id="users-datalist">
-                  @for (u of users(); track u.id) {
-                    <option [value]="u.username">{{ u.username }}</option>
+              <!-- Add-permission form (Signal Form) -->
+              @if (addPermFolderId() === folder.id) {
+                <div class="border rounded p-2 mb-2 bg-body-secondary">
+                  @if (permError()) {
+                    <div class="alert alert-danger py-1 small mb-2">{{ permError() }}</div>
                   }
-                </datalist>
 
-                <div class="row g-2 align-items-end">
+                  <datalist id="users-datalist-root">
+                    @for (u of users(); track u.id) {
+                      <option [value]="u.username">{{ u.username }}</option>
+                    }
+                  </datalist>
 
-                  <!-- Username (formField + datalist) -->
-                  <div class="col-md-4">
-                    <label class="form-label small fw-semibold mb-1">Username</label>
-                    <input
-                      type="text"
-                      class="form-control form-control-sm"
-                      placeholder="Select or type a username"
-                      list="users-datalist"
-                      [formField]="permForm.username"
-                    />
-                  </div>
-
-                  <!-- Can pull -->
-                  <div class="col-auto">
-                    <div class="form-check mb-0">
+                  <div class="row g-2 align-items-end">
+                    <div class="col-md-4">
+                      <label class="form-label small fw-semibold mb-1">Username</label>
                       <input
-                        class="form-check-input"
-                        type="checkbox"
-                        [id]="'perm-pull-' + folder.id"
-                        [formField]="permForm.canPull"
+                        type="text"
+                        class="form-control form-control-sm"
+                        placeholder="Select or type a username"
+                        list="users-datalist-root"
+                        [formField]="permForm.username"
                       />
-                      <label
-                        class="form-check-label small"
-                        [htmlFor]="'perm-pull-' + folder.id"
-                      >
-                        <i class="bi bi-download me-1"></i>Pull
-                      </label>
                     </div>
-                  </div>
-
-                  <!-- Can push -->
-                  <div class="col-auto">
-                    <div class="form-check mb-0">
-                      <input
-                        class="form-check-input"
-                        type="checkbox"
-                        [id]="'perm-push-' + folder.id"
-                        [formField]="permForm.canPush"
-                      />
-                      <label
-                        class="form-check-label small"
-                        [htmlFor]="'perm-push-' + folder.id"
-                      >
-                        <i class="bi bi-upload me-1"></i>Push
-                      </label>
+                    <div class="col-auto">
+                      <div class="form-check mb-0">
+                        <input
+                          class="form-check-input"
+                          type="checkbox"
+                          [id]="'perm-pull-root-' + folder.id"
+                          [formField]="permForm.canPull"
+                        />
+                        <label class="form-check-label small" [htmlFor]="'perm-pull-root-' + folder.id">
+                          <i class="bi bi-download me-1"></i>Pull
+                        </label>
+                      </div>
                     </div>
-                  </div>
-
-                  <!-- Submit / cancel -->
-                  <div class="col-auto d-flex gap-1">
-                    <button
-                      class="btn btn-primary btn-sm"
-                      (click)="savePerm(folder.id)"
-                      [disabled]="!permForm().valid() || savingPerm()"
-                    >
-                      @if (savingPerm()) {
-                        <span class="spinner-border spinner-border-sm"></span>
-                      } @else {
-                        Add
-                      }
-                    </button>
-                    <button
-                      class="btn btn-outline-secondary btn-sm"
-                      (click)="cancelAddPerm()"
-                    >
-                      Cancel
-                    </button>
+                    <div class="col-auto">
+                      <div class="form-check mb-0">
+                        <input
+                          class="form-check-input"
+                          type="checkbox"
+                          [id]="'perm-push-root-' + folder.id"
+                          [formField]="permForm.canPush"
+                        />
+                        <label class="form-check-label small" [htmlFor]="'perm-push-root-' + folder.id">
+                          <i class="bi bi-upload me-1"></i>Push
+                        </label>
+                      </div>
+                    </div>
+                    <div class="col-auto d-flex gap-1">
+                      <button
+                        class="btn btn-primary btn-sm"
+                        (click)="savePerm(folder.id)"
+                        [disabled]="!permForm().valid() || savingPerm()"
+                      >
+                        @if (savingPerm()) {
+                          <span class="spinner-border spinner-border-sm"></span>
+                        } @else {
+                          Add
+                        }
+                      </button>
+                      <button
+                        class="btn btn-outline-secondary btn-sm"
+                        (click)="cancelAddPerm()"
+                      >
+                        Cancel
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            }
+              }
 
-            <!-- Permissions list -->
-            @if (folder.permissions.length === 0) {
-              <div class="text-muted small py-2">
-                <i class="bi bi-person-slash me-1"></i>No users assigned yet.
-              </div>
-            } @else {
-              <table class="table table-sm align-middle mb-0">
-                <thead>
-                  <tr class="text-muted" style="font-size: 0.78rem">
-                    <th>User</th>
-                    <th class="text-center">Pull</th>
-                    <th class="text-center">Push</th>
-                    <th class="text-end">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  @for (perm of folder.permissions; track perm.username) {
-                    <tr>
-                      <td>
-                        <span class="fw-semibold font-monospace small">{{ perm.username }}</span>
-                      </td>
-                      <td class="text-center">
-                        <input
-                          class="form-check-input"
-                          type="checkbox"
-                          [checked]="perm.can_pull"
-                          (change)="updatePerm(folder.id, perm.username, $any($event.target).checked, perm.can_push)"
-                        />
-                      </td>
-                      <td class="text-center">
-                        <input
-                          class="form-check-input"
-                          type="checkbox"
-                          [checked]="perm.can_push"
-                          (change)="updatePerm(folder.id, perm.username, perm.can_pull, $any($event.target).checked)"
-                        />
-                      </td>
-                      <td class="text-end">
-                        <button
-                          class="btn btn-outline-danger btn-sm"
-                          (click)="removePerm(folder.id, perm.username)"
-                          title="Remove user from folder"
-                        >
-                          <i class="bi bi-person-dash"></i>
-                        </button>
-                      </td>
+              <!-- Permissions list -->
+              @if (folder.permissions.length === 0) {
+                <div class="text-muted small py-2">
+                  <i class="bi bi-person-slash me-1"></i>No users assigned yet.
+                </div>
+              } @else {
+                <table class="table table-sm align-middle mb-0">
+                  <thead>
+                    <tr class="text-muted" style="font-size: 0.78rem">
+                      <th>User</th>
+                      <th class="text-center">Pull</th>
+                      <th class="text-center">Push</th>
+                      <th class="text-end">Actions</th>
                     </tr>
-                  }
-                </tbody>
-              </table>
-            }
+                  </thead>
+                  <tbody>
+                    @for (perm of folder.permissions; track perm.username) {
+                      <tr>
+                        <td>
+                          <span class="fw-semibold font-monospace small">{{ perm.username }}</span>
+                        </td>
+                        <td class="text-center">
+                          <input
+                            class="form-check-input"
+                            type="checkbox"
+                            [checked]="perm.can_pull"
+                            (change)="updatePerm(folder.id, perm.username, $any($event.target).checked, perm.can_push)"
+                          />
+                        </td>
+                        <td class="text-center">
+                          <input
+                            class="form-check-input"
+                            type="checkbox"
+                            [checked]="perm.can_push"
+                            (change)="updatePerm(folder.id, perm.username, perm.can_pull, $any($event.target).checked)"
+                          />
+                        </td>
+                        <td class="text-end">
+                          <button
+                            class="btn btn-outline-danger btn-sm"
+                            (click)="removePerm(folder.id, perm.username)"
+                            title="Remove user from folder"
+                          >
+                            <i class="bi bi-person-dash"></i>
+                          </button>
+                        </td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              }
 
+            </div>
+          }
+        </div>
+
+      } @else {
+
+        <!-- ── Regular folder card ──────────────────────────────────────────── -->
+        <div class="border rounded mb-2 overflow-hidden">
+
+          <!-- Folder header row (accordion toggle) -->
+          <div
+            class="d-flex align-items-center gap-3 px-3 py-2 bg-body-secondary"
+            style="cursor: pointer"
+            (click)="toggleExpand(folder.id)"
+          >
+            <i
+              class="bi"
+              [class.bi-chevron-right]="expandedId() !== folder.id"
+              [class.bi-chevron-down]="expandedId() === folder.id"
+            ></i>
+            <span class="fw-semibold font-monospace">{{ folder.name }}</span>
+            @if (folder.description) {
+              <span class="text-muted small">{{ folder.description }}</span>
+            }
+            <span class="badge bg-secondary-subtle text-secondary ms-auto">
+              {{ folder.permissions.length }} user(s)
+            </span>
+            <span class="text-muted small">{{ formatDate(folder.created_at) }}</span>
           </div>
-        }
-      </div>
+
+          <!-- Expanded detail section -->
+          @if (expandedId() === folder.id) {
+            <div class="px-3 py-2">
+
+              <!-- Description edit -->
+              @if (editingDescId() === folder.id) {
+                <div class="d-flex gap-2 mb-3 align-items-center">
+                  <input
+                    type="text"
+                    class="form-control form-control-sm"
+                    [value]="editDesc()"
+                    (input)="editDesc.set($any($event.target).value)"
+                  />
+                  <button
+                    class="btn btn-sm btn-primary"
+                    (click)="saveDesc(folder.id)"
+                    [disabled]="savingDesc()"
+                  >
+                    @if (savingDesc()) {
+                      <span class="spinner-border spinner-border-sm"></span>
+                    } @else {
+                      Save
+                    }
+                  </button>
+                  <button
+                    class="btn btn-sm btn-outline-secondary"
+                    (click)="cancelEditDesc()"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              } @else {
+                <div class="d-flex gap-2 mb-3">
+                  <button
+                    class="btn btn-sm btn-outline-secondary"
+                    (click)="startEditDesc(folder)"
+                  >
+                    <i class="bi bi-pencil me-1"></i>Edit description
+                  </button>
+                  <button
+                    class="btn btn-sm btn-outline-danger ms-auto"
+                    (click)="deleteFolder(folder.id)"
+                    [disabled]="deletingId() === folder.id"
+                  >
+                    @if (deletingId() === folder.id) {
+                      <span class="spinner-border spinner-border-sm"></span>
+                    } @else {
+                      <i class="bi bi-trash me-1"></i>Delete folder
+                    }
+                  </button>
+                </div>
+              }
+
+              <!-- Permissions header -->
+              <div class="d-flex align-items-center justify-content-between mb-2">
+                <span class="fw-semibold small">
+                  <i class="bi bi-key me-1"></i>User permissions
+                </span>
+                @if (addPermFolderId() !== folder.id) {
+                  <button
+                    class="btn btn-outline-primary btn-sm"
+                    (click)="openAddPerm(folder.id)"
+                  >
+                    <i class="bi bi-person-plus me-1"></i>Add user
+                  </button>
+                }
+              </div>
+
+              <!-- Add-permission form (Signal Form) -->
+              @if (addPermFolderId() === folder.id) {
+                <div class="border rounded p-2 mb-2 bg-body-secondary">
+
+                  @if (permError()) {
+                    <div class="alert alert-danger py-1 small mb-2">{{ permError() }}</div>
+                  }
+
+                  <datalist id="users-datalist">
+                    @for (u of users(); track u.id) {
+                      <option [value]="u.username">{{ u.username }}</option>
+                    }
+                  </datalist>
+
+                  <div class="row g-2 align-items-end">
+
+                    <!-- Username (formField + datalist) -->
+                    <div class="col-md-4">
+                      <label class="form-label small fw-semibold mb-1">Username</label>
+                      <input
+                        type="text"
+                        class="form-control form-control-sm"
+                        placeholder="Select or type a username"
+                        list="users-datalist"
+                        [formField]="permForm.username"
+                      />
+                    </div>
+
+                    <!-- Can pull -->
+                    <div class="col-auto">
+                      <div class="form-check mb-0">
+                        <input
+                          class="form-check-input"
+                          type="checkbox"
+                          [id]="'perm-pull-' + folder.id"
+                          [formField]="permForm.canPull"
+                        />
+                        <label
+                          class="form-check-label small"
+                          [htmlFor]="'perm-pull-' + folder.id"
+                        >
+                          <i class="bi bi-download me-1"></i>Pull
+                        </label>
+                      </div>
+                    </div>
+
+                    <!-- Can push -->
+                    <div class="col-auto">
+                      <div class="form-check mb-0">
+                        <input
+                          class="form-check-input"
+                          type="checkbox"
+                          [id]="'perm-push-' + folder.id"
+                          [formField]="permForm.canPush"
+                        />
+                        <label
+                          class="form-check-label small"
+                          [htmlFor]="'perm-push-' + folder.id"
+                        >
+                          <i class="bi bi-upload me-1"></i>Push
+                        </label>
+                      </div>
+                    </div>
+
+                    <!-- Submit / cancel -->
+                    <div class="col-auto d-flex gap-1">
+                      <button
+                        class="btn btn-primary btn-sm"
+                        (click)="savePerm(folder.id)"
+                        [disabled]="!permForm().valid() || savingPerm()"
+                      >
+                        @if (savingPerm()) {
+                          <span class="spinner-border spinner-border-sm"></span>
+                        } @else {
+                          Add
+                        }
+                      </button>
+                      <button
+                        class="btn btn-outline-secondary btn-sm"
+                        (click)="cancelAddPerm()"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              }
+
+              <!-- Permissions list -->
+              @if (folder.permissions.length === 0) {
+                <div class="text-muted small py-2">
+                  <i class="bi bi-person-slash me-1"></i>No users assigned yet.
+                </div>
+              } @else {
+                <table class="table table-sm align-middle mb-0">
+                  <thead>
+                    <tr class="text-muted" style="font-size: 0.78rem">
+                      <th>User</th>
+                      <th class="text-center">Pull</th>
+                      <th class="text-center">Push</th>
+                      <th class="text-end">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (perm of folder.permissions; track perm.username) {
+                      <tr>
+                        <td>
+                          <span class="fw-semibold font-monospace small">{{ perm.username }}</span>
+                        </td>
+                        <td class="text-center">
+                          <input
+                            class="form-check-input"
+                            type="checkbox"
+                            [checked]="perm.can_pull"
+                            (change)="updatePerm(folder.id, perm.username, $any($event.target).checked, perm.can_push)"
+                          />
+                        </td>
+                        <td class="text-center">
+                          <input
+                            class="form-check-input"
+                            type="checkbox"
+                            [checked]="perm.can_push"
+                            (change)="updatePerm(folder.id, perm.username, perm.can_pull, $any($event.target).checked)"
+                          />
+                        </td>
+                        <td class="text-end">
+                          <button
+                            class="btn btn-outline-danger btn-sm"
+                            (click)="removePerm(folder.id, perm.username)"
+                            title="Remove user from folder"
+                          >
+                            <i class="bi bi-person-dash"></i>
+                          </button>
+                        </td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              }
+
+            </div>
+          }
+        </div>
+
+      }
     }
 
   </div>
