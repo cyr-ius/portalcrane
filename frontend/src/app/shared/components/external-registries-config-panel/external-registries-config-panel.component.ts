@@ -12,7 +12,7 @@
  * `browsable` value set by the backend) to the shared service signal so that
  * all consumers (images-list, staging) react without extra HTTP calls.
  */
-import { Component, inject, OnInit, signal } from "@angular/core";
+import { Component, effect, inject, OnInit, signal } from "@angular/core";
 import { form, FormField, required, submit } from "@angular/forms/signals";
 import { firstValueFrom } from "rxjs";
 import {
@@ -93,9 +93,19 @@ export class ExternalRegistriesConfigPanelComponent implements OnInit {
 
   ngOnInit(): void {
     this.loading.set(true);
-    this.extRegSvc.loadRegistries();
-    this.syncLocalList();
-    this.loading.set(false);
+    this.extRegSvc.listRegistries().subscribe({
+      next: (regs) => {
+        this.extRegSvc.setRegistriesCache(regs);
+        this.loading.set(false); // ← maintenant APRÈS la réponse
+      },
+      error: () => this.loading.set(false),
+    });
+  }
+
+  constructor() {
+    effect(() => {
+      this.registries.set(this.extRegSvc.externalRegistries());
+    });
   }
 
   // ── Registry list helpers ──────────────────────────────────────────────────
