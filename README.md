@@ -45,6 +45,7 @@ Portalcrane's internal registry allows you to organize images into directories. 
 - 🔍 Advanced mode: detailed image metadata (layers, labels, env vars, architecture…)
 - 🌐 External registries: CRUD management + connectivity test
 - 🔄 Sync: push local images to external registries (full or per-image)
+- 📡 Syslog support in the Network tab
 - 📋 Audit logs: full history of API operations
 - 🔒 Registry proxy with authentication enforcement
 - ℹ️ About panel with version check against the latest GitHub release
@@ -114,21 +115,23 @@ volumes:
 ### Usage
 
 Access the web interface (`http(s)://<ip or name>:8080`) to control, pull or push your images
-or directly with Docker commands
+or directly with Docker commands via the registry proxy.
 
 ```bash
-docker login portalcrane:8080
+docker login <host>:8080
 docker pull <image>:<tag>
 docker push <image>:<tag>
 docker logout
 ```
 
-For full access without authentication, set the REGISTRY_PROXY_AUTH_ENABLED variable to `false`
+For full access without authentication, set the REGISTRY_PROXY_AUTH_ENABLED variable to `false`.
+If you are using the dev stack and want direct registry access, use `<host>:5000`.
 
 
 ### Docker Compose (dev stack, from this repo)
 
-This stack builds the local image.
+This stack builds the local image and also starts a dedicated registry on port `5000`.
+Registry data is stored in the `registry_data` volume.
 
 ```bash
 docker compose up -d
@@ -138,7 +141,8 @@ docker compose up -d
 
 ## Ports
 
-- `8080` — Portalcrane UI + API + Internal registry
+- `8080` — Portalcrane UI + API + registry proxy
+- `5000` — Docker registry (dev stack only)
 
 ## Healthcheck
 
@@ -321,4 +325,4 @@ Image tags follow semantic versioning: `latest`, `edge`, `X`, `X.Y`, `X.Y.Z`, `s
 ## License
 
 MIT — see [LICENSE](LICENSE) for details.
-Author: [@cyr-ius](https://github.com/cyr-ius)
+Author: [@cyr-ius](https://github.com/cyr-ius) — Sponsor: [GitHub Sponsors](https://github.com/sponsors/cyr-ius)
