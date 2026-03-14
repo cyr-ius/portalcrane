@@ -48,18 +48,3 @@
 .job-card:hover {
   border-color: var(--bs-primary-border-subtle);
 }
-
-/* ── Spin animation (used for refresh icons) ─────────────────────────────── */
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.spin {
-  display: inline-block;
-  animation: spin 0.8s linear infinite;
-}
