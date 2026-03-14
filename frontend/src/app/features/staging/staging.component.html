@@ -53,7 +53,7 @@
                   : 'Pull from a saved registry'
               }}"
             >
-              <i class="bi bi-hdd-network me-1"></i>Saved registry
+              <i class="bi bi-globe me-1"></i>External registries
             </button>
             <button
               type="button"
@@ -66,10 +66,117 @@
             </button>
           </div>
 
+
+          <!-- Search Docker Hub card -->
+          @if (showDockerHubSearch()) {
+            <div class="mb-3">
+              <label class="form-label small fw-semibold">
+                <i class="bi bi-search me-2"></i>Search Docker Hub
+              </label>
+              <div class="input-group mb-2">
+                <input
+                  type="text"
+                  class="form-control"
+                  placeholder="nginx, redis, node…"
+                  [value]="searchQuery()"
+                  (input)="searchQuery.set($any($event.target).value)"
+                  (keyup.enter)="onSearch()"
+                />
+                <button
+                  class="btn btn-primary"
+                  (click)="onSearch()"
+                  [disabled]="searching()"
+                  type="button"
+                >
+                  @if (searching()) {
+                    <span class="spinner-border spinner-border-sm"></span>
+                  } @else {
+                    <i class="bi bi-search"></i>
+                  }
+                </button>
+              </div>
+
+              <!-- Search results list -->
+              <!-- List stays visible after image selection -->
+              @if (searchResults().length > 0) {
+                <div class="search-results-list">
+                  @for (result of searchResults(); track result.name) {
+                    <div
+                      class="search-result-item d-flex align-items-center gap-2 px-2 py-2"
+                      [class.selected]="pullImage() === result.name"
+                      (click)="selectImage(result.name)"
+                      (keyup.enter)="selectImage(result.name)"
+                      tabindex="0"
+                      role="button"
+                    >
+                      <!-- Left: image info -->
+                      <div class="flex-grow-1 min-w-0">
+                        <div class="d-flex align-items-center gap-1 mb-0">
+                          <span class="fw-semibold small text-truncate">{{
+                            result.name
+                          }}</span>
+                          @if (result.is_official) {
+                            <span
+                              class="badge bg-primary-subtle text-primary"
+                              style="font-size: 0.6rem"
+                              >Official</span
+                            >
+                          }
+                        </div>
+                        @if (result.description) {
+                          <div
+                            class="text-muted"
+                            style="
+                              font-size: 0.72rem;
+                              white-space: nowrap;
+                              overflow: hidden;
+                              text-overflow: ellipsis;
+                            "
+                          >
+                            {{ result.description }}
+                          </div>
+                        }
+                        <div class="text-muted" style="font-size: 0.68rem">
+                          <i class="bi bi-star me-1"></i
+                          >{{ formatCount(result.star_count) }}
+                          <span class="ms-2">
+                            <i class="bi bi-download me-1"></i
+                            >{{ formatCount(result.pull_count) }}
+                          </span>
+                        </div>
+                      </div>
+
+                      <!-- Right: select button -->
+                      <button
+                        class="btn btn-sm flex-shrink-0"
+                        [class.btn-primary]="pullImage() === result.name"
+                        [class.btn-outline-primary]="pullImage() !== result.name"
+                        (click)="
+                          selectImage(result.name); $event.stopPropagation()
+                        "
+                        type="button"
+                        title="Select {{ result.name }}"
+                      >
+                        @if (pullImage() === result.name) {
+                          <i class="bi bi-check"></i>
+                        } @else {
+                          <i class="bi bi-plus"></i>
+                        }
+                      </button>
+                    </div>
+                  }
+                </div>
+              }
+
+            </div>
+          }
+
           <!-- Saved registry selector -->
           @if (pullSourceMode() === 'saved') {
             <div class="mb-3">
-              <label class="form-label small fw-semibold">Registry</label>
+              <label class="form-label small fw-semibold">
+                <i class="bi bi-globe me-2"></i>Registry
+              </label>
               <select
                 class="form-select form-select-sm"
                 [value]="pullSourceRegistryId()"
@@ -129,130 +236,8 @@
               </div>
             </div>
           }
-
-          <!-- Docker Hub: current active account hint -->
-          @if (pullSourceMode() === "dockerhub") {
-            <div class="d-flex align-items-center gap-2 text-muted small">
-              <i class="bi bi-person-circle"></i>
-              <span>
-                Uses your saved Docker Hub account for authenticated pulls.
-                Configure it in
-                <a routerLink="/settings" class="text-decoration-none"
-                  >account settings</a
-                >.
-              </span>
-            </div>
-          }
         </div>
       </div>
-
-      <!-- ── Search Docker Hub card (only visible in Docker Hub mode) ───── -->
-      @if (showDockerHubSearch()) {
-        <div class="card border-0 mb-3">
-          <div class="card-header border-0">
-            <h6 class="fw-semibold mb-0">
-              <i class="bi bi-search me-2"></i>Search Docker Hub
-            </h6>
-          </div>
-          <div class="card-body">
-            <!-- Search input + button -->
-            <div class="input-group mb-2">
-              <input
-                type="text"
-                class="form-control"
-                placeholder="nginx, redis, node…"
-                [value]="searchQuery()"
-                (input)="searchQuery.set($any($event.target).value)"
-                (keyup.enter)="searchDockerHub()"
-              />
-              <button
-                class="btn btn-primary"
-                (click)="searchDockerHub()"
-                [disabled]="searching()"
-                type="button"
-              >
-                @if (searching()) {
-                  <span class="spinner-border spinner-border-sm"></span>
-                } @else {
-                  <i class="bi bi-search"></i>
-                }
-              </button>
-            </div>
-
-            <!-- Search results list -->
-            <!-- FIX 3: list stays visible after image selection -->
-            @if (searchResults().length > 0) {
-              <div class="search-results-list">
-                @for (result of searchResults(); track result.name) {
-                  <div
-                    class="search-result-item d-flex align-items-center gap-2 px-2 py-2"
-                    [class.selected]="pullImage() === result.name"
-                    (click)="selectImage(result.name)"
-                    (keyup.enter)="selectImage(result.name)"
-                    tabindex="0"
-                    role="button"
-                  >
-                    <!-- Left: image info -->
-                    <div class="flex-grow-1 min-w-0">
-                      <div class="d-flex align-items-center gap-1 mb-0">
-                        <span class="fw-semibold small text-truncate">{{
-                          result.name
-                        }}</span>
-                        @if (result.is_official) {
-                          <span
-                            class="badge bg-primary-subtle text-primary"
-                            style="font-size: 0.6rem"
-                            >Official</span
-                          >
-                        }
-                      </div>
-                      @if (result.description) {
-                        <div
-                          class="text-muted"
-                          style="
-                            font-size: 0.72rem;
-                            white-space: nowrap;
-                            overflow: hidden;
-                            text-overflow: ellipsis;
-                          "
-                        >
-                          {{ result.description }}
-                        </div>
-                      }
-                      <div class="text-muted" style="font-size: 0.68rem">
-                        <i class="bi bi-star me-1"></i
-                        >{{ formatCount(result.star_count) }}
-                        <span class="ms-2">
-                          <i class="bi bi-download me-1"></i
-                          >{{ formatCount(result.pull_count) }}
-                        </span>
-                      </div>
-                    </div>
-
-                    <!-- Right: select button -->
-                    <button
-                      class="btn btn-sm flex-shrink-0"
-                      [class.btn-primary]="pullImage() === result.name"
-                      [class.btn-outline-primary]="pullImage() !== result.name"
-                      (click)="
-                        selectImage(result.name); $event.stopPropagation()
-                      "
-                      type="button"
-                      title="Select {{ result.name }}"
-                    >
-                      @if (pullImage() === result.name) {
-                        <i class="bi bi-check"></i>
-                      } @else {
-                        <i class="bi bi-plus"></i>
-                      }
-                    </button>
-                  </div>
-                }
-              </div>
-            }
-          </div>
-        </div>
-      }
 
       <!-- ── Pull form card ─────────────────────────────────────────────── -->
       <div class="card border-0 mb-3">
@@ -311,6 +296,29 @@
               }
             </div>
 
+            <!-- Pull button -->
+            <div class="col-auto">
+              <button
+                class="btn btn-primary"
+                (click)="startPull()"
+                [disabled]="
+                  pulling() ||
+                  !pullImage() ||
+                  (pullSourceMode() === 'saved' && !pullSourceRegistryId()) ||
+                  (pullSourceMode() === 'adhoc' && !pullSourceHost()) ||
+                  !!pullFolderWarning()
+                "
+                type="button"
+              >
+                @if (pulling()) {
+                  <span class="spinner-border spinner-border-sm me-1"></span>
+                  Pulling…
+                } @else {
+                  <i class="bi bi-cloud-download me-1"></i>Pull
+                }
+              </button>
+            </div>
+
             <!-- Active scan config summary (read-only, driven by Settings) -->
             <div class="scan-summary d-flex gap-2 flex-wrap mb-3">
               @let vulnOn =
@@ -345,35 +353,13 @@
               >
                 <i class="bi bi-gear me-1"></i>Configure
               </a>
+              @if (pullImage()) {
+              <code  class="small text-muted text-truncate ms-auto" style="max-width: 80%">
+                {{pullHostPreview()}}{{pullImage()}}:{{pullTag()}} → local
+              </code>
+              }
             </div>
 
-            <!-- Pull button -->
-            <div class="col-auto">
-              <button
-                class="btn btn-primary"
-                (click)="startPull()"
-                [disabled]="
-                  pulling() ||
-                  !pullImage() ||
-                  (pullSourceMode() === 'saved' && !pullSourceRegistryId()) ||
-                  (pullSourceMode() === 'adhoc' && !pullSourceHost()) ||
-                  !!pullFolderWarning()
-                "
-                type="button"
-              >
-                @if (pulling()) {
-                  <span class="spinner-border spinner-border-sm me-1"></span>
-                  Pulling…
-                } @else {
-                  <i class="bi bi-cloud-download me-1"></i>Pull
-                  @if (pullSourceMode() !== "dockerhub") {
-                    <span class="ms-1 opacity-75"
-                      >from {{ pullSourceLabel() }}</span
-                    >
-                  }
-                }
-              </button>
-            </div>
           </div>
         </div>
       </div>

@@ -119,6 +119,21 @@ export class StagingComponent implements OnInit {
     }
   });
 
+  readonly pullHostPreview = computed(() => {
+    switch (this.pullSourceMode()) {
+      case "saved": {
+        const reg = this.externalRegistries().find(
+          (r) => r.id === this.pullSourceRegistryId(),
+        );
+        return reg ? `${reg.host}/` : "";
+      }
+      case "adhoc":
+        return `${this.pullSourceHost()}/` || "";
+      default:
+        return "";
+    }
+  })
+
   readonly pushFolderOptions = computed(() => this.folderSvc.allowedPushFolders());
 
   ngOnInit(): void {
@@ -153,10 +168,6 @@ export class StagingComponent implements OnInit {
       },
       error: () => this.searching.set(false),
     });
-  }
-
-  searchDockerHub(): void {
-    this.onSearch();
   }
 
   selectImage(name: string): void {
@@ -223,12 +234,4 @@ export class StagingComponent implements OnInit {
     return `${n}`;
   }
 
-  sourceRegistryIcon(host: string | null | undefined): string {
-    if (!host) return "🐳"; // Docker Hub
-    if (host.includes("ghcr.io")) return "🐙";
-    if (host.includes("quay.io")) return "🔴";
-    if (host.includes("gcr.io") || host.includes("pkg.dev")) return "☁️";
-    if (host.includes("amazonaws.com")) return "🟠";
-    return "🏢";
-  }
 }
