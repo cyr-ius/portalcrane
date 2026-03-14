@@ -31,24 +31,13 @@ interface RegistryFormModel {
   host: string;
   username: string;
   password: string;
-  /** "global" (admin-visible to all) or "personal" (current user only). */
   owner: "global" | "personal";
-  /**
-   * When false, all connections use plain HTTP — no TLS handshake at all.
-   * Useful for registries running on http:// behind a private network.
-   */
   use_tls: boolean;
-  /**
-   * Only relevant when use_tls is true.
-   * When false, the TLS certificate is accepted without verification
-   * (e.g. for self-signed certificates on HTTPS registries).
-   */
   tls_verify: boolean;
 }
 
 @Component({
   selector: "app-external-registries-config-panel",
-  // FormField directive required for [formField] bindings in template
   imports: [FormField],
   templateUrl: "./external-registries-config-panel.component.html",
   styleUrl: "./external-registries-config-panel.component.css",
@@ -57,23 +46,15 @@ export class ExternalRegistriesConfigPanelComponent implements OnInit {
   readonly authService = inject(AuthService);
   private readonly extRegSvc = inject(ExternalRegistryService);
 
+  readonly loading = signal(false);
+
   // ── Registry list ──────────────────────────────────────────────────────────
 
-  /**
-   * Local display list, kept in sync with the shared service cache.
-   * Populated by loadLocalRegistries() which reads from the service signal.
-   */
   readonly registries = signal<ExternalRegistry[]>([]);
   readonly showAddForm = signal(false);
   readonly editingId = signal<string | null>(null);
-
-  // Known-registry quick-select presets (extensible with custom hosts)
   readonly registryPresets = signal<RegistryPreset[]>([...KNOWN_REGISTRY_PRESETS]);
-
-  // Custom host input — outside the main form (preset adder only)
   readonly customHost = signal("");
-
-  // Test and save state
   readonly savingRegistry = signal(false);
   readonly testingNew = signal(false);
   readonly testingRegistryId = signal<string | null>(null);
@@ -111,39 +92,21 @@ export class ExternalRegistriesConfigPanelComponent implements OnInit {
   // ──────────────────────────────────────────────────────────────────────────
 
   ngOnInit(): void {
-    // Ensure the shared service cache is populated so this panel and all
-    // other consumers (images-list, staging) start with current data.
+    this.loading.set(true);
     this.extRegSvc.loadRegistries();
-
-    // Mirror the service signal into the local display list.
-    // Using effect() would require ChangeDetectionStrategy.OnPush; instead
-    // we sync after every mutating operation via refreshAndSync().
     this.syncLocalList();
+    this.loading.set(false);
   }
 
   // ── Registry list helpers ──────────────────────────────────────────────────
 
-  /**
-   * Copy the current service cache into the local display signal.
-   * Called at init and after every create/update/delete operation.
-   */
   private syncLocalList(): void {
     this.registries.set(this.extRegSvc.externalRegistries());
   }
 
-  /**
-   * Reload from the API (via the service), then sync the local display list.
-   * This is the single method to call after any mutation so both the shared
-   * cache and the panel list stay consistent.
-   */
   private refreshAndSync(): void {
-    // refreshRegistries() updates the service signal; once the HTTP call
-    // completes, all computed signals (browsableRegistries in images-list,
-    // externalRegistries in staging) react automatically.
     this.extRegSvc.listRegistries().subscribe({
       next: (regs) => {
-        // Update the shared service cache manually since refreshRegistries()
-        // does not expose a completion callback. Access via the service method.
         this.extRegSvc.setRegistriesCache(regs);
         this.syncLocalList();
       },
@@ -166,10 +129,8 @@ export class ExternalRegistriesConfigPanelComponent implements OnInit {
       name: reg.name,
       host: reg.host,
       username: reg.username ?? "",
-      // Password intentionally left blank — backend keeps current value if empty
       password: "",
       owner: reg.owner === "global" ? "global" : "personal",
-      // Preserve saved TLS settings; default to true for old entries
       use_tls: reg.use_tls ?? true,
       tls_verify: reg.tls_verify ?? true,
     });
@@ -219,15 +180,7 @@ export class ExternalRegistriesConfigPanelComponent implements OnInit {
 
   // ── Form actions ───────────────────────────────────────────────────────────
 
-  /**
-   * Save (create or update) the registry via Signal Form submit.
-   *
-   * On success, refreshAndSync() is called so:
-   *   1. The shared ExternalRegistryService cache gets the updated list,
-   *      including the `browsable` value freshly computed by the backend.
-   *   2. The local panel list mirrors the cache.
-   *   3. browsableRegistries in images-list and staging react automatically.
-   */
+
   saveRegistry(): void {
     submit(this.registryForm, async (f) => {
       const { name, host, username, password, owner, use_tls, tls_verify } = f().value();
@@ -270,7 +223,6 @@ export class ExternalRegistriesConfigPanelComponent implements OnInit {
     });
   }
 
-  /** Test the form's current host/credentials/TLS settings without saving. */
   testNewConnection(): void {
     const { host, username, password, use_tls, tls_verify } = this.registryModel();
     this.testingNew.set(true);
@@ -295,7 +247,6 @@ export class ExternalRegistriesConfigPanelComponent implements OnInit {
       });
   }
 
-  /** Test an already-saved registry by id. */
   testSavedRegistry(id: string): void {
     this.testingRegistryId.set(id);
     this.extRegSvc.testSaved(id).subscribe({
@@ -304,10 +255,6 @@ export class ExternalRegistriesConfigPanelComponent implements OnInit {
     });
   }
 
-  /**
-   * Delete a registry by id.
-   * On success, refreshAndSync() updates the shared cache and local list.
-   */
   deleteRegistry(id: string): void {
     this.extRegSvc.deleteRegistry(id).subscribe({
       next: () => this.refreshAndSync(),

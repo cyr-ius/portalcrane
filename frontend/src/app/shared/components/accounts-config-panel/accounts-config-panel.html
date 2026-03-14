@@ -28,13 +28,11 @@
     }
 
     @if (loading()) {
-    <div class="d-flex align-items-center gap-2 text-muted">
-      <span class="spinner-border spinner-border-sm"></span>
-      Loading users…
+    <div class="text-center py-5 text-muted">
+      <span class="spinner-border spinner-border-sm me-2"></span>Loading users…
     </div>
-    }
 
-    @if (!loading()) {
+    } @else {
 
     <!-- ── Create form (local accounts only) ────────────────────────────── -->
     @if (showCreateForm()) {

@@ -1,8 +1,9 @@
 <!-- Portalcrane - External Registries Configuration Panel -->
-<!-- MIGRATION: Add/edit form fields now use [formField] bindings -->
-<!-- NOTE: owner radio buttons and tls_verify checkbox use manual binding -->
-<!--       because DOM events return raw strings/booleans, not Signal Form values -->
-
+@if (loading()) {
+  <div class="text-center py-5 text-muted">
+    <span class="spinner-border spinner-border-sm me-2"></span>Loading external registries…
+  </div>
+} @else {
 <div class="card border-0 mb-3">
   <div class="card-header border-0 d-flex align-items-center justify-content-between">
     <div>
@@ -321,3 +322,4 @@
     }
   </div>
 </div>
+}
