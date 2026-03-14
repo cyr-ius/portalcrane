@@ -5,11 +5,12 @@
  */
 import { Component, inject, OnDestroy, OnInit, signal } from "@angular/core";
 import { RouterLink, RouterLinkActive, RouterOutlet } from "@angular/router";
-import { readBool } from "../../../core/helpers/storage";
-import { AuthService } from "../../../core/services/auth.service";
-import { ThemeService } from "../../../core/services/theme.service";
-import { AccountModalComponent } from "../account-modal/account-modal.component";
-import { SessionExpiredModalComponent } from "../session-expired-modal/session-expired-modal.component";
+import { readBool } from "../core/helpers/storage";
+import { AuthService } from "../core/services/auth.service";
+import { ThemeService } from "../core/services/theme.service";
+import { AccountModalComponent } from "../shared/components/account-modal/account-modal.component";
+import { SessionExpiredModalComponent } from "../shared/components/session-expired-modal/session-expired-modal.component";
+
 
 // Breakpoint below which the sidebar auto-collapses (matches Bootstrap 'lg')
 const COLLAPSE_BREAKPOINT = 992;
