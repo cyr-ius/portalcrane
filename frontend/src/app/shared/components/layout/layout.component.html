@@ -11,15 +11,17 @@
     >
       <!-- Portalcrane SVG logo — redesigned for better clarity -->
         <svg
-          width="80"
-          height="80"
           viewBox="0 0 200 200"
+          [attr.width]="sidebarCollapsed() ? '36' : '64'"
+          [attr.height]="sidebarCollapsed() ? '36' : '64'"
+          style="
+            transition:
+              width 0.25s ease,
+              height 0.25s ease;
+            flex-shrink: 0;
+          "
           version="1.1"
           id="svg106"
-          sodipodi:docname="test.svg"
-          inkscape:version="1.4.3 (fcd0343856, 2026-01-01)"
-          xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
-          xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
           xmlns="http://www.w3.org/2000/svg"
           xmlns:svg="http://www.w3.org/2000/svg">
           <defs
