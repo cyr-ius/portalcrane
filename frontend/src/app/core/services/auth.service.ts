@@ -58,7 +58,7 @@ export class AuthService {
       .post<LoginResponse>("/api/auth/login", { username, password })
       .pipe(
         tap((response) => {
-          this._setToken(response.access_token);
+          this.storeToken(response.access_token);
           this.loadUserInfo();
         }),
       );
@@ -136,9 +136,4 @@ export class AuthService {
     localStorage.setItem(this.TOKEN_KEY, token);
   }
 
-  // ── Private helpers ───────────────────────────────────────────────────────
-
-  private _setToken(token: string): void {
-    this.storeToken(token);
-  }
 }
