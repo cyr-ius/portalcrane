@@ -383,10 +383,9 @@ async def push_image(
 async def search_dockerhub(
     q: str,
     page: int = 1,
-    current_user: UserInfo = Depends(require_pull_access),
+    _: UserInfo = Depends(require_pull_access),
 ):
-    """Search Docker Hub images."""
-    auth = _build_dockerhub_auth(current_user.username)
+    """Search Docker Hub images (only anonymous)."""
     # Docker Hub search has used both `q` and `query` over time depending on
     # endpoint generation and account context. Send both keys for compatibility.
     params = {"q": q, "query": q, "page": page, "page_size": 25}
@@ -395,33 +394,13 @@ async def search_dockerhub(
             timeout=HTTPX_TIMEOUT, follow_redirects=True
         ) as client:
 
-            async def _search(req_auth: httpx.BasicAuth | None) -> httpx.Response:
+            async def _search() -> httpx.Response:
                 return await client.get(
                     f"{DOCKERHUB_API_URL}/search/repositories/",
                     params=params,
-                    auth=req_auth,
                 )
 
-            resp = await _search(auth)
-
-            # Some Docker Hub accounts/tokens can trigger 401/403 on search,
-            # or return an empty payload despite a valid query.
-            # Fall back to anonymous mode so search stays functional.
-            if auth is not None:
-                should_retry_anonymous = resp.status_code in {401, 403}
-                if not should_retry_anonymous:
-                    try:
-                        payload = resp.json()
-                        raw_results = (
-                            payload.get("results") or payload.get("summaries") or []
-                        )
-                        should_retry_anonymous = len(raw_results) == 0
-                    except ValueError:
-                        should_retry_anonymous = False
-
-                if should_retry_anonymous:
-                    resp = await _search(None)
-
+            resp = await _search()
             resp.raise_for_status()
             data = resp.json()
     except Exception as exc:
