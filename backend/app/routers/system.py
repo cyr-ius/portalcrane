@@ -86,15 +86,3 @@ async def purge_orphan_oci(_: UserInfo = Depends(require_admin)):
             shutil.rmtree(entry, ignore_errors=True)
             purged.append(entry.name)
     return {"message": f"Purged {len(purged)} orphan directories", "purged": purged}
-
-
-@router.get("/dangling-images")
-async def get_dangling_images(_: UserInfo = Depends(require_admin)):
-    """List dangling (untagged) images in the local registry."""
-    return {"images": [], "count": 0}
-
-
-@router.post("/dangling-images/purge")
-async def purge_dangling_images(_: UserInfo = Depends(require_admin)):
-    """Purge dangling images from the local registry."""
-    return {"message": "No dangling images to purge", "output": ""}

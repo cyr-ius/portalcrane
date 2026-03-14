@@ -119,33 +119,4 @@ export class StagingService {
     );
   }
 
-  getDanglingImages(): Observable<{
-    images: {
-      id: string;
-      repository: string;
-      tag: string;
-      size: string;
-      created: string;
-    }[];
-    count: number;
-  }> {
-    return this.http.get<{
-      images: {
-        id: string;
-        repository: string;
-        tag: string;
-        size: string;
-        created: string;
-      }[];
-      count: number;
-    }>(`${this.SYS_BASE}/dangling-images`);
-  }
-
-  purgeDanglingImages(): Observable<{ message: string; output: string }> {
-    return this.http.post<{ message: string; output: string }>(
-      `${this.SYS_BASE}/dangling-images/purge`,
-      {},
-    );
-  }
-
 }
