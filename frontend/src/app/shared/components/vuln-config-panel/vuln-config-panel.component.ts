@@ -46,6 +46,12 @@ export class VulnConfigPanelComponent implements OnInit {
     return image && tag ? `localhost:5000/${image}:${tag}` : "";
   });
 
+  readonly imagePreview = computed(() => {
+    const image = this.selectedImage().trim();
+    const tag = this.selectedTag().trim();
+    return image && tag ? `${image}:${tag}` : "";
+  });
+
   // ── Constants used in the template ───────────────────────────────────────
 
   readonly allSeverities = TRIVY_SEVERITIES;

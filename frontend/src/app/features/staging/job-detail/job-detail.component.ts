@@ -107,7 +107,7 @@ export class JobDetailComponent {
 
     if (mode === "local") {
       const path = folder ? `${folder}/${rawImg}` : rawImg;
-      return `localhost:5000/${path}:${tag}`;
+      return `${path}:${tag}`;
     }
 
     const regId = this.getExtRegistryId(job);
