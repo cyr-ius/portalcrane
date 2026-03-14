@@ -325,4 +325,7 @@ Image tags follow semantic versioning: `latest`, `edge`, `X`, `X.Y`, `X.Y.Z`, `s
 ## License
 
 MIT — see [LICENSE](LICENSE) for details.
+
+## About
+
 Author: [@cyr-ius](https://github.com/cyr-ius) — Sponsor: [GitHub Sponsors](https://github.com/sponsors/cyr-ius)
