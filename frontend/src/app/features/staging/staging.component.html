@@ -296,31 +296,8 @@
               }
             </div>
 
-            <!-- Pull button -->
-            <div class="col-auto">
-              <button
-                class="btn btn-primary"
-                (click)="startPull()"
-                [disabled]="
-                  pulling() ||
-                  !pullImage() ||
-                  (pullSourceMode() === 'saved' && !pullSourceRegistryId()) ||
-                  (pullSourceMode() === 'adhoc' && !pullSourceHost()) ||
-                  !!pullFolderWarning()
-                "
-                type="button"
-              >
-                @if (pulling()) {
-                  <span class="spinner-border spinner-border-sm me-1"></span>
-                  Pulling…
-                } @else {
-                  <i class="bi bi-cloud-download me-1"></i>Pull
-                }
-              </button>
-            </div>
-
             <!-- Active scan config summary (read-only, driven by Settings) -->
-            <div class="scan-summary d-flex gap-2 flex-wrap mb-3">
+            <div class="scan-summary d-flex align-items-center gap-2 justify-content-between flex-wrap mb-3">
               @let vulnOn =
                 trivySvc.vulnOverride()
                   ? trivySvc.vulnEnabled()
@@ -354,10 +331,30 @@
                 <i class="bi bi-gear me-1"></i>Configure
               </a>
               @if (pullImage()) {
-              <code  class="small text-muted text-truncate ms-auto" style="max-width: 80%">
+              <code  class="small text-muted text-truncate">
                 {{pullHostPreview()}}{{pullImage()}}:{{pullTag()}} → local
               </code>
               }
+              <!-- Pull button -->
+              <button
+                class="btn btn-primary ms-auto"
+                (click)="startPull()"
+                [disabled]="
+                  pulling() ||
+                  !pullImage() ||
+                  (pullSourceMode() === 'saved' && !pullSourceRegistryId()) ||
+                  (pullSourceMode() === 'adhoc' && !pullSourceHost()) ||
+                  !!pullFolderWarning()
+                "
+                type="button"
+              >
+                @if (pulling()) {
+                  <span class="spinner-border spinner-border-sm me-1"></span>
+                  Pulling…
+                } @else {
+                  <i class="bi bi-cloud-download me-1"></i>Pull
+                }
+              </button>
             </div>
 
           </div>
