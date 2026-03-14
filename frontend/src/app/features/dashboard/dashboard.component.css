@@ -1,3 +1,5 @@
+/* Portalcrane - Dashboard Component Styles */
+
 .stat-card {
   background: var(--pc-card-bg);
   border-radius: 12px;
@@ -43,17 +45,31 @@
   white-space: pre-wrap;
   word-break: break-all;
 }
+
+/* ── Spin animation (shared by Refresh button icon and Orphan OCI refresh) ── */
 .spin {
   animation: spin 1s linear infinite;
 }
 @keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
 }
+
+/* ── Stat cards visual feedback during manual refresh ───────────────────── */
+/*
+ * Applied to the row wrapper [class.stat-cards-refreshing]="refreshing()".
+ * Pulses the cards softly while the new values are being fetched, then
+ * snaps back to full opacity when refreshing() returns to false.
+ */
+.stat-cards-refreshing .stat-card {
+  animation: stat-pulse 1.2s ease-in-out infinite;
+}
+@keyframes stat-pulse {
+  0%   { opacity: 1; }
+  50%  { opacity: 0.45; }
+  100% { opacity: 1; }
+}
+
 .card {
   background: var(--pc-card-bg);
   border-radius: 12px;

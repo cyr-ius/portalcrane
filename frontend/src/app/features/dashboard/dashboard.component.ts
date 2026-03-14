@@ -1,6 +1,17 @@
 /**
  * Portalcrane - Dashboard Component
  *
+ * Change: visual refresh feedback
+ *   - New `refreshing` signal: true while a manual Refresh is in flight.
+ *     Unlike `loading` (which shows the full-page spinner on first load),
+ *     `refreshing` keeps the dashboard visible and only animates the button
+ *     icon + fades the stat cards via CSS class `refreshing-overlay`.
+ *   - refresh() now resets ghostsChecked / orphanOciChecked to false before
+ *     calling checkGhostRepos() / checkOrphanOci(), so their individual card
+ *     spinners restart visually on every manual refresh.
+ *   - refreshing is cleared only after ALL concurrent requests have settled
+ *     (stats + gcStatus + ghost + orphan), using a simple counter tracked by
+ *     _refreshPending signal.
  */
 import { DatePipe, SlicePipe } from "@angular/common";
 import {
@@ -14,6 +25,7 @@ import {
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { RouterLink } from "@angular/router";
 import { Subject, switchMap, takeWhile, timer } from "rxjs";
+import { formatBytes } from "../../core/helpers/storage";
 import { AuthService } from "../../core/services/auth.service";
 import {
   DashboardService,
@@ -41,6 +53,21 @@ export class DashboardComponent implements OnInit {
   stats = signal<DashboardStats | null>(null);
   loading = signal(false);
 
+  readonly formatBytes = formatBytes
+
+  /**
+   * True while a manual Refresh is in progress.
+   * Controls: button spin animation, stat-card overlay fade, button disabled state.
+   * Does NOT hide the dashboard — the existing data stays visible.
+   */
+  refreshing = signal(false);
+
+  /**
+   * Internal counter tracking how many concurrent refresh sub-requests are
+   * still in flight. When it reaches 0, `refreshing` is cleared.
+   */
+  private _refreshPending = signal(0);
+
   gcStatus = signal<GCStatus | null>(null);
   gcDryStatus = signal(false);
 
@@ -62,10 +89,10 @@ export class DashboardComponent implements OnInit {
 
   ngOnInit(): void {
     this.setupGCPolling();
-    this.loadStats(this.stats() === null);   // ← identique à ce que refresh() faisait
+    this.loadStats(this.stats() === null);
     this.registryService.getGCStatus().subscribe({ next: (s) => this.gcStatus.set(s) });
-    this.checkGhostRepos();    // ← appelé directement, sans guard
-    this.checkOrphanOci();     // ← appelé directement, sans guard
+    this.checkGhostRepos();
+    this.checkOrphanOci();
   }
 
   /**
@@ -95,31 +122,101 @@ export class DashboardComponent implements OnInit {
       });
   }
 
+  // ── Refresh pending counter helpers ──────────────────────────────────────
+
+  /**
+   * Increment the pending counter and activate the refreshing state.
+   * Call once per sub-request started during a manual refresh.
+   */
+  private _refreshStart(): void {
+    this._refreshPending.update((n) => n + 1);
+    this.refreshing.set(true);
+  }
+
+  /**
+   * Decrement the pending counter.
+   * When it reaches 0, all sub-requests have settled and refreshing is cleared.
+   */
+  private _refreshDone(): void {
+    this._refreshPending.update((n) => Math.max(0, n - 1));
+    if (this._refreshPending() === 0) {
+      this.refreshing.set(false);
+    }
+  }
+
   // ── Public methods ────────────────────────────────────────────────────────
 
-  refresh() {
-    // Show the full spinner only when there is no data yet
-    this.loadStats(this.stats() === null);
+  refresh(): void {
+    // Reset card-level checked flags so their individual spinners restart.
+    this.ghostsChecked.set(false);
+    this.orphanOciChecked.set(false);
+
+    // Stats — silent reload (no full-page spinner), but tracked for refreshing.
+    this._refreshStart();
+    this.dashboardService.getStats().subscribe({
+      next: (data) => {
+        this.stats.set(data);
+        this._refreshDone();
+      },
+      error: () => this._refreshDone(),
+    });
 
     if (!this.authService.currentUser()?.is_admin) {
       return;
     }
+
+    // GC status
+    this._refreshStart();
     this.registryService.getGCStatus().subscribe({
-      next: (s) => this.gcStatus.set(s),
+      next: (s) => {
+        this.gcStatus.set(s);
+        this._refreshDone();
+      },
+      error: () => this._refreshDone(),
     });
-    this.checkGhostRepos();
-    this.checkOrphanOci();
+
+    // Ghost repos
+    this._refreshStart();
+    this.registryService.getEmptyRepositories().subscribe({
+      next: (res) => {
+        this.ghostRepos.set(res.empty_repositories);
+        this.ghostsChecked.set(true);
+        this._refreshDone();
+      },
+      error: () => {
+        this.ghostsChecked.set(true);
+        this._refreshDone();
+      },
+    });
+
+    // Orphan OCI
+    this._refreshStart();
+    this.orphanOciRefreshing.set(true);
+    this.stagingService.getOrphanOci().subscribe({
+      next: (res) => {
+        this.orphanOciDirs.set(res.dirs);
+        this.orphanOciSize.set(res.total_size_human);
+        this.orphanOciChecked.set(true);
+        this.orphanOciRefreshing.set(false);
+        this._refreshDone();
+      },
+      error: () => {
+        this.orphanOciChecked.set(true);
+        this.orphanOciRefreshing.set(false);
+        this._refreshDone();
+      },
+    });
   }
 
   /**
    * Load dashboard stats from the backend.
    *
    * @param showSpinner - When true (initial load only), the full-page loading
-   *   spinner is shown while the request is in-flight.  When false (silent
+   *   spinner is shown while the request is in-flight. When false (silent
    *   refresh triggered by GC / Purge), stats are updated in place without
    *   affecting the loading flag, so the rest of the dashboard stays visible.
    */
-  loadStats(showSpinner = false) {
+  loadStats(showSpinner = false): void {
     if (showSpinner) {
       this.loading.set(true);
     }
@@ -138,7 +235,7 @@ export class DashboardComponent implements OnInit {
     });
   }
 
-  startGC(dryRun: boolean) {
+  startGC(dryRun: boolean): void {
     this.gcDryStatus.set(dryRun);
     this.registryService.startGarbageCollect(dryRun).subscribe({
       next: (s) => {
@@ -150,7 +247,7 @@ export class DashboardComponent implements OnInit {
 
   // ── Ghost repositories ────────────────────────────────────────────────────
 
-  checkGhostRepos() {
+  checkGhostRepos(): void {
     this.registryService.getEmptyRepositories().subscribe({
       next: (res) => {
         this.ghostRepos.set(res.empty_repositories);
@@ -160,14 +257,13 @@ export class DashboardComponent implements OnInit {
     });
   }
 
-  purgeGhostRepos() {
+  purgeGhostRepos(): void {
     if (this.purgingGhosts()) return;
     this.purgingGhosts.set(true);
     this.registryService.purgeEmptyRepositories().subscribe({
       next: () => {
         this.purgingGhosts.set(false);
         this.checkGhostRepos();
-        // Silent refresh — no spinner
         this.loadStats(false);
       },
       error: () => this.purgingGhosts.set(false),
@@ -176,7 +272,7 @@ export class DashboardComponent implements OnInit {
 
   // ── Orphan OCI layouts ───────────────────────────────────────────────────
 
-  checkOrphanOci() {
+  checkOrphanOci(): void {
     this.orphanOciRefreshing.set(true);
     this.stagingService.getOrphanOci().subscribe({
       next: (res) => {
@@ -192,14 +288,13 @@ export class DashboardComponent implements OnInit {
     });
   }
 
-  purgeOrphanOci() {
+  purgeOrphanOci(): void {
     if (this.purgingOrphanOci()) return;
     this.purgingOrphanOci.set(true);
     this.stagingService.purgeOrphanOci().subscribe({
       next: () => {
         this.purgingOrphanOci.set(false);
         this.checkOrphanOci();
-        // No loadStats() here — purging OCI dirs does not affect registry stats
       },
       error: () => this.purgingOrphanOci.set(false),
     });
@@ -217,15 +312,4 @@ export class DashboardComponent implements OnInit {
     return map[status] ?? "badge bg-secondary-subtle text-secondary";
   }
 
-  formatBytes(bytes: number): string {
-    if (!bytes) return "0 B";
-    const units = ["B", "KB", "MB", "GB", "TB"];
-    let size = bytes;
-    let i = 0;
-    while (size >= 1024 && i < units.length - 1) {
-      size /= 1024;
-      i++;
-    }
-    return `${size.toFixed(2)} ${units[i]}`;
-  }
 }

@@ -1,3 +1,14 @@
+<!-- Portalcrane - Dashboard Component Template -->
+<!-- Angular 21: @if / @for control flow, signal bindings -->
+<!--
+  Changes vs previous version:
+  - Refresh button: disabled + spin animation while refreshing() is true
+  - Stat cards row: wrapped in a div with [class.stat-cards-refreshing] so
+    values fade during a manual refresh (CSS handles the opacity transition)
+  - Ghost repos & Orphan OCI health cards already rely on ghostsChecked() /
+    orphanOciChecked() for their individual spinners — reset in refresh()
+    in the .ts file makes them restart automatically, no HTML change needed.
+-->
 @if (loading()) {
   <div class="d-flex justify-content-center align-items-center py-5">
     <div class="spinner-border text-primary" role="status"></div>
@@ -9,13 +20,27 @@
         <h2 class="fw-bold mb-1">Dashboard</h2>
         <p class="text-muted small mb-0">Registry overview and quick actions</p>
       </div>
-      <button class="btn btn-sm btn-outline-secondary" (click)="refresh()">
-        <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+
+      <!-- Refresh button: spins and is disabled while refreshing() is true -->
+      <button
+        class="btn btn-sm btn-outline-secondary"
+        (click)="refresh()"
+        [disabled]="refreshing()"
+      >
+        <i
+          class="bi bi-arrow-clockwise me-1"
+          [class.spin]="refreshing()"
+        ></i>
+        @if (refreshing()) {
+          Refreshing…
+        } @else {
+          Refresh
+        }
       </button>
     </div>
 
-    <!-- Stats cards -->
-    <div class="row g-3 mb-4">
+    <!-- Stats cards — faded while refreshing -->
+    <div class="row g-3 mb-4" [class.stat-cards-refreshing]="refreshing()">
       <div class="col-sm-6 col-lg-3">
         <div class="stat-card card border-0 h-100">
           <div class="card-body">
@@ -277,15 +302,21 @@
                   </td>
                 </tr>
                 <tr>
-                  <td class="text-muted small">Disk Total</td>
-                  <td class="small">
-                    {{ formatBytes(s.disk_total_bytes) }}
-                  </td>
+                  <td class="text-muted small">Total Images</td>
+                  <td class="fw-semibold">{{ s.total_images }}</td>
+                </tr>
+                <tr>
+                  <td class="text-muted small">Total Tags</td>
+                  <td class="fw-semibold">{{ s.total_tags }}</td>
+                </tr>
+                <tr>
+                  <td class="text-muted small">Registry Size</td>
+                  <td class="fw-semibold">{{ s.total_size_human }}</td>
                 </tr>
                 <tr>
                   <td class="text-muted small">Disk Free</td>
-                  <td class="small">
-                    {{ formatBytes(s.disk_free_bytes) }}
+                  <td class="fw-semibold">
+                    {{ (s.disk_free_bytes / 1073741824).toFixed(1) }} GB
                   </td>
                 </tr>
               </tbody>
@@ -294,38 +325,41 @@
         </div>
       </div>
 
-      <!-- ── Quick Actions card (navigation shortcuts only) ── -->
+      <!-- Quick actions -->
       <div class="col-lg-6">
         <div class="card border-0">
           <div class="card-header border-0 pb-0">
-            <h6 class="fw-semibold mb-0">
-              <i class="bi bi-lightning-charge me-2 text-primary"></i>Quick
-              Actions
-            </h6>
+            <h6 class="fw-semibold mb-0">Quick Actions</h6>
           </div>
           <div class="card-body d-flex flex-column gap-2">
-            <!-- Navigate to the image browser -->
             <a
               routerLink="/images"
-              class="btn btn-outline-primary d-flex align-items-center gap-2"
+              class="btn btn-outline-primary btn-sm text-start"
             >
-              <i class="bi bi-layers"></i>
-              Browse Images
+              <i class="bi bi-layers me-2"></i>Browse Images
             </a>
-            <!-- Navigate to the staging pipeline to pull from Docker Hub -->
             <a
               routerLink="/staging"
-              class="btn btn-outline-success d-flex align-items-center gap-2"
+              class="btn btn-outline-secondary btn-sm text-start"
             >
-              <i class="bi bi-cloud-arrow-down"></i>
-              Pull Image from Docker Hub
+              <i class="bi bi-cloud-download me-2"></i>Staging Pipeline
             </a>
+            @if (authService.currentUser()?.is_admin) {
+              <a
+                routerLink="/settings"
+                class="btn btn-outline-secondary btn-sm text-start"
+              >
+                <i class="bi bi-gear me-2"></i>Settings
+              </a>
+            }
           </div>
         </div>
       </div>
+    </div>
 
-      <!-- ── Maintenance Actions card (housekeeping operations) ── -->
-      @if (authService.currentUser()?.is_admin) {
+    <!-- Maintenance section — admin only -->
+    @if (authService.currentUser()?.is_admin) {
+    <div class="row g-3 mt-1">
       <div class="col-12">
         <div class="card border-0">
           <div class="card-header border-0 pb-0">
@@ -425,7 +459,6 @@
                   <div
                     class="fw-semibold small d-flex align-items-center gap-2"
                   >
-                    <!-- Ghost icon added for consistency with the other actions -->
                     <i class="bi bi-shadows text-secondary"></i>
                     Ghost Repositories
                     @if (ghostCount() > 0) {
@@ -539,7 +572,7 @@
           </div>
         </div>
       </div>
-      }
     </div>
+    }
   </div>
 }
