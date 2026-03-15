@@ -325,10 +325,9 @@ async def browse_v2_repositories(
     # Fetch tags via GitHub API for each package
     async def _fetch_github_tags(repo: str) -> list[str]:
         """Fetch versions/tags for a GitHub package."""
-        pkg_name = repo.split("/", 1)[-1]
         try:
             return await browse_v2_tags(
-                host, username, password, pkg_name, use_tls, tls_verify
+                host, username, password, repo, use_tls, tls_verify
             )
         except Exception:
             pass
