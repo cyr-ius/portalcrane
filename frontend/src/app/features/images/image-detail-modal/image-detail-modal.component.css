@@ -1,0 +1,54 @@
+/*
+ * Portalcrane - ImageDetailModalComponent styles
+ *
+ * Scoped styles for the unified image detail modal.
+ * Applies to both local and external V2 registry sources.
+ */
+
+/* Layer list: compact monospace rows */
+.layers-list {
+  max-height: 240px;
+  overflow-y: auto;
+}
+.layer-item {
+  background: var(--pc-card-bg);
+  border: 1px solid var(--pc-border);
+}
+
+/* Keep the tag list scrollable independently from the modal body */
+.list-group.overflow-auto {
+  max-height: 520px;
+}
+
+.list-group-item {
+  background: transparent;
+  transition: background 0.1s;
+}
+
+/* Active tag row: use Bootstrap primary with readable foreground */
+.list-group-item.active {
+  background-color: var(--bs-primary);
+  border-color: var(--bs-primary);
+  color: #fff;
+}
+
+/* Buttons inside the active row should remain visible */
+.list-group-item.active .btn-outline-secondary,
+.list-group-item.active .btn-outline-danger {
+  border-color: rgba(255, 255, 255, 0.5);
+  color: #fff;
+}
+
+.list-group-item:hover {
+  background: var(--pc-nav-hover);
+}
+
+.list-group-item.active {
+  background: var(--pc-nav-active-bg) !important;
+  border-style: none !important;
+}
+
+.layer-item {
+  background: var(--pc-card-bg);
+  border: 1px solid var(--pc-border);
+}

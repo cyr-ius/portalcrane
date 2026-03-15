@@ -38,7 +38,6 @@ import {
 } from "@angular/core";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { FormsModule } from "@angular/forms";
-import { Router } from "@angular/router";
 import { debounceTime, distinctUntilChanged, Subject } from "rxjs";
 import { AuthService } from "../../../core/services/auth.service";
 import {
@@ -52,7 +51,7 @@ import {
   PaginatedImages,
   RegistryService,
 } from "../../../core/services/registry.service";
-import { ExternalImageDetailComponent } from "../external-image-detail/external-image-detail.component";
+import { ImageDetailModalComponent } from "../image-detail-modal/image-detail-modal.component";
 
 /** Available sort fields for the image list. */
 type SortField = "name" | "tag_count";
@@ -81,13 +80,12 @@ type SourceId = "local" | string;
 
 @Component({
   selector: "app-images-list",
-  imports: [FormsModule, ExternalImageDetailComponent],
+  imports: [FormsModule, ImageDetailModalComponent],
   templateUrl: "./images-list.component.html",
   styleUrl: "./images-list.component.css",
 })
 export class ImagesListComponent implements OnInit {
   private registry = inject(RegistryService);
-  private router = inject(Router);
   private readonly folderSvc = inject(FolderService);
   private readonly authService = inject(AuthService);
   private readonly extRegSvc = inject(ExternalRegistryService);
@@ -497,21 +495,37 @@ export class ImagesListComponent implements OnInit {
 
   // ── Image helpers ──────────────────────────────────────────────────────────
 
-  goToDetail(imageName: string): void {
-    if (this.isExternalSource()) {
-      const image =
-        this.filteredItems().find((i) => i.name === imageName) ??
-        this.data()?.items.find((i) => i.name === imageName) ??
-        null;
-      if (image) {
-        this.viewTarget.set(image);
-      }
-      return;
-    }
+  /**
+   * Returns true if the current user has push permission on the folder that
+   * contains the given local registry image.
+   *
+   * Admins always have push rights.
+   * Non-admin users must have their folder listed in pushableFolders().
+   *
+   * @param image  The ImageInfo row from the local registry list.
+   */
+  canPushOnLocalImage(image: ImageInfo): boolean {
+    if (this.isAdmin()) return true;
+    const folder = image.name.includes("/")
+      ? image.name.split("/")[0]
+      : "(root)";
+    return this.pushableFolders().includes(folder);
+  }
 
-    this.router.navigate(["/images/detail"], {
-      queryParams: { repository: imageName },
-    });
+
+  /**
+   * Open the image detail modal.
+   *
+   * Previously, local-registry images navigated to /images/detail (page view)
+   * while external V2 images opened ExternalImageDetailComponent (modal).
+   * Both are now unified: any V2-compatible source (local or external) opens
+   * ImageDetailModalComponent inline, keeping the user in context.
+   *
+   * @param name  Repository name, e.g. "myorg/myimage"
+   */
+  goToDetail(name: string): void {
+    const image = this.data()?.items.find((i) => i.name === name) ?? null;
+    this.viewTarget.set(image);
   }
 
   /**

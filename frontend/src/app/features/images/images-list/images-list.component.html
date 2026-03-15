@@ -604,12 +604,12 @@
 -->
 @if (viewTarget()) {
 
-  @if (isExternalSource() && !isGithubMode() && !isDockerHubMode()) {
+  @if (!isGithubMode() && !isDockerHubMode()) {
     <!-- Rich V2 detail modal with tag management -->
-    <app-external-image-detail
-      [registryId]="selectedSource()"
+    <app-image-detail-modal
+      [source]="selectedSource()"
       [image]="viewTarget()!"
-      [canPush]="canPushExternal()"
+      [canPush]="isExternalSource() ? canPushExternal() : canPushOnLocalImage(viewTarget()!)"
       (closed)="viewTarget.set(null)"
       (tagsChanged)="reloadImages()"
     />

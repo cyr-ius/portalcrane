@@ -1,33 +1,39 @@
-<!-- Portalcrane - External Image Detail Modal -->
+<!-- Portalcrane - Image Detail Modal -->
 <!--
-  Full-detail modal for a repository in a standard V2 external registry.
-  Shown when isExternalSource() && !isGithubMode() && !isDockerHubMode().
+  Unified modal for local and external V2 registry image details.
+
+  Replaces:
+    - The router navigation to /images/detail (local registry)
+    - The standalone ExternalImageDetailComponent (external V2 registry)
 
   Layout:
-    Left column  — tag selector list with add / delete actions
+    Left column  — tag selector list with optional add / delete actions
     Right column — metadata panel for the selected tag
+
+  Source routing is handled entirely in the component TypeScript;
+  the template is source-agnostic.
 -->
 <div class="modal fade show d-block" tabindex="-1" style="background: rgba(0, 0, 0, 0.45)" (click)="close()">
   <div class="modal-dialog modal-xl modal-dialog-scrollable" (click)="$event.stopPropagation()">
     <div class="modal-content border-0 shadow-lg">
 
-      <!-- ── Header ───────────────────────────────────────────────────────── -->
+      <!-- ── Header ─────────────────────────────────────────────────────── -->
       <div class="modal-header border-0 pb-0">
         <div>
           <h5 class="modal-title fw-semibold">
-            <i class="bi bi-globe me-2 text-info"></i>
+            <i [class]="sourceIcon()"></i>
             {{ image().name }}
           </h5>
-          <p class="text-muted small mb-0">External V2 registry — image details</p>
+          <p class="text-muted small mb-0">{{ sourceLabel() }}</p>
         </div>
         <button class="btn-close" (click)="close()"></button>
       </div>
 
-      <!-- ── Body ─────────────────────────────────────────────────────────── -->
+      <!-- ── Body ───────────────────────────────────────────────────────── -->
       <div class="modal-body pt-3">
         <div class="row g-3">
 
-          <!-- ── Left: tag list ───────────────────────────────────────────── -->
+          <!-- ══ Left: tag selector ═══════════════════════════════════════ -->
           <div class="col-12 col-md-4">
             <div class="card border-0 bg-body-secondary h-100">
               <div class="card-header border-0 bg-transparent d-flex align-items-center justify-content-between py-2">
@@ -38,7 +44,6 @@
                   </span>
                 </span>
 
-                <!-- Add tag button (push permission required) -->
                 @if (canPush()) {
                   <button class="btn btn-sm btn-primary" (click)="openAddForm()" title="Add a new tag">
                     <i class="bi bi-plus-lg me-1"></i>Add Tag
@@ -46,12 +51,14 @@
                 }
               </div>
 
-              <!-- Add-tag inline form -->
+              <!-- ── Add-tag inline form ─────────────────────────────── -->
               @if (showAddForm()) {
                 <div class="card-body border-top px-3 py-2">
                   <p class="text-muted small mb-2">
                     Copy a manifest to a new tag name
                   </p>
+
+                  <!-- Source tag selector -->
                   <div class="mb-2">
                     <label class="form-label small mb-1">Source tag</label>
                     <select
@@ -64,16 +71,20 @@
                       }
                     </select>
                   </div>
+
+                  <!-- New tag name input -->
                   <div class="mb-2">
                     <label class="form-label small mb-1">New tag name</label>
                     <input
                       type="text"
                       class="form-control form-control-sm font-monospace"
-                      placeholder="e.g. v2.0.0"
+                      placeholder="e.g. v2.1.0"
                       [value]="addNewTag()"
                       (input)="addNewTag.set($any($event.target).value)"
                     />
                   </div>
+
+                  <!-- Form feedback -->
                   @if (addMessage()) {
                     <div
                       class="alert alert-sm py-1 px-2 small mb-2"
@@ -83,20 +94,22 @@
                       {{ addMessage() }}
                     </div>
                   }
+
+                  <!-- Form actions -->
                   <div class="d-flex gap-2">
                     <button
-                      class="btn btn-sm btn-success"
+                      class="btn btn-sm btn-primary flex-grow-1"
                       (click)="submitAddTag()"
-                      [disabled]="adding() || !addNewTag().trim()"
+                      [disabled]="adding() || !addSourceTag() || !addNewTag()"
                     >
                       @if (adding()) {
                         <span class="spinner-border spinner-border-sm me-1"></span>
                       }
-                      Create
+                      Add
                     </button>
                     <button
                       class="btn btn-sm btn-outline-secondary"
-                      (click)="showAddForm.set(false)"
+                      (click)="cancelAddForm()"
                     >
                       Cancel
                     </button>
@@ -104,80 +117,91 @@
                 </div>
               }
 
-              <!-- Global feedback (delete / add) -->
-              @if (deleteMessage()) {
-                <div class="px-3 pt-2">
-                  <div
-                    class="alert alert-sm py-1 px-2 small"
-                    [class.alert-success]="deleteSuccess()"
-                    [class.alert-danger]="!deleteSuccess()"
-                  >
-                    {{ deleteMessage() }}
-                  </div>
-                </div>
-              }
-
-              <!-- Tag list -->
-              <ul class="list-group list-group-flush">
+              <!-- ── Tag list ────────────────────────────────────────── -->
+              <ul class="list-group list-group-flush overflow-auto" style="max-height: 520px">
                 @for (tag of sortedTags(); track tag) {
-                  <li
-                    class="list-group-item list-group-item-action d-flex align-items-center justify-content-between py-2 px-3"
-                    [class.active]="selectedTag() === tag"
-                    style="cursor: pointer"
-                    (click)="selectTag(tag)"
-                  >
-                    <span class="font-monospace small text-truncate me-2">
-                      @if (tag === "latest") {
-                        <i class="bi bi-star-fill text-warning me-1" style="font-size: 0.65rem"></i>
-                      } @else {
-                        <i class="bi bi-tag-fill text-primary me-1" style="font-size: 0.65rem"></i>
-                      }
-                      {{ tag }}
-                    </span>
 
-                    <!-- Delete confirm inline -->
-                    @if (deleteTarget() === tag) {
-                      <div class="d-flex gap-1 flex-shrink-0" (click)="$event.stopPropagation()">
+                  <!-- Delete confirmation row -->
+                  @if (deleteTarget() === tag) {
+                    <li class="list-group-item bg-danger-subtle px-3 py-2">
+                      <p class="small mb-2">
+                        Delete <strong>{{ tag }}</strong>? This cannot be undone.
+                      </p>
+                      @if (deleteMessage()) {
+                        <div
+                          class="alert py-1 px-2 small mb-2"
+                          [class.alert-success]="deleteSuccess()"
+                          [class.alert-danger]="!deleteSuccess()"
+                        >
+                          {{ deleteMessage() }}
+                        </div>
+                      }
+                      <div class="d-flex gap-2">
                         <button
-                          class="btn btn-xs btn-danger"
-                          style="font-size: 0.7rem; padding: 1px 6px"
+                          class="btn btn-sm btn-danger flex-grow-1"
                           (click)="executeDeleteTag()"
                           [disabled]="deleting()"
                         >
                           @if (deleting()) {
-                            <span class="spinner-border spinner-border-sm"></span>
-                          } @else {
-                            Confirm
+                            <span class="spinner-border spinner-border-sm me-1"></span>
                           }
+                          Delete
                         </button>
                         <button
-                          class="btn btn-xs btn-outline-secondary"
-                          style="font-size: 0.7rem; padding: 1px 6px"
+                          class="btn btn-sm btn-outline-secondary"
                           (click)="cancelDelete()"
                         >
-                          No
+                          Cancel
                         </button>
                       </div>
-                    } @else if (canPush()) {
+                    </li>
 
-                      <button
-                        class="btn btn-sm btn-outline-info border-0 ms-auto me-3"
-                        (click)="$event.stopPropagation(); copyToClipboard(tag)"
-                        [disabled]="copyingTag() === tag"
-                        title="Copy pull path"
-                      >
-                        <i class="bi bi-copy" [class.spin]="copyingTag() === tag"></i>
-                      </button>
-                      <button
-                        class="btn btn-sm btn-outline-danger border-0"
-                        title="Delete this tag"
-                        (click)="confirmDeleteTag(tag); $event.stopPropagation()"
-                      >
-                        <i class="bi bi-trash"></i>
-                      </button>
-                    }
-                  </li>
+                  } @else {
+                    <!-- Normal tag row -->
+                    <li
+                      class="list-group-item list-group-item-action d-flex align-items-center justify-content-between px-3 py-2"
+                      [class.active]="selectedTag() === tag"
+                      (click)="selectTag(tag)"
+                      style="cursor: pointer"
+                    >
+                      <span class="font-monospace small text-truncate me-2">
+                        @if (tag === "latest") {
+                            <i class="bi bi-star-fill text-warning me-1" style="font-size: 0.65rem"></i>
+                        } @else {
+                            <i class="bi bi-tag-fill text-primary me-1" style="font-size: 0.65rem"></i>
+                        }
+                        {{ tag }}
+                      </span>
+
+                      <div class="d-flex gap-1 flex-shrink-0">
+                        <!-- Copy docker pull command -->
+                        <button
+                          class="btn btn-sm btn-outline-secondary border-0"
+                          title="Copy docker pull command"
+                          (click)="copyToClipboard(tag); $event.stopPropagation()"
+                        >
+                          @if (copyingTag() === tag) {
+                            <i class="bi bi-check-lg text-success"></i>
+                          } @else {
+                            <i class="bi bi-clipboard"></i>
+                          }
+                        </button>
+
+                        <!-- Delete tag (push permission required) -->
+                        @if (canPush()) {
+                          <button
+                            class="btn btn-sm btn-outline-danger border-0"
+                            title="Delete this tag"
+                            (click)="confirmDeleteTag(tag); $event.stopPropagation()"
+                          >
+                            <i class="bi bi-trash"></i>
+                          </button>
+                        }
+                      </div>
+                    </li>
+                  }
                 }
+
                 @if (sortedTags().length === 0) {
                   <li class="list-group-item text-center text-muted py-4">
                     <i class="bi bi-tags d-block mb-2"></i>
@@ -188,17 +212,18 @@
             </div>
           </div>
 
-          <!-- ── Right: detail panel ──────────────────────────────────────── -->
+          <!-- ══ Right: metadata panel ════════════════════════════════════ -->
           <div class="col-12 col-md-8">
 
             @if (!selectedTag()) {
-              <!-- No tag selected yet -->
+              <!-- No tag selected placeholder -->
               <div class="d-flex align-items-center justify-content-center h-100 text-muted">
                 <div class="text-center">
                   <i class="bi bi-cursor-fill display-5 d-block mb-2"></i>
                   <span class="small">Select a tag to view its details</span>
                 </div>
               </div>
+
             } @else if (loadingDetail()) {
               <!-- Loading spinner -->
               <div class="d-flex align-items-center justify-content-center h-100 text-muted">
@@ -207,37 +232,35 @@
                   <span class="small">Loading metadata…</span>
                 </div>
               </div>
+
             } @else if (detailError()) {
               <!-- Error banner -->
               <div class="alert alert-warning d-flex align-items-center gap-2">
                 <i class="bi bi-exclamation-triangle-fill"></i>
                 <span>{{ detailError() }}</span>
               </div>
+
             } @else if (tagDetail()) {
-              <!-- Metadata cards -->
+              <!-- ── Summary cards ──────────────────────────────────── -->
               <div class="row g-3 mb-3">
-                <!-- Size -->
                 <div class="col-6 col-lg-3">
                   <div class="card border-0 bg-body-secondary text-center py-2 px-1">
                     <div class="text-muted small">Size</div>
                     <div class="fw-semibold">{{ formatBytes(tagDetail()!.size) }}</div>
                   </div>
                 </div>
-                <!-- Layers -->
                 <div class="col-6 col-lg-3">
                   <div class="card border-0 bg-body-secondary text-center py-2 px-1">
                     <div class="text-muted small">Layers</div>
                     <div class="fw-semibold">{{ tagDetail()!.layers.length }}</div>
                   </div>
                 </div>
-                <!-- Architecture -->
                 <div class="col-6 col-lg-3">
                   <div class="card border-0 bg-body-secondary text-center py-2 px-1">
                     <div class="text-muted small">Architecture</div>
                     <div class="fw-semibold font-monospace small">{{ tagDetail()!.architecture || "—" }}</div>
                   </div>
                 </div>
-                <!-- OS -->
                 <div class="col-6 col-lg-3">
                   <div class="card border-0 bg-body-secondary text-center py-2 px-1">
                     <div class="text-muted small">OS</div>
@@ -254,7 +277,7 @@
                 </code>
               </div>
 
-              <!-- Created -->
+              <!-- Created date -->
               @if (tagDetail()!.created) {
                 <div class="mb-3">
                   <label class="text-muted small d-block mb-1">Created</label>
@@ -288,7 +311,7 @@
                 </div>
               }
 
-              <!-- Entrypoint / CMD -->
+              <!-- CMD / Entrypoint -->
               @if ((tagDetail()!.entrypoint?.length ?? 0) > 0 || (tagDetail()!.cmd?.length ?? 0) > 0) {
                 <div class="mb-3">
                   <label class="text-muted small d-block mb-1">Command</label>
@@ -306,39 +329,47 @@
                 </div>
               }
 
-              <!-- Layers (advanced) -->
-              @if (showAdvanced() && (tagDetail()!.layers?.length ?? 0) > 0) {
-                <div class="mb-3">
-                  <label class="text-muted small d-block mb-1">Layers</label>
-                  <div class="layers-list">
+              <!-- Advanced: layer list toggle -->
+              @if ((tagDetail()!.layers?.length ?? 0) > 0) {
+                <div class="mb-2">
+                  <button
+                    class="btn btn-sm btn-outline-secondary"
+                    (click)="showAdvanced.set(!showAdvanced())"
+                  >
+                    <i class="bi bi-stack me-1"></i>
+                    {{ showAdvanced() ? "Hide" : "Show" }} Layers ({{ tagDetail()!.layers.length }})
+                  </button>
+                </div>
+
+                @if (showAdvanced()) {
+                  <div class="layer-list p-2 bg-body-secondary rounded mb-3">
                     @for (layer of tagDetail()!.layers; track layer.digest) {
-                      <div class="layer-item d-flex align-items-center gap-2 p-2 rounded mb-1 bg-body-secondary">
-                        <i class="bi bi-stack text-muted" style="font-size: 0.75rem"></i>
-                        <code class="small text-truncate flex-grow-1">{{ layer.digest }}</code>
-                        <span class="badge bg-secondary-subtle text-secondary flex-shrink-0">
+                      <div class="d-flex justify-content-between align-items-center py-1 border-bottom border-secondary-subtle small font-monospace">
+
+                        <span class="small text-truncate me-3">
+                            <i class="bi bi-stack text-muted" style="font-size: 0.75rem"></i>
+                          {{ layer.digest }}
+                        </span>
+                        <span class="text-muted flex-shrink-0">
                           {{ formatBytes(layer.size) }}
                         </span>
                       </div>
                     }
                   </div>
-                </div>
+                }
               }
-
-              <div class="mt-3">
-                <button class="btn btn-sm btn-outline-secondary" (click)="showAdvanced.set(!showAdvanced())">
-                  <i [class]="showAdvanced() ? 'bi bi-chevron-up' : 'bi bi-chevron-down'" class="me-1"></i>
-                  {{ showAdvanced() ? "Less info" : "More info" }}
-                </button>
-              </div>
             }
           </div>
+          <!-- /right column -->
+
         </div>
       </div>
-
+      <!-- /modal-body -->
       <!-- ── Footer ───────────────────────────────────────────────────────── -->
       <div class="modal-footer border-0 pt-0">
         <button class="btn btn-secondary btn-sm" (click)="close()">Close</button>
       </div>
+
 
     </div>
   </div>

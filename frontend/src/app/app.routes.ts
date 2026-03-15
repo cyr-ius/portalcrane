@@ -44,15 +44,6 @@ export const routes: Routes = [
           ),
       },
       {
-        // Repository name is passed as ?repository=... query param instead of
-        // a path segment to avoid %2F encoding issues with reverse proxies.
-        path: "images/detail",
-        loadComponent: () =>
-          import("./features/images/image-detail/image-detail.component").then(
-            (m) => m.ImageDetailComponent,
-          ),
-      },
-      {
         path: "staging",
         loadComponent: () =>
           import("./features/staging/staging.component").then(
