@@ -36,6 +36,11 @@
           <i class="bi bi-github"></i>
           GitHub Packages — {{ activeSourceLabel() }} — Read-only
         </span>
+      } @else if (isDockerHubMode()) {
+        <span class="badge bg-primary text-white px-3 py-2 d-flex align-items-center gap-2">
+          🐳
+          Docker Hub — {{ activeSourceLabel() }} — Read-only
+        </span>
       } @else {
         <span class="badge bg-info-subtle text-info border border-info-subtle px-3 py-2">
           <i class="bi bi-globe me-1"></i>
@@ -82,8 +87,14 @@
               (click)="selectSource(reg.id)"
               [title]="reg.host"
             >
-              @if (reg.host === 'ghcr.io' || reg.host?.includes('ghcr.io')) {
+              @if (reg.host === 'ghcr.io' || reg.host.includes('ghcr.io')) {
                 <i class="bi bi-github me-1"></i>
+              } @else if (
+                reg.host === 'docker.io' ||
+                reg.host === 'index.docker.io' ||
+                reg.host === 'registry-1.docker.io'
+              ) {
+                <span class="me-1">🐳</span>
               } @else {
                 <i class="bi bi-globe me-1"></i>
               }
@@ -602,6 +613,10 @@
             <h5 class="modal-title">
               <i class="bi bi-github me-2"></i>GitHub Package details
             </h5>
+          } @else if (isExternalSource() && isDockerHubMode()) {
+            <h5 class="modal-title">
+              <i class="bi bi-eye me-2"></i>Docker Hub image details
+            </h5>
           } @else {
             <h5 class="modal-title">
               <i class="bi bi-eye me-2"></i>Image details
@@ -631,7 +646,6 @@
               </span>
             }
           </div>
-
           <!-- GitHub link: double-gated, never shown in local mode -->
           @if (isExternalSource() && isGithubMode() && viewTarget()) {
             <div class="mt-3 pt-3 border-top">
@@ -647,8 +661,22 @@
               </a>
             </div>
           }
+          <!-- Docker Hub link: double-gated, never shown in local or GitHub mode -->
+          @if (isExternalSource() && isDockerHubMode() && viewTarget()) {
+          <div class="mt-3 pt-3 border-top">
+            <a
+              [href]="'https://hub.docker.com/r/' + viewTarget()!.name"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-2"
+            >
+              🐳
+              View on Docker Hub
+              <i class="bi bi-box-arrow-up-right" style="font-size: 0.7rem"></i>
+            </a>
+          </div>
+          }
         </div>
-
         <div class="modal-footer">
           <button class="btn btn-secondary btn-sm" (click)="viewTarget.set(null)">Close</button>
         </div>
@@ -682,6 +710,8 @@
               <span class="text-info">
                 @if (isGithubMode()) {
                   Action: import this GitHub package to local registry
+                } @else if (isDockerHubMode()) {
+                  Action: import this Docker Hub image to local registry
                 } @else {
                   Action: import this image tag to local registry
                 }

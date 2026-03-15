@@ -38,6 +38,14 @@ import httpx
 
 from ..config import DATA_DIR, Settings, REGISTRY_HOST
 from .external_github import browse_github_packages, delete_github_package
+from .external_dockerhub import (
+    browse_dockerhub_repositories,
+)
+from .external_dockerhub import (
+    browse_dockerhub_tags,
+    delete_dockerhub_repository,
+    get_dockerhub_tags_for_import,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +98,15 @@ def _redact(r: dict) -> dict:
 def _is_ghcr(host: str) -> bool:
     """Return True when the registry host is GitHub Container Registry."""
     return _normalize_registry_host(host) == "ghcr.io"
+
+
+def _is_dockerhub(host: str) -> bool:
+    """Return True when the registry host is Docker Hub."""
+    return _normalize_registry_host(host) in {
+        "docker.io",
+        "index.docker.io",
+        "registry-1.docker.io",
+    }
 
 
 def get_registries(owner: str | None = None) -> list[dict]:
@@ -180,11 +197,17 @@ async def check_catalog_browsable(
     the frontend can hide non-browsable registries from the Images source
     selector without making additional requests.
     """
-    # Docker Hub never exposes /v2/_catalog publicly
+    # Docker Hub never exposes /v2/_catalog publicly, but when credentials
+    # are present we browse via the Hub REST API — mark as browsable.
     normalized = _normalize_registry_host(host)
     if normalized in {"docker.io", "index.docker.io", "registry-1.docker.io"}:
-        logger.debug("check_catalog_browsable: Docker Hub — not browsable")
-        return False
+        has_creds = bool((username or "").strip() and (password or "").strip())
+        logger.debug(
+            "check_catalog_browsable: Docker Hub — browsable=%s (creds present=%s)",
+            has_creds,
+            has_creds,
+        )
+        return has_creds
 
     base_url = _build_registry_base_url(host, use_tls=use_tls)
     verify = tls_verify if use_tls else False
@@ -546,18 +569,37 @@ async def browse_external_images(
             page_size=page_size,
         )
 
-    # ── Standard: /v2/_catalog ─────────────────────────────────────────────
-    normalized = _normalize_registry_host(host)
-    if normalized in {"docker.io", "index.docker.io", "registry-1.docker.io"}:
+    # ── Docker Hub: use Hub REST API ───────────────────────────────────────
+    if _is_dockerhub(host) and username and password:
+        # The stored username is used both as auth account and as the
+        # namespace to browse.  If the registry was saved with a different
+        # org namespace it can be overridden in the future via a dedicated
+        # field; for now username == namespace is the correct assumption.
+        return await browse_dockerhub_repositories(
+            username=username,
+            password=password,
+            namespace=username,
+            search=search,
+            page=page,
+            page_size=page_size,
+        )
+
+    # ── Docker Hub without credentials: not browsable ─────────────────────
+    if _is_dockerhub(host):
         return {
             "items": [],
             "total": 0,
             "page": page,
             "page_size": page_size,
             "total_pages": 1,
-            "error": "Docker Hub does not expose a public catalog endpoint.",
+            "error": (
+                "Docker Hub browsing requires credentials. "
+                "Please add your Docker Hub username and password (or access token) "
+                "to this registry entry."
+            ),
         }
 
+    # ── Standard: /v2/_catalog ─────────────────────────────────────────────
     base_url = _build_registry_base_url(host, use_tls=use_tls)
     verify = tls_verify if use_tls else False
     auth = (username, password) if username and password else None
@@ -642,6 +684,18 @@ async def browse_external_tags(registry_id: str, repository: str) -> dict:
     use_tls = registry.get("use_tls", True)
     tls_verify = registry.get("tls_verify", True)
 
+    # ── Docker Hub: use Hub REST API ───────────────────────────────────────
+    if _is_dockerhub(host):
+        tags = await browse_dockerhub_tags(
+            username=username,
+            password=password,
+            repository=repository,
+        )
+        return {"repository": repository, "tags": tags}
+
+    # ── GHCR: already handled by browse_external_tags caller; fall through
+    # to standard /v2/.../tags/list for all other registries.
+
     base_url = _build_registry_base_url(host, use_tls=use_tls)
     verify = tls_verify if use_tls else False
     auth = (username, password) if username and password else None
@@ -699,6 +753,25 @@ async def delete_external_image(registry_id: str, repository: str) -> dict:
             "deleted_tags": [repository],
             "failed_tags": [],
             "message": f"Package '{repository}' deleted from GitHub Container Registry",
+        }
+
+    # ── Docker Hub: use Hub REST API to delete the repository ─────────────
+    if _is_dockerhub(host):
+        error = await delete_dockerhub_repository(
+            username=username,
+            password=password,
+            repository=repository,
+        )
+        if error:
+            return {
+                "deleted_tags": [],
+                "failed_tags": [repository],
+                "message": f"Docker Hub delete failed: {error}",
+            }
+        return {
+            "deleted_tags": [repository],
+            "failed_tags": [],
+            "message": f"Repository '{repository}' deleted from Docker Hub.",
         }
 
     # ── Standard registry: manifest-based tag deletion ────────────────────
@@ -1123,6 +1196,19 @@ async def run_import_job(
                         item["name"] for item in result.get("items", [])
                     ]
 
+                elif _is_dockerhub(src_host) and src_username and src_password:
+                    # Docker Hub: list repositories via Hub REST API
+                    result = await browse_dockerhub_repositories(
+                        username=src_username,
+                        password=src_password,
+                        namespace=src_username,
+                        search=None,
+                        page=1,
+                        page_size=200,
+                    )
+                    images: list[str] = [
+                        item["name"] for item in result.get("items", [])
+                    ]
                 else:
                     async with httpx.AsyncClient(
                         timeout=30, verify=httpx_verify, follow_redirects=True
@@ -1146,7 +1232,6 @@ async def run_import_job(
                     tags = [source_image.split(":", 1)[1]]
                 elif _is_ghcr(src_host) and src_password:
                     # GHCR: fetch tags via GitHub Packages API
-                    # img is 'owner/package-name' — extract package name
                     from .external_github import get_github_tags_for_import
 
                     pkg_name = img.split("/", 1)[-1] if "/" in img else img
@@ -1154,6 +1239,13 @@ async def run_import_job(
                         token=src_password,
                         owner=src_username,
                         package=pkg_name,
+                    )
+                elif _is_dockerhub(src_host) and src_username and src_password:
+                    # Docker Hub: fetch tags via Hub REST API
+                    tags = await get_dockerhub_tags_for_import(
+                        username=src_username,
+                        password=src_password,
+                        repository=img,
                     )
                 else:
                     # Standard registry: use /v2/.../tags/list

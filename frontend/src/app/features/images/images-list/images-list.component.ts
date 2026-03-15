@@ -125,6 +125,19 @@ export class ImagesListComponent implements OnInit {
     return host === "ghcr.io";
   });
 
+  readonly isDockerHubMode = computed<boolean>(() => {
+    const src = this.selectedSource();
+    if (src === "local") return false;
+    const reg = this.externalRegistries().find((r) => r.id === src);
+    if (!reg) return false;
+    const host = (reg.host ?? "").toLowerCase().replace(/^https?:\/\//, "").split("/")[0];
+    return (
+      host === "docker.io" ||
+      host === "index.docker.io" ||
+      host === "registry-1.docker.io"
+    );
+  });
+
   readonly activeSourceLabel = computed(() => {
     const src = this.selectedSource();
     if (src === "local") return "Local Registry";
