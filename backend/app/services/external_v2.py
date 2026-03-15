@@ -23,6 +23,7 @@ All public functions receive already-resolved connection parameters
 no dependency on the JSON registry store.
 """
 
+import asyncio
 import logging
 from typing import Any
 
@@ -321,7 +322,29 @@ async def browse_v2_repositories(
     start = (page - 1) * page_size
     page_repos = repositories[start : start + page_size]
 
-    items = [{"name": repo, "tags": []} for repo in page_repos]
+    # Fetch tags via GitHub API for each package
+    async def _fetch_github_tags(repo: str) -> list[str]:
+        """Fetch versions/tags for a GitHub package."""
+        pkg_name = repo.split("/", 1)[-1]
+        try:
+            return await browse_v2_tags(
+                host, username, password, pkg_name, use_tls, tls_verify
+            )
+        except Exception:
+            pass
+        return []
+
+    tags_results = await asyncio.gather(*[_fetch_github_tags(r) for r in page_repos])
+
+    items = [
+        {
+            "name": repo,
+            "tags": tags,
+            "tag_count": len(tags),
+            "total_size": 0,
+        }
+        for repo, tags in zip(page_repos, tags_results)
+    ]
 
     return {
         "items": items,
@@ -329,6 +352,7 @@ async def browse_v2_repositories(
         "page": page,
         "page_size": page_size,
         "total_pages": total_pages,
+        "error": None,
     }
 
 
@@ -342,7 +366,7 @@ async def browse_v2_tags(
     repository: str,
     use_tls: bool = True,
     tls_verify: bool = True,
-) -> dict[str, Any]:
+) -> list[str]:
     """List all tags for a repository in a V2-compatible registry.
 
     Uses GET /v2/{repository}/tags/list as specified by the OCI Distribution
@@ -378,7 +402,7 @@ async def browse_v2_tags(
         )
         tags = []
 
-    return {"repository": repository, "tags": tags}
+    return tags
 
 
 # ── Delete ────────────────────────────────────────────────────────────────────
@@ -524,7 +548,7 @@ async def get_v2_tags_for_import(
     Returns:
         List of tag name strings (may be empty on error).
     """
-    result = await browse_v2_tags(
+    tags = await browse_v2_tags(
         host=host,
         username=username,
         password=password,
@@ -532,4 +556,4 @@ async def get_v2_tags_for_import(
         use_tls=use_tls,
         tls_verify=tls_verify,
     )
-    return result.get("tags") or []
+    return tags or []

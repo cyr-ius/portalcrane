@@ -45,6 +45,7 @@ import httpx
 from ..config import DATA_DIR, Settings, REGISTRY_HOST
 from .external_github import (
     browse_github_packages,
+    browse_github_tag,
     delete_github_package,
     get_github_tags_for_import,
 )
@@ -537,6 +538,15 @@ async def browse_external_tags(registry_id: str, repository: str) -> dict:
     use_tls = registry.get("use_tls", True)
     tls_verify = registry.get("tls_verify", True)
 
+    # ── GHCR: REST API ───────────────────────────────────────────
+    if _is_ghcr(host):
+        tags = await browse_github_tag(
+            owner=username,
+            token=password,
+            repository=repository,
+        )
+        return {"repository": repository, "tags": tags}
+
     # ── Docker Hub: Hub REST API ───────────────────────────────────────────
     if _is_dockerhub(host):
         tags = await browse_dockerhub_tags(
@@ -547,7 +557,7 @@ async def browse_external_tags(registry_id: str, repository: str) -> dict:
         return {"repository": repository, "tags": tags}
 
     # ── GHCR and all standard V2 registries ────────────────────────────────
-    return await browse_v2_tags(
+    tags = await browse_v2_tags(
         host=host,
         username=username,
         password=password,
@@ -555,6 +565,7 @@ async def browse_external_tags(registry_id: str, repository: str) -> dict:
         use_tls=use_tls,
         tls_verify=tls_verify,
     )
+    return {"repository": repository, "tags": tags}
 
 
 async def delete_external_image(registry_id: str, repository: str) -> dict:

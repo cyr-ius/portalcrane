@@ -15,6 +15,7 @@ Authentication uses a JWT token obtained from hub.docker.com/v2/users/login.
 The stored username and password are used to authenticate each session.
 """
 
+import asyncio
 import logging
 from typing import Any
 
@@ -111,6 +112,7 @@ async def browse_dockerhub_repositories(
         }
 
     headers = _auth_headers(token)
+    repositories: list[str] = []
 
     try:
         async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
@@ -150,6 +152,12 @@ async def browse_dockerhub_repositories(
 
             resp.raise_for_status()
             data = resp.json()
+            packages = data.get("results", {})
+            repositories = [
+                f"{username}/{pkg['name']}"
+                for pkg in packages
+                if isinstance(pkg, dict) and "name" in pkg
+            ]
 
     except httpx.HTTPStatusError as exc:
         logger.warning(
@@ -176,26 +184,35 @@ async def browse_dockerhub_repositories(
             "error": "Docker Hub API unreachable.",
         }
 
+    # Apply search filter
+    if search:
+        repositories = [r for r in repositories if search.lower() in r.lower()]
+
     # ── Build paginated response ───────────────────────────────────────────
-    raw_results: list[dict] = data.get("results") or []
-    total: int = data.get("count") or 0
+    total = len(repositories)
     total_pages = max(1, (total + page_size - 1) // page_size)
+    start = (page - 1) * page_size
+    page_repos = repositories[start : start + page_size]
+
+    # Fetch tags for each package
+    async def _fetch_tags(repo: str) -> list[str]:
+        """Fetch versions/tags for a GitHub package."""
+        try:
+            return await browse_dockerhub_tags(username, password, repo)
+        except Exception:
+            pass
+        return []
+
+    tags_results = await asyncio.gather(*[_fetch_tags(r) for r in page_repos])
 
     items = [
         {
-            # Full reference: namespace/name
-            "name": f"{r.get('namespace', namespace)}/{r.get('name', '')}",
-            # tags are fetched lazily via browse_dockerhub_tags
-            "tags": [],
-            "tag_count": r.get("tag_count") or 0,
-            "total_size": r.get("full_size") or 0,
-            # Docker Hub extras — useful for display
-            "description": r.get("description") or "",
-            "is_private": r.get("is_private", False),
-            "star_count": r.get("star_count") or 0,
-            "pull_count": r.get("pull_count") or 0,
+            "name": repo,
+            "tags": tags,
+            "tag_count": len(tags),
+            "total_size": 0,
         }
-        for r in raw_results
+        for repo, tags in zip(page_repos, tags_results)
     ]
 
     return {

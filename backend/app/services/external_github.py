@@ -141,14 +141,14 @@ async def browse_github_packages(
 async def browse_github_tag(
     token: str,
     owner: str,
-    package: str,
+    repository: str,
 ) -> list[str]:
     """Get package version for a GitHub user or organisation."""
     headers = _auth_headers(token)
     async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
         for base_url in get_urls(owner):
             try:
-                tag_url = f"{base_url}/container/{package}/versions"
+                tag_url = f"{base_url}/container/{repository}/versions"
                 resp = await client.get(tag_url, headers=headers)
                 if resp.status_code == 200:
                     versions = resp.json()
@@ -206,7 +206,7 @@ async def get_github_tags_for_import(
     This is a simplified wrapper around browse_github_tag() that always
     returns a list (never a dict), safe to iterate in run_import_job().
     """
-    result = await browse_github_tag(token=token, owner=owner, package=package)
+    result = await browse_github_tag(token=token, owner=owner, repository=package)
     if isinstance(result, list):
         return result
     return []
