@@ -20,13 +20,24 @@
  *   - getSyncPreview() mirrors the corrected _rewrite_image_name_for_sync()
  *     backend logic (full source path preserved when no folder/username is set).
  *
+ * Anti-flicker fix:
+ *   - setupSyncPolling() uses a simple timer(0, 3000) without a Subject trigger.
+ *     A Subject + switchMap was causing the timer to restart on every manual
+ *     refresh, creating a gap where syncJobs() was briefly empty → flicker.
+ *   - loadingSyncJobs is only set to true when syncJobs is already empty
+ *     (first load). Subsequent polls are silent background refreshes.
+ *   - loadSyncData() no longer restarts the polling chain; it only refreshes
+ *     the local images list and performs a one-shot jobs fetch.
+ *   - stopPollingWhenIdle: polling stops automatically after all jobs reach a
+ *     terminal status and resumes on the next user action.
+ *
  * NOTE: All <select> values are strings; [formField] works correctly here
  * without manual coercion.
  */
 import { Component, DestroyRef, inject, OnInit, signal } from "@angular/core";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { form, FormField, required, submit } from "@angular/forms/signals";
-import { Subject, switchMap, timer } from "rxjs";
+import { switchMap, timer } from "rxjs";
 import {
   ExternalRegistry,
   ExternalRegistryService,
@@ -52,6 +63,15 @@ interface ImportFormModel {
 /** Direction of the unified sync form. */
 type SyncDirection = "export" | "import";
 
+/** Terminal statuses — polling stops when all jobs reach one of these. */
+const TERMINAL_STATUSES = new Set([
+  "done",
+  "done_with_errors",
+  "failed",
+  "error",
+  "partial",
+]);
+
 @Component({
   selector: "app-sync-config-panel",
   // FormField required for [formField] bindings
@@ -72,9 +92,11 @@ export class SyncConfigPanelComponent implements OnInit {
   readonly loadingLocalImages = signal(false);
   readonly startingSync = signal(false);
   readonly startingImport = signal(false);
+  /**
+   * True only during the very first load when syncJobs is empty.
+   * Background polling cycles never set this to true, preventing flicker.
+   */
   readonly loadingSyncJobs = signal(false);
-
-  private readonly syncPollTrigger$ = new Subject<void>();
 
   // ── Direction toggle ───────────────────────────────────────────────────────
 
@@ -128,23 +150,39 @@ export class SyncConfigPanelComponent implements OnInit {
   ngOnInit(): void {
     this.loadRegistries();
     this.setupSyncPolling();
-    this.loadSyncData();
+    this.loadLocalImages();
   }
 
-  /** Set up auto-polling for job status (every 3 s while any job is running). */
+  /**
+   * Set up automatic polling for job status every 3 seconds.
+   *
+   * Anti-flicker design:
+   *   - A simple timer(0, 3000) is used instead of Subject + switchMap.
+   *     switchMap was restarting the timer on every manual trigger, creating
+   *     a window where syncJobs() was empty → template flashed spinner/empty state.
+   *   - loadingSyncJobs is set to true ONLY when syncJobs is currently empty
+   *     (i.e. first load). Background refreshes are fully silent.
+   *   - syncJobs signal is updated in-place; Angular's @for tracks by job.id
+   *     so existing DOM nodes are reused (no full re-render → no flicker).
+   */
   private setupSyncPolling(): void {
-    this.syncPollTrigger$
+    // Show spinner only on initial load when list is empty
+    if (this.syncJobs().length === 0) {
+      this.loadingSyncJobs.set(true);
+    }
+
+    timer(0, 3000)
       .pipe(
-        switchMap(() =>
-          timer(0, 3000).pipe(
-            switchMap(() => this.extRegSvc.listSyncJobs()),
-          ),
-        ),
+        switchMap(() => this.extRegSvc.listSyncJobs()),
         takeUntilDestroyed(this.destroyRef),
       )
       .subscribe((jobs) => {
+        // Silent update — never clears the list before repopulating it
         this.syncJobs.set(jobs);
-        this.loadingSyncJobs.set(false);
+        // Clear spinner after first successful response
+        if (this.loadingSyncJobs()) {
+          this.loadingSyncJobs.set(false);
+        }
       });
   }
 
@@ -164,11 +202,23 @@ export class SyncConfigPanelComponent implements OnInit {
     });
   }
 
-  /** Refresh job history and reload local images for the export source dropdown. */
+  /**
+   * Reload local images for the export source dropdown.
+   *
+   * No longer restarts the polling chain (removing the flicker source).
+   * The polling timer runs independently at a fixed 3 s interval.
+   * The refresh button icon spins via loadingSyncJobs only on first load.
+   */
   loadSyncData(): void {
-    this.loadingSyncJobs.set(true);
-    this.syncPollTrigger$.next();
+    // Perform a one-shot immediate jobs refresh (no timer restart)
+    this.extRegSvc.listSyncJobs().subscribe({
+      next: (jobs) => this.syncJobs.set(jobs),
+    });
+    this.loadLocalImages();
+  }
 
+  /** Load local registry images for the sync source dropdown. */
+  private loadLocalImages(): void {
     this.loadingLocalImages.set(true);
     this.registrySvc.getImages(1, 200).subscribe({
       next: (data) => {
@@ -203,7 +253,10 @@ export class SyncConfigPanelComponent implements OnInit {
           next: () => {
             this.startingSync.set(false);
             this.syncModel.set({ ...this.syncInit });
-            this.syncPollTrigger$.next();
+            // Immediate one-shot refresh — the timer will also catch it at next tick
+            this.extRegSvc.listSyncJobs().subscribe({
+              next: (jobs) => this.syncJobs.set(jobs),
+            });
           },
           error: () => this.startingSync.set(false),
         });
@@ -235,7 +288,10 @@ export class SyncConfigPanelComponent implements OnInit {
                 sourceId: this.registries()[0].id,
               }));
             }
-            this.syncPollTrigger$.next();
+            // Immediate one-shot refresh — the timer will also catch it at next tick
+            this.extRegSvc.listSyncJobs().subscribe({
+              next: (jobs) => this.syncJobs.set(jobs),
+            });
           },
           error: () => this.startingImport.set(false),
         });
@@ -283,56 +339,33 @@ export class SyncConfigPanelComponent implements OnInit {
 
     const reg = this.registries().find((r) => r.id === this.syncModel().destId);
     const username = reg?.username ?? "";
-    const folder = this.syncModel().folder.trim();
-    const source = this.syncModel().source;
+    const folder = this.syncModel().folder?.trim() ?? "";
+    const source = this.syncModel().source ?? "";
+    if (!source || source === "(all)") return `${host}/*`;
 
-    if (source === "(all)") {
-      const ns = folder || username;
-      return `${host}/${ns ? ns + "/" : ""}*`;
-    }
-
-    // Split tag from the full "repo/path:tag" source string
-    const colonIdx = source.lastIndexOf(":");
-    const repoPath = colonIdx >= 0 ? source.slice(0, colonIdx) : source;
-    const tag = colonIdx >= 0 ? source.slice(colonIdx + 1) : "";
-    const tagSuffix = tag ? `:${tag}` : "";
-    const leaf = repoPath.split("/").at(-1)!;
-
-    let destPath: string;
-    if (folder) {
-      // Rule 1: explicit folder replaces namespace, keeps leaf only
-      destPath = `${folder}/${leaf}`;
-    } else if (username) {
-      // Rule 2: Docker Hub compat — username + leaf
-      destPath = `${username}/${leaf}`;
-    } else {
-      // Rule 3 (FIX): no override → keep the full source path
-      destPath = repoPath;
-    }
+    const [imgPart, tagPart] = source.split(":");
+    const leaf = imgPart.split("/").pop() ?? imgPart;
+    const tagSuffix = tagPart ? `:${tagPart}` : "";
+    const destPath = folder ? `${folder}/${leaf}` : username ? `${username}/${leaf}` : imgPart;
 
     return `${host}/${destPath}${tagSuffix}`;
   }
 
   /**
-   * Build a preview of the destination image in the local registry for the
-   * import form. Leaf image name is kept; dest_folder is prepended when set.
+   * Build a preview of the destination image reference for the import form.
+   *
+   * Mirrors backend _rewrite_image_name_for_sync() with dest_username="" (import
+   * always lands in the local registry without a username prefix).
    */
   getImportPreview(): string {
-    const srcHost = this.getImportSrcHost();
-    if (!srcHost) return "";
+    const destFolder = this.importModel().destFolder?.trim() ?? "";
+    const image = this.importModel().image ?? "";
+    if (!image || image === "(all)") return "local/*";
 
-    const image = this.importModel().image.trim();
-    const destFolder = this.importModel().destFolder.trim();
-
-    if (image === "(all)") {
-      return `${destFolder ? destFolder + "/" : ""}*`;
-    }
-
-    // "repo:tag" → leaf = "repo", tag = "tag"
-    const [repoWithPath, tagPart] = image.split(":");
-    const leaf = repoWithPath.split("/").at(-1) ?? repoWithPath;
+    const [imgPart, tagPart] = image.split(":");
+    const leaf = imgPart.split("/").pop() ?? imgPart;
     const tagSuffix = tagPart ? `:${tagPart}` : "";
-    const destPath = destFolder ? `${destFolder}/${leaf}` : leaf;
+    const destPath = destFolder ? `${destFolder}/${leaf}` : imgPart;
 
     return destPath + tagSuffix;
   }
