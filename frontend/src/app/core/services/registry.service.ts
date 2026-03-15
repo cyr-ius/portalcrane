@@ -61,7 +61,6 @@ export interface PaginatedImages {
   page: number;
   page_size: number;
   total_pages: number;
-  /** Present only when browsing an external registry — null for local. */
   error?: string | null;
 }
 

@@ -107,33 +107,24 @@ export class ImagesListComponent implements OnInit {
 
   // ── Source selection ───────────────────────────────────────────────────────
 
-  /** 'local' or a saved external registry ID. */
   readonly selectedSource = signal<SourceId>("local");
-
-  /**
-   * External registries that support /v2/_catalog browsing.
-   *
-   * Computed from the shared ExternalRegistryService cache so that all
-   * consumers (Staging, Settings panel) stay in sync after a create/update/
-   * delete operation — no per-visit catalog-check HTTP calls are needed.
-   * The backend sets `browsable` when a registry is created or updated.
-   */
   readonly externalRegistries = computed<ExternalRegistry[]>(
     () => this.extRegSvc.browsableRegistries(),
   );
-
-  /**
-   * True while the single GET /registries call is in flight.
-   * Replaced the previous "N parallel catalog-check probes" spinner.
-   */
   readonly checkingCatalog = signal(false);
-
-  /** True when an external registry is currently selected. */
   readonly isExternalSource = computed(
     () => this.selectedSource() !== "local",
   );
 
-  /** Display name of the active source for the toolbar badge. */
+  readonly isGithubMode = computed<boolean>(() => {
+    const src = this.selectedSource();
+    if (src === "local") return false;
+    const reg = this.externalRegistries().find((r) => r.id === src);
+    if (!reg) return false;
+    const host = (reg.host ?? "").toLowerCase().replace(/^https?:\/\//, "").split("/")[0];
+    return host === "ghcr.io";
+  });
+
   readonly activeSourceLabel = computed(() => {
     const src = this.selectedSource();
     if (src === "local") return "Local Registry";

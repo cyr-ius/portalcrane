@@ -37,10 +37,12 @@ from pathlib import Path
 import httpx
 
 from ..config import DATA_DIR, Settings, REGISTRY_HOST
+from .external_github import browse_github_packages
 
 logger = logging.getLogger(__name__)
 
 _REGISTRIES_FILE = Path(f"{DATA_DIR}/external_registries.json")
+
 _sync_jobs: dict[str, dict] = {}
 
 
@@ -83,6 +85,11 @@ def _redact(r: dict) -> dict:
         "tls_verify": r.get("tls_verify", True),
         "browsable": r.get("browsable", True),
     }
+
+
+def _is_ghcr(host: str) -> bool:
+    """Return True when the registry host is GitHub Container Registry."""
+    return _normalize_registry_host(host) == "ghcr.io"
 
 
 def get_registries(owner: str | None = None) -> list[dict]:
@@ -508,6 +515,12 @@ async def browse_external_images(
     """
     List repositories available in an external registry using /v2/_catalog.
 
+    For GHCR (ghcr.io) registries: uses the GitHub Packages REST API
+    (GET /users/{owner}/packages?package_type=container) with the stored
+    token (password field) and the stored username as the GitHub owner.
+
+    For all other registries: uses /v2/_catalog as before.
+
     Returns a paginated dict compatible with the local PaginatedImages shape:
       { items, total, page, page_size, total_pages, error }
     """
@@ -521,6 +534,19 @@ async def browse_external_images(
     use_tls = registry.get("use_tls", True)
     tls_verify = registry.get("tls_verify", True)
 
+    # ── GHCR: use GitHub Packages API ─────────────────────────────────────
+    if _is_ghcr(host) and password:
+        github_owner = username  # username stored == GitHub username / org
+        return await browse_github_packages(
+            username=username,
+            token=password,
+            owner=github_owner,
+            search=search,
+            page=page,
+            page_size=page_size,
+        )
+
+    # ── Standard: /v2/_catalog ─────────────────────────────────────────────
     normalized = _normalize_registry_host(host)
     if normalized in {"docker.io", "index.docker.io", "registry-1.docker.io"}:
         return {
