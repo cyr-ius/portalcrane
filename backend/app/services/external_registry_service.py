@@ -1,7 +1,12 @@
-"""
-Portalcrane - External Registry Service
-Manages the list of external registries and exposes skopeo-based
-push, synchronisation, browse and import helpers.
+"""Portalcrane - External Registry Service.
+
+Orchestrates CRUD, connectivity testing, catalog browsing, and skopeo-based
+push / sync / import operations for all external registry types.
+
+Registry type routing:
+  - ghcr.io            -> external_github   (GitHub Packages REST API)
+  - docker.io variants -> external_dockerhub (Docker Hub REST API)
+  - everything else    -> external_v2        (OCI Distribution V2 spec)
 
 Changes:
   - tls_verify field: each registry stores whether TLS certificate
@@ -11,17 +16,18 @@ Changes:
   - [NEW] browse_external_tags()   — list tags of a repo from an external
     registry (Évolution 1).
   - [NEW] run_import_job()         — mirror of run_sync_job() with src/dest
-    reversed (external → local).  direction="import" stored in job dict
+    reversed (external -> local).  direction="import" stored in job dict
     (Évolution 2).
   - run_sync_job() jobs now carry direction="export" so the UI can show
     direction badges in the history list (Évolution 2).
   - [FIX] _skopeo_tls_verify() helper: properly derive --tls-verify flag
     from both use_tls AND tls_verify fields. Previously only tls_verify was
     checked, causing skopeo to attempt HTTPS on plain-HTTP registries.
-  - [NEW] check_catalog_browsable() — probe /v2/_catalog to check whether
-    the registry supports listing repositories. The result is persisted in
-    the browsable field and exposed in the API response so the frontend can
-    hide non-browsable registries from the Images source selector.
+  - [REFACTOR] HTTP logic extracted into external_v2.py (OCI V2),
+    external_github.py (GHCR) and external_dockerhub.py (Docker Hub).
+    This service is now a pure orchestrator: it resolves the registry
+    record from the JSON store, determines the registry type, and delegates
+    to the appropriate module.
 """
 
 import asyncio
@@ -37,14 +43,24 @@ from pathlib import Path
 import httpx
 
 from ..config import DATA_DIR, Settings, REGISTRY_HOST
-from .external_github import browse_github_packages, delete_github_package
-from .external_dockerhub import (
-    browse_dockerhub_repositories,
+from .external_github import (
+    browse_github_packages,
+    delete_github_package,
+    get_github_tags_for_import,
 )
 from .external_dockerhub import (
+    browse_dockerhub_repositories,
     browse_dockerhub_tags,
     delete_dockerhub_repository,
     get_dockerhub_tags_for_import,
+)
+from .external_v2 import (
+    browse_v2_repositories,
+    browse_v2_tags,
+    check_v2_catalog,
+    delete_v2_image,
+    get_v2_tags_for_import,
+    test_v2_connection,
 )
 
 logger = logging.getLogger(__name__)
@@ -95,6 +111,19 @@ def _redact(r: dict) -> dict:
     }
 
 
+# ── Registry type detection ───────────────────────────────────────────────────
+
+
+def _normalize_registry_host(host: str) -> str:
+    """Normalise a registry host string to bare hostname:port (no protocol, no path)."""
+    value = (host or "").strip().lower()
+    if not value:
+        return ""
+    if "://" in value:
+        value = urlparse(value).netloc or value
+    return value.split("/", 1)[0].strip("/")
+
+
 def _is_ghcr(host: str) -> bool:
     """Return True when the registry host is GitHub Container Registry."""
     return _normalize_registry_host(host) == "ghcr.io"
@@ -109,9 +138,40 @@ def _is_dockerhub(host: str) -> bool:
     }
 
 
-def get_registries(owner: str | None = None) -> list[dict]:
+# ── URL / TLS helpers (shared, used by skopeo callers) ───────────────────────
+
+
+def _build_registry_base_url(host: str, use_tls: bool = True) -> str:
+    """Build the base URL for a registry host string.
+
+    When the host already contains a scheme (http:// or https://) it is used
+    as-is so callers who stored the full URL are unaffected.
+    When *use_tls* is False the scheme is http://, otherwise https://.
     """
-    Return saved external registries (passwords redacted).
+    if "://" in host:
+        return host.rstrip("/")
+    scheme = "https" if use_tls else "http"
+    return f"{scheme}://{host}"
+
+
+def _skopeo_tls_verify(use_tls: bool, tls_verify: bool) -> bool:
+    """Derive the boolean value for skopeo --src/dest-tls-verify.
+
+    Mapping:
+      use_tls=False              -> plain HTTP -> --tls-verify=false
+      use_tls=True, verify=False -> HTTPS, skip cert check -> --tls-verify=false
+      use_tls=True, verify=True  -> normal HTTPS -> --tls-verify=true
+    """
+    if not use_tls:
+        return False
+    return tls_verify
+
+
+# ── Registry store public API ─────────────────────────────────────────────────
+
+
+def get_registries(owner: str | None = None) -> list[dict]:
+    """Return saved external registries (passwords redacted).
 
     When *owner* is provided only global + owner registries are returned.
     When *owner* is None (admin) all registries are returned.
@@ -139,97 +199,24 @@ def get_registry_by_id(registry_id: str) -> dict | None:
     return None
 
 
-def _normalize_registry_host(host: str) -> str:
-    """Normalise a registry host string to bare hostname:port (no protocol, no path)."""
-    value = (host or "").strip().lower()
-    if not value:
-        return ""
-    if "://" in value:
-        value = urlparse(value).netloc or value
-    return value.split("/", 1)[0].strip("/")
-
-
-def _build_registry_base_url(host: str, use_tls: bool = True) -> str:
-    """
-    Build the base URL for a registry host string.
-
-    When the host already contains a scheme (http:// or https://) it is used
-    as-is so callers who stored the full URL are unaffected.
-    When *use_tls* is False the scheme is http://, otherwise https://.
-    """
-    if "://" in host:
-        return host.rstrip("/")
-    scheme = "https" if use_tls else "http"
-    return f"{scheme}://{host}"
-
-
-def _skopeo_tls_verify(use_tls: bool, tls_verify: bool) -> bool:
-    """
-    Derive the boolean value for skopeo --src/dest-tls-verify.
-
-    Mapping:
-      use_tls=False              -> plain HTTP -> --tls-verify=false
-      use_tls=True, verify=False -> HTTPS, skip cert check -> --tls-verify=false
-      use_tls=True, verify=True  -> normal HTTPS -> --tls-verify=true
-    """
-    if not use_tls:
+def delete_registry(registry_id: str) -> bool:
+    """Delete a registry entry. Returns True if deleted, False if not found."""
+    registries = _load_registries()
+    new_list = [r for r in registries if r["id"] != registry_id]
+    if len(new_list) == len(registries):
         return False
-    return tls_verify
+    _save_registries(new_list)
+    return True
 
 
-async def check_catalog_browsable(
-    host: str,
-    username: str,
-    password: str,
-    use_tls: bool = True,
-    tls_verify: bool = True,
-) -> bool:
-    """
-    Probe /v2/_catalog to determine whether this registry supports repository
-    listing (browsing).
-
-    Returns True when the endpoint responds with HTTP 200 or 401 (reachable
-    but authentication required — still a browse-capable registry).
-    Returns False when the registry is unreachable, returns an unexpected
-    status, or explicitly blocks /v2/_catalog (e.g. Docker Hub).
-
-    This result is stored in the `browsable` field of the registry entry so
-    the frontend can hide non-browsable registries from the Images source
-    selector without making additional requests.
-    """
-    # Docker Hub never exposes /v2/_catalog publicly, but when credentials
-    # are present we browse via the Hub REST API — mark as browsable.
-    normalized = _normalize_registry_host(host)
-    if normalized in {"docker.io", "index.docker.io", "registry-1.docker.io"}:
-        has_creds = bool((username or "").strip() and (password or "").strip())
-        logger.debug(
-            "check_catalog_browsable: Docker Hub — browsable=%s (creds present=%s)",
-            has_creds,
-            has_creds,
-        )
-        return has_creds
-
-    base_url = _build_registry_base_url(host, use_tls=use_tls)
-    verify = tls_verify if use_tls else False
-    auth = (username, password) if username and password else None
-
-    try:
-        async with httpx.AsyncClient(
-            timeout=10, verify=verify, follow_redirects=True
-        ) as client:
-            resp = await client.get(f"{base_url}/v2/_catalog?n=1", auth=auth)
-        # 200 = OK, 401 = auth required but endpoint exists -> browsable
-        browsable = resp.status_code in (200, 401)
-        logger.debug(
-            "check_catalog_browsable host=%s status=%s browsable=%s",
-            host,
-            resp.status_code,
-            browsable,
-        )
-        return browsable
-    except Exception as exc:
-        logger.warning("check_catalog_browsable host=%s error: %s", host, exc)
-        return False
+def delete_registries_for_owner(owner: str) -> int:
+    """Delete all personal registries owned by *owner* and return count."""
+    registries = _load_registries()
+    new_list = [r for r in registries if r.get("owner", "global") != owner]
+    deleted_count = len(registries) - len(new_list)
+    if deleted_count:
+        _save_registries(new_list)
+    return deleted_count
 
 
 def find_registry_credentials_for_host(host: str, owner: str) -> tuple[str, str] | None:
@@ -261,6 +248,85 @@ def find_registry_credentials_for_host(host: str, owner: str) -> tuple[str, str]
     return None
 
 
+# ── Connectivity & catalog ────────────────────────────────────────────────────
+
+
+async def test_registry_connection(
+    host: str,
+    username: str,
+    password: str,
+    use_tls: bool = True,
+    tls_verify: bool = True,
+) -> dict:
+    """Probe the registry to check reachability and validate credentials.
+
+    Delegates to external_v2.test_v2_connection for all registry types
+    (GHCR and Docker Hub also expose the standard /v2/ ping endpoint).
+
+    Returns {"reachable": bool, "auth_ok": bool, "message": str}.
+    """
+    return await test_v2_connection(
+        host=host,
+        username=username,
+        password=password,
+        use_tls=use_tls,
+        tls_verify=tls_verify,
+    )
+
+
+async def check_catalog_browsable(
+    host: str,
+    username: str,
+    password: str,
+    use_tls: bool = True,
+    tls_verify: bool = True,
+) -> bool:
+    """Determine whether this registry supports repository listing.
+
+    Routing:
+      - Docker Hub (docker.io) — never exposes /v2/_catalog; browsable only
+        when credentials are present (Hub REST API is used instead).
+      - GHCR (ghcr.io) — always considered browsable when a token is stored
+        (GitHub Packages API is used).
+      - All other registries — probe /v2/_catalog via external_v2.check_v2_catalog.
+
+    The result is stored in the ``browsable`` field of the registry entry so
+    the frontend can hide non-browsable registries from the Images source
+    selector without making additional requests.
+    """
+    # Docker Hub: browsable only when credentials exist (Hub REST API path)
+    if _is_dockerhub(host):
+        has_creds = bool((username or "").strip() and (password or "").strip())
+        logger.debug(
+            "check_catalog_browsable: Docker Hub — browsable=%s (creds present=%s)",
+            has_creds,
+            has_creds,
+        )
+        return has_creds
+
+    # GHCR: browsable when a token is stored (GitHub Packages API path)
+    if _is_ghcr(host):
+        browsable = bool(password)
+        logger.debug(
+            "check_catalog_browsable: GHCR — browsable=%s (token present=%s)",
+            browsable,
+            browsable,
+        )
+        return browsable
+
+    # Standard V2 registry: probe /v2/_catalog
+    return await check_v2_catalog(
+        host=host,
+        username=username,
+        password=password,
+        use_tls=use_tls,
+        tls_verify=tls_verify,
+    )
+
+
+# ── Registry create / update ──────────────────────────────────────────────────
+
+
 async def create_registry(
     name: str,
     host: str,
@@ -270,16 +336,14 @@ async def create_registry(
     use_tls: bool = True,
     tls_verify: bool = True,
 ) -> dict:
-    """
-    Create and persist a new external registry entry.
+    """Create and persist a new external registry entry.
 
     *use_tls*    — when False, all HTTP connections use plain http://.
-    *tls_verify* — only relevant when use_tls is True; set to False for
-                   self-signed certificates.
+    *tls_verify* — when False, TLS certificate errors are ignored (HTTPS only).
 
-    The browsable field is set by probing /v2/_catalog so the frontend can
-    immediately filter out non-browsable registries in the Images source
-    selector and the Staging pull registry selector.
+    The *browsable* field is probed immediately after creation so the UI
+    can show/hide the registry in the Images source selector without an
+    additional catalog-check request.
     """
     browsable = await check_catalog_browsable(
         host=host,
@@ -288,9 +352,7 @@ async def create_registry(
         use_tls=use_tls,
         tls_verify=tls_verify,
     )
-
-    registries = _load_registries()
-    entry = {
+    registry = {
         "id": str(uuid.uuid4()),
         "name": name,
         "host": host,
@@ -300,35 +362,31 @@ async def create_registry(
         "use_tls": use_tls,
         "tls_verify": tls_verify,
         "browsable": browsable,
-        "created_at": datetime.now(timezone.utc).isoformat(),
     }
-    registries.append(entry)
+    registries = _load_registries()
+    registries.append(registry)
     _save_registries(registries)
     logger.debug(
-        "External registry created id=%s host=%s owner=%s use_tls=%s "
-        "tls_verify=%s browsable=%s",
-        entry["id"],
+        "External registry created id=%s host=%s owner=%s browsable=%s",
+        registry["id"],
         host,
         owner,
-        use_tls,
-        tls_verify,
         browsable,
     )
-    return _redact(entry)
+    return _redact(registry)
 
 
 async def update_registry(
     registry_id: str,
-    name: str | None,
-    host: str | None,
-    username: str | None,
-    password: str | None,
+    name: str | None = None,
+    host: str | None = None,
+    username: str | None = None,
+    password: str | None = None,
     owner: str | None = None,
     use_tls: bool | None = None,
     tls_verify: bool | None = None,
 ) -> dict | None:
-    """
-    Update an existing registry entry.
+    """Update a registry entry (partial update — only supplied fields are changed).
 
     use_tls/tls_verify are only changed when explicitly supplied.
     browsable is re-evaluated whenever any connectivity-related field
@@ -380,153 +438,7 @@ async def update_registry(
     return None
 
 
-def delete_registry(registry_id: str) -> bool:
-    """Delete a registry entry. Returns True if deleted, False if not found."""
-    registries = _load_registries()
-    new_list = [r for r in registries if r["id"] != registry_id]
-    if len(new_list) == len(registries):
-        return False
-    _save_registries(new_list)
-    return True
-
-
-def delete_registries_for_owner(owner: str) -> int:
-    """Delete all personal registries owned by *owner* and return count."""
-    registries = _load_registries()
-    new_list = [r for r in registries if r.get("owner", "global") != owner]
-    deleted_count = len(registries) - len(new_list)
-    if deleted_count:
-        _save_registries(new_list)
-    return deleted_count
-
-
-# ── Connectivity test ─────────────────────────────────────────────────────────
-async def test_registry_connection(
-    host: str,
-    username: str,
-    password: str,
-    use_tls: bool = True,
-    tls_verify: bool = True,
-) -> dict:
-    """
-    Probe the registry to check reachability and validate credentials.
-
-    Strategy:
-      Step 1 — Ping /v2/ to verify the registry is reachable.
-               A response of 200 or 401 confirms a live OCI/Docker registry.
-               Any other status (or a network error) means unreachable.
-
-      Step 2 — If credentials were supplied, validate them by calling
-               /v2/_catalog?n=1 with Basic Auth.
-               - 200  → credentials accepted.
-               - 401  → credentials rejected (wrong user/password).
-               - 403  → credentials are valid but the account has no catalog
-                        access (still considered auth_ok=True for the purpose
-                        of this check, because the registry recognised them).
-
-               Rationale: /v2/ is a simple ping that many registries (Harbor,
-               Nexus, plain Docker registry) answer with 200 regardless of
-               whether credentials are correct or even present.  Only an
-               authenticated endpoint reliably distinguishes valid creds from
-               invalid ones.
-
-      If no credentials are supplied:
-               reachable=True, auth_ok=True when the registry is public (200),
-               reachable=True, auth_ok=False when authentication is required
-               (401) but no credentials were given.
-
-    Returns {"reachable": bool, "auth_ok": bool, "message": str}.
-    """
-    base_url = _build_registry_base_url(host, use_tls=use_tls)
-    verify = tls_verify if use_tls else False
-    has_credentials = bool(username and password)
-    auth = (username, password) if has_credentials else None
-
-    try:
-        async with httpx.AsyncClient(
-            timeout=10, verify=verify, follow_redirects=True
-        ) as client:
-            # ── Step 1: reachability ping ──────────────────────────────────
-            ping_resp = await client.get(f"{base_url}/v2/")
-
-            if ping_resp.status_code not in (200, 401):
-                return {
-                    "reachable": True,
-                    "auth_ok": False,
-                    "message": f"Unexpected status {ping_resp.status_code}",
-                }
-
-            # Registry is reachable.
-            if not has_credentials:
-                # No credentials supplied — report whether the registry is
-                # public (200) or requires authentication (401).
-                auth_ok = ping_resp.status_code == 200
-                return {
-                    "reachable": True,
-                    "auth_ok": auth_ok,
-                    "message": "Registry reachable (public)"
-                    if auth_ok
-                    else "Registry reachable — authentication required",
-                }
-
-            # ── Step 2: credential validation ──────────────────────────────
-            # Use /v2/_catalog?n=1 because /v2/ answers 200 for unauthenticated
-            # requests on most registries (Harbor, Nexus, plain Docker registry).
-            cred_resp = await client.get(f"{base_url}/v2/", auth=auth)
-            if cred_resp.status_code == 401:
-                cred_resp = await client.get(base_url, auth=auth)
-
-            if cred_resp.status_code == 200:
-                return {
-                    "reachable": True,
-                    "auth_ok": True,
-                    "message": "Registry reachable — credentials accepted",
-                }
-
-            if cred_resp.status_code == 403:
-                # Credentials were recognised but the account cannot list the
-                # catalog (e.g. non-admin on Harbor).  The credentials are
-                # still valid for push/pull operations.
-                return {
-                    "reachable": True,
-                    "auth_ok": True,
-                    "message": "Registry reachable — credentials accepted (catalog access restricted)",
-                }
-
-            if cred_resp.status_code == 401:
-                return {
-                    "reachable": True,
-                    "auth_ok": False,
-                    "message": "Authentication failed — invalid username or password",
-                }
-
-            # Any other status (404 _catalog not exposed, 500 …)
-            # Fall back to the ping result: reachable but cannot confirm creds.
-            logger.debug(
-                "test_registry_connection: /v2/_catalog returned %s for host=%s; "
-                "falling back to ping-only result",
-                cred_resp.status_code,
-                host,
-            )
-            return {
-                "reachable": True,
-                "auth_ok": False,
-                "message": (
-                    f"Registry reachable but credential check inconclusive "
-                    f"(catalog endpoint returned {cred_resp.status_code})"
-                ),
-            }
-
-    except httpx.ConnectError:
-        return {"reachable": False, "auth_ok": False, "message": "Connection refused"}
-    except httpx.TimeoutException:
-        return {"reachable": False, "auth_ok": False, "message": "Connection timed out"}
-    except Exception as exc:
-        logger.warning("Registry connection test failed host=%s: %s", host, exc)
-        return {"reachable": False, "auth_ok": False, "message": "Connection failed"}
-
-
-# ── Browse external registry (Évolution 1) ───────────────────────────────────
+# ── Browse — public orchestration API ─────────────────────────────────────────
 
 
 async def browse_external_images(
@@ -535,17 +447,15 @@ async def browse_external_images(
     page: int = 1,
     page_size: int = 20,
 ) -> dict:
-    """
-    List repositories available in an external registry using /v2/_catalog.
+    """List repositories available in an external registry.
 
-    For GHCR (ghcr.io) registries: uses the GitHub Packages REST API
-    (GET /users/{owner}/packages?package_type=container) with the stored
-    token (password field) and the stored username as the GitHub owner.
-
-    For all other registries: uses /v2/_catalog as before.
+    Routing:
+      - GHCR (ghcr.io)   -> external_github.browse_github_packages
+      - Docker Hub        -> external_dockerhub.browse_dockerhub_repositories
+      - All other V2      -> external_v2.browse_v2_repositories
 
     Returns a paginated dict compatible with the local PaginatedImages shape:
-      { items, total, page, page_size, total_pages, error }
+      { items, total, page, page_size, total_pages, error? }
     """
     registry = get_registry_by_id(registry_id)
     if not registry:
@@ -557,24 +467,19 @@ async def browse_external_images(
     use_tls = registry.get("use_tls", True)
     tls_verify = registry.get("tls_verify", True)
 
-    # ── GHCR: use GitHub Packages API ─────────────────────────────────────
+    # ── GHCR: GitHub Packages API ──────────────────────────────────────────
     if _is_ghcr(host) and password:
-        github_owner = username  # username stored == GitHub username / org
         return await browse_github_packages(
             username=username,
             token=password,
-            owner=github_owner,
+            owner=username,
             search=search,
             page=page,
             page_size=page_size,
         )
 
-    # ── Docker Hub: use Hub REST API ───────────────────────────────────────
+    # ── Docker Hub: Hub REST API ───────────────────────────────────────────
     if _is_dockerhub(host) and username and password:
-        # The stored username is used both as auth account and as the
-        # namespace to browse.  If the registry was saved with a different
-        # org namespace it can be overridden in the future via a dedicated
-        # field; for now username == namespace is the correct assumption.
         return await browse_dockerhub_repositories(
             username=username,
             password=password,
@@ -584,7 +489,7 @@ async def browse_external_images(
             page_size=page_size,
         )
 
-    # ── Docker Hub without credentials: not browsable ─────────────────────
+    # Docker Hub without credentials: browsing not supported
     if _is_dockerhub(host):
         return {
             "items": [],
@@ -599,79 +504,27 @@ async def browse_external_images(
             ),
         }
 
-    # ── Standard: /v2/_catalog ─────────────────────────────────────────────
-    base_url = _build_registry_base_url(host, use_tls=use_tls)
-    verify = tls_verify if use_tls else False
-    auth = (username, password) if username and password else None
-
-    try:
-        async with httpx.AsyncClient(
-            timeout=30, verify=verify, follow_redirects=True
-        ) as client:
-            resp = await client.get(f"{base_url}/v2/_catalog?n=1000", auth=auth)
-            resp.raise_for_status()
-            repositories: list[str] = resp.json().get("repositories", [])
-    except httpx.HTTPStatusError as exc:
-        logger.warning("browse_external_images catalog error: %s", exc)
-        return {
-            "items": [],
-            "total": 0,
-            "page": page,
-            "page_size": page_size,
-            "total_pages": 1,
-            "error": f"Registry returned HTTP {exc.response.status_code}",
-        }
-    except Exception as exc:
-        logger.warning("browse_external_images connection error: %s", exc)
-        return {
-            "items": [],
-            "total": 0,
-            "page": page,
-            "page_size": page_size,
-            "total_pages": 1,
-            "error": str(exc),
-        }
-
-    if search:
-        repositories = [r for r in repositories if search.lower() in r.lower()]
-
-    total = len(repositories)
-    total_pages = max(1, (total + page_size - 1) // page_size)
-    start = (page - 1) * page_size
-    page_repos = repositories[start : start + page_size]
-
-    async def _fetch_tags(repo: str) -> list[str]:
-        try:
-            async with httpx.AsyncClient(
-                timeout=15, verify=verify, follow_redirects=True
-            ) as client:
-                r = await client.get(f"{base_url}/v2/{repo}/tags/list", auth=auth)
-                if r.status_code == 200:
-                    return r.json().get("tags") or []
-        except Exception:
-            pass
-        return []
-
-    tags_results = await asyncio.gather(*[_fetch_tags(repo) for repo in page_repos])
-
-    items = [
-        {"name": repo, "tags": tags, "tag_count": len(tags), "total_size": 0}
-        for repo, tags in zip(page_repos, tags_results)
-    ]
-
-    return {
-        "items": items,
-        "total": total,
-        "page": page,
-        "page_size": page_size,
-        "total_pages": total_pages,
-        "error": None,
-    }
+    # ── Standard V2 registry: OCI Distribution /v2/_catalog ───────────────
+    return await browse_v2_repositories(
+        host=host,
+        username=username,
+        password=password,
+        use_tls=use_tls,
+        tls_verify=tls_verify,
+        search=search,
+        page=page,
+        page_size=page_size,
+    )
 
 
 async def browse_external_tags(registry_id: str, repository: str) -> dict:
-    """
-    List tags for a specific repository in an external registry.
+    """List tags for a repository in an external registry.
+
+    Routing:
+      - Docker Hub -> external_dockerhub.browse_dockerhub_tags
+      - GHCR       -> external_v2.browse_v2_tags (standard /v2/ tags endpoint)
+      - All other  -> external_v2.browse_v2_tags
+
     Returns {"repository": str, "tags": list[str]}.
     """
     registry = get_registry_by_id(registry_id)
@@ -684,7 +537,7 @@ async def browse_external_tags(registry_id: str, repository: str) -> dict:
     use_tls = registry.get("use_tls", True)
     tls_verify = registry.get("tls_verify", True)
 
-    # ── Docker Hub: use Hub REST API ───────────────────────────────────────
+    # ── Docker Hub: Hub REST API ───────────────────────────────────────────
     if _is_dockerhub(host):
         tags = await browse_dockerhub_tags(
             username=username,
@@ -693,37 +546,24 @@ async def browse_external_tags(registry_id: str, repository: str) -> dict:
         )
         return {"repository": repository, "tags": tags}
 
-    # ── GHCR: already handled by browse_external_tags caller; fall through
-    # to standard /v2/.../tags/list for all other registries.
-
-    base_url = _build_registry_base_url(host, use_tls=use_tls)
-    verify = tls_verify if use_tls else False
-    auth = (username, password) if username and password else None
-
-    try:
-        async with httpx.AsyncClient(
-            timeout=15, verify=verify, follow_redirects=True
-        ) as client:
-            resp = await client.get(f"{base_url}/v2/{repository}/tags/list", auth=auth)
-            resp.raise_for_status()
-            tags = resp.json().get("tags") or []
-    except Exception as exc:
-        logger.warning("browse_external_tags error repo=%s: %s", repository, exc)
-        tags = []
-
-    return {"repository": repository, "tags": tags}
+    # ── GHCR and all standard V2 registries ────────────────────────────────
+    return await browse_v2_tags(
+        host=host,
+        username=username,
+        password=password,
+        repository=repository,
+        use_tls=use_tls,
+        tls_verify=tls_verify,
+    )
 
 
 async def delete_external_image(registry_id: str, repository: str) -> dict:
-    """
-    Delete all tags for a repository in an external registry.
+    """Delete all tags for a repository in an external registry.
 
-    For GHCR (ghcr.io): uses the GitHub Packages DELETE API via
-    delete_github_package(), which requires the token to have
-    `delete:packages` scope in addition to `read:packages`.
-
-    For each tag we fetch its manifest digest then call DELETE
-    /v2/<repository>/manifests/<digest>.
+    Routing:
+      - GHCR       -> external_github.delete_github_package
+      - Docker Hub -> external_dockerhub.delete_dockerhub_repository
+      - All other  -> external_v2.delete_v2_image (manifest-based tag deletion)
     """
     registry = get_registry_by_id(registry_id)
     if not registry:
@@ -732,10 +572,11 @@ async def delete_external_image(registry_id: str, repository: str) -> dict:
     host = registry["host"]
     username = registry.get("username", "")
     password = registry.get("password", "")
+    use_tls = registry.get("use_tls", True)
+    tls_verify = registry.get("tls_verify", True)
 
-    # ── GHCR: use GitHub Packages DELETE API ──────────────────────────────
+    # ── GHCR: GitHub Packages DELETE API ──────────────────────────────────
     if _is_ghcr(host) and password:
-        # repository is 'owner/package-name', e.g. 'cyr-ius/letslexicon'
         owner = username
         pkg_name = repository.split("/", 1)[-1] if "/" in repository else repository
         error = await delete_github_package(
@@ -755,7 +596,7 @@ async def delete_external_image(registry_id: str, repository: str) -> dict:
             "message": f"Package '{repository}' deleted from GitHub Container Registry",
         }
 
-    # ── Docker Hub: use Hub REST API to delete the repository ─────────────
+    # ── Docker Hub: Hub REST API ───────────────────────────────────────────
     if _is_dockerhub(host):
         error = await delete_dockerhub_repository(
             username=username,
@@ -774,85 +615,15 @@ async def delete_external_image(registry_id: str, repository: str) -> dict:
             "message": f"Repository '{repository}' deleted from Docker Hub.",
         }
 
-    # ── Standard registry: manifest-based tag deletion ────────────────────
-
-    use_tls = registry.get("use_tls", True)
-    tls_verify = registry.get("tls_verify", True)
-
-    base_url = _build_registry_base_url(host, use_tls=use_tls)
-    verify = tls_verify if use_tls else False
-    auth = (username, password) if username and password else None
-
-    deleted_tags: list[str] = []
-    failed_tags: list[str] = []
-
-    try:
-        async with httpx.AsyncClient(
-            timeout=20, verify=verify, follow_redirects=True
-        ) as client:
-            tags_resp = await client.get(
-                f"{base_url}/v2/{repository}/tags/list", auth=auth
-            )
-            tags_resp.raise_for_status()
-            tags = tags_resp.json().get("tags") or []
-
-            if not tags:
-                return {
-                    "repository": repository,
-                    "deleted_tags": [],
-                    "failed_tags": [],
-                    "message": "No tags found for this repository",
-                }
-
-            manifest_accept = ", ".join(
-                [
-                    "application/vnd.oci.image.manifest.v1+json",
-                    "application/vnd.docker.distribution.manifest.v2+json",
-                    "application/vnd.docker.distribution.manifest.list.v2+json",
-                ]
-            )
-
-            for tag in tags:
-                try:
-                    manifest_resp = await client.get(
-                        f"{base_url}/v2/{repository}/manifests/{tag}",
-                        auth=auth,
-                        headers={"Accept": manifest_accept},
-                    )
-                    manifest_resp.raise_for_status()
-
-                    digest = manifest_resp.headers.get("Docker-Content-Digest")
-                    if not digest:
-                        failed_tags.append(tag)
-                        continue
-
-                    delete_resp = await client.delete(
-                        f"{base_url}/v2/{repository}/manifests/{digest}",
-                        auth=auth,  # type: ignore
-                    )
-                    if delete_resp.status_code in {202, 200}:
-                        deleted_tags.append(tag)
-                    else:
-                        failed_tags.append(tag)
-                except Exception:
-                    failed_tags.append(tag)
-
-    except Exception as exc:
-        logger.warning("delete_external_image error repo=%s: %s", repository, exc)
-        return {
-            "deleted_tags": [],
-            "failed_tags": [repository],
-            "message": "Delete external image error, please view log",
-        }
-
-    return {
-        "deleted_tags": deleted_tags,
-        "failed_tags": failed_tags,
-        "message": (
-            f"Deleted {len(deleted_tags)} tag(s)"
-            + (f", {len(failed_tags)} failed" if failed_tags else "")
-        ),
-    }
+    # ── Standard V2: manifest-based tag deletion ───────────────────────────
+    return await delete_v2_image(
+        host=host,
+        username=username,
+        password=password,
+        repository=repository,
+        use_tls=use_tls,
+        tls_verify=tls_verify,
+    )
 
 
 # ── Validation helpers ────────────────────────────────────────────────────────
@@ -931,8 +702,8 @@ async def skopeo_sync_image(
     src_tls_verify: bool = False,
     dest_tls_verify: bool = True,
 ) -> tuple[bool, str]:
-    """
-    Copy an image between two docker:// registries using skopeo copy.
+    """Copy an image between two docker:// registries using skopeo copy.
+
     Used by both export (local->external) and import (external->local) jobs.
     """
     cmd = [
@@ -976,8 +747,7 @@ def _rewrite_image_name_for_sync(
     dest_folder: str | None,
     dest_username: str,
 ) -> str:
-    """
-    Rewrite the image repository name for the destination registry.
+    """Rewrite the image repository name for the destination registry.
 
     Rules (applied in order):
       1. dest_folder supplied -> replace namespace with folder prefix
@@ -1009,120 +779,115 @@ async def run_sync_job(
     local_registry_url: str,
     settings: Settings,
 ) -> str:
-    """
-    Start an asynchronous export job (local -> external) and return the job ID.
+    """Start an asynchronous export job (local -> external) and return the job ID.
+
     The job dict carries direction="export" for display in the history list.
     """
-    job_id = str(uuid.uuid4())
     registry = get_registry_by_id(dest_registry_id)
     if not registry:
         raise ValueError(f"Registry {dest_registry_id} not found")
 
-    dest_host = registry["host"]
-    dest_username = registry.get("username", "")
-    dest_password = registry.get("password", "")
-    dest_use_tls = registry.get("use_tls", True)
-    dest_tls_verify_raw = registry.get("tls_verify", True)
-
-    dest_tls_verify = _skopeo_tls_verify(dest_use_tls, dest_tls_verify_raw)
-    src_tls_verify = local_registry_url.startswith("https://")
-
+    job_id = str(uuid.uuid4())
     _sync_jobs[job_id] = {
         "id": job_id,
         "direction": "export",
-        "source": source_image,
-        "source_registry_id": None,
+        "source_image": source_image,
         "dest_registry_id": dest_registry_id,
+        "dest_registry_name": registry.get("name", ""),
         "dest_folder": dest_folder,
         "status": "running",
         "started_at": datetime.now(timezone.utc).isoformat(),
-        "finished_at": None,
-        "message": "Sync started",
-        "error": None,
-        "progress": 0,
         "images_total": 0,
         "images_done": 0,
+        "errors": [],
     }
 
-    async def _run() -> None:
-        try:
-            catalog_url = f"{local_registry_url}/v2/_catalog?n=1000"
+    asyncio.create_task(
+        _run_sync_job_task(
+            job_id=job_id,
+            source_image=source_image,
+            registry=registry,
+            dest_folder=dest_folder,
+            local_registry_url=local_registry_url,
+            settings=settings,
+        )
+    )
+    return job_id
+
+
+async def _run_sync_job_task(
+    job_id: str,
+    source_image: str,
+    registry: dict,
+    dest_folder: str | None,
+    local_registry_url: str,
+    settings: Settings,
+) -> None:
+    """Background task: export images from local registry to an external registry."""
+    dest_host = registry["host"]
+    dest_username = registry.get("username", "")
+    dest_password = registry.get("password", "")
+    dest_tls_verify = _skopeo_tls_verify(
+        registry.get("use_tls", True), registry.get("tls_verify", True)
+    )
+    src_tls_verify = not local_registry_url.startswith("http://")
+
+    try:
+        # Resolve image list from local registry
+        if source_image == "(all)":
             async with httpx.AsyncClient(timeout=30) as client:
-                resp = await client.get(catalog_url)
+                resp = await client.get(f"{local_registry_url}/v2/_catalog?n=1000")
                 resp.raise_for_status()
-                all_images = resp.json().get("repositories", [])
+                images: list[str] = resp.json().get("repositories", [])
+        else:
+            images = [source_image.split(":")[0]]
 
-            images = (
-                all_images
-                if source_image == "(all)"
-                else [i for i in all_images if source_image.split(":")[0] in i]
-            )
+        _sync_jobs[job_id]["images_total"] = len(images)
 
-            _sync_jobs[job_id]["images_total"] = len(images)
-
-            errors: list[str] = []
-            for img in images:
-                tags_url = f"{local_registry_url}/v2/{img}/tags/list"
-                async with httpx.AsyncClient(timeout=30) as client:
-                    tr = await client.get(tags_url)
-                    tags: list[str] = (
-                        tr.json().get("tags") or [] if tr.status_code == 200 else []
-                    )
-
-                for tag in tags:
-                    src_ref = f"docker://{REGISTRY_HOST}/{img}:{tag}"
-                    dest_image = _rewrite_image_name_for_sync(
-                        img=img,
-                        dest_folder=dest_folder,
-                        dest_username=dest_username,
-                    )
-                    dest_ref = build_target_path(None, dest_image, tag, dest_host)
-
-                    ok, msg = await skopeo_sync_image(
-                        src_ref=src_ref,
-                        dest_ref=dest_ref,
-                        src_username="",
-                        src_password="",
-                        dest_username=dest_username,
-                        dest_password=dest_password,
-                        settings=settings,
-                        src_tls_verify=src_tls_verify,
-                        dest_tls_verify=dest_tls_verify,
-                    )
-                    if not ok:
-                        errors.append(f"{img}:{tag} — {msg}")
-                        logger.warning(
-                            "Export job %s: failed %s:%s — %s",
-                            job_id,
-                            img,
-                            tag,
-                            msg,
-                        )
-
-                _sync_jobs[job_id]["images_done"] += 1
-                _sync_jobs[job_id]["progress"] = int(
-                    (_sync_jobs[job_id]["images_done"] / max(len(images), 1)) * 100
+        errors: list[str] = []
+        for img in images:
+            # Fetch tags from local registry
+            async with httpx.AsyncClient(timeout=30) as client:
+                tr = await client.get(f"{local_registry_url}/v2/{img}/tags/list")
+                tags: list[str] = (
+                    tr.json().get("tags") or [] if tr.status_code == 200 else []
                 )
 
-            if errors:
-                _sync_jobs[job_id]["status"] = "partial"
-                _sync_jobs[job_id]["error"] = "\n".join(errors)
-                _sync_jobs[job_id]["message"] = f"Completed with {len(errors)} error(s)"
-            else:
-                _sync_jobs[job_id]["status"] = "done"
-                _sync_jobs[job_id]["message"] = "Sync completed successfully"
+            for tag in tags:
+                src_ref = f"docker://{REGISTRY_HOST}/{img}:{tag}"
+                dest_image = _rewrite_image_name_for_sync(
+                    img=img,
+                    dest_folder=dest_folder,
+                    dest_username=dest_username,
+                )
+                dest_ref = build_target_path(None, dest_image, tag, dest_host)
 
-        except Exception as exc:
-            logger.exception("Export job %s failed: %s", job_id, exc)
-            _sync_jobs[job_id]["status"] = "error"
-            _sync_jobs[job_id]["error"] = str(exc)
-            _sync_jobs[job_id]["message"] = f"Sync failed: {exc}"
-        finally:
-            _sync_jobs[job_id]["finished_at"] = datetime.now(timezone.utc).isoformat()
-            _sync_jobs[job_id]["progress"] = 100
+                ok, msg = await skopeo_sync_image(
+                    src_ref=src_ref,
+                    dest_ref=dest_ref,
+                    src_username="",
+                    src_password="",
+                    dest_username=dest_username,
+                    dest_password=dest_password,
+                    settings=settings,
+                    src_tls_verify=src_tls_verify,
+                    dest_tls_verify=dest_tls_verify,
+                )
+                if not ok:
+                    errors.append(f"{img}:{tag} — {msg}")
+                    logger.warning("sync export error %s:%s — %s", img, tag, msg)
 
-    asyncio.create_task(_run())
-    return job_id
+            _sync_jobs[job_id]["images_done"] = _sync_jobs[job_id]["images_done"] + 1
+
+        _sync_jobs[job_id]["status"] = "done" if not errors else "done_with_errors"
+        _sync_jobs[job_id]["errors"] = errors
+        _sync_jobs[job_id]["finished_at"] = datetime.now(timezone.utc).isoformat()
+
+    except Exception as exc:
+        logger.error("sync export job %s failed: %s", job_id, exc)
+        _sync_jobs[job_id]["status"] = "failed"
+        _sync_jobs[job_id]["errors"] = [str(exc)]
+        _sync_jobs[job_id]["finished_at"] = datetime.now(timezone.utc).isoformat()
 
 
 async def run_import_job(
@@ -1132,187 +897,157 @@ async def run_import_job(
     local_registry_url: str,
     settings: Settings,
 ) -> str:
-    """
-    Start an asynchronous import job (external -> local) and return the job ID.
-    The job dict carries direction="import" for display in the history list.
+    """Start an asynchronous import job (external -> local) and return the job ID.
 
-    For ghcr.io registries the tag list is now retrieved via the
-    GitHub Packages API (get_github_tags_for_import) instead of /v2/…/tags/list,
-    which is unreliable on GHCR even with a valid PAT.
+    The job dict carries direction="import" for display in the history list.
     """
-    job_id = str(uuid.uuid4())
     registry = get_registry_by_id(source_registry_id)
     if not registry:
         raise ValueError(f"Registry {source_registry_id} not found")
 
+    job_id = str(uuid.uuid4())
+    _sync_jobs[job_id] = {
+        "id": job_id,
+        "direction": "import",
+        "source_image": source_image,
+        "source_registry_id": source_registry_id,
+        "source_registry_name": registry.get("name", ""),
+        "dest_folder": dest_folder,
+        "status": "running",
+        "started_at": datetime.now(timezone.utc).isoformat(),
+        "images_total": 0,
+        "images_done": 0,
+        "errors": [],
+    }
+
+    asyncio.create_task(
+        _run_import_job_task(
+            job_id=job_id,
+            source_image=source_image,
+            registry=registry,
+            dest_folder=dest_folder,
+            local_registry_url=local_registry_url,
+            settings=settings,
+        )
+    )
+    return job_id
+
+
+async def _run_import_job_task(
+    job_id: str,
+    source_image: str,
+    registry: dict,
+    dest_folder: str | None,
+    local_registry_url: str,
+    settings: Settings,
+) -> None:
+    """Background task: import images from an external registry into the local registry."""
     src_host = registry["host"]
     src_username = registry.get("username", "")
     src_password = registry.get("password", "")
     src_use_tls = registry.get("use_tls", True)
-    src_tls_verify_raw = registry.get("tls_verify", True)
+    src_tls_verify_field = registry.get("tls_verify", True)
+    src_tls_verify = _skopeo_tls_verify(src_use_tls, src_tls_verify_field)
+    dest_tls_verify = not local_registry_url.startswith("http://")
 
-    src_tls_verify = _skopeo_tls_verify(src_use_tls, src_tls_verify_raw)
-    dest_tls_verify = local_registry_url.startswith("https://")
+    try:
+        # ── Resolve image list from source registry ────────────────────────
+        if source_image == "(all)":
+            if _is_ghcr(src_host) and src_password:
+                result = await browse_github_packages(
+                    username=src_username,
+                    token=src_password,
+                    owner=src_username,
+                    search=None,
+                    page=1,
+                    page_size=200,
+                )
+                images: list[str] = [item["name"] for item in result.get("items", [])]
+            elif _is_dockerhub(src_host) and src_username and src_password:
+                result = await browse_dockerhub_repositories(
+                    username=src_username,
+                    password=src_password,
+                    namespace=src_username,
+                    search=None,
+                    page=1,
+                    page_size=200,
+                )
+                images = [item["name"] for item in result.get("items", [])]
+            else:
+                # Standard V2: /v2/_catalog via external_v2
+                result = await browse_v2_repositories(
+                    host=src_host,
+                    username=src_username,
+                    password=src_password,
+                    use_tls=src_use_tls,
+                    tls_verify=src_tls_verify_field,
+                    page=1,
+                    page_size=1000,
+                )
+                images = [item["name"] for item in result.get("items", [])]
+        else:
+            images = [source_image.split(":")[0]]
 
-    _sync_jobs[job_id] = {
-        "id": job_id,
-        "direction": "import",
-        "source": source_image,
-        "source_registry_id": source_registry_id,
-        "dest_registry_id": None,
-        "dest_folder": dest_folder,
-        "status": "running",
-        "started_at": datetime.now(timezone.utc).isoformat(),
-        "finished_at": None,
-        "message": "Import started",
-        "error": None,
-        "progress": 0,
-        "images_total": 0,
-        "images_done": 0,
-    }
+        _sync_jobs[job_id]["images_total"] = len(images)
 
-    async def _run() -> None:
-        try:
-            base_url = _build_registry_base_url(src_host, use_tls=src_use_tls)
-            auth = (
-                (src_username, src_password) if src_username and src_password else None
+        errors: list[str] = []
+        for img in images:
+            # ── Resolve tags per image ─────────────────────────────────────
+            if source_image != "(all)" and ":" in source_image:
+                tags = [source_image.split(":", 1)[1]]
+            elif _is_ghcr(src_host) and src_password:
+                tags = await get_github_tags_for_import(
+                    token=src_password,
+                    owner=src_username,
+                    package=img.split("/", 1)[-1] if "/" in img else img,
+                )
+            elif _is_dockerhub(src_host) and src_username and src_password:
+                tags = await get_dockerhub_tags_for_import(
+                    username=src_username,
+                    password=src_password,
+                    repository=img,
+                )
+            else:
+                tags = await get_v2_tags_for_import(
+                    host=src_host,
+                    username=src_username,
+                    password=src_password,
+                    repository=img,
+                    use_tls=src_use_tls,
+                    tls_verify=src_tls_verify_field,
+                )
+
+            # ── Rewrite destination image name ─────────────────────────────
+            dest_img = _rewrite_image_name_for_sync(
+                img=img, dest_folder=dest_folder, dest_username=""
             )
-            httpx_verify = src_tls_verify_raw if src_use_tls else False
+            for tag in tags:
+                src_ref = build_target_path(None, img, tag, src_host)
+                dest_ref = f"docker://{REGISTRY_HOST}/{dest_img}:{tag}"
 
-            # ── Build image list ───────────────────────────────────────────
-            if source_image == "(all)":
-                if _is_ghcr(src_host) and src_password:
-                    from .external_github import browse_github_packages
-
-                    result = await browse_github_packages(
-                        username=src_username,
-                        token=src_password,
-                        owner=src_username,
-                        search=None,
-                        page=1,
-                        page_size=200,
-                    )
-                    images: list[str] = [
-                        item["name"] for item in result.get("items", [])
-                    ]
-
-                elif _is_dockerhub(src_host) and src_username and src_password:
-                    # Docker Hub: list repositories via Hub REST API
-                    result = await browse_dockerhub_repositories(
-                        username=src_username,
-                        password=src_password,
-                        namespace=src_username,
-                        search=None,
-                        page=1,
-                        page_size=200,
-                    )
-                    images: list[str] = [
-                        item["name"] for item in result.get("items", [])
-                    ]
-                else:
-                    async with httpx.AsyncClient(
-                        timeout=30, verify=httpx_verify, follow_redirects=True
-                    ) as client:
-                        resp = await client.get(
-                            f"{base_url}/v2/_catalog?n=1000", auth=auth
-                        )
-                        resp.raise_for_status()
-                        images: list[str] = resp.json().get("repositories", [])
-            else:
-                # Single image: strip tag if present
-                images = [source_image.split(":")[0]]
-
-            _sync_jobs[job_id]["images_total"] = len(images)
-
-            errors: list[str] = []
-            for img in images:
-                # ── Resolve tags for this image ────────────────────────────
-                if source_image != "(all)" and ":" in source_image:
-                    # Explicit tag provided — use it directly
-                    tags = [source_image.split(":", 1)[1]]
-                elif _is_ghcr(src_host) and src_password:
-                    # GHCR: fetch tags via GitHub Packages API
-                    from .external_github import get_github_tags_for_import
-
-                    pkg_name = img.split("/", 1)[-1] if "/" in img else img
-                    tags = await get_github_tags_for_import(
-                        token=src_password,
-                        owner=src_username,
-                        package=pkg_name,
-                    )
-                elif _is_dockerhub(src_host) and src_username and src_password:
-                    # Docker Hub: fetch tags via Hub REST API
-                    tags = await get_dockerhub_tags_for_import(
-                        username=src_username,
-                        password=src_password,
-                        repository=img,
-                    )
-                else:
-                    # Standard registry: use /v2/.../tags/list
-                    async with httpx.AsyncClient(
-                        timeout=15, verify=httpx_verify, follow_redirects=True
-                    ) as client:
-                        tr = await client.get(
-                            f"{base_url}/v2/{img}/tags/list", auth=auth
-                        )
-                        tags = (
-                            tr.json().get("tags") or [] if tr.status_code == 200 else []
-                        )
-
-                # ── Rewrite destination image name ─────────────────────────
-                dest_img = _rewrite_image_name_for_sync(
-                    img=img, dest_folder=dest_folder, dest_username=""
+                ok, msg = await skopeo_sync_image(
+                    src_ref=src_ref,
+                    dest_ref=dest_ref,
+                    src_username=src_username,
+                    src_password=src_password,
+                    dest_username="",
+                    dest_password="",
+                    settings=settings,
+                    src_tls_verify=src_tls_verify,
+                    dest_tls_verify=dest_tls_verify,
                 )
-                for tag in tags:
-                    # src_ref: for GHCR, img already contains 'owner/pkg'
-                    # build_target_path produces docker://ghcr.io/owner/pkg:tag
-                    src_ref = build_target_path(None, img, tag, src_host)
-                    dest_ref = f"docker://{REGISTRY_HOST}/{dest_img}:{tag}"
+                if not ok:
+                    errors.append(f"{img}:{tag} — {msg}")
+                    logger.warning("sync import error %s:%s — %s", img, tag, msg)
 
-                    ok, msg = await skopeo_sync_image(
-                        src_ref=src_ref,
-                        dest_ref=dest_ref,
-                        src_username=src_username,
-                        src_password=src_password,
-                        dest_username="",
-                        dest_password="",
-                        settings=settings,
-                        src_tls_verify=src_tls_verify,
-                        dest_tls_verify=dest_tls_verify,
-                    )
-                    if not ok:
-                        errors.append(f"{img}:{tag} — {msg}")
-                        logger.warning(
-                            "Import job %s: failed %s:%s — %s",
-                            job_id,
-                            img,
-                            tag,
-                            msg,
-                        )
+            _sync_jobs[job_id]["images_done"] = _sync_jobs[job_id]["images_done"] + 1
 
-                _sync_jobs[job_id]["images_done"] += 1
-                _sync_jobs[job_id]["progress"] = int(
-                    (_sync_jobs[job_id]["images_done"] / max(len(images), 1)) * 100
-                )
+        _sync_jobs[job_id]["status"] = "done" if not errors else "done_with_errors"
+        _sync_jobs[job_id]["errors"] = errors
+        _sync_jobs[job_id]["finished_at"] = datetime.now(timezone.utc).isoformat()
 
-            if errors:
-                _sync_jobs[job_id]["status"] = "partial"
-                _sync_jobs[job_id]["error"] = "\n".join(errors)
-                _sync_jobs[job_id]["message"] = (
-                    f"Import completed with {len(errors)} error(s)"
-                )
-            else:
-                _sync_jobs[job_id]["status"] = "done"
-                _sync_jobs[job_id]["message"] = "Import completed successfully"
-
-        except Exception as exc:
-            logger.exception("Import job %s failed: %s", job_id, exc)
-            _sync_jobs[job_id]["status"] = "error"
-            _sync_jobs[job_id]["error"] = str(exc)
-            _sync_jobs[job_id]["message"] = f"Import failed: {exc}"
-        finally:
-            _sync_jobs[job_id]["finished_at"] = datetime.now(timezone.utc).isoformat()
-            _sync_jobs[job_id]["progress"] = 100
-
-    asyncio.create_task(_run())
-    return job_id
+    except Exception as exc:
+        logger.error("sync import job %s failed: %s", job_id, exc)
+        _sync_jobs[job_id]["status"] = "failed"
+        _sync_jobs[job_id]["errors"] = [str(exc)]
+        _sync_jobs[job_id]["finished_at"] = datetime.now(timezone.utc).isoformat()

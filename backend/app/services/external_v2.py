@@ -1,0 +1,535 @@
+"""Portalcrane - OCI / Docker Distribution V2 Registry Service.
+
+Provides browse, tag listing, connectivity test, catalog check, and
+manifest-based delete operations for any registry that implements the
+OCI Distribution Specification v1 / Docker Registry HTTP API V2.
+
+This module is the V2-standard counterpart of external_github.py and
+external_dockerhub.py: it is called by external_registry_service.py
+whenever the target registry host is neither ghcr.io nor docker.io.
+
+Supported registries (non-exhaustive):
+  - Harbor (VMware)
+  - Quay.io (Red Hat)
+  - GitLab Container Registry
+  - Nexus Repository (Sonatype)
+  - Amazon ECR (public endpoint)
+  - Azure Container Registry (ACR)
+  - Google Artifact Registry (GAR)
+  - Any self-hosted Docker Distribution (registry:2) instance
+
+All public functions receive already-resolved connection parameters
+(host, username, password, use_tls, tls_verify) so this module has
+no dependency on the JSON registry store.
+"""
+
+import logging
+from typing import Any
+
+import httpx
+
+logger = logging.getLogger(__name__)
+
+# ── Accept header covering all OCI and Docker manifest media types ────────────
+
+_MANIFEST_ACCEPT = ", ".join(
+    [
+        "application/vnd.oci.image.manifest.v1+json",
+        "application/vnd.oci.image.index.v1+json",
+        "application/vnd.docker.distribution.manifest.v2+json",
+        "application/vnd.docker.distribution.manifest.list.v2+json",
+    ]
+)
+
+
+# ── Internal helpers ──────────────────────────────────────────────────────────
+
+
+def _build_base_url(host: str, use_tls: bool = True) -> str:
+    """Build the base HTTPS/HTTP URL for a registry host.
+
+    When the host already contains a scheme (http:// or https://) it is
+    preserved as-is so callers that stored the full URL are unaffected.
+    When *use_tls* is False the scheme is http://, otherwise https://.
+
+    Args:
+        host:    Registry hostname, optionally prefixed with a scheme.
+        use_tls: When True (default) use https://, otherwise http://.
+
+    Returns:
+        Base URL string without trailing slash.
+    """
+    if "://" in host:
+        return host.rstrip("/")
+    scheme = "https" if use_tls else "http"
+    return f"{scheme}://{host}"
+
+
+def _httpx_verify(use_tls: bool, tls_verify: bool) -> bool:
+    """Derive the httpx *verify* parameter from TLS settings.
+
+    Mapping:
+      use_tls=False               -> plain HTTP, verify irrelevant -> False
+      use_tls=True, verify=False  -> HTTPS without cert check      -> False
+      use_tls=True, verify=True   -> standard HTTPS verification   -> True
+
+    Args:
+        use_tls:    Whether HTTPS is used at all.
+        tls_verify: Whether TLS certificate verification is enforced.
+
+    Returns:
+        Boolean suitable for httpx AsyncClient(verify=...).
+    """
+    if not use_tls:
+        return False
+    return tls_verify
+
+
+# ── Connectivity ──────────────────────────────────────────────────────────────
+
+
+async def test_v2_connection(
+    host: str,
+    username: str,
+    password: str,
+    use_tls: bool = True,
+    tls_verify: bool = True,
+) -> dict[str, Any]:
+    """Probe a V2-compatible registry to check reachability and credentials.
+
+    Strategy:
+      Step 1 — GET /v2/ to verify the registry speaks the V2 protocol.
+               HTTP 200 or 401 confirms a live OCI/Docker registry.
+      Step 2 — When credentials are provided, re-request /v2/ with Basic
+               Auth to validate them.  HTTP 200 = accepted; 401 = rejected;
+               403 = accepted but catalog access is restricted.
+
+    Args:
+        host:       Registry hostname (bare or with scheme).
+        username:   Registry username (may be empty for anonymous access).
+        password:   Registry password or access token.
+        use_tls:    Use HTTPS (default True).
+        tls_verify: Enforce TLS certificate validation (default True).
+
+    Returns:
+        Dict with keys: reachable (bool), auth_ok (bool), message (str).
+    """
+    base_url = _build_base_url(host, use_tls)
+    verify = _httpx_verify(use_tls, tls_verify)
+    has_credentials = bool(username and password)
+    auth = (username, password) if has_credentials else None
+
+    try:
+        async with httpx.AsyncClient(
+            timeout=10, verify=verify, follow_redirects=True
+        ) as client:
+            # ── Step 1: reachability ping ──────────────────────────────────
+            ping_resp = await client.get(f"{base_url}/v2/")
+
+            if ping_resp.status_code not in (200, 401):
+                return {
+                    "reachable": True,
+                    "auth_ok": False,
+                    "message": f"Unexpected status {ping_resp.status_code}",
+                }
+
+            if not has_credentials:
+                auth_ok = ping_resp.status_code == 200
+                return {
+                    "reachable": True,
+                    "auth_ok": auth_ok,
+                    "message": (
+                        "Registry reachable (public)"
+                        if auth_ok
+                        else "Registry reachable — authentication required"
+                    ),
+                }
+
+            # ── Step 2: credential validation ──────────────────────────────
+            cred_resp = await client.get(f"{base_url}/v2/", auth=auth)
+
+            if cred_resp.status_code == 200:
+                return {
+                    "reachable": True,
+                    "auth_ok": True,
+                    "message": "Registry reachable — credentials accepted",
+                }
+
+            if cred_resp.status_code == 403:
+                return {
+                    "reachable": True,
+                    "auth_ok": True,
+                    "message": (
+                        "Registry reachable — credentials accepted"
+                        " (catalog access restricted)"
+                    ),
+                }
+
+            if cred_resp.status_code == 401:
+                return {
+                    "reachable": True,
+                    "auth_ok": False,
+                    "message": "Authentication failed — invalid username or password",
+                }
+
+            logger.debug(
+                "test_v2_connection: /v2/ returned %s for host=%s; "
+                "falling back to ping-only result",
+                cred_resp.status_code,
+                host,
+            )
+            return {
+                "reachable": True,
+                "auth_ok": False,
+                "message": (
+                    f"Registry reachable but credential check inconclusive"
+                    f" (status {cred_resp.status_code})"
+                ),
+            }
+
+    except httpx.ConnectError:
+        return {"reachable": False, "auth_ok": False, "message": "Connection refused"}
+    except httpx.TimeoutException:
+        return {"reachable": False, "auth_ok": False, "message": "Connection timed out"}
+    except Exception as exc:
+        logger.warning("test_v2_connection failed host=%s: %s", host, exc)
+        return {"reachable": False, "auth_ok": False, "message": "Connection failed"}
+
+
+async def check_v2_catalog(
+    host: str,
+    username: str,
+    password: str,
+    use_tls: bool = True,
+    tls_verify: bool = True,
+) -> bool:
+    """Probe /v2/_catalog to determine whether this registry supports listing.
+
+    HTTP 200 (OK) or 401 (auth required but endpoint exists) are both
+    treated as "browsable" because the endpoint is reachable.
+    HTTP 403, 404, or network errors indicate the registry does not expose
+    its catalog and browsing will not be possible.
+
+    Args:
+        host:       Registry hostname (bare or with scheme).
+        username:   Registry username (may be empty).
+        password:   Registry password or access token.
+        use_tls:    Use HTTPS (default True).
+        tls_verify: Enforce TLS certificate validation (default True).
+
+    Returns:
+        True when the registry exposes /v2/_catalog, False otherwise.
+    """
+    base_url = _build_base_url(host, use_tls)
+    verify = _httpx_verify(use_tls, tls_verify)
+    auth = (username, password) if username and password else None
+
+    try:
+        async with httpx.AsyncClient(
+            timeout=10, verify=verify, follow_redirects=True
+        ) as client:
+            resp = await client.get(f"{base_url}/v2/_catalog?n=1", auth=auth)
+        browsable = resp.status_code in (200, 401)
+        logger.debug(
+            "check_v2_catalog host=%s status=%s browsable=%s",
+            host,
+            resp.status_code,
+            browsable,
+        )
+        return browsable
+    except Exception as exc:
+        logger.warning("check_v2_catalog host=%s error: %s", host, exc)
+        return False
+
+
+# ── Browse repositories ───────────────────────────────────────────────────────
+
+
+async def browse_v2_repositories(
+    host: str,
+    username: str,
+    password: str,
+    use_tls: bool = True,
+    tls_verify: bool = True,
+    search: str | None = None,
+    page: int = 1,
+    page_size: int = 20,
+) -> dict[str, Any]:
+    """List repositories available in a V2-compatible registry via /v2/_catalog.
+
+    The catalog endpoint is fetched with n=1000 (maximum supported by most
+    registries).  Pagination and optional keyword filtering are applied
+    client-side because the V2 spec does not mandate server-side search.
+
+    Args:
+        host:       Registry hostname (bare or with scheme).
+        username:   Registry username (may be empty for public registries).
+        password:   Registry password or access token.
+        use_tls:    Use HTTPS (default True).
+        tls_verify: Enforce TLS certificate validation (default True).
+        search:     Optional substring filter applied to repository names.
+        page:       1-based page number (default 1).
+        page_size:  Number of items per page (default 20).
+
+    Returns:
+        Paginated dict compatible with ExternalPaginatedImages:
+        { items, total, page, page_size, total_pages, error? }
+        Each item has at least a ``name`` key containing the repository path.
+    """
+    base_url = _build_base_url(host, use_tls)
+    verify = _httpx_verify(use_tls, tls_verify)
+    auth = (username, password) if username and password else None
+
+    try:
+        async with httpx.AsyncClient(
+            timeout=20, verify=verify, follow_redirects=True
+        ) as client:
+            resp = await client.get(f"{base_url}/v2/_catalog?n=1000", auth=auth)
+            resp.raise_for_status()
+            repositories: list[str] = resp.json().get("repositories") or []
+    except httpx.HTTPStatusError as exc:
+        logger.warning(
+            "browse_v2_repositories: HTTP %s for host=%s",
+            exc.response.status_code,
+            host,
+        )
+        return {
+            "items": [],
+            "total": 0,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": 1,
+            "error": f"Registry returned HTTP {exc.response.status_code}",
+        }
+    except Exception as exc:
+        logger.warning("browse_v2_repositories: error host=%s: %s", host, exc)
+        return {
+            "items": [],
+            "total": 0,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": 1,
+            "error": str(exc),
+        }
+
+    # Apply optional client-side keyword filter
+    if search:
+        repositories = [r for r in repositories if search.lower() in r.lower()]
+
+    total = len(repositories)
+    total_pages = max(1, (total + page_size - 1) // page_size)
+    start = (page - 1) * page_size
+    page_repos = repositories[start : start + page_size]
+
+    items = [{"name": repo, "tags": []} for repo in page_repos]
+
+    return {
+        "items": items,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": total_pages,
+    }
+
+
+# ── Tag listing ───────────────────────────────────────────────────────────────
+
+
+async def browse_v2_tags(
+    host: str,
+    username: str,
+    password: str,
+    repository: str,
+    use_tls: bool = True,
+    tls_verify: bool = True,
+) -> dict[str, Any]:
+    """List all tags for a repository in a V2-compatible registry.
+
+    Uses GET /v2/{repository}/tags/list as specified by the OCI Distribution
+    Specification.
+
+    Args:
+        host:       Registry hostname (bare or with scheme).
+        username:   Registry username (may be empty).
+        password:   Registry password or access token.
+        repository: Repository path, e.g. "myorg/myimage".
+        use_tls:    Use HTTPS (default True).
+        tls_verify: Enforce TLS certificate validation (default True).
+
+    Returns:
+        Dict with keys: repository (str), tags (list[str]).
+        The tags list is empty when the repository does not exist or
+        an error occurs (errors are logged, not raised).
+    """
+    base_url = _build_base_url(host, use_tls)
+    verify = _httpx_verify(use_tls, tls_verify)
+    auth = (username, password) if username and password else None
+
+    try:
+        async with httpx.AsyncClient(
+            timeout=15, verify=verify, follow_redirects=True
+        ) as client:
+            resp = await client.get(f"{base_url}/v2/{repository}/tags/list", auth=auth)
+            resp.raise_for_status()
+            tags: list[str] = resp.json().get("tags") or []
+    except Exception as exc:
+        logger.warning(
+            "browse_v2_tags error host=%s repo=%s: %s", host, repository, exc
+        )
+        tags = []
+
+    return {"repository": repository, "tags": tags}
+
+
+# ── Delete ────────────────────────────────────────────────────────────────────
+
+
+async def delete_v2_image(
+    host: str,
+    username: str,
+    password: str,
+    repository: str,
+    use_tls: bool = True,
+    tls_verify: bool = True,
+) -> dict[str, Any]:
+    """Delete all tags of a repository in a V2-compatible registry.
+
+    For each tag the manifest digest is resolved via
+    GET /v2/{repository}/manifests/{tag} (reading the Docker-Content-Digest
+    response header), then the manifest is deleted via
+    DELETE /v2/{repository}/manifests/{digest}.
+
+    The registry must have ``delete`` enabled in its configuration
+    (REGISTRY_STORAGE_DELETE_ENABLED=true for Docker Distribution).
+
+    Args:
+        host:       Registry hostname (bare or with scheme).
+        username:   Registry username.
+        password:   Registry password or access token.
+        repository: Repository path, e.g. "myorg/myimage".
+        use_tls:    Use HTTPS (default True).
+        tls_verify: Enforce TLS certificate validation (default True).
+
+    Returns:
+        Dict with keys: deleted_tags (list), failed_tags (list), message (str).
+    """
+    base_url = _build_base_url(host, use_tls)
+    verify = _httpx_verify(use_tls, tls_verify)
+    auth = (username, password) if username and password else None
+
+    deleted_tags: list[str] = []
+    failed_tags: list[str] = []
+
+    try:
+        async with httpx.AsyncClient(
+            timeout=20, verify=verify, follow_redirects=True
+        ) as client:
+            # Retrieve tag list first
+            tags_resp = await client.get(
+                f"{base_url}/v2/{repository}/tags/list", auth=auth
+            )
+            tags_resp.raise_for_status()
+            tags: list[str] = tags_resp.json().get("tags") or []
+
+            if not tags:
+                return {
+                    "repository": repository,
+                    "deleted_tags": [],
+                    "failed_tags": [],
+                    "message": "No tags found for this repository",
+                }
+
+            # For each tag: resolve digest then delete by digest
+            for tag in tags:
+                try:
+                    manifest_resp = await client.get(
+                        f"{base_url}/v2/{repository}/manifests/{tag}",
+                        auth=auth,
+                        headers={"Accept": _MANIFEST_ACCEPT},
+                    )
+                    manifest_resp.raise_for_status()
+
+                    digest = manifest_resp.headers.get("Docker-Content-Digest")
+                    if not digest:
+                        logger.warning(
+                            "delete_v2_image: no digest header for %s:%s",
+                            repository,
+                            tag,
+                        )
+                        failed_tags.append(tag)
+                        continue
+
+                    delete_resp = await client.delete(
+                        f"{base_url}/v2/{repository}/manifests/{digest}",
+                        auth=auth,  # type: ignore[arg-type]
+                    )
+                    if delete_resp.status_code in (200, 202):
+                        deleted_tags.append(tag)
+                    else:
+                        logger.warning(
+                            "delete_v2_image: DELETE returned %s for %s:%s",
+                            delete_resp.status_code,
+                            repository,
+                            tag,
+                        )
+                        failed_tags.append(tag)
+                except Exception as exc:
+                    logger.warning(
+                        "delete_v2_image: error deleting %s:%s — %s",
+                        repository,
+                        tag,
+                        exc,
+                    )
+                    failed_tags.append(tag)
+
+    except Exception as exc:
+        logger.warning("delete_v2_image: error repo=%s: %s", repository, exc)
+        return {
+            "deleted_tags": [],
+            "failed_tags": [repository],
+            "message": "Delete v2 image error, please view log",
+        }
+
+    return {
+        "deleted_tags": deleted_tags,
+        "failed_tags": failed_tags,
+        "message": (
+            f"Deleted {len(deleted_tags)} tag(s)"
+            + (f", {len(failed_tags)} failed" if failed_tags else "")
+        ),
+    }
+
+
+async def get_v2_tags_for_import(
+    host: str,
+    username: str,
+    password: str,
+    repository: str,
+    use_tls: bool = True,
+    tls_verify: bool = True,
+) -> list[str]:
+    """Retrieve tag names for a V2 repository, used by import jobs.
+
+    Thin wrapper around browse_v2_tags that guarantees a list[str] return
+    suitable for use inside run_import_job() tag resolution loops.
+
+    Args:
+        host:       Registry hostname (bare or with scheme).
+        username:   Registry username (may be empty).
+        password:   Registry password or access token.
+        repository: Repository path, e.g. "myorg/myimage".
+        use_tls:    Use HTTPS (default True).
+        tls_verify: Enforce TLS certificate validation (default True).
+
+    Returns:
+        List of tag name strings (may be empty on error).
+    """
+    result = await browse_v2_tags(
+        host=host,
+        username=username,
+        password=password,
+        repository=repository,
+        use_tls=use_tls,
+        tls_verify=tls_verify,
+    )
+    return result.get("tags") or []
