@@ -279,8 +279,14 @@
               </div>
             }
 
-            <!-- Status message / error -->
-            @if (job.error) {
+            <!-- Status message / error — show each error on its own line -->
+            @if (job.errors && job.errors.length > 0) {
+              @for (err of job.errors; track err) {
+                <div class="text-danger mt-1" style="font-size: 0.68rem">
+                  <i class="bi bi-exclamation-circle me-1"></i>{{ err }}
+                </div>
+              }
+            } @else if (job.error) {
               <div class="text-danger mt-1" style="font-size: 0.68rem">
                 <i class="bi bi-exclamation-circle me-1"></i>{{ job.error }}
               </div>

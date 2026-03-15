@@ -376,3 +376,35 @@ async def run_push_pipeline(
         jobs_list[job_id]["error"] = str(exc)
         jobs_list[job_id]["message"] = f"❌ Push failed: {exc}"
         jobs_list[job_id]["progress"] = 100
+
+
+def normalize_sync_job(job: dict) -> dict:
+    """
+    Normalize a raw sync/import job dict for the frontend SyncJob interface.
+
+    Mappings applied:
+      - source_image -> source      (frontend key name)
+      - errors: list -> error: str  (join list into single display string)
+      - errors: list -> errors      (kept for multi-error display)
+    """
+    errors: list[str] = job.get("errors") or []
+    return {
+        "id": job.get("id", ""),
+        "direction": job.get("direction", "export"),
+        # Map internal 'source_image' to the frontend-expected 'source' field
+        "source": job.get("source_image", ""),
+        "source_registry_id": job.get("source_registry_id"),
+        "dest_registry_id": job.get("dest_registry_id"),
+        "dest_folder": job.get("dest_folder"),
+        "status": job.get("status", "running"),
+        "started_at": job.get("started_at", ""),
+        "finished_at": job.get("finished_at"),
+        "message": job.get("message", ""),
+        # Join error list into a single display string; None when no errors
+        "error": "\n".join(errors) if errors else None,
+        # Keep full error list for multi-error rendering
+        "errors": errors,
+        "progress": job.get("progress", 0),
+        "images_total": job.get("images_total", 0),
+        "images_done": job.get("images_done", 0),
+    }

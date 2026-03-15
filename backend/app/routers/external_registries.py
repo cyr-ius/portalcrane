@@ -18,7 +18,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 
 from ..config import Settings, get_settings, REGISTRY_URL
-from ..services.job_service import jobs_list
+from ..services.job_service import jobs_list, normalize_sync_job
 from ..services.external_registry_service import (
     browse_external_images,
     browse_external_tags,
@@ -475,7 +475,7 @@ async def list_sync_jobs_endpoint(
     _: UserInfo = Depends(require_pull_access),
 ):
     """List all sync/import jobs sorted by start time descending."""
-    return list_sync_jobs()
+    return [normalize_sync_job(j) for j in list_sync_jobs()]
 
 
 # ── Import (external -> local) ────────────────────────────────────────────────

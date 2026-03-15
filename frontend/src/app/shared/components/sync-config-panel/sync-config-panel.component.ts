@@ -340,10 +340,12 @@ export class SyncConfigPanelComponent implements OnInit {
   /** Bootstrap badge class for a sync/import job status. */
   syncStatusBadge(status: string): string {
     const map: Record<string, string> = {
-      running: "badge bg-info-subtle text-info",
-      done: "badge bg-success-subtle text-success",
-      partial: "badge bg-warning-subtle text-warning",
-      error: "badge bg-danger-subtle text-danger",
+      running:          "badge bg-info-subtle text-info",
+      done:             "badge bg-success-subtle text-success",
+      done_with_errors: "badge bg-warning-subtle text-warning",
+      partial:          "badge bg-warning-subtle text-warning",
+      failed:           "badge bg-danger-subtle text-danger",
+      error:            "badge bg-danger-subtle text-danger",
     };
     return map[status] ?? "badge bg-secondary";
   }
@@ -351,10 +353,12 @@ export class SyncConfigPanelComponent implements OnInit {
   /** Bootstrap icon class for a sync/import job status. */
   syncStatusIcon(status: string): string {
     const map: Record<string, string> = {
-      running: "bi-arrow-repeat text-info",
-      done: "bi-check-circle text-success",
-      partial: "bi-exclamation-circle text-warning",
-      error: "bi-x-circle text-danger",
+      running:          "bi-arrow-repeat text-info",
+      done:             "bi-check-circle text-success",
+      done_with_errors: "bi-exclamation-circle text-warning",
+      partial:          "bi-exclamation-circle text-warning",
+      failed:           "bi-x-circle text-danger",
+      error:            "bi-x-circle text-danger",
     };
     return map[status] ?? "bi-circle";
   }

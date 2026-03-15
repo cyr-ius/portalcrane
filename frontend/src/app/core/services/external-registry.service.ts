@@ -31,23 +31,10 @@ export interface ExternalRegistry {
   name: string;
   host: string;
   username?: string;
-  /** Password is always redacted in API responses. */
   password?: string;
   owner: string;
   use_tls: boolean;
   tls_verify: boolean;
-  /**
-   * True when the registry's /v2/_catalog endpoint responds with HTTP 200 or
-   * 401, meaning repository listing is available.
-   * Set automatically by the backend on create/update by calling
-   * check_catalog_browsable().
-   *
-   * Defaults to true for legacy entries (created before this field existed)
-   * so they keep appearing in selectors until they are saved again.
-   *
-   * Components that display a source selector (Images list, Staging pull)
-   * should filter on this field using the browsableRegistries computed signal.
-   */
   browsable: boolean;
   created_at?: string;
 }
@@ -85,11 +72,12 @@ export interface SyncJob {
   source_registry_id: string | null;
   dest_registry_id: string | null;
   dest_folder: string | null;
-  status: "running" | "done" | "partial" | "error";
+  status: "running" | "done" | "done_with_errors" | "failed" | "partial" | "error";
   started_at: string;
   finished_at: string | null;
   message: string;
   error: string | null;
+  errors: string[];
   progress: number;
   images_total: number;
   images_done: number;
