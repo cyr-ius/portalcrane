@@ -3,13 +3,28 @@
 import asyncio
 import logging
 from typing import Any
+
 import httpx
 
-# ── GitHub Packages browse (GHCR-specific) ────────────────────────────────────
+# ── Constants ─────────────────────────────────────────────────────────────────
 
 _GITHUB_API = "https://api.github.com"
 
 logger = logging.getLogger(__name__)
+
+# ── Authentication ────────────────────────────────────────────────────────────
+
+
+def _auth_headers(token: str) -> dict[str, str]:
+    """Return standard GitHub API request headers with Bearer authentication."""
+    return {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+
+
+# ── Browse repositories ───────────────────────────────────────────────────────
 
 
 def get_urls(owner: str) -> list[str]:
@@ -18,15 +33,6 @@ def get_urls(owner: str) -> list[str]:
         f"{_GITHUB_API}/users/{owner}/packages",
         f"{_GITHUB_API}/orgs/{owner}/packages",
     ]
-
-
-def get_headers(token: str) -> dict[str, str]:
-    """Return standard GitHub API request headers with Bearer authentication."""
-    return {
-        "Authorization": f"Bearer {token}",
-        "Accept": "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28",
-    }
 
 
 async def browse_github_packages(
@@ -48,7 +54,7 @@ async def browse_github_packages(
     Authentication: GitHub personal access token with `read:packages` scope,
     stored as the registry password.
     """
-    headers = get_headers(token)
+    headers = _auth_headers(token)
 
     # Try user packages first, fall back to org packages
     urls_to_try = get_urls(owner=owner)
@@ -129,36 +135,7 @@ async def browse_github_packages(
     }
 
 
-async def delete_github_package(
-    token: str,
-    owner: str,
-    package: str,
-) -> str | None:
-    """
-    Delete a container package for a GitHub user or organisation.
-
-    Tries the user endpoint first, then the org endpoint.
-    Returns None on success, or an error string on failure.
-    """
-    headers = get_headers(token)
-    last_error: str | None = None
-
-    async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
-        for base_url in get_urls(owner):
-            try:
-                full_url = f"{base_url}/container/{package}"
-                resp = await client.delete(full_url, headers=headers)
-                if resp.status_code in (200, 204):
-                    return None  # success
-                elif resp.status_code == 404:
-                    # Not a user, try org endpoint
-                    continue
-                else:
-                    last_error = f"GitHub API returned HTTP {resp.status_code}"
-            except Exception as exc:
-                last_error = str(exc)
-
-    return last_error
+# ── Tags ──────────────────────────────────────────────────────────────────────
 
 
 async def browse_github_tag(
@@ -167,7 +144,7 @@ async def browse_github_tag(
     package: str,
 ) -> list[str]:
     """Get package version for a GitHub user or organisation."""
-    headers = get_headers(token)
+    headers = _auth_headers(token)
     async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
         for base_url in get_urls(owner):
             try:
@@ -196,7 +173,7 @@ async def get_github_tag(
     token: str, owner: str, package: str, version_id: str
 ) -> dict[str, Any]:
     """Get a specific version of a GitHub container package."""
-    headers = get_headers(token)
+    headers = _auth_headers(token)
     last_error: str | None = None
 
     async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
@@ -233,3 +210,38 @@ async def get_github_tags_for_import(
     if isinstance(result, list):
         return result
     return []
+
+
+# ── Delete ────────────────────────────────────────────────────────────────────
+
+
+async def delete_github_package(
+    token: str,
+    owner: str,
+    package: str,
+) -> str | None:
+    """
+    Delete a container package for a GitHub user or organisation.
+
+    Tries the user endpoint first, then the org endpoint.
+    Returns None on success, or an error string on failure.
+    """
+    headers = _auth_headers(token)
+    last_error: str | None = None
+
+    async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
+        for base_url in get_urls(owner):
+            try:
+                full_url = f"{base_url}/container/{package}"
+                resp = await client.delete(full_url, headers=headers)
+                if resp.status_code in (200, 204):
+                    return None  # success
+                elif resp.status_code == 404:
+                    # Not a user, try org endpoint
+                    continue
+                else:
+                    last_error = f"GitHub API returned HTTP {resp.status_code}"
+            except Exception as exc:
+                last_error = str(exc)
+
+    return last_error
