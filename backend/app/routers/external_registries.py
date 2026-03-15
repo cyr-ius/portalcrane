@@ -150,8 +150,8 @@ async def create_registry_endpoint(
             detail="Only admins can create global registries",
         )
     owner = request.owner if request.owner else current_user.username
-    # await because create_registry probes /v2/_catalog (async I/O)
-    return await create_registry(
+
+    created = await create_registry(
         name=request.name,
         host=request.host,
         username=request.username,
@@ -160,6 +160,11 @@ async def create_registry_endpoint(
         use_tls=request.use_tls,
         tls_verify=request.tls_verify,
     )
+
+    if created.get("reachable") is False:
+        raise HTTPException(status_code=400, detail="Registry unreachable")
+    if created.get("auth_ok") is False:
+        raise HTTPException(status_code=403, detail="Authentication error")
 
 
 @router.patch("/registries/{registry_id}")
@@ -225,6 +230,10 @@ async def update_registry_endpoint(
     )
     if not updated:
         raise HTTPException(status_code=404, detail="Registry not found")
+    if updated.get("reachable") is False:
+        raise HTTPException(status_code=400, detail="Registry unreachable")
+    if updated.get("auth_ok") is False:
+        raise HTTPException(status_code=403, detail="Authentication error")
     return updated
 
 
@@ -275,13 +284,19 @@ async def test_saved_connection(
     registry = get_registry_by_id(registry_id)
     if not registry:
         raise HTTPException(status_code=404, detail="Registry not found")
-    return await test_registry_connection(
+    checks = await test_registry_connection(
         host=registry["host"],
         username=registry.get("username", ""),
         password=registry.get("password", ""),
         use_tls=registry.get("use_tls", True),
         tls_verify=registry.get("tls_verify", True),
     )
+
+    if checks.get("reachable") is False:
+        raise HTTPException(status_code=400, detail="Registry unreachable")
+
+    if checks.get("auth_ok") is False:
+        raise HTTPException(status_code=403, detail="Authentication error")
 
 
 # ── Browse external registry (Évolution 1) ───────────────────────────────────
