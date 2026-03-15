@@ -85,8 +85,6 @@ export class ExternalRegistriesConfigPanelComponent implements OnInit {
   readonly registryForm = form(this.registryModel, (p) => {
     required(p.name);
     required(p.host);
-    required(p.username);
-    required(p.password);
   });
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -193,7 +191,6 @@ export class ExternalRegistriesConfigPanelComponent implements OnInit {
         this.showAddForm.set(false);
         this.editingId.set(null);
         f().reset({ ...this.registryInit });
-        // Refresh shared cache + local list — browsable field is now up to date
         this.refreshAndSync();
       } catch (err: unknown) {
         const httpErr = err as { error?: { detail?: string } };
@@ -230,14 +227,6 @@ export class ExternalRegistriesConfigPanelComponent implements OnInit {
           this.testingNew.set(false);
         },
       });
-  }
-
-  testSavedRegistry(id: string): void {
-    this.testingRegistryId.set(id);
-    this.extRegSvc.testSaved(id).subscribe({
-      next: () => this.testingRegistryId.set(null),
-      error: () => this.testingRegistryId.set(null),
-    });
   }
 
   deleteRegistry(id: string): void {
