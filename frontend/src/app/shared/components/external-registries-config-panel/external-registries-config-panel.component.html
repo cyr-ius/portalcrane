@@ -55,27 +55,10 @@
                 </button>
               }
             </div>
-            <!-- Custom host adder (outside the Signal Form — used only for preset list) -->
-            <div class="input-group input-group-sm">
-              <input
-                type="text"
-                class="form-control"
-                placeholder="Custom host (e.g. registry.company.tld)"
-                [value]="customHost()"
-                (input)="customHost.set($any($event.target).value)"
-              />
-              <button
-                type="button"
-                class="btn btn-outline-primary"
-                (click)="addCustomHostToPresets()"
-              >
-                <i class="bi bi-plus-lg me-1"></i>Add to list
-              </button>
-            </div>
           </div>
 
           <!-- Registry host -->
-          <div class="col-md-6">
+          <div class="col-md-4">
             <label class="form-label small fw-semibold">Registry host</label>
             <input
               type="text"
@@ -86,7 +69,7 @@
           </div>
 
           <!-- Username -->
-          <div class="col-md-6">
+          <div class="col-md-4">
             <label class="form-label small fw-semibold">Username</label>
             <input
               type="text"
@@ -96,9 +79,13 @@
           </div>
 
           <!-- Password -->
-          <div class="col-md-6">
+          <div class="col-md-4">
             <label class="form-label small fw-semibold">
-              Password / token
+              @if (registryForm.host().value() == 'ghcr.io') {
+              Personal Access Token (PAT)
+              } @else {
+              Password / Token
+              }
               @if (editingId()) {
                 <span class="text-muted fw-normal">(leave blank to keep current)</span>
               }
@@ -244,7 +231,7 @@
           <button
             class="btn btn-sm btn-outline-secondary"
             (click)="testNewConnection()"
-            [disabled]="testingNew()"
+            [disabled]="testingNew() || editingId()"
           >
             @if (testingNew()) {
               <span class="spinner-border spinner-border-sm me-1"></span>

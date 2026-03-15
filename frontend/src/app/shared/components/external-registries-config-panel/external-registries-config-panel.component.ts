@@ -25,7 +25,6 @@ import {
   ExternalRegistryService,
 } from "../../../core/services/external-registry.service";
 
-/** Shape of the registry add/edit form model. */
 interface RegistryFormModel {
   name: string;
   host: string;
@@ -54,7 +53,6 @@ export class ExternalRegistriesConfigPanelComponent implements OnInit {
   readonly showAddForm = signal(false);
   readonly editingId = signal<string | null>(null);
   readonly registryPresets = signal<RegistryPreset[]>([...KNOWN_REGISTRY_PRESETS]);
-  readonly customHost = signal("");
   readonly savingRegistry = signal(false);
   readonly testingNew = signal(false);
   readonly testingRegistryId = signal<string | null>(null);
@@ -87,6 +85,8 @@ export class ExternalRegistriesConfigPanelComponent implements OnInit {
   readonly registryForm = form(this.registryModel, (p) => {
     required(p.name);
     required(p.host);
+    required(p.username);
+    required(p.password);
   });
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -128,7 +128,6 @@ export class ExternalRegistriesConfigPanelComponent implements OnInit {
   openAddForm(): void {
     this.editingId.set(null);
     this.registryModel.set({ ...this.registryInit });
-    this.customHost.set("");
     this.testResult.set(null);
     this.showAddForm.set(true);
   }
@@ -144,14 +143,12 @@ export class ExternalRegistriesConfigPanelComponent implements OnInit {
       use_tls: reg.use_tls ?? true,
       tls_verify: reg.tls_verify ?? true,
     });
-    this.customHost.set("");
     this.testResult.set(null);
     this.showAddForm.set(true);
   }
 
   cancelForm(): void {
     this.showAddForm.set(false);
-    this.customHost.set("");
     this.testResult.set(null);
   }
 
@@ -164,28 +161,6 @@ export class ExternalRegistriesConfigPanelComponent implements OnInit {
       host,
       name: m.name.trim() ? m.name : preset.name,
     }));
-  }
-
-  addCustomHostToPresets(): void {
-    const host = this.normalizeHost(this.customHost());
-    if (!host) return;
-
-    const exists = this.registryPresets().some(
-      (p) => this.normalizeHost(p.host) === host,
-    );
-    if (!exists) {
-      this.registryPresets.set([
-        { id: `custom-${host}`, name: host, host, logo: "🏢" },
-        ...this.registryPresets(),
-      ]);
-    }
-
-    this.registryModel.update((m) => ({
-      ...m,
-      host,
-      name: m.name.trim() ? m.name : host,
-    }));
-    this.customHost.set("");
   }
 
   // ── Form actions ───────────────────────────────────────────────────────────
