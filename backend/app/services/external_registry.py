@@ -64,6 +64,9 @@ from .external_v2 import (
     delete_v2_image,
     get_v2_tags_for_import,
     test_v2_connection,
+    get_v2_tag_detail,
+    delete_v2_tag,
+    add_v2_tag,
 )
 
 logger = logging.getLogger(__name__)
@@ -1089,3 +1092,124 @@ async def _run_import_job_task(
         _sync_jobs[job_id]["status"] = "failed"
         _sync_jobs[job_id]["errors"] = [str(exc)]
         _sync_jobs[job_id]["finished_at"] = datetime.now(timezone.utc).isoformat()
+
+
+async def get_external_tag_detail(registry_id: str, repository: str, tag: str) -> dict:
+    """Return full image metadata for a specific tag in an external V2 registry.
+
+    Only standard V2 registries are supported (not Docker Hub, not GHCR).
+    Returns an empty dict when the registry type is unsupported or on error.
+
+    Args:
+        registry_id: ID of the saved external registry.
+        repository:  Repository path, e.g. "myorg/myimage".
+        tag:         Tag name, e.g. "latest".
+
+    Returns:
+        Dict matching the ImageDetail schema (name, tag, digest, size,
+        created, architecture, os, layers, labels, env, cmd, entrypoint,
+        exposed_ports) or empty dict on failure.
+    """
+    registry = get_registry_by_id(registry_id)
+    if not registry:
+        raise ValueError(f"Registry {registry_id} not found")
+
+    host = registry["host"]
+    username = registry.get("username", "")
+    password = registry.get("password", "")
+    use_tls = registry.get("use_tls", True)
+    tls_verify = registry.get("tls_verify", True)
+
+    # Only standard V2 registries support this operation
+    if _is_dockerhub(host) or _is_ghcr(host):
+        return {}
+
+    return await get_v2_tag_detail(
+        host=host,
+        username=username,
+        password=password,
+        repository=repository,
+        tag=tag,
+        use_tls=use_tls,
+        tls_verify=tls_verify,
+    )
+
+
+async def delete_external_tag(registry_id: str, repository: str, tag: str) -> dict:
+    """Delete a single tag from an external V2 registry.
+
+    Args:
+        registry_id: ID of the saved external registry.
+        repository:  Repository path.
+        tag:         Tag name to delete.
+
+    Returns:
+        Dict with keys: success (bool), message (str).
+    """
+    registry = get_registry_by_id(registry_id)
+    if not registry:
+        raise ValueError(f"Registry {registry_id} not found")
+
+    host = registry["host"]
+    username = registry.get("username", "")
+    password = registry.get("password", "")
+    use_tls = registry.get("use_tls", True)
+    tls_verify = registry.get("tls_verify", True)
+
+    if _is_dockerhub(host) or _is_ghcr(host):
+        return {
+            "success": False,
+            "message": "Single-tag delete is not supported for this registry type",
+        }
+
+    return await delete_v2_tag(
+        host=host,
+        username=username,
+        password=password,
+        repository=repository,
+        tag=tag,
+        use_tls=use_tls,
+        tls_verify=tls_verify,
+    )
+
+
+async def add_external_tag(
+    registry_id: str, repository: str, source_tag: str, new_tag: str
+) -> dict:
+    """Create a new tag by copying a manifest in an external V2 registry.
+
+    Args:
+        registry_id: ID of the saved external registry.
+        repository:  Repository path.
+        source_tag:  Existing tag whose manifest will be copied.
+        new_tag:     New tag name to create.
+
+    Returns:
+        Dict with keys: success (bool), message (str).
+    """
+    registry = get_registry_by_id(registry_id)
+    if not registry:
+        raise ValueError(f"Registry {registry_id} not found")
+
+    host = registry["host"]
+    username = registry.get("username", "")
+    password = registry.get("password", "")
+    use_tls = registry.get("use_tls", True)
+    tls_verify = registry.get("tls_verify", True)
+
+    if _is_dockerhub(host) or _is_ghcr(host):
+        return {
+            "success": False,
+            "message": "Tag creation is not supported for this registry type",
+        }
+
+    return await add_v2_tag(
+        host=host,
+        username=username,
+        password=password,
+        repository=repository,
+        source_tag=source_tag,
+        new_tag=new_tag,
+        use_tls=use_tls,
+        tls_verify=tls_verify,
+    )

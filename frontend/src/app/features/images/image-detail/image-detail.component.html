@@ -32,11 +32,6 @@
         @if (showAddTag()) {
           <div class="card-body border-bottom py-2">
             <div class="d-flex gap-2 mb-2">
-              <!--
-                FIX: use (change)="addTagSource.set(...)" instead of
-                     (input)="addTagSource = ..." which overwrites the signal
-                     reference with a plain string, breaking subsequent calls.
-              -->
               <select
                 class="form-select form-select-sm"
                 [value]="addTagSource()"
@@ -49,11 +44,6 @@
             </div>
             <div class="input-group input-group-sm">
               <span class="input-group-text"><i class="bi bi-tag"></i></span>
-              <!--
-                FIX: use (input)="newTagName.set(...)" instead of
-                     (input)="newTagName = ..." which overwrites the signal
-                     reference with a plain string, breaking subsequent calls.
-              -->
               <input
                 type="text"
                 class="form-control"
@@ -61,10 +51,6 @@
                 [value]="newTagName()"
                 (input)="newTagName.set($any($event.target).value)"
               />
-              <!--
-                FIX: [disabled]="!newTagName()" tests the signal value.
-                     The original !newTagName was always false (signal is truthy).
-              -->
               <button
                 class="btn btn-success"
                 (click)="addTag()"
@@ -259,20 +245,12 @@
                   <label class="text-muted small d-block mb-1">Layers</label>
                   <div class="layers-list">
                     @for (layer of tagDetail()?.layers; track layer.digest) {
-                      <div
-                        class="layer-item d-flex align-items-center gap-2 p-2 rounded mb-1"
-                      >
-                        <i
-                          class="bi bi-stack text-muted"
-                          style="font-size: 0.75rem"
-                        ></i>
-                        <code class="small text-truncate flex-grow-1">{{
-                          layer.digest
-                        }}</code>
-                        <span
-                          class="badge bg-secondary-subtle text-secondary"
-                          >{{ formatBytes(layer.size) }}</span
-                        >
+                      <div class="layer-item d-flex align-items-center gap-2 p-2 rounded mb-1">
+                        <i class="bi bi-stack text-muted" style="font-size: 0.75rem"></i>
+                        <code class="small text-truncate flex-grow-1">{{ layer.digest}}</code>
+                        <span class="badge bg-secondary-subtle text-secondary">
+                          {{ formatBytes(layer.size) }}
+                        </span>
                       </div>
                     }
                   </div>
@@ -280,16 +258,8 @@
               }
 
               <div class="mt-3">
-                <button
-                  class="btn btn-sm btn-outline-secondary"
-                  (click)="showAdvanced.set(!showAdvanced())"
-                >
-                  <i
-                    [class]="
-                      showAdvanced() ? 'bi bi-chevron-up' : 'bi bi-chevron-down'
-                    "
-                    class="me-1"
-                  ></i>
+                <button class="btn btn-sm btn-outline-secondary" (click)="showAdvanced.set(!showAdvanced())">
+                  <i [class]="showAdvanced() ? 'bi bi-chevron-up' : 'bi bi-chevron-down'" class="me-1"></i>
                   {{ showAdvanced() ? "Less info" : "More info" }}
                 </button>
               </div>

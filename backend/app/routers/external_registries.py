@@ -14,12 +14,12 @@ Changes:
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 
 from ..config import Settings, get_settings, REGISTRY_URL
 from ..services.job_service import jobs_list, normalize_sync_job
-from ..services.external_registry_service import (
+from ..services.external_registry import (
     browse_external_images,
     browse_external_tags,
     delete_external_image,
@@ -36,7 +36,11 @@ from ..services.external_registry_service import (
     test_registry_connection,
     update_registry,
     validate_folder_path,
+    get_external_tag_detail,
+    delete_external_tag,
+    add_external_tag,
 )
+
 from ..core.jwt import (
     UserInfo,
     get_current_user,
@@ -112,6 +116,11 @@ class ImportRequest(BaseModel):
     source_registry_id: str
     source_image: str = "(all)"
     dest_folder: str | None = None
+
+
+class AddExternalTagRequest(BaseModel):
+    source_tag: str
+    new_tag: str
 
 
 # ── Registry CRUD ─────────────────────────────────────────────────────────────
@@ -299,7 +308,7 @@ async def test_saved_connection(
         raise HTTPException(status_code=403, detail="Authentication error")
 
 
-# ── Browse external registry (Évolution 1) ───────────────────────────────────
+# ── Browse external registry  ─────────────────────────────────────────────────
 
 
 @router.get("/registries/{registry_id}/browse")
@@ -381,6 +390,89 @@ async def catalog_check(
     return {"available": check, "reason": ""}
 
 
+@router.get("/registries/{registry_id}/browse/tags/detail")
+async def browse_registry_tag_detail(
+    registry_id: str,
+    repository: str = Query(..., description="Repository name, e.g. myorg/myimage"),
+    tag: str = Query(..., description="Tag name, e.g. latest"),
+    _: UserInfo = Depends(require_pull_access),
+):
+    """Return detailed metadata for a specific tag in an external V2 registry.
+
+    Only available for standard V2 registries (not Docker Hub, not GHCR).
+    Returns HTTP 404 when the registry or tag is not found.
+    Returns HTTP 422 when the registry type does not support this operation.
+    """
+    registry = get_registry_by_id(registry_id)
+    if not registry:
+        raise HTTPException(status_code=404, detail="Registry not found")
+
+    detail = await get_external_tag_detail(
+        registry_id=registry_id, repository=repository, tag=tag
+    )
+    if not detail:
+        raise HTTPException(
+            status_code=404, detail="Tag not found or registry type unsupported"
+        )
+    return detail
+
+
+@router.delete("/registries/{registry_id}/browse/tags")
+async def delete_registry_tag(
+    registry_id: str,
+    repository: str = Query(..., description="Repository name, e.g. myorg/myimage"),
+    tag: str = Query(..., description="Tag name to delete"),
+    _: UserInfo = Depends(require_push_access),
+):
+    """Delete a single tag from an external V2 registry.
+
+    The registry must have manifest delete enabled.
+    Returns HTTP 400 when the operation fails on the remote registry.
+    """
+    registry = get_registry_by_id(registry_id)
+    if not registry:
+        raise HTTPException(status_code=404, detail="Registry not found")
+
+    result = await delete_external_tag(
+        registry_id=registry_id, repository=repository, tag=tag
+    )
+    if not result.get("success"):
+        raise HTTPException(
+            status_code=400, detail=result.get("message", "Delete tag failed")
+        )
+    return result
+
+
+@router.post("/registries/{registry_id}/browse/tags")
+async def add_registry_tag(
+    registry_id: str,
+    repository: str = Query(..., description="Repository name, e.g. myorg/myimage"),
+    request: AddExternalTagRequest = Body(...),
+    _: UserInfo = Depends(require_push_access),
+):
+    """Create a new tag by copying a manifest in an external V2 registry.
+
+    The source tag manifest is fetched and PUT under the new tag name.
+    No data transfer occurs; only the manifest reference is created.
+    Returns HTTP 400 when the operation fails on the remote registry.
+    """
+    registry = get_registry_by_id(registry_id)
+    if not registry:
+        raise HTTPException(status_code=404, detail="Registry not found")
+
+    result = await add_external_tag(
+        registry_id=registry_id,
+        repository=repository,
+        source_tag=request.source_tag,
+        new_tag=request.new_tag,
+    )
+    if not result.get("success"):
+        raise HTTPException(
+            status_code=400, detail=result.get("message", "Add tag failed")
+        )
+    return result
+
+
 # ── Push to external registry ─────────────────────────────────────────────────
 
 
@@ -391,7 +483,7 @@ async def push_to_external(
     settings: Settings = Depends(get_settings),
 ):
     """Push a staged OCI layout to an external registry."""
-    from ..services.external_registry_service import _skopeo_tls_verify
+    from ..services.external_registry import _skopeo_tls_verify
 
     if request.job_id not in jobs_list:
         raise HTTPException(status_code=404, detail="Job not found")

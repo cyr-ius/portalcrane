@@ -556,3 +556,290 @@ async def get_v2_tags_for_import(
         tls_verify=tls_verify,
     )
     return tags or []
+
+
+# ── Tag detail (manifest + config blob) ──────────────────────────────────────
+
+
+async def get_v2_tag_detail(
+    host: str,
+    username: str,
+    password: str,
+    repository: str,
+    tag: str,
+    use_tls: bool = True,
+    tls_verify: bool = True,
+) -> dict[str, Any]:
+    """Fetch detailed metadata for a specific tag in a V2 registry.
+
+    Resolves the image manifest and then the config blob to extract
+    architecture, OS, creation date, labels, environment variables,
+    exposed ports, entrypoint, cmd and layer list.
+
+    This mirrors RegistryService.get_manifest / get_image_config for the
+    local registry but targets an arbitrary external V2 endpoint.
+
+    Args:
+        host:       Registry hostname (bare or with scheme).
+        username:   Registry username (may be empty).
+        password:   Registry password or access token.
+        repository: Repository path, e.g. "myorg/myimage".
+        tag:        Tag name, e.g. "latest".
+        use_tls:    Use HTTPS (default True).
+        tls_verify: Enforce TLS certificate validation (default True).
+
+    Returns:
+        Dict matching the ImageDetail schema used by the local registry router:
+        name, tag, digest, size, created, architecture, os, layers,
+        labels, env, cmd, entrypoint, exposed_ports.
+        Returns an empty dict when the tag is not found.
+    """
+    base_url = _build_base_url(host, use_tls)
+    verify = _httpx_verify(use_tls, tls_verify)
+    auth = (username, password) if username and password else None
+
+    try:
+        async with httpx.AsyncClient(
+            timeout=20, verify=verify, follow_redirects=True
+        ) as client:
+            # ── Step 1: fetch manifest ─────────────────────────────────────
+            manifest_resp = await client.get(
+                f"{base_url}/v2/{repository}/manifests/{tag}",
+                auth=auth,
+                headers={"Accept": _MANIFEST_ACCEPT},
+            )
+            if manifest_resp.status_code == 404:
+                return {}
+            manifest_resp.raise_for_status()
+
+            digest = manifest_resp.headers.get("Docker-Content-Digest", "")
+            manifest: dict[str, Any] = manifest_resp.json()
+
+            # Handle manifest list (multi-arch): resolve first platform manifest
+            media_type = manifest.get("mediaType", "")
+            if media_type in (
+                "application/vnd.docker.distribution.manifest.list.v2+json",
+                "application/vnd.oci.image.index.v1+json",
+            ):
+                sub_manifests = manifest.get("manifests", [])
+                if sub_manifests:
+                    sub_digest = sub_manifests[0]["digest"]
+                    sub_resp = await client.get(
+                        f"{base_url}/v2/{repository}/manifests/{sub_digest}",
+                        auth=auth,
+                        headers={"Accept": _MANIFEST_ACCEPT},
+                    )
+                    sub_resp.raise_for_status()
+                    manifest = sub_resp.json()
+
+            layers: list[dict[str, Any]] = manifest.get("layers", [])
+            total_size: int = sum(int(layer.get("size", 0)) for layer in layers)
+
+            # ── Step 2: fetch config blob ──────────────────────────────────
+            config_digest: str = manifest.get("config", {}).get("digest", "")
+            config: dict[str, Any] = {}
+            if config_digest:
+                blob_resp = await client.get(
+                    f"{base_url}/v2/{repository}/blobs/{config_digest}",
+                    auth=auth,
+                )
+                if blob_resp.status_code == 200:
+                    config = blob_resp.json()
+
+            container_config: dict[str, Any] = config.get(
+                "config", config.get("container_config", {})
+            )
+
+            return {
+                "name": repository,
+                "tag": tag,
+                "digest": digest,
+                "size": total_size,
+                "created": str(config.get("created", "")),
+                "architecture": str(config.get("architecture", "")),
+                "os": str(config.get("os", "")),
+                "layers": layers,
+                "labels": container_config.get("Labels", {}) or {},
+                "env": container_config.get("Env", []) or [],
+                "cmd": container_config.get("Cmd", []) or [],
+                "entrypoint": container_config.get("Entrypoint", []) or [],
+                "exposed_ports": container_config.get("ExposedPorts", {}) or {},
+            }
+
+    except Exception as exc:
+        logger.warning(
+            "get_v2_tag_detail error host=%s repo=%s tag=%s: %s",
+            host,
+            repository,
+            tag,
+            exc,
+        )
+        return {}
+
+
+# ── Single-tag delete ─────────────────────────────────────────────────────────
+
+
+async def delete_v2_tag(
+    host: str,
+    username: str,
+    password: str,
+    repository: str,
+    tag: str,
+    use_tls: bool = True,
+    tls_verify: bool = True,
+) -> dict[str, Any]:
+    """Delete a single tag from a V2 registry by resolving its manifest digest.
+
+    The registry must have delete enabled
+    (REGISTRY_STORAGE_DELETE_ENABLED=true for Docker Distribution).
+
+    Args:
+        host:       Registry hostname (bare or with scheme).
+        username:   Registry username.
+        password:   Registry password or access token.
+        repository: Repository path, e.g. "myorg/myimage".
+        tag:        Tag name to delete, e.g. "v1.0.0".
+        use_tls:    Use HTTPS (default True).
+        tls_verify: Enforce TLS certificate validation (default True).
+
+    Returns:
+        Dict with keys: success (bool), message (str).
+    """
+    base_url = _build_base_url(host, use_tls)
+    verify = _httpx_verify(use_tls, tls_verify)
+    auth = (username, password) if username and password else None
+
+    try:
+        async with httpx.AsyncClient(
+            timeout=20, verify=verify, follow_redirects=True
+        ) as client:
+            # Resolve digest from tag
+            manifest_resp = await client.get(
+                f"{base_url}/v2/{repository}/manifests/{tag}",
+                auth=auth,
+                headers={"Accept": _MANIFEST_ACCEPT},
+            )
+            if manifest_resp.status_code == 404:
+                return {"success": False, "message": f"Tag '{tag}' not found"}
+            manifest_resp.raise_for_status()
+
+            digest = manifest_resp.headers.get("Docker-Content-Digest")
+            if not digest:
+                return {
+                    "success": False,
+                    "message": "Registry did not return a Docker-Content-Digest header",
+                }
+
+            # Delete by digest
+            delete_resp = await client.delete(
+                f"{base_url}/v2/{repository}/manifests/{digest}",
+                auth=auth,  # type: ignore[arg-type]
+            )
+            if delete_resp.status_code in (200, 202):
+                return {"success": True, "message": f"Tag '{tag}' deleted"}
+
+            return {
+                "success": False,
+                "message": f"Registry returned HTTP {delete_resp.status_code}",
+            }
+
+    except Exception as exc:
+        logger.warning(
+            "delete_v2_tag error host=%s repo=%s tag=%s: %s",
+            host,
+            repository,
+            tag,
+            exc,
+        )
+        return {"success": False, "message": str(exc)}
+
+
+# ── Add tag (manifest copy) ───────────────────────────────────────────────────
+
+
+async def add_v2_tag(
+    host: str,
+    username: str,
+    password: str,
+    repository: str,
+    source_tag: str,
+    new_tag: str,
+    use_tls: bool = True,
+    tls_verify: bool = True,
+) -> dict[str, Any]:
+    """Create a new tag by copying the manifest of an existing tag.
+
+    Implements a client-side retag: the manifest of *source_tag* is fetched
+    and then PUT under *new_tag*.  No data transfer is involved; only the
+    manifest reference changes.
+
+    Args:
+        host:       Registry hostname (bare or with scheme).
+        username:   Registry username.
+        password:   Registry password or access token.
+        repository: Repository path, e.g. "myorg/myimage".
+        source_tag: Existing tag whose manifest will be copied.
+        new_tag:    New tag name to create.
+        use_tls:    Use HTTPS (default True).
+        tls_verify: Enforce TLS certificate validation (default True).
+
+    Returns:
+        Dict with keys: success (bool), message (str).
+    """
+    base_url = _build_base_url(host, use_tls)
+    verify = _httpx_verify(use_tls, tls_verify)
+    auth = (username, password) if username and password else None
+
+    try:
+        async with httpx.AsyncClient(
+            timeout=20, verify=verify, follow_redirects=True
+        ) as client:
+            # Fetch source manifest (raw bytes to preserve exact JSON)
+            manifest_resp = await client.get(
+                f"{base_url}/v2/{repository}/manifests/{source_tag}",
+                auth=auth,
+                headers={"Accept": _MANIFEST_ACCEPT},
+            )
+            if manifest_resp.status_code == 404:
+                return {
+                    "success": False,
+                    "message": f"Source tag '{source_tag}' not found",
+                }
+            manifest_resp.raise_for_status()
+
+            content_type = manifest_resp.headers.get(
+                "Content-Type",
+                "application/vnd.docker.distribution.manifest.v2+json",
+            )
+            # Use the raw response body to avoid JSON re-serialisation drift
+            raw_manifest = manifest_resp.content
+
+            # PUT manifest under new tag
+            put_resp = await client.put(
+                f"{base_url}/v2/{repository}/manifests/{new_tag}",
+                auth=auth,  # type: ignore[arg-type]
+                content=raw_manifest,
+                headers={"Content-Type": content_type},
+            )
+            if put_resp.status_code in (200, 201):
+                return {
+                    "success": True,
+                    "message": f"Tag '{new_tag}' created from '{source_tag}'",
+                }
+
+            return {
+                "success": False,
+                "message": f"Registry returned HTTP {put_resp.status_code}",
+            }
+
+    except Exception as exc:
+        logger.warning(
+            "add_v2_tag error host=%s repo=%s src=%s new=%s: %s",
+            host,
+            repository,
+            source_tag,
+            new_tag,
+            exc,
+        )
+        return {"success": False, "message": str(exc)}

@@ -52,6 +52,7 @@ import {
   PaginatedImages,
   RegistryService,
 } from "../../../core/services/registry.service";
+import { ExternalImageDetailComponent } from "../external-image-detail/external-image-detail.component";
 
 /** Available sort fields for the image list. */
 type SortField = "name" | "tag_count";
@@ -80,7 +81,7 @@ type SourceId = "local" | string;
 
 @Component({
   selector: "app-images-list",
-  imports: [FormsModule],
+  imports: [FormsModule, ExternalImageDetailComponent],
   templateUrl: "./images-list.component.html",
   styleUrl: "./images-list.component.css",
 })
@@ -279,6 +280,21 @@ export class ImagesListComponent implements OnInit {
     }
     return result;
   });
+
+  /**
+  * True when the current user has push access on the selected external registry.
+  * Used to show/hide add-tag and delete-tag controls in the external detail modal.
+  */
+  readonly canPushExternal = computed<boolean>(() => {
+    const user = this.authService.currentUser();
+    // Admins always have full access
+    if (user?.is_admin) return true;
+    // Non-admin users: require at least one pushable folder
+    // For external registries there is no folder concept, but we reuse
+    // the same check used for the delete button in external mode.
+    return this.pushableFolders().length > 0;
+  });
+
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
 
@@ -485,9 +501,11 @@ export class ImagesListComponent implements OnInit {
     if (this.isExternalSource()) {
       const image =
         this.filteredItems().find((i) => i.name === imageName) ??
-        this.accessibleItems().find((i) => i.name === imageName) ??
+        this.data()?.items.find((i) => i.name === imageName) ??
         null;
-      this.viewTarget.set(image);
+      if (image) {
+        this.viewTarget.set(image);
+      }
       return;
     }
 
@@ -529,6 +547,10 @@ export class ImagesListComponent implements OnInit {
     if (this.isExternalSource()) return this.isAdmin() || this.pushableFolders().length > 0;
     if (this.isAdmin()) return true;
     return this.pushableFolders().length > 0;
+  }
+
+  reloadImages(): void {
+    this.loadImages();
   }
 
   // ── Copy modal ─────────────────────────────────────────────────────────────

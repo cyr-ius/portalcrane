@@ -30,7 +30,7 @@ from ..core.jwt import (
     require_admin,
 )
 from ..core.security import hash_password, verify_user
-from ..services.external_registry_service import (
+from ..services.external_registry import (
     delete_registries_for_owner,
     find_registry_credentials_for_host,
 )

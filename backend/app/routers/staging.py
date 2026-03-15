@@ -123,7 +123,7 @@ def _resolve_pull_source(
     # ── 1. Saved external registry ────────────────────────────────────────────
     if request.source_registry_id:
         from .external_registries import get_registry_by_id
-        from ..services.external_registry_service import _skopeo_tls_verify
+        from ..services.external_registry import _skopeo_tls_verify
 
         registry = get_registry_by_id(request.source_registry_id)
         if not registry:
@@ -275,7 +275,7 @@ async def push_image(
     Non-admin users can only push their own jobs.
     """
     from .external_registries import build_target_path, get_registry_by_id
-    from ..services.external_registry_service import skopeo_push
+    from ..services.external_registry import skopeo_push
 
     if request.job_id not in jobs_list:
         raise HTTPException(
@@ -313,7 +313,7 @@ async def push_image(
             password = registry.get("password", "")
             use_tls = registry.get("use_tls", True)
             tls_verify = registry.get("tls_verify", True)
-            from ..services.external_registry_service import _skopeo_tls_verify
+            from ..services.external_registry import _skopeo_tls_verify
 
             effective_tls_verify = _skopeo_tls_verify(use_tls, tls_verify)
         else:

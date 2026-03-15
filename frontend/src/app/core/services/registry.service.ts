@@ -397,4 +397,80 @@ export class RegistryService {
       `${this.BASE}/ping`,
     );
   }
+
+
+  // ── External V2 tag detail / add / delete ────────────────────────────────
+
+  /**
+   * Fetch detailed metadata for a specific tag in an external V2 registry.
+   *
+   * Backend: GET /api/external/registries/{id}/browse/tags/detail
+   *
+   * Only available for standard V2 registries (not Docker Hub, not GHCR).
+   *
+   * @param registryId  ID of the saved external registry.
+   * @param repository  Repository name, e.g. "myorg/myimage".
+   * @param tag         Tag name, e.g. "latest".
+   */
+  getExternalTagDetail(
+    registryId: string,
+    repository: string,
+    tag: string,
+  ): Observable<ImageDetail> {
+    const params = new HttpParams()
+      .set("repository", repository)
+      .set("tag", tag);
+    return this.http.get<ImageDetail>(
+      `${this.EXTERNAL}/registries/${registryId}/browse/tags/detail`,
+      { params },
+    );
+  }
+
+  /**
+   * Delete a single tag from an external V2 registry.
+   *
+   * Backend: DELETE /api/external/registries/{id}/browse/tags
+   *
+   * @param registryId  ID of the saved external registry.
+   * @param repository  Repository name.
+   * @param tag         Tag name to delete.
+   */
+  deleteExternalTag(
+    registryId: string,
+    repository: string,
+    tag: string,
+  ): Observable<{ success: boolean; message: string }> {
+    const params = new HttpParams()
+      .set("repository", repository)
+      .set("tag", tag);
+    return this.http.delete<{ success: boolean; message: string }>(
+      `${this.EXTERNAL}/registries/${registryId}/browse/tags`,
+      { params },
+    );
+  }
+
+  /**
+   * Create a new tag by copying a manifest in an external V2 registry.
+   *
+   * Backend: POST /api/external/registries/{id}/browse/tags
+   *
+   * @param registryId  ID of the saved external registry.
+   * @param repository  Repository name.
+   * @param sourceTag   Existing tag to copy from.
+   * @param newTag      New tag name to create.
+   */
+  addExternalTag(
+    registryId: string,
+    repository: string,
+    sourceTag: string,
+    newTag: string,
+  ): Observable<{ success: boolean; message: string }> {
+    const params = new HttpParams().set("repository", repository);
+    return this.http.post<{ success: boolean; message: string }>(
+      `${this.EXTERNAL}/registries/${registryId}/browse/tags`,
+      { source_tag: sourceTag, new_tag: newTag },
+      { params },
+    );
+  }
+
 }

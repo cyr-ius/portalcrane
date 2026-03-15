@@ -595,94 +595,111 @@
 <!-- MODALS                                                                    -->
 <!-- ══════════════════════════════════════════════════════════════════════════ -->
 
+
 <!-- ── View / details modal ─────────────────────────────────────────────────
-     Used for all external registry modes.
-     Not used for local: router navigates to /images/detail instead.
+     Routing:
+       - Standard V2 external registry → ExternalImageDetailComponent (rich modal)
+       - GitHub GHCR / Docker Hub       → existing simple tag-list modal
+     Local: router navigates to /images/detail instead (handled in goToDetail).
 -->
 @if (viewTarget()) {
-  <div
-    class="modal fade show d-block"
-    tabindex="-1"
-    style="background: rgba(0,0,0,.4)"
-    (click)="viewTarget.set(null)"
-  >
-    <div class="modal-dialog" (click)="$event.stopPropagation()">
-      <div class="modal-content">
-        <div class="modal-header">
-          @if (isExternalSource() && isGithubMode()) {
-            <h5 class="modal-title">
-              <i class="bi bi-github me-2"></i>GitHub Package details
-            </h5>
-          } @else if (isExternalSource() && isDockerHubMode()) {
-            <h5 class="modal-title">
-              <i class="bi bi-eye me-2"></i>Docker Hub image details
-            </h5>
-          } @else {
-            <h5 class="modal-title">
-              <i class="bi bi-eye me-2"></i>Image details
-            </h5>
-          }
-          <button class="btn-close" (click)="viewTarget.set(null)"></button>
-        </div>
 
-        <div class="modal-body">
-          <div class="mb-2 d-flex align-items-center gap-2">
-            <span class="text-muted small fw-semibold">
-              {{ (isExternalSource() && isGithubMode()) ? 'Package' : 'Repository' }}:
-            </span>
-            <code class="small">{{ viewTarget()?.name }}</code>
-          </div>
-          <div class="mb-3">
-            <span class="text-muted small fw-semibold">Tags: </span>
-            <strong>{{ viewTarget()?.tag_count }}</strong>
-          </div>
-          <div class="d-flex flex-wrap gap-1">
-            @for (tag of (viewTarget()?.tags ? viewTarget()!.tags.slice(0, 20) : []); track tag) {
-              <span class="badge bg-secondary-subtle text-secondary font-monospace">{{ tag }}</span>
+  @if (isExternalSource() && !isGithubMode() && !isDockerHubMode()) {
+    <!-- Rich V2 detail modal with tag management -->
+    <app-external-image-detail
+      [registryId]="selectedSource()"
+      [image]="viewTarget()!"
+      [canPush]="canPushExternal()"
+      (closed)="viewTarget.set(null)"
+      (tagsChanged)="reloadImages()"
+    />
+  } @else {
+    <!-- Simple tag-list modal for GHCR / Docker Hub -->
+    <div
+      class="modal fade show d-block"
+      tabindex="-1"
+      style="background: rgba(0,0,0,.4)"
+      (click)="viewTarget.set(null)"
+    >
+      <div class="modal-dialog" (click)="$event.stopPropagation()">
+        <div class="modal-content">
+          <div class="modal-header">
+            @if (isExternalSource() && isGithubMode()) {
+              <h5 class="modal-title">
+                <i class="bi bi-github me-2"></i>GitHub Package details
+              </h5>
+            } @else if (isExternalSource() && isDockerHubMode()) {
+              <h5 class="modal-title">
+                <i class="bi bi-eye me-2"></i>Docker Hub image details
+              </h5>
+            } @else {
+              <h5 class="modal-title">
+                <i class="bi bi-eye me-2"></i>Image details
+              </h5>
             }
-            @if ((viewTarget()?.tags?.length ?? 0) > 20) {
-              <span class="badge bg-secondary-subtle text-muted">
-                +{{ (viewTarget()?.tags?.length ?? 0) - 20 }} more
+            <button class="btn-close" (click)="viewTarget.set(null)"></button>
+          </div>
+
+          <div class="modal-body">
+            <div class="mb-2 d-flex align-items-center gap-2">
+              <span class="text-muted small fw-semibold">
+                {{ (isExternalSource() && isGithubMode()) ? 'Package' : 'Repository' }}:
               </span>
+              <code class="small">{{ viewTarget()?.name }}</code>
+            </div>
+            <div class="mb-3">
+              <span class="text-muted small fw-semibold">Tags: </span>
+              <strong>{{ viewTarget()?.tag_count }}</strong>
+            </div>
+            <div class="d-flex flex-wrap gap-1">
+              @for (tag of (viewTarget()?.tags ? viewTarget()!.tags.slice(0, 20) : []); track tag) {
+                <span class="badge bg-secondary-subtle text-secondary font-monospace">{{ tag }}</span>
+              }
+              @if ((viewTarget()?.tags?.length ?? 0) > 20) {
+                <span class="badge bg-secondary-subtle text-muted">
+                  +{{ (viewTarget()?.tags?.length ?? 0) - 20 }} more
+                </span>
+              }
+            </div>
+            <!-- GitHub link -->
+            @if (isExternalSource() && isGithubMode() && viewTarget()) {
+              <div class="mt-3 pt-3 border-top">
+                <a
+                  [href]="'https://ghcr.io/' + viewTarget()!.name"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-2"
+                >
+                  <i class="bi bi-github"></i>
+                  View on GitHub Container Registry
+                  <i class="bi bi-box-arrow-up-right" style="font-size: 0.7rem"></i>
+                </a>
+              </div>
+            }
+            <!-- Docker Hub link -->
+            @if (isExternalSource() && isDockerHubMode() && viewTarget()) {
+              <div class="mt-3 pt-3 border-top">
+                <a
+                  [href]="'https://hub.docker.com/r/' + viewTarget()!.name"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-2"
+                >
+                  🐳
+                  View on Docker Hub
+                  <i class="bi bi-box-arrow-up-right" style="font-size: 0.7rem"></i>
+                </a>
+              </div>
             }
           </div>
-          <!-- GitHub link: double-gated, never shown in local mode -->
-          @if (isExternalSource() && isGithubMode() && viewTarget()) {
-            <div class="mt-3 pt-3 border-top">
-              <a
-                [href]="'https://ghcr.io/' + viewTarget()!.name"
-                target="_blank"
-                rel="noopener noreferrer"
-                class="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-2"
-              >
-                <i class="bi bi-github"></i>
-                View on GitHub Container Registry
-                <i class="bi bi-box-arrow-up-right" style="font-size: 0.7rem"></i>
-              </a>
-            </div>
-          }
-          <!-- Docker Hub link: double-gated, never shown in local or GitHub mode -->
-          @if (isExternalSource() && isDockerHubMode() && viewTarget()) {
-          <div class="mt-3 pt-3 border-top">
-            <a
-              [href]="'https://hub.docker.com/r/' + viewTarget()!.name"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-2"
-            >
-              🐳
-              View on Docker Hub
-              <i class="bi bi-box-arrow-up-right" style="font-size: 0.7rem"></i>
-            </a>
+          <div class="modal-footer">
+            <button class="btn btn-secondary btn-sm" (click)="viewTarget.set(null)">Close</button>
           </div>
-          }
-        </div>
-        <div class="modal-footer">
-          <button class="btn btn-secondary btn-sm" (click)="viewTarget.set(null)">Close</button>
         </div>
       </div>
     </div>
-  </div>
+  }
+
 }
 
 
