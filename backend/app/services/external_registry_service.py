@@ -37,7 +37,7 @@ from pathlib import Path
 import httpx
 
 from ..config import DATA_DIR, Settings, REGISTRY_HOST
-from .external_github import browse_github_packages
+from .external_github import browse_github_packages, delete_github_package
 
 logger = logging.getLogger(__name__)
 
@@ -664,6 +664,10 @@ async def delete_external_image(registry_id: str, repository: str) -> dict:
     """
     Delete all tags for a repository in an external registry.
 
+    For GHCR (ghcr.io): uses the GitHub Packages DELETE API via
+    delete_github_package(), which requires the token to have
+    `delete:packages` scope in addition to `read:packages`.
+
     For each tag we fetch its manifest digest then call DELETE
     /v2/<repository>/manifests/<digest>.
     """
@@ -674,6 +678,31 @@ async def delete_external_image(registry_id: str, repository: str) -> dict:
     host = registry["host"]
     username = registry.get("username", "")
     password = registry.get("password", "")
+
+    # ── GHCR: use GitHub Packages DELETE API ──────────────────────────────
+    if _is_ghcr(host) and password:
+        # repository is 'owner/package-name', e.g. 'cyr-ius/letslexicon'
+        owner = username
+        pkg_name = repository.split("/", 1)[-1] if "/" in repository else repository
+        error = await delete_github_package(
+            token=password,
+            owner=owner,
+            package=pkg_name,
+        )
+        if error:
+            return {
+                "deleted_tags": [],
+                "failed_tags": [repository],
+                "message": f"GitHub delete failed: {error}",
+            }
+        return {
+            "deleted_tags": [repository],
+            "failed_tags": [],
+            "message": f"Package '{repository}' deleted from GitHub Container Registry",
+        }
+
+    # ── Standard registry: manifest-based tag deletion ────────────────────
+
     use_tls = registry.get("use_tls", True)
     tls_verify = registry.get("tls_verify", True)
 
@@ -684,63 +713,72 @@ async def delete_external_image(registry_id: str, repository: str) -> dict:
     deleted_tags: list[str] = []
     failed_tags: list[str] = []
 
-    async with httpx.AsyncClient(
-        timeout=20, verify=verify, follow_redirects=True
-    ) as client:
-        tags_resp = await client.get(f"{base_url}/v2/{repository}/tags/list", auth=auth)
-        tags_resp.raise_for_status()
-        tags = tags_resp.json().get("tags") or []
+    try:
+        async with httpx.AsyncClient(
+            timeout=20, verify=verify, follow_redirects=True
+        ) as client:
+            tags_resp = await client.get(
+                f"{base_url}/v2/{repository}/tags/list", auth=auth
+            )
+            tags_resp.raise_for_status()
+            tags = tags_resp.json().get("tags") or []
 
-        if not tags:
-            return {
-                "repository": repository,
-                "deleted_tags": [],
-                "failed_tags": [],
-                "message": "No tags found for this repository",
-            }
+            if not tags:
+                return {
+                    "repository": repository,
+                    "deleted_tags": [],
+                    "failed_tags": [],
+                    "message": "No tags found for this repository",
+                }
 
-        manifest_accept = ", ".join(
-            [
-                "application/vnd.oci.image.manifest.v1+json",
-                "application/vnd.docker.distribution.manifest.v2+json",
-                "application/vnd.docker.distribution.manifest.list.v2+json",
-            ]
-        )
+            manifest_accept = ", ".join(
+                [
+                    "application/vnd.oci.image.manifest.v1+json",
+                    "application/vnd.docker.distribution.manifest.v2+json",
+                    "application/vnd.docker.distribution.manifest.list.v2+json",
+                ]
+            )
 
-        for tag in tags:
-            try:
-                manifest_resp = await client.get(
-                    f"{base_url}/v2/{repository}/manifests/{tag}",
-                    auth=auth,
-                    headers={"Accept": manifest_accept},
-                )
-                manifest_resp.raise_for_status()
+            for tag in tags:
+                try:
+                    manifest_resp = await client.get(
+                        f"{base_url}/v2/{repository}/manifests/{tag}",
+                        auth=auth,
+                        headers={"Accept": manifest_accept},
+                    )
+                    manifest_resp.raise_for_status()
 
-                digest = manifest_resp.headers.get("Docker-Content-Digest")
-                if not digest:
+                    digest = manifest_resp.headers.get("Docker-Content-Digest")
+                    if not digest:
+                        failed_tags.append(tag)
+                        continue
+
+                    delete_resp = await client.delete(
+                        f"{base_url}/v2/{repository}/manifests/{digest}",
+                        auth=auth,  # type: ignore
+                    )
+                    if delete_resp.status_code in {202, 200}:
+                        deleted_tags.append(tag)
+                    else:
+                        failed_tags.append(tag)
+                except Exception:
                     failed_tags.append(tag)
-                    continue
 
-                delete_resp = await client.delete(
-                    f"{base_url}/v2/{repository}/manifests/{digest}",
-                    auth=auth,  # type: ignore
-                )
-                if delete_resp.status_code in {202, 200}:
-                    deleted_tags.append(tag)
-                else:
-                    failed_tags.append(tag)
-            except Exception:
-                failed_tags.append(tag)
-
-    message = f"Deleted {len(deleted_tags)} tag(s)"
-    if failed_tags:
-        message += f", failed: {', '.join(failed_tags)}"
+    except Exception as exc:
+        logger.warning("delete_external_image error repo=%s: %s", repository, exc)
+        return {
+            "deleted_tags": [],
+            "failed_tags": [repository],
+            "message": "Delete external image error, please view log",
+        }
 
     return {
-        "repository": repository,
         "deleted_tags": deleted_tags,
         "failed_tags": failed_tags,
-        "message": message,
+        "message": (
+            f"Deleted {len(deleted_tags)} tag(s)"
+            + (f", {len(failed_tags)} failed" if failed_tags else "")
+        ),
     }
 
 
@@ -1024,6 +1062,10 @@ async def run_import_job(
     """
     Start an asynchronous import job (external -> local) and return the job ID.
     The job dict carries direction="import" for display in the history list.
+
+    For ghcr.io registries the tag list is now retrieved via the
+    GitHub Packages API (get_github_tags_for_import) instead of /v2/…/tags/list,
+    which is unreliable on GHCR even with a valid PAT.
     """
     job_id = str(uuid.uuid4())
     registry = get_registry_by_id(source_registry_id)
@@ -1064,23 +1106,57 @@ async def run_import_job(
             )
             httpx_verify = src_tls_verify_raw if src_use_tls else False
 
+            # ── Build image list ───────────────────────────────────────────
             if source_image == "(all)":
-                async with httpx.AsyncClient(
-                    timeout=30, verify=httpx_verify, follow_redirects=True
-                ) as client:
-                    resp = await client.get(f"{base_url}/v2/_catalog?n=1000", auth=auth)
-                    resp.raise_for_status()
-                    images: list[str] = resp.json().get("repositories", [])
+                if _is_ghcr(src_host) and src_password:
+                    from .external_github import browse_github_packages
+
+                    result = await browse_github_packages(
+                        username=src_username,
+                        token=src_password,
+                        owner=src_username,
+                        search=None,
+                        page=1,
+                        page_size=200,
+                    )
+                    images: list[str] = [
+                        item["name"] for item in result.get("items", [])
+                    ]
+
+                else:
+                    async with httpx.AsyncClient(
+                        timeout=30, verify=httpx_verify, follow_redirects=True
+                    ) as client:
+                        resp = await client.get(
+                            f"{base_url}/v2/_catalog?n=1000", auth=auth
+                        )
+                        resp.raise_for_status()
+                        images: list[str] = resp.json().get("repositories", [])
             else:
+                # Single image: strip tag if present
                 images = [source_image.split(":")[0]]
 
             _sync_jobs[job_id]["images_total"] = len(images)
 
             errors: list[str] = []
             for img in images:
+                # ── Resolve tags for this image ────────────────────────────
                 if source_image != "(all)" and ":" in source_image:
+                    # Explicit tag provided — use it directly
                     tags = [source_image.split(":", 1)[1]]
+                elif _is_ghcr(src_host) and src_password:
+                    # GHCR: fetch tags via GitHub Packages API
+                    # img is 'owner/package-name' — extract package name
+                    from .external_github import get_github_tags_for_import
+
+                    pkg_name = img.split("/", 1)[-1] if "/" in img else img
+                    tags = await get_github_tags_for_import(
+                        token=src_password,
+                        owner=src_username,
+                        package=pkg_name,
+                    )
                 else:
+                    # Standard registry: use /v2/.../tags/list
                     async with httpx.AsyncClient(
                         timeout=15, verify=httpx_verify, follow_redirects=True
                     ) as client:
@@ -1091,10 +1167,13 @@ async def run_import_job(
                             tr.json().get("tags") or [] if tr.status_code == 200 else []
                         )
 
+                # ── Rewrite destination image name ─────────────────────────
                 dest_img = _rewrite_image_name_for_sync(
                     img=img, dest_folder=dest_folder, dest_username=""
                 )
                 for tag in tags:
+                    # src_ref: for GHCR, img already contains 'owner/pkg'
+                    # build_target_path produces docker://ghcr.io/owner/pkg:tag
                     src_ref = build_target_path(None, img, tag, src_host)
                     dest_ref = f"docker://{REGISTRY_HOST}/{dest_img}:{tag}"
 

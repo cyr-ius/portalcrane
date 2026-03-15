@@ -318,7 +318,7 @@
             <tbody>
               @for (image of filteredItems(); track image.name) {
                 <tr>
-                  <!-- Column 1: image name / package link -->
+                  <!-- Repository or Package -->
                   <td class="align-middle py-2" style="font-size: 0.875rem">
                     <div class="d-flex align-items-center gap-2">
                       <div class="image-icon flex-shrink-0">
@@ -328,32 +328,17 @@
                           <i class="bi bi-box-seam"></i>
                         }
                       </div>
-                      @if (isExternalSource() && isGithubMode()) {
-                        <a
-                          [href]="'https://ghcr.io/' + image.name"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          class="fw-semibold text-decoration-none font-monospace"
-                          style="font-size: 0.875rem"
-                          [title]="'Open ghcr.io/' + image.name"
-                        >
-                          {{ image.name }}
-                          <i class="bi bi-box-arrow-up-right ms-1 text-muted" style="font-size: 0.65rem"></i>
-                        </a>
-                      } @else {
-                        <button
-                          class="btn btn-link p-0 fw-semibold text-decoration-none link-body-emphasis font-monospace text-start"
-                          style="font-size: 0.875rem"
-                          (click)="goToDetail(image.name)"
-                          [title]="isExternalSource() ? 'View external details' : 'View details'"
-                        >
-                          {{ image.name }}
-                        </button>
-                      }
+                      <button
+                        class="btn btn-link p-0 fw-semibold text-decoration-none link-body-emphasis font-monospace text-start"
+                        style="font-size: 0.875rem"
+                        (click)="goToDetail(image.name)"
+                        [title]="isExternalSource() ? 'View external details' : 'View details'"
+                      >
+                        {{ image.name }}
+                      </button>
                     </div>
                   </td>
-
-                  <!-- Column 2: tag count badge — identical in all modes -->
+                  <!-- Tags -->
                   <td class="align-middle py-2">
                     <span
                       [class]="
@@ -363,15 +348,7 @@
                       "
                     >{{ image.tag_count }}</span>
                   </td>
-
-                  <!--
-                    Column 3: tag list badges — identical in all modes.
-                    Colour logic:
-                      'latest'                    → green  (bg-success-subtle)
-                      'main' | 'master' | 'edge'  → blue   (bg-primary-subtle)
-                      everything else             → grey   (bg-secondary-subtle)
-                    ★ prefix only for 'latest'.
-                  -->
+                  <!-- Tag list -->
                   <td class="align-middle py-2">
                     <div class="d-flex flex-wrap gap-1">
                       @for (tag of image.tags.slice(0, 4); track tag) {
@@ -392,8 +369,7 @@
                       }
                     </div>
                   </td>
-
-                  <!-- Column 4: action buttons -->
+                  <!-- Actions -->
                   <td class="align-middle py-2 text-end">
                     <div class="d-flex gap-1 justify-content-end">
                       <button
@@ -415,20 +391,22 @@
                       >
                         <i class="bi bi-copy"></i>
                       </button>
-                      @if (!(isExternalSource() && isGithubMode())) {
-                        <button
-                          class="btn btn-sm btn-outline-danger"
-                          (click)="confirmDeleteImage(image)"
-                          [disabled]="!canDeleteImage(image)"
-                          [title]="
-                            canDeleteImage(image)
-                              ? (isExternalSource() ? 'Delete from external registry: ' + image.name : 'Delete ' + image.name)
-                              : 'No push permission on this folder'
-                          "
-                        >
-                          <i class="bi bi-trash"></i>
-                        </button>
-                      }
+                      <button
+                        class="btn btn-sm btn-outline-danger"
+                        (click)="confirmDeleteImage(image)"
+                        [disabled]="!canDeleteImage(image)"
+                        [title]="
+                          canDeleteImage(image)
+                            ? (isExternalSource() && isGithubMode())
+                              ? 'Delete GitHub package: ' + image.name + ' (requires delete:packages scope)'
+                              : isExternalSource()
+                                ? 'Delete from external registry: ' + image.name
+                                : 'Delete ' + image.name
+                            : 'No push permission on this folder'
+                        "
+                      >
+                        <i class="bi bi-trash"></i>
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -509,6 +487,7 @@
                     <button
                       class="btn btn-link p-0 fw-semibold text-decoration-none link-body-emphasis font-monospace small text-start"
                       (click)="goToDetail(image.name)"
+                      style="font-size: 0.875rem"
                     >
                       {{ imageShortName(image) }}
                     </button>
@@ -818,7 +797,12 @@
         </div>
         <div class="modal-body">
           <p>
-            @if (isExternalSource()) {
+            @if (isExternalSource() && isGithubMode()) {
+              Delete GitHub package
+              <strong class="font-monospace">{{ deleteTarget()?.name }}</strong>
+              from GitHub Container Registry?
+              <br /><span class="text-muted small">This calls the GitHub Packages DELETE API and requires <code>delete:packages</code> scope on your token.</span>
+            } @else if (isExternalSource()) {
               Delete repository
               <strong class="font-monospace">{{ deleteTarget()?.name }}</strong>
               from the external registry?
