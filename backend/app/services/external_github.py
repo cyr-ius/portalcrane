@@ -20,8 +20,82 @@ def _auth_headers(token: str) -> dict[str, str]:
     return {
         "Authorization": f"Bearer {token}",
         "Accept": "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28",
+        "X-GitHub-Api-Version": "2026-03-10",
     }
+
+
+# ── Connectivity ──────────────────────────────────────────────────────────────
+
+
+async def test_github_connection(
+    host: str,
+    username: str,
+    password: str,
+    tls_verify: bool = True,
+) -> dict[str, Any]:
+    """Probe a Docker hub registry to check reachability and credentials.
+    Returns:
+        Dict with keys: reachable (bool), auth_ok (bool), message (str).
+    """
+
+    if username is None or username == "":
+        return {
+            "reachable": False,
+            "auth_ok": False,
+            "message": "Username is incorrect",
+        }
+
+    try:
+        async with httpx.AsyncClient(
+            timeout=15, verify=tls_verify, follow_redirects=True
+        ) as client:
+            auth_url = f"{_GITHUB_API}/octocat"
+            cred_resp = await client.get(auth_url, headers=_auth_headers(password))
+            if cred_resp.status_code == 200:
+                return {
+                    "reachable": True,
+                    "auth_ok": True,
+                    "message": "Registry reachable — credentials accepted",
+                }
+
+            if cred_resp.status_code == 403:
+                return {
+                    "reachable": True,
+                    "auth_ok": True,
+                    "message": (
+                        "Registry reachable — credentials accepted"
+                        " (catalog access restricted)"
+                    ),
+                }
+
+            if cred_resp.status_code == 401:
+                return {
+                    "reachable": True,
+                    "auth_ok": False,
+                    "message": "Authentication failed — invalid username or password",
+                }
+
+            logger.debug(
+                "test_dockerhub_connection: returned %s for host=%s; ",
+                cred_resp.status_code,
+                host,
+            )
+            return {
+                "reachable": True,
+                "auth_ok": False,
+                "message": (
+                    f"Registry reachable but credential check inconclusive"
+                    f" (status {cred_resp.status_code})"
+                ),
+            }
+
+    except httpx.ConnectError:
+        return {"reachable": False, "auth_ok": False, "message": "Connection refused"}
+    except httpx.TimeoutException:
+        return {"reachable": False, "auth_ok": False, "message": "Connection timed out"}
+    except Exception as exc:
+        logger.warning("test_dockerhub_connection failed host=%s: %s", host, exc)
+        return {"reachable": False, "auth_ok": False, "message": "Connection failed"}
 
 
 # ── Browse repositories ───────────────────────────────────────────────────────
@@ -42,6 +116,7 @@ async def browse_github_packages(
     search: str | None,
     page: int,
     page_size: int,
+    tls_verify: bool = True,
 ) -> dict:
     """
     List container packages for a GitHub user or organisation via the
@@ -62,7 +137,9 @@ async def browse_github_packages(
     repositories: list[str] = []
     last_error: str | None = None
 
-    async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
+    async with httpx.AsyncClient(
+        timeout=30, verify=tls_verify, follow_redirects=True
+    ) as client:
         for url in urls_to_try:
             try:
                 params = {"package_type": "container", "per_page": 100}
@@ -142,10 +219,13 @@ async def browse_github_tag(
     token: str,
     owner: str,
     repository: str,
+    tls_verify: bool = True,
 ) -> list[str]:
     """Get package version for a GitHub user or organisation."""
     headers = _auth_headers(token)
-    async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
+    async with httpx.AsyncClient(
+        timeout=30, verify=tls_verify, follow_redirects=True
+    ) as client:
         for base_url in get_urls(owner):
             try:
                 tag_url = f"{base_url}/container/{repository}/versions"
@@ -170,13 +250,19 @@ async def browse_github_tag(
 
 
 async def get_github_tag(
-    token: str, owner: str, package: str, version_id: str
+    token: str,
+    owner: str,
+    package: str,
+    version_id: str,
+    tls_verify: bool = True,
 ) -> dict[str, Any]:
     """Get a specific version of a GitHub container package."""
     headers = _auth_headers(token)
     last_error: str | None = None
 
-    async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
+    async with httpx.AsyncClient(
+        timeout=30, verify=tls_verify, follow_redirects=True
+    ) as client:
         for base_url in get_urls(owner):
             try:
                 version_url = f"{base_url}/container/{package}/versions/{version_id}"
@@ -199,6 +285,7 @@ async def get_github_tags_for_import(
     token: str,
     owner: str,
     package: str,
+    tls_verify: bool = True,
 ) -> list[str]:
     """
     Retrieve all tag names for a package, used by the import job.
@@ -206,7 +293,9 @@ async def get_github_tags_for_import(
     This is a simplified wrapper around browse_github_tag() that always
     returns a list (never a dict), safe to iterate in run_import_job().
     """
-    result = await browse_github_tag(token=token, owner=owner, repository=package)
+    result = await browse_github_tag(
+        token=token, owner=owner, repository=package, tls_verify=tls_verify
+    )
     if isinstance(result, list):
         return result
     return []
@@ -219,6 +308,7 @@ async def delete_github_package(
     token: str,
     owner: str,
     package: str,
+    tls_verify: bool = True,
 ) -> str | None:
     """
     Delete a container package for a GitHub user or organisation.
@@ -229,7 +319,9 @@ async def delete_github_package(
     headers = _auth_headers(token)
     last_error: str | None = None
 
-    async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
+    async with httpx.AsyncClient(
+        timeout=30, verify=tls_verify, follow_redirects=True
+    ) as client:
         for base_url in get_urls(owner):
             try:
                 full_url = f"{base_url}/container/{package}"

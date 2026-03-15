@@ -48,12 +48,14 @@ from .external_github import (
     browse_github_tag,
     delete_github_package,
     get_github_tags_for_import,
+    test_github_connection,
 )
 from .external_dockerhub import (
     browse_dockerhub_repositories,
     browse_dockerhub_tags,
     delete_dockerhub_repository,
     get_dockerhub_tags_for_import,
+    test_dockerhub_connection,
 )
 from .external_v2 import (
     browse_v2_repositories,
@@ -140,19 +142,6 @@ def _is_dockerhub(host: str) -> bool:
 
 
 # ── URL / TLS helpers (shared, used by skopeo callers) ───────────────────────
-
-
-def _build_registry_base_url(host: str, use_tls: bool = True) -> str:
-    """Build the base URL for a registry host string.
-
-    When the host already contains a scheme (http:// or https://) it is used
-    as-is so callers who stored the full URL are unaffected.
-    When *use_tls* is False the scheme is http://, otherwise https://.
-    """
-    if "://" in host:
-        return host.rstrip("/")
-    scheme = "https" if use_tls else "http"
-    return f"{scheme}://{host}"
 
 
 def _skopeo_tls_verify(use_tls: bool, tls_verify: bool) -> bool:
@@ -266,6 +255,20 @@ async def test_registry_connection(
 
     Returns {"reachable": bool, "auth_ok": bool, "message": str}.
     """
+
+    if _is_ghcr(host):
+        return await test_github_connection(
+            host=host, username=username, password=password, tls_verify=tls_verify
+        )
+
+    if _is_dockerhub(host):
+        return await test_dockerhub_connection(
+            host=host,
+            username=username,
+            password=password,
+            tls_verify=tls_verify,
+        )
+
     return await test_v2_connection(
         host=host,
         username=username,
@@ -346,6 +349,18 @@ async def create_registry(
     can show/hide the registry in the Images source selector without an
     additional catalog-check request.
     """
+
+    checks = await test_registry_connection(
+        host=host,
+        username=username,
+        password=password,
+        use_tls=use_tls,
+        tls_verify=tls_verify,
+    )
+
+    if not checks["reachable"] or not checks["auth_ok"]:
+        return checks
+
     browsable = await check_catalog_browsable(
         host=host,
         username=username,
@@ -410,6 +425,18 @@ async def update_registry(
                 r["use_tls"] = use_tls
             if tls_verify is not None:
                 r["tls_verify"] = tls_verify
+
+            # Re-check authentication
+            checks = await test_registry_connection(
+                host=r["host"],
+                username=r.get("username", ""),
+                password=r.get("password", ""),
+                use_tls=r.get("use_tls", True),
+                tls_verify=r.get("tls_verify", True),
+            )
+
+            if not checks["reachable"] or not checks["auth_ok"]:
+                return checks
 
             # Re-check browsability when any connectivity parameter changes
             connectivity_changed = any(
@@ -477,6 +504,7 @@ async def browse_external_images(
             search=search,
             page=page,
             page_size=page_size,
+            tls_verify=tls_verify,
         )
 
     # ── Docker Hub: Hub REST API ───────────────────────────────────────────
@@ -488,6 +516,7 @@ async def browse_external_images(
             search=search,
             page=page,
             page_size=page_size,
+            tls_verify=tls_verify,
         )
 
     # Docker Hub without credentials: browsing not supported
@@ -541,9 +570,7 @@ async def browse_external_tags(registry_id: str, repository: str) -> dict:
     # ── GHCR: REST API ───────────────────────────────────────────
     if _is_ghcr(host):
         tags = await browse_github_tag(
-            owner=username,
-            token=password,
-            repository=repository,
+            owner=username, token=password, repository=repository, tls_verify=tls_verify
         )
         return {"repository": repository, "tags": tags}
 
@@ -553,6 +580,7 @@ async def browse_external_tags(registry_id: str, repository: str) -> dict:
             username=username,
             password=password,
             repository=repository,
+            tls_verify=tls_verify,
         )
         return {"repository": repository, "tags": tags}
 
@@ -591,9 +619,7 @@ async def delete_external_image(registry_id: str, repository: str) -> dict:
         owner = username
         pkg_name = repository.split("/", 1)[-1] if "/" in repository else repository
         error = await delete_github_package(
-            token=password,
-            owner=owner,
-            package=pkg_name,
+            token=password, owner=owner, package=pkg_name, tls_verify=tls_verify
         )
         if error:
             return {
@@ -613,6 +639,7 @@ async def delete_external_image(registry_id: str, repository: str) -> dict:
             username=username,
             password=password,
             repository=repository,
+            tls_verify=tls_verify,
         )
         if error:
             return {

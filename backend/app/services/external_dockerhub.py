@@ -33,7 +33,9 @@ logger = logging.getLogger(__name__)
 # ── Authentication ────────────────────────────────────────────────────────────
 
 
-async def _get_hub_token(username: str, password: str) -> str | None:
+async def _get_hub_token(
+    username: str, password: str, tls_verify: bool = True
+) -> str | None:
     """
     Obtain a short-lived JWT from the Docker Hub login endpoint.
 
@@ -43,7 +45,9 @@ async def _get_hub_token(username: str, password: str) -> str | None:
     subsequent API calls.
     """
     try:
-        async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
+        async with httpx.AsyncClient(
+            timeout=15, verify=tls_verify, follow_redirects=True
+        ) as client:
             resp = await client.post(
                 _HUB_AUTH_URL,
                 json={"username": username, "password": password},
@@ -68,6 +72,81 @@ def _auth_headers(token: str) -> dict[str, str]:
     }
 
 
+# ── Connectivity ──────────────────────────────────────────────────────────────
+
+
+async def test_dockerhub_connection(
+    host: str,
+    username: str,
+    password: str,
+    tls_verify: bool = True,
+) -> dict[str, Any]:
+    """Probe a Docker hub registry to check reachability and credentials.
+    Returns:
+        Dict with keys: reachable (bool), auth_ok (bool), message (str).
+    """
+    has_credentials = bool(username and password)
+    auth = {"username": username, "password": password} if has_credentials else None
+
+    try:
+        async with httpx.AsyncClient(
+            timeout=15, verify=tls_verify, follow_redirects=True
+        ) as client:
+            cred_resp = await client.post(_HUB_AUTH_URL, json=auth)
+            if cred_resp.status_code == 200:
+                if not has_credentials:
+                    return {
+                        "reachable": True,
+                        "auth_ok": True,
+                        "message": "Registry reachable (public)",
+                    }
+
+                return {
+                    "reachable": True,
+                    "auth_ok": True,
+                    "message": "Registry reachable — credentials accepted",
+                }
+
+            if cred_resp.status_code == 403:
+                return {
+                    "reachable": True,
+                    "auth_ok": True,
+                    "message": (
+                        "Registry reachable — credentials accepted"
+                        " (catalog access restricted)"
+                    ),
+                }
+
+            if cred_resp.status_code == 401:
+                return {
+                    "reachable": True,
+                    "auth_ok": False,
+                    "message": "Authentication failed — invalid username or password",
+                }
+
+            logger.debug(
+                "test_dockerhub_connection: returned %s for host=%s; ",
+                cred_resp.status_code,
+                host,
+            )
+            return {
+                "reachable": True,
+                "auth_ok": False,
+                "message": (
+                    f"Registry reachable but credential check inconclusive"
+                    f" (status {cred_resp.status_code})"
+                ),
+            }
+
+    except httpx.ConnectError:
+        return {"reachable": False, "auth_ok": False, "message": "Connection refused"}
+    except httpx.TimeoutException:
+        return {"reachable": False, "auth_ok": False, "message": "Connection timed out"}
+    except Exception as exc:
+        logger.warning("test_dockerhub_connection failed host=%s: %s", host, exc)
+        return {"reachable": False, "auth_ok": False, "message": "Connection failed"}
+
+
 # ── Browse repositories ───────────────────────────────────────────────────────
 
 
@@ -78,6 +157,7 @@ async def browse_dockerhub_repositories(
     search: str | None = None,
     page: int = 1,
     page_size: int = 20,
+    tls_verify: bool = True,
 ) -> dict[str, Any]:
     """
     List container repositories for a Docker Hub namespace (user or organisation).
@@ -100,7 +180,7 @@ async def browse_dockerhub_repositories(
         Paginated dict compatible with ExternalPaginatedImages:
         { items, total, page, page_size, total_pages, error }
     """
-    token = await _get_hub_token(username, password)
+    token = await _get_hub_token(username, password, tls_verify)
     if not token:
         return {
             "items": [],
@@ -115,7 +195,9 @@ async def browse_dockerhub_repositories(
     repositories: list[str] = []
 
     try:
-        async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
+        async with httpx.AsyncClient(
+            timeout=20, verify=tls_verify, follow_redirects=True
+        ) as client:
             # The Hub API supports server-side search via the `name` query param
             params: dict[str, Any] = {
                 "page": page,
@@ -198,7 +280,7 @@ async def browse_dockerhub_repositories(
     async def _fetch_tags(repo: str) -> list[str]:
         """Fetch versions/tags for a GitHub package."""
         try:
-            return await browse_dockerhub_tags(username, password, repo)
+            return await browse_dockerhub_tags(username, password, repo, tls_verify)
         except Exception:
             pass
         return []
@@ -232,6 +314,7 @@ async def browse_dockerhub_tags(
     username: str,
     password: str,
     repository: str,
+    tls_verify: bool = True,
 ) -> list[str]:
     """
     List all tags for a Docker Hub repository.
@@ -245,7 +328,7 @@ async def browse_dockerhub_tags(
     Returns:
         List of tag name strings (may be empty on error).
     """
-    token = await _get_hub_token(username, password)
+    token = await _get_hub_token(username, password, tls_verify)
     if not token:
         logger.warning("browse_dockerhub_tags: auth failed for repo=%s", repository)
         return []
@@ -262,7 +345,9 @@ async def browse_dockerhub_tags(
     url: str | None = f"{_HUB_API}/repositories/{namespace}/{name}/tags/"
 
     try:
-        async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
+        async with httpx.AsyncClient(
+            timeout=20, verify=tls_verify, follow_redirects=True
+        ) as client:
             while url:
                 resp = await client.get(
                     url,
@@ -293,13 +378,14 @@ async def get_dockerhub_tags_for_import(
     username: str,
     password: str,
     repository: str,
+    tls_verify: bool = True,
 ) -> list[str]:
     """
     Retrieve tag names for a Docker Hub repository, used by the import job.
 
     Thin wrapper around browse_dockerhub_tags that guarantees a list return.
     """
-    return await browse_dockerhub_tags(username, password, repository)
+    return await browse_dockerhub_tags(username, password, repository, tls_verify)
 
 
 # ── Delete ────────────────────────────────────────────────────────────────────
@@ -309,6 +395,7 @@ async def delete_dockerhub_repository(
     username: str,
     password: str,
     repository: str,
+    tls_verify: bool = True,
 ) -> str | None:
     """
     Delete a Docker Hub repository via the Hub REST API.
@@ -324,7 +411,7 @@ async def delete_dockerhub_repository(
     Returns:
         None on success, or an error string on failure.
     """
-    token = await _get_hub_token(username, password)
+    token = await _get_hub_token(username, password, tls_verify)
     if not token:
         return "Docker Hub authentication failed. Check your credentials."
 
@@ -336,7 +423,9 @@ async def delete_dockerhub_repository(
         namespace, name = username, repository
 
     try:
-        async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
+        async with httpx.AsyncClient(
+            timeout=20, verify=tls_verify, follow_redirects=True
+        ) as client:
             resp = await client.delete(
                 f"{_HUB_API}/repositories/{namespace}/{name}/",
                 headers=headers,
