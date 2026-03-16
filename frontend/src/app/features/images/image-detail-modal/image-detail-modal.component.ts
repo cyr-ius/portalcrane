@@ -40,21 +40,22 @@
  */
 import { DatePipe } from "@angular/common";
 import {
-    Component,
-    computed,
-    DestroyRef,
-    inject,
-    input,
-    OnInit,
-    output,
-    signal,
+  Component,
+  computed,
+  DestroyRef,
+  inject,
+  input,
+  OnInit,
+  output,
+  signal,
 } from "@angular/core";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { FormsModule } from "@angular/forms";
+import { formatBytes } from "../../../core/helpers/storage";
 import {
-    ImageDetail,
-    ImageInfo,
-    RegistryService,
+  ImageDetail,
+  ImageInfo,
+  RegistryService,
 } from "../../../core/services/registry.service";
 
 @Component({
@@ -67,31 +68,14 @@ export class ImageDetailModalComponent implements OnInit {
   private readonly registrySvc = inject(RegistryService);
   private readonly destroyRef = inject(DestroyRef);
 
+  readonly formatBytes = formatBytes
+
   // ── Inputs / outputs ───────────────────────────────────────────────────────
 
-  /**
-   * Registry source identifier.
-   * 'local' targets the embedded Portalcrane registry (/api/registry/…).
-   * Any other value is treated as an external registry ID (/api/external/…).
-   */
   readonly source = input.required<string>();
-
-  /** Image metadata row coming from the list. */
   readonly image = input.required<ImageInfo>();
-
-  /**
-   * Whether the authenticated user has push rights on this image location.
-   * Controls visibility of add-tag / delete-tag actions.
-   */
   readonly canPush = input<boolean>(false);
-
-  /** Emitted when the user dismisses the modal. */
   readonly closed = output<void>();
-
-  /**
-   * Emitted after a successful tag add or delete so the parent component
-   * can trigger a data refresh without a full page reload.
-   */
   readonly tagsChanged = output<void>();
 
   // ── Internal state ─────────────────────────────────────────────────────────
@@ -121,38 +105,29 @@ export class ImageDetailModalComponent implements OnInit {
 
   // ── Derived ────────────────────────────────────────────────────────────────
 
-  /** True when source is the local embedded registry. */
   readonly isLocal = computed(() => this.source() === "local");
-
-  /**
-   * Tags sorted with 'latest' first, then alphabetically.
-   * Derived directly from the image input so it reacts to parent updates.
-   */
+  readonly localTags = signal<string[]>([]);
   readonly sortedTags = computed<string[]>(() => {
-    const tags = [...(this.image().tags ?? [])];
+    const tags = [...this.localTags()];
     return tags.sort((a, b) => {
       if (a === "latest") return -1;
       if (b === "latest") return 1;
       return a.localeCompare(b);
     });
   });
-
-  /** Header subtitle shown below the image name. */
   readonly sourceLabel = computed(() =>
     this.isLocal() ? "Local V2 registry — image details" : "External V2 registry — image details",
   );
-
-  /** Icon class for the header badge. */
   readonly sourceIcon = computed(() =>
     this.isLocal() ? "bi bi-hdd-rack me-2 text-primary" : "bi bi-globe me-2 text-info",
   );
-
-  /** Helper exposed to the template for Object.keys iteration. */
   readonly objectKeys = Object.keys;
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
 
   ngOnInit(): void {
+    // Initialize local tag list from the image input
+    this.localTags.set([...(this.image().tags ?? [])]);
     // Auto-select and load the first available tag
     const first = this.sortedTags()[0] ?? "";
     if (first) {
@@ -222,6 +197,7 @@ export class ImageDetailModalComponent implements OnInit {
         this.addMessage.set(res.message);
         this.showAddForm.set(false);
         this.addNewTag.set("");
+        this.localTags.update(tags => [...tags, newT]);
         this.tagsChanged.emit();
       },
       error: (err) => {
@@ -266,7 +242,7 @@ export class ImageDetailModalComponent implements OnInit {
         this.deleteSuccess.set(true);
         this.deleteMessage.set(res.message);
         this.deleteTarget.set(null);
-        // Reset the detail panel if the deleted tag was the selected one
+        this.localTags.update(tags => tags.filter(t => t !== tag));
         if (this.selectedTag() === tag) {
           this.tagDetail.set(null);
           this.selectedTag.set("");
@@ -311,19 +287,6 @@ export class ImageDetailModalComponent implements OnInit {
   }
 
   // ── Utilities ──────────────────────────────────────────────────────────────
-
-  /** Format a byte count as a human-readable string (B / KB / MB / GB). */
-  formatBytes(bytes: number): string {
-    if (!bytes || bytes === 0) return "0 B";
-    const units = ["B", "KB", "MB", "GB"];
-    let value = bytes;
-    let unitIndex = 0;
-    while (value >= 1024 && unitIndex < units.length - 1) {
-      value /= 1024;
-      unitIndex++;
-    }
-    return `${value.toFixed(1)} ${units[unitIndex]}`;
-  }
 
   /** Close the modal and notify the parent. */
   close(): void {

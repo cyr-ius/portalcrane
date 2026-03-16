@@ -389,7 +389,7 @@ export class ImagesListComponent implements OnInit {
 
   // ── Data loading ───────────────────────────────────────────────────────────
 
-  loadImages(): void {
+  loadImages(refreshTargetName: string | null = null): void {
     this.loading.set(true);
     const src = this.selectedSource();
 
@@ -399,6 +399,14 @@ export class ImagesListComponent implements OnInit {
         .subscribe({
           next: (data) => {
             this.data.set(data);
+
+            if (refreshTargetName) {
+              const refreshed = data.items.find((i) => i.name === refreshTargetName) ?? null;
+              if (refreshed) {
+                this.viewTarget.set(refreshed);
+              }
+            }
+
             this.browseError.set(null);
             const allFolders = new Set(this.folderTree().map((n) => n.name));
             this.expandedFolders.set(allFolders);
@@ -412,6 +420,14 @@ export class ImagesListComponent implements OnInit {
         .subscribe({
           next: (data: ExternalPaginatedImages) => {
             this.data.set(data);
+
+            if (refreshTargetName) {
+              const refreshed = data.items.find((i) => i.name === refreshTargetName) ?? null;
+              if (refreshed) {
+                this.viewTarget.set(refreshed);
+              }
+            }
+
             this.browseError.set(data.error ?? null);
             const allFolders = new Set(this.folderTree().map((n) => n.name));
             this.expandedFolders.set(allFolders);
@@ -564,6 +580,7 @@ export class ImagesListComponent implements OnInit {
   }
 
   reloadImages(): void {
+    const targetName = this.viewTarget()?.name ?? null;
     this.loadImages();
   }
 

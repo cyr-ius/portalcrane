@@ -55,17 +55,7 @@ export class DashboardComponent implements OnInit {
 
   readonly formatBytes = formatBytes
 
-  /**
-   * True while a manual Refresh is in progress.
-   * Controls: button spin animation, stat-card overlay fade, button disabled state.
-   * Does NOT hide the dashboard — the existing data stays visible.
-   */
   refreshing = signal(false);
-
-  /**
-   * Internal counter tracking how many concurrent refresh sub-requests are
-   * still in flight. When it reaches 0, `refreshing` is cleared.
-   */
   private _refreshPending = signal(0);
 
   gcStatus = signal<GCStatus | null>(null);
