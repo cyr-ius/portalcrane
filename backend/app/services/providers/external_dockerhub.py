@@ -5,6 +5,7 @@ import logging
 from typing import Any
 
 import httpx
+from .base import BaseRegistryProvider
 
 logger = logging.getLogger(__name__)
 
@@ -13,7 +14,9 @@ _HUB_AUTH_URL = f"{_HUB_API}/users/login"
 _PAGE_SIZE_MAX = 100  # Docker Hub maximum page size for repository listing
 
 
-class DockerHubProvider:
+class DockerHubProvider(BaseRegistryProvider):
+    """Docker Hub provider."""
+
     host: str
     username: str
     password: str
@@ -23,6 +26,10 @@ class DockerHubProvider:
     def __init__(self):
         """Initialize."""
         self.verify = False if not self.use_tls else self.tls_verify
+
+    @property
+    def provider_name(self) -> str:
+        return "dockerhub"
 
     async def _get_token(self) -> str | None:
         """

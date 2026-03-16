@@ -3,15 +3,17 @@
 import asyncio
 import logging
 from typing import Any
-
 import httpx
+from .base import BaseRegistryProvider
 
 logger = logging.getLogger(__name__)
 
 _GITHUB_API = "https://api.github.com"
 
 
-class GithubProvider:
+class GithubProvider(BaseRegistryProvider):
+    """Github provider"""
+
     host: str
     username: str
     password: str
@@ -21,6 +23,10 @@ class GithubProvider:
     def __init__(self):
         """Initialize."""
         self.verify = False if not self.use_tls else self.tls_verify
+
+    @property
+    def provider_name(self) -> str:
+        return "gihub"
 
     @property
     def owner(self):

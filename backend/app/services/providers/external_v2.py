@@ -3,7 +3,7 @@
 import asyncio
 import logging
 from typing import Any
-
+from .base import BaseRegistryProvider
 import httpx
 
 logger = logging.getLogger(__name__)
@@ -18,7 +18,9 @@ _MANIFEST_ACCEPT = ", ".join(
 )
 
 
-class V2Provider:
+class V2Provider(BaseRegistryProvider):
+    """Registry V2 Provider."""
+
     host: str
     username: str
     password: str
@@ -28,6 +30,10 @@ class V2Provider:
     def __init__(self):
         """Initialize."""
         self.verify = False if not self.use_tls else self.tls_verify
+
+    @property
+    def provider_name(self) -> str:
+        return "v2"
 
     def _build_base_url(self) -> str:
         """Build the base HTTPS/HTTP URL for a registry host.
