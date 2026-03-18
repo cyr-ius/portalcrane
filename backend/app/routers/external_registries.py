@@ -13,6 +13,7 @@ Changes:
 """
 
 import logging
+import shutil
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from pydantic import BaseModel
@@ -30,8 +31,8 @@ from ..services.external_registry import (
     get_registry_by_id,
     list_sync_jobs,
     run_import_job,
-    run_sync_job,
-    skopeo_push,
+    run_export_job,
+    skopeo_copy_oci_image,
     test_registry_connection,
     update_registry,
     validate_folder_path,
@@ -40,7 +41,7 @@ from ..services.external_registry import (
     add_external_tag,
 )
 from ..services.providers import build_target_path, resolve_provider_from_registry
-
+from ..services.job_service import safe_job_path
 from ..core.jwt import (
     UserInfo,
     get_current_user,
@@ -490,8 +491,6 @@ async def push_to_external(
     if not current_user.is_admin and job.get("owner") != current_user.username:
         raise HTTPException(status_code=403, detail="Access denied")
 
-    from ..services.job_service import safe_job_path
-
     try:
         oci_dir = safe_job_path(request.job_id)
     except ValueError as exc:
@@ -501,13 +500,11 @@ async def push_to_external(
         registry = get_registry_by_id(request.registry_id)
         if not registry:
             raise HTTPException(status_code=404, detail="Saved registry not found")
-
         provider = resolve_provider_from_registry(registry)
         host = provider.host
         username = provider.username
         password = provider.password
         effective_tls_verify = provider.verify
-
     else:
         host = request.registry_host or ""
         username = request.registry_username or ""
@@ -519,7 +516,7 @@ async def push_to_external(
     folder = request.folder or ""
     dest_ref = build_target_path(folder or None, image_name, tag, host)
 
-    ok, message = await skopeo_push(
+    ok, message = await skopeo_copy_oci_image(
         oci_dir=str(oci_dir),
         dest_ref=dest_ref,
         dest_username=username,
@@ -530,10 +527,21 @@ async def push_to_external(
     return {"success": ok, "message": message, "dest_ref": dest_ref}
 
 
-# ── Sync (local -> external) ──────────────────────────────────────────────────
+# ── List Sync Jobs ──────────────────────────────────────────────────
 
 
-@router.post("/sync")
+@router.get("/sync/jobs")
+async def list_sync_jobs_endpoint(
+    _: UserInfo = Depends(require_pull_access),
+):
+    """List all sync/import jobs sorted by start time descending."""
+    return [normalize_sync_job(j) for j in list_sync_jobs()]
+
+
+# ── Export (local -> external) ────────────────────────────────────────────────
+
+
+@router.post("/export")
 async def start_sync(
     request: SyncRequest,
     _: UserInfo = Depends(require_push_access),
@@ -548,7 +556,7 @@ async def start_sync(
         raise HTTPException(status_code=400, detail=str(exc))
 
     try:
-        job_id = await run_sync_job(
+        job_id = await run_export_job(
             source_image=request.source_image,
             dest_registry_id=request.dest_registry_id,
             dest_folder=folder,
@@ -559,14 +567,6 @@ async def start_sync(
         raise HTTPException(status_code=404, detail=str(exc))
 
     return {"job_id": job_id, "status": "running"}
-
-
-@router.get("/sync/jobs")
-async def list_sync_jobs_endpoint(
-    _: UserInfo = Depends(require_pull_access),
-):
-    """List all sync/import jobs sorted by start time descending."""
-    return [normalize_sync_job(j) for j in list_sync_jobs()]
 
 
 # ── Import (external -> local) ────────────────────────────────────────────────
@@ -609,8 +609,6 @@ async def delete_staging_job(
     _: UserInfo = Depends(require_pull_access),
 ):
     """Delete an orphaned staging OCI directory."""
-    import shutil
-    from ..services.job_service import safe_job_path
 
     try:
         oci_dir = safe_job_path(job_id)

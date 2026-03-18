@@ -37,7 +37,7 @@ from ..services.job_service import (
     jobs_list,
     safe_job_path,
 )
-from ..services.external_registry import skopeo_push
+from ..services.external_registry import skopeo_copy_oci_image
 from ..services.providers import resolve_provider_from_registry
 
 router = APIRouter()
@@ -266,12 +266,11 @@ async def push_image(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="Saved registry not found",
                 )
-            host = registry["host"]
-            username = registry.get("username", "")
-            password = registry.get("password", "")
-            use_tls = registry.get("use_tls", True)
-            tls_verify = registry.get("tls_verify", True)
-            effective_tls_verify = False if not use_tls else tls_verify
+            provider = resolve_provider_from_registry(registry)
+            host = provider.host
+            username = provider.username
+            password = provider.password
+            effective_tls_verify = provider.verify
         else:
             host = request.external_registry_host or ""
             username = request.external_registry_username or ""
@@ -290,7 +289,7 @@ async def push_image(
         job["status"] = JobStatus.PUSHING
         job["message"] = f"Pushing to external registry {host}..."
 
-        success, message = await skopeo_push(
+        success, message = await skopeo_copy_oci_image(
             oci_dir=str(oci_dir),
             dest_ref=dest_ref,
             dest_username=username,

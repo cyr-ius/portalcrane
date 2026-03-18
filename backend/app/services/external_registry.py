@@ -392,7 +392,7 @@ async def delete_external_image(registry_id: str, repository: str) -> dict:
     return {
         "deleted_tags": [repository],
         "failed_tags": [],
-        "message": f"Package '{repository}' deleted from GitHub Container Registry",
+        "message": f"Package '{repository}' deleted from {provider.host}",
     }
 
 
@@ -482,7 +482,7 @@ def validate_folder_path(folder: str) -> str | None:
 # ── Skopeo helpers ────────────────────────────────────────────────────────────
 
 
-async def skopeo_push(
+async def skopeo_copy_oci_image(
     oci_dir: str,
     dest_ref: str,
     dest_username: str,
@@ -513,7 +513,7 @@ async def skopeo_push(
     return False, stderr.decode().strip() or stdout.decode().strip()
 
 
-async def skopeo_sync_image(
+async def skopeo_copy_image_image(
     src_ref: str,
     dest_ref: str,
     dest_username: str,
@@ -594,7 +594,7 @@ def list_sync_jobs() -> list[dict]:
     return jobs
 
 
-async def run_sync_job(
+async def run_export_job(
     source_image: str,
     dest_registry_id: str,
     dest_folder: str | None,
@@ -625,7 +625,7 @@ async def run_sync_job(
     }
 
     asyncio.create_task(
-        _run_sync_job_task(
+        _run_export_job_task(
             job_id=job_id,
             source_image=source_image,
             registry=registry,
@@ -637,7 +637,7 @@ async def run_sync_job(
     return job_id
 
 
-async def _run_sync_job_task(
+async def _run_export_job_task(
     job_id: str,
     source_image: str,
     registry: dict,
@@ -685,7 +685,7 @@ async def _run_sync_job_task(
                 )
                 dest_ref = build_target_path(None, dest_image, tag, dest_host)
 
-                ok, msg = await skopeo_sync_image(
+                ok, msg = await skopeo_copy_image_image(
                     src_ref=src_ref,
                     dest_ref=dest_ref,
                     src_username="",
@@ -801,7 +801,7 @@ async def _run_import_job_task(
                 src_ref = build_target_path(None, img, tag, src_host)
                 dest_ref = build_target_path(None, dest_img, tag, REGISTRY_HOST)
 
-                ok, msg = await skopeo_sync_image(
+                ok, msg = await skopeo_copy_image_image(
                     src_ref=src_ref,
                     dest_ref=dest_ref,
                     src_username=src_username,

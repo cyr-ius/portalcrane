@@ -59,12 +59,6 @@ export interface UpdateRegistryPayload {
   tls_verify?: boolean;
 }
 
-/**
- * A sync or import job entry returned by GET /api/external/sync/jobs.
- *
- * direction "export" = local -> external (sync)
- * direction "import" = external -> local (import)
- */
 export interface SyncJob {
   id: string;
   direction: "export" | "import";
@@ -174,17 +168,19 @@ export class ExternalRegistryService {
     );
   }
 
-  // ── Sync (local -> external) ────────────────────────────────────────────────
-
-  startSync(request: SyncRequest): Observable<{ job_id: string; status: string }> {
-    return this.http.post<{ job_id: string; status: string }>(
-      `${this.BASE}/sync`,
-      request,
-    );
-  }
+  // ── List Sync Jobs ────────────────────────────────────────────────
 
   listSyncJobs(): Observable<SyncJob[]> {
     return this.http.get<SyncJob[]>(`${this.BASE}/sync/jobs`);
+  }
+
+  // ── Export (local -> external) ────────────────────────────────────────────────
+
+  startSync(request: SyncRequest): Observable<{ job_id: string; status: string }> {
+    return this.http.post<{ job_id: string; status: string }>(
+      `${this.BASE}/export`,
+      request,
+    );
   }
 
   // ── Import (external -> local) ────────────────────────────────────────────

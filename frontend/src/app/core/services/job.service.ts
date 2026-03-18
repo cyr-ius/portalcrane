@@ -83,80 +83,27 @@ export class JobService {
   private _jobs = signal<StagingJob[]>([]);
   readonly jobs = this._jobs.asReadonly();
 
-  /**
-   * FIX #1 (flicker) + FIX #2 (rePush broken):
-   *
-   * `pushingJobId` is a service-level signal that tracks which job is
-   * currently being submitted for push. Moving it out of JobDetailComponent
-   * (where it was a local signal) solves both bugs:
-   *
-   * - FLICKER: The component was calling `pushing.set(null)` in the HTTP
-   *   `next:` callback, which briefly re-enabled the Push button before
-   *   the next polling cycle brought back `status: "pushing"` from the
-   *   backend. Now the state is cleared only when the backend status
-   *   transitions, not on HTTP response.
-   *
-   * - REPUSH BROKEN: Angular's @for re-creates JobDetailComponent when the
-   *   job object reference changes (every 3 s polling cycle). A local signal
-   *   is reset to its initial value on each re-creation, losing the pushing
-   *   state and orphaning the HTTP subscribe. A service-level signal survives
-   *   component re-creation.
-   */
   private readonly _pushingJobId = signal<string | null>(null);
   readonly pushingJobId = this._pushingJobId.asReadonly();
 
-  /**
-   * Tracks job IDs whose status has been locally overridden to "scan_clean"
-   * by the "Push again" action.
-   */
   private readonly _rePushOverrides = new Set<string>();
 
-  // ── Session lifecycle ──────────────────────────────────────────────────────
-
-  /**
-   * Reset all mutable state to its initial value.
-   *
-   * Must be called by AuthService.clearSession() so that a new user logging
-   * in after a logout/expiry never sees stale jobs belonging to the previous
-   * session. JobService is providedIn: 'root' (singleton), so the signal
-   * would otherwise persist across sessions within the same browser tab.
-   */
   clearState(): void {
     this._jobs.set([]);
     this._pushingJobId.set(null);
     this._rePushOverrides.clear();
   }
 
-  // ── Push lifecycle helpers ─────────────────────────────────────────────────
-
-  /**
-   * Register a job as currently being pushed.
-   * Called synchronously before the HTTP request so the UI transitions
-   * atomically (no intermediate flash of the idle Push button).
-   */
   startPushing(jobId: string): void {
     this._pushingJobId.set(jobId);
   }
 
-  /**
-   * Clear the pushing state for a given job.
-   * Called by setJobs() when the backend status moves away from the
-   * initial "pending" state (i.e. the backend has accepted the push),
-   * or immediately on HTTP error.
-   */
   clearPushing(jobId: string): void {
     if (this._pushingJobId() === jobId) {
       this._pushingJobId.set(null);
     }
   }
 
-  // ── Job list management ────────────────────────────────────────────────────
-
-  /**
-   * Replace the full job list with data from the backend.
-   * - Reapplies re-push overrides so the push panel stays visible across polling cycles.
-   * - Clears pushingJobId once the backend acknowledges the push (status !== "pending").
-   */
   setJobs(jobs: StagingJob[]): void {
     const merged = jobs.map((job) => {
       if (this._rePushOverrides.has(job.job_id)) {
@@ -169,13 +116,6 @@ export class JobService {
         this._rePushOverrides.delete(job.job_id);
       }
 
-      /**
-       * FIX #1 — Clear pushingJobId when the backend confirms the push
-       * pipeline has started (status moves from pending to any other state).
-       * This is the single authoritative place to clear the pushing flag,
-       * replacing the previous approach of clearing it in the HTTP next:
-       * callback (which caused a brief idle-button flash).
-       */
       if (
         this._pushingJobId() === job.job_id &&
         job.status !== "pending"
@@ -189,9 +129,6 @@ export class JobService {
     this._jobs.set(this.sortJobs(merged));
   }
 
-  /**
-   * Insert or update a single job without duplicating it.
-   */
   updateJob(job: StagingJob): void {
     this._jobs.update((jobs) => {
       const exists = jobs.some((j) => j.job_id === job.job_id);
@@ -204,14 +141,6 @@ export class JobService {
     });
   }
 
-  /**
-   * Locally override a job's status to "scan_clean" so the push panel
-   * becomes visible again after a completed push ("Push again" button).
-   *
-   * The job ID is registered in _rePushOverrides so that setJobs()
-   * reapplies the override on every polling cycle until the backend
-   * reports a status transition away from "done" (new push started).
-   */
   reUpdateJob(job: StagingJob): void {
     this._rePushOverrides.add(job.job_id);
 
@@ -221,8 +150,6 @@ export class JobService {
       ),
     );
   }
-
-  // ── HTTP calls ─────────────────────────────────────────────────────────────
 
   getJob(jobId: string): Observable<StagingJob> {
     return this.http.get<StagingJob>(`${this.BASE}/jobs/${jobId}`);
@@ -254,12 +181,6 @@ export class JobService {
     return this.http.delete<{ message: string }>(`${this.BASE}/jobs/${jobId}`);
   }
 
-  // ── Sort helper ────────────────────────────────────────────────────────────
-
-  /**
-   * Sort jobs: active jobs first, then by creation date descending
-   * (most recent at the top of each group).
-   */
   sortJobs(jobs: StagingJob[]): StagingJob[] {
     return [...jobs].sort((a, b) => {
       const aActive = ACTIVE_STATUSES.has(a.status) ? 0 : 1;
