@@ -14,15 +14,30 @@ _GITHUB_API = "https://api.github.com"
 class GithubProvider(BaseRegistryProvider):
     """Github provider"""
 
-    host: str
-    username: str
-    password: str
-    use_tls: bool = True
-    tls_verify: bool = True
+    def __init__(
+        self,
+        host: str,
+        username: str = "",
+        password: str = "",
+        use_tls: bool = True,
+        tls_verify: bool = True,
+    ) -> None:
+        """Initialize provider with registry credentials.
 
-    def __init__(self):
-        """Initialize."""
-        self.verify = False if not self.use_tls else self.tls_verify
+        Args:
+            host:       Registry hostname, with or without scheme.
+            username:   Registry username or GitHub owner login.
+            password:   Registry password or access token.
+            use_tls:    Use HTTPS when True (default).
+            tls_verify: Validate TLS certificate when True (default).
+        """
+        super().__init__(
+            host=host,
+            username=username,
+            password=password,
+            use_tls=use_tls,
+            tls_verify=tls_verify,
+        )
 
     @property
     def provider_name(self) -> str:
@@ -130,7 +145,7 @@ class GithubProvider(BaseRegistryProvider):
                 "message": "Connection failed",
             }
 
-    async def browse_repository(
+    async def browse_repositories(
         self, search: str | None, page: int, page_size: int
     ) -> dict:
         """
@@ -283,19 +298,20 @@ class GithubProvider(BaseRegistryProvider):
 
         return {"error": last_error}
 
-    async def get_tags_for_import(self, package: str) -> list[str]:
+    async def get_tags_for_import(self, repository: str) -> list[str]:
         """
         Retrieve all tag names for a package, used by the import job.
 
         This is a simplified wrapper around browse_github_tag() that always
         returns a list (never a dict), safe to iterate in run_import_job().
         """
-        result = await self.browse_tags(repository=package)
+        repository = repository.split("/", 1)[-1] if "/" in repository else repository
+        result = await self.browse_tags(repository=repository)
         if isinstance(result, list):
             return result
         return []
 
-    async def delete_repository(self, package: str) -> str | None:
+    async def delete_repository(self, repository: str) -> str | None:
         """
         Delete a container package for a GitHub user or organisation.
 
@@ -304,13 +320,14 @@ class GithubProvider(BaseRegistryProvider):
         """
         headers = self._auth_headers()
         last_error: str | None = None
+        repository = repository.split("/", 1)[-1] if "/" in repository else repository
 
         async with httpx.AsyncClient(
             timeout=30, verify=self.verify, follow_redirects=True
         ) as client:
             for base_url in self._get_urls():
                 try:
-                    full_url = f"{base_url}/container/{package}"
+                    full_url = f"{base_url}/container/{repository}"
                     resp = await client.delete(full_url, headers=headers)
                     if resp.status_code in (200, 204):
                         return None  # success
@@ -323,3 +340,12 @@ class GithubProvider(BaseRegistryProvider):
                     last_error = str(exc)
 
         return last_error
+
+    async def check_catalog(self) -> bool:
+        browsable = bool(self.password)
+        logger.debug(
+            "check_catalog_browsable: GHCR — browsable=%s (token present=%s)",
+            browsable,
+            browsable,
+        )
+        return browsable

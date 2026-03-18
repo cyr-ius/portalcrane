@@ -4,7 +4,6 @@ Handles local authentication and user management:
   - POST /token           → OAuth2 password-flow token endpoint
   - POST /login           → JSON login endpoint
   - GET  /me              → current user information
-  - GET /account/dockerhub → Docker Hub credentials source (external registry)
   - GET/POST/PATCH/DELETE /users → local users CRUD
 
 Pull/push permissions are managed exclusively through folder permissions.
@@ -32,7 +31,6 @@ from ..core.jwt import (
 from ..core.security import hash_password, verify_user
 from ..services.external_registry import (
     delete_registries_for_owner,
-    find_registry_credentials_for_host,
 )
 from .folders import remove_permissions_for_username
 from .personal_tokens import revoke_tokens_for_username
@@ -186,14 +184,6 @@ def _user_to_public(u: dict) -> LocalUserPublic:
         created_at=u.get("created_at", ""),
         auth_source=u.get("auth_source", AUTH_SOURCE_LOCAL),
     )
-
-
-# ─── Docker Hub helpers ───────────────────────────────────────────────────────
-
-
-def get_user_dockerhub_credentials(username: str) -> tuple[str, str] | None:
-    """Return Docker Hub credentials from external registries for *username*."""
-    return find_registry_credentials_for_host("docker.io", owner=username)
 
 
 # ─── Endpoints ────────────────────────────────────────────────────────────────
@@ -382,22 +372,3 @@ async def delete_local_user(
     revoke_tokens_for_username(username)
 
     _save_users([u for u in users if u["id"] != user_id])
-
-
-@router.get("/account/dockerhub", response_model=DockerHubAccountSettings)
-async def get_dockerhub_account(
-    current_user: UserInfo = Depends(get_current_user),
-) -> DockerHubAccountSettings:
-    """Return the Docker Hub credentials stored for the current user."""
-    creds = find_registry_credentials_for_host(
-        "docker.io",
-        owner=current_user.username,
-    )
-    if creds:
-        username, password = creds
-        return DockerHubAccountSettings(
-            username=username,
-            has_password=bool(password),
-        )
-
-    return DockerHubAccountSettings(username="", has_password=False)

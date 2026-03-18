@@ -21,15 +21,30 @@ _MANIFEST_ACCEPT = ", ".join(
 class V2Provider(BaseRegistryProvider):
     """Registry V2 Provider."""
 
-    host: str
-    username: str
-    password: str
-    use_tls: bool = True
-    tls_verify: bool = True
+    def __init__(
+        self,
+        host: str,
+        username: str = "",
+        password: str = "",
+        use_tls: bool = True,
+        tls_verify: bool = True,
+    ) -> None:
+        """Initialize provider with registry credentials.
 
-    def __init__(self):
-        """Initialize."""
-        self.verify = False if not self.use_tls else self.tls_verify
+        Args:
+            host:       Registry hostname, with or without scheme.
+            username:   Registry username or GitHub owner login.
+            password:   Registry password or access token.
+            use_tls:    Use HTTPS when True (default).
+            tls_verify: Validate TLS certificate when True (default).
+        """
+        super().__init__(
+            host=host,
+            username=username,
+            password=password,
+            use_tls=use_tls,
+            tls_verify=tls_verify,
+        )
 
     @property
     def provider_name(self) -> str:
@@ -349,7 +364,7 @@ class V2Provider(BaseRegistryProvider):
 
         return tags
 
-    async def delete_image(self, repository: str) -> dict[str, Any]:
+    async def delete_repository(self, repository: str) -> dict[str, Any]:
         """Delete all tags of a repository in a V2-compatible registry.
 
         For each tag the manifest digest is resolved via

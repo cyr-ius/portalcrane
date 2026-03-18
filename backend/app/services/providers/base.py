@@ -21,37 +21,35 @@ logger = logging.getLogger(__name__)
 class BaseRegistryProvider(ABC):
     """Abstract base class for all external registry providers.
 
-    Each concrete provider encapsulates the HTTP logic for a specific registry
-    type.  The orchestrator (external_registry.py) resolves the registry type,
-    instantiates the matching provider, and calls the uniform interface defined
-    here without knowing the underlying implementation.
-
-    Attributes:
-        host:      Registry hostname, with or without scheme.
-        username:  Registry username (may be empty for anonymous access).
-        password:  Registry password or access token.
-        use_tls:   When True (default) use HTTPS, otherwise plain HTTP.
-        tls_verify: When True (default) validate TLS certificates.
-        verify:    Resolved httpx verify parameter — derived from use_tls and
-                   tls_verify in __init__; do not override after construction.
+    Provider hierarchy:
+        BaseRegistryProvider  (abstract — this file)
+        ├── V2Provider        (OCI Distribution / Docker V2 spec)
+        ├── GithubProvider    (GitHub Container Registry — Packages REST API)
+        └── DockerHubProvider (Docker Hub — Hub REST API)
     """
 
-    # ── Class-level type annotations (overridden by concrete subclasses) ──────
+    def __init__(
+        self,
+        host: str,
+        username: str = "",
+        password: str = "",
+        use_tls: bool = True,
+        tls_verify: bool = True,
+    ) -> None:
+        """Initialize credentials and resolve the httpx verify parameter.
 
-    host: str
-    username: str
-    password: str
-    use_tls: bool = True
-    tls_verify: bool = True
-
-    def __init__(self) -> None:
-        """Resolve the httpx verify parameter from use_tls and tls_verify.
-
-        Mapping:
-            use_tls=False              -> verify=False  (plain HTTP, no TLS at all)
-            use_tls=True, verify=False -> verify=False  (HTTPS, skip cert check)
-            use_tls=True, verify=True  -> verify=True   (HTTPS, full cert validation)
+        Args:
+            host:       Registry hostname, with or without scheme.
+            username:   Registry username (may be empty for anonymous access).
+            password:   Registry password or access token.
+            use_tls:    When True (default) use HTTPS, otherwise plain HTTP.
+            tls_verify: When True (default) validate TLS certificates.
         """
+        self.host = host
+        self.username = username
+        self.password = password
+        self.use_tls = use_tls
+        self.tls_verify = tls_verify
         self.verify: bool = False if not self.use_tls else self.tls_verify
 
     # ── Abstract interface — every provider MUST implement these methods ───────

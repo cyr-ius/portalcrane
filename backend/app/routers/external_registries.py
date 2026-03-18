@@ -23,7 +23,6 @@ from ..services.external_registry import (
     browse_external_images,
     browse_external_tags,
     delete_external_image,
-    build_target_path,
     check_catalog_browsable,
     create_registry,
     delete_registry,
@@ -40,6 +39,7 @@ from ..services.external_registry import (
     delete_external_tag,
     add_external_tag,
 )
+from ..services.providers import build_target_path, resolve_provider_from_registry
 
 from ..core.jwt import (
     UserInfo,
@@ -483,8 +483,6 @@ async def push_to_external(
     settings: Settings = Depends(get_settings),
 ):
     """Push a staged OCI layout to an external registry."""
-    from ..services.external_registry import _skopeo_tls_verify
-
     if request.job_id not in jobs_list:
         raise HTTPException(status_code=404, detail="Job not found")
 
@@ -503,12 +501,13 @@ async def push_to_external(
         registry = get_registry_by_id(request.registry_id)
         if not registry:
             raise HTTPException(status_code=404, detail="Saved registry not found")
-        host = registry["host"]
-        username = registry.get("username", "")
-        password = registry.get("password", "")
-        effective_tls_verify = _skopeo_tls_verify(
-            registry.get("use_tls", True), registry.get("tls_verify", True)
-        )
+
+        provider = resolve_provider_from_registry(registry)
+        host = provider.host
+        username = provider.username
+        password = provider.password
+        effective_tls_verify = provider.verify
+
     else:
         host = request.registry_host or ""
         username = request.registry_username or ""

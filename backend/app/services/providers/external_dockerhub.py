@@ -17,15 +17,30 @@ _PAGE_SIZE_MAX = 100  # Docker Hub maximum page size for repository listing
 class DockerHubProvider(BaseRegistryProvider):
     """Docker Hub provider."""
 
-    host: str
-    username: str
-    password: str
-    use_tls: bool = True
-    tls_verify: bool = True
+    def __init__(
+        self,
+        host: str,
+        username: str = "",
+        password: str = "",
+        use_tls: bool = True,
+        tls_verify: bool = True,
+    ) -> None:
+        """Initialize provider with registry credentials.
 
-    def __init__(self):
-        """Initialize."""
-        self.verify = False if not self.use_tls else self.tls_verify
+        Args:
+            host:       Registry hostname, with or without scheme.
+            username:   Registry username or GitHub owner login.
+            password:   Registry password or access token.
+            use_tls:    Use HTTPS when True (default).
+            tls_verify: Validate TLS certificate when True (default).
+        """
+        super().__init__(
+            host=host,
+            username=username,
+            password=password,
+            use_tls=use_tls,
+            tls_verify=tls_verify,
+        )
 
     @property
     def provider_name(self) -> str:
@@ -151,11 +166,7 @@ class DockerHubProvider(BaseRegistryProvider):
             }
 
     async def browse_repositories(
-        self,
-        namespace: str,
-        search: str | None = None,
-        page: int = 1,
-        page_size: int = 20,
+        self, search: str | None = None, page: int = 1, page_size: int = 20
     ) -> dict[str, Any]:
         """
         List container repositories for a Docker Hub namespace (user or organisation).
@@ -167,9 +178,6 @@ class DockerHubProvider(BaseRegistryProvider):
         username=john, namespace defaults to john.
 
         Args:
-            username:  Docker Hub account username (used for authentication).
-            password:  Docker Hub account password or access token.
-            namespace: Docker Hub namespace to browse (user or org name).
             search:    Optional substring filter applied client-side on repo name.
             page:      1-based page number.
             page_size: Number of items per page.
@@ -191,6 +199,7 @@ class DockerHubProvider(BaseRegistryProvider):
 
         headers = self._auth_headers(token)
         repositories: list[str] = []
+        namespace = self.username  # Docker Hub namespace to browse (user or org name).
 
         try:
             async with httpx.AsyncClient(
@@ -423,3 +432,14 @@ class DockerHubProvider(BaseRegistryProvider):
                 "delete_dockerhub_repository error repo=%s: %s", repository, exc
             )
             return f"Delete failed: {exc}"
+
+    async def check_catalog(self) -> bool:
+        has_creds = bool(
+            (self.username or "").strip() and (self.password or "").strip()
+        )
+        logger.debug(
+            "check_catalog_browsable: Docker Hub — browsable=%s (creds present=%s)",
+            has_creds,
+            has_creds,
+        )
+        return has_creds

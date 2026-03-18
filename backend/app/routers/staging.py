@@ -19,7 +19,7 @@ from ..config import (
     Settings,
     get_settings,
 )
-from .auth import get_user_dockerhub_credentials
+from .external_registries import get_registry_by_id, build_target_path
 from ..core.jwt import (
     UserInfo,
     require_pull_access,
@@ -37,6 +37,8 @@ from ..services.job_service import (
     jobs_list,
     safe_job_path,
 )
+from ..services.external_registry import skopeo_push
+from ..services.providers import resolve_provider_from_registry
 
 router = APIRouter()
 
@@ -57,39 +59,6 @@ class DockerHubSearchResult(BaseModel):
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 
 
-def _build_skopeo_src_creds(current_user: UserInfo) -> list[str]:
-    """
-    Return skopeo --src-creds argument list using the authenticated user's
-    Docker Hub credentials. Returns an empty list when no credentials exist.
-    """
-    creds = get_user_dockerhub_credentials(current_user.username)
-    if creds:
-        return ["--src-creds", f"{creds[0]}:{creds[1]}"]
-    return []
-
-
-def _build_dockerhub_auth(username: str) -> httpx.BasicAuth | None:
-    """
-    Return an httpx.BasicAuth instance using the user's saved Docker Hub
-    credentials, or None when no credentials are configured.
-    Authenticated requests lift the Docker Hub anonymous rate-limit.
-    """
-    creds = get_user_dockerhub_credentials(username)
-    if creds:
-        _logger.debug(
-            "Docker Hub auth resolved for user=%s using docker_username=%s",
-            username,
-            creds[0],
-        )
-        return httpx.BasicAuth(username=creds[0], password=creds[1])
-
-    _logger.debug(
-        "Docker Hub auth resolved for user=%s using anonymous mode (no credentials)",
-        username,
-    )
-    return None
-
-
 def _build_external_target_image(image: str, username: str) -> str:
     """Return external target image path, replacing source namespace with destination username."""
     if not username:
@@ -101,7 +70,7 @@ def _build_external_target_image(image: str, username: str) -> str:
 
 def _resolve_pull_source(
     request: PullRequest,
-    current_user: UserInfo,
+    _: UserInfo,
 ) -> tuple[str, list[str], str | None]:
     """
     Resolve the skopeo source reference, credentials flags and display host
@@ -122,35 +91,26 @@ def _resolve_pull_source(
 
     # ── 1. Saved external registry ────────────────────────────────────────────
     if request.source_registry_id:
-        from .external_registries import get_registry_by_id
-        from ..services.external_registry import _skopeo_tls_verify
-
         registry = get_registry_by_id(request.source_registry_id)
         if not registry:
             raise ValueError(f"Source registry not found: {request.source_registry_id}")
 
-        host = registry["host"].rstrip("/")
-        username = registry.get("username", "")
-        password = registry.get("password", "")
-        use_tls = registry.get("use_tls", True)
-        tls_verify = registry.get("tls_verify", True)
-        src_tls_verify = _skopeo_tls_verify(use_tls, tls_verify)
-
-        src_ref = f"docker://{host}/{image}:{tag}"
-        src_creds = [f"--src-tls-verify={'true' if src_tls_verify else 'false'}"]
-        if username and password:
-            src_creds += ["--src-creds", f"{username}:{password}"]
+        provider = resolve_provider_from_registry(registry)
+        src_ref = build_target_path(None, image, tag, provider.host)
+        src_creds = [f"--src-tls-verify={'true' if provider.verify else 'false'}"]
+        if provider.username and provider.password:
+            src_creds += ["--src-creds", f"{provider.username}:{provider.password}"]
 
         _logger.debug(
             "Pull source resolved: saved registry id=%s host=%s use_tls=%s tls_verify=%s "
             "→ --src-tls-verify=%s",
             request.source_registry_id,
-            host,
-            use_tls,
-            tls_verify,
-            src_tls_verify,
+            provider.host,
+            provider.use_tls,
+            provider.tls_verify,
+            provider.verify,
         )
-        return src_ref, src_creds, host
+        return src_ref, src_creds, provider.host
 
     # ── 2. Ad-hoc source registry ─────────────────────────────────────────────
     if request.source_registry_host:
@@ -186,7 +146,8 @@ def _resolve_pull_source(
 
     # ── 3. Default: Docker Hub ─────────────────────────────────────────────────
     src_ref = f"docker://{image}:{tag}"
-    src_creds = _build_skopeo_src_creds(current_user)
+    src_ref = build_target_path(None, image, tag, None)
+    src_creds = []
     return src_ref, src_creds, None
 
 
@@ -274,9 +235,6 @@ async def push_image(
     Push a scanned image to the local registry or to an external registry.
     Non-admin users can only push their own jobs.
     """
-    from .external_registries import build_target_path, get_registry_by_id
-    from ..services.external_registry import skopeo_push
-
     if request.job_id not in jobs_list:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Job not found"
@@ -313,9 +271,7 @@ async def push_image(
             password = registry.get("password", "")
             use_tls = registry.get("use_tls", True)
             tls_verify = registry.get("tls_verify", True)
-            from ..services.external_registry import _skopeo_tls_verify
-
-            effective_tls_verify = _skopeo_tls_verify(use_tls, tls_verify)
+            effective_tls_verify = False if not use_tls else tls_verify
         else:
             host = request.external_registry_host or ""
             username = request.external_registry_username or ""
@@ -435,17 +391,16 @@ async def search_dockerhub(
 @router.get("/dockerhub/tags/{image:path}")
 async def get_dockerhub_tags(
     image: str,
-    current_user: UserInfo = Depends(require_pull_access),
+    _: UserInfo = Depends(require_pull_access),
 ):
     """Fetch available tags for a Docker Hub image."""
-    auth = _build_dockerhub_auth(current_user.username)
     namespace, name = image.split("/", 1) if "/" in image else ("library", image)
     url = f"{DOCKERHUB_API_URL}/repositories/{namespace}/{name}/tags/"
     try:
         async with httpx.AsyncClient(
             timeout=HTTPX_TIMEOUT, follow_redirects=True
         ) as client:
-            resp = await client.get(url, params={"page_size": 50}, auth=auth)
+            resp = await client.get(url, params={"page_size": 50})
             resp.raise_for_status()
             data = resp.json()
     except Exception as exc:
