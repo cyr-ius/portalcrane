@@ -13,13 +13,12 @@ Changes:
 """
 
 import logging
-import shutil
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 
 from ..config import Settings, get_settings, REGISTRY_URL
-from ..services.job_service import jobs_list, normalize_sync_job
+from ..services.job_service import normalize_sync_job
 from ..services.external_registry import (
     browse_external_images,
     browse_external_tags,
@@ -32,7 +31,6 @@ from ..services.external_registry import (
     list_sync_jobs,
     run_import_job,
     run_export_job,
-    skopeo_copy_oci_image,
     test_registry_connection,
     update_registry,
     validate_folder_path,
@@ -40,8 +38,6 @@ from ..services.external_registry import (
     delete_external_tag,
     add_external_tag,
 )
-from ..services.providers import build_target_path, resolve_provider_from_registry
-from ..services.job_service import safe_job_path
 from ..core.jwt import (
     UserInfo,
     get_current_user,
@@ -474,59 +470,6 @@ async def add_registry_tag(
     return result
 
 
-# ── Push to external registry ─────────────────────────────────────────────────
-
-
-@router.post("/push")
-async def push_to_external(
-    request: ExternalPushRequest,
-    current_user: UserInfo = Depends(require_push_access),
-    settings: Settings = Depends(get_settings),
-):
-    """Push a staged OCI layout to an external registry."""
-    if request.job_id not in jobs_list:
-        raise HTTPException(status_code=404, detail="Job not found")
-
-    job = jobs_list[request.job_id]
-    if not current_user.is_admin and job.get("owner") != current_user.username:
-        raise HTTPException(status_code=403, detail="Access denied")
-
-    try:
-        oci_dir = safe_job_path(request.job_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
-
-    if request.registry_id:
-        registry = get_registry_by_id(request.registry_id)
-        if not registry:
-            raise HTTPException(status_code=404, detail="Saved registry not found")
-        provider = resolve_provider_from_registry(registry)
-        host = provider.host
-        username = provider.username
-        password = provider.password
-        effective_tls_verify = provider.verify
-    else:
-        host = request.registry_host or ""
-        username = request.registry_username or ""
-        password = request.registry_password or ""
-        effective_tls_verify = True
-
-    image_name = request.image_name or job.get("image", "")
-    tag = request.tag or job.get("tag", "latest")
-    folder = request.folder or ""
-    dest_ref = build_target_path(folder or None, image_name, tag, host)
-
-    ok, message = await skopeo_copy_oci_image(
-        oci_dir=str(oci_dir),
-        dest_ref=dest_ref,
-        dest_username=username,
-        dest_password=password,
-        settings=settings,
-        tls_verify=effective_tls_verify,
-    )
-    return {"success": ok, "message": message, "dest_ref": dest_ref}
-
-
 # ── List Sync Jobs ──────────────────────────────────────────────────
 
 
@@ -598,25 +541,3 @@ async def start_import(
         raise HTTPException(status_code=404, detail=str(exc))
 
     return {"job_id": job_id, "status": "running"}
-
-
-# ── Staging OCI cleanup ───────────────────────────────────────────────────────
-
-
-@router.delete("/staging/{job_id}")
-async def delete_staging_job(
-    job_id: str,
-    _: UserInfo = Depends(require_pull_access),
-):
-    """Delete an orphaned staging OCI directory."""
-
-    try:
-        oci_dir = safe_job_path(job_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
-
-    if not oci_dir.exists():
-        raise HTTPException(status_code=404, detail="OCI directory not found")
-
-    shutil.rmtree(oci_dir, ignore_errors=True)
-    return {"message": f"Staging directory {job_id} deleted"}

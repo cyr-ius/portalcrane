@@ -383,62 +383,10 @@ async def ping_registry(
     return {"status": "ok" if is_up else "unreachable", "url": registry.base_url}
 
 
-@router.post("/images/rename")
-async def rename_image(
-    repository: str = Query(..., description="Source repository name"),
-    request: RenameImageRequest = Body(...),
-    current_user: UserInfo = Depends(require_push_access),
-):
-    """Retag an image to a new repository/name using skopeo copy."""
-    _ensure_folder_permission(
-        current_user=current_user,
-        image_path=repository,
-        is_pull=True,
-    )
-    _ensure_folder_permission(
-        current_user=current_user,
-        image_path=request.new_repository,
-        is_pull=False,
-    )
-
-    source = f"docker://{REGISTRY_HOST}/{repository}:{request.new_tag}"
-    dest = f"docker://{REGISTRY_HOST}/{request.new_repository}:{request.new_tag}"
-
-    tls_flags = (
-        ["--src-tls-verify=false", "--dest-tls-verify=false"]
-        if REGISTRY_URL.startswith("http://")
-        else []
-    )
-
-    proc = await asyncio.create_subprocess_exec(
-        "skopeo",
-        "copy",
-        *tls_flags,
-        source,
-        dest,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
-    _, stderr = await proc.communicate()  # pyright: ignore[reportAssignmentType]
-
-    if proc.returncode != 0:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"skopeo copy failed: {stderr.decode()}",
-        )
-
-    return {
-        "message": (
-            f"Image '{repository}' retagged to "
-            f"'{request.new_repository}:{request.new_tag}'"
-        )
-    }
-
-
 # ─── Garbage Collection ───────────────────────────────────────────────────────
 
 
-async def _run_gc(dry_run: bool, settings: Settings) -> None:
+async def _run_gc(dry_run: bool) -> None:
     """Run registry garbage-collect inside the container via supervisord."""
     import xmlrpc.client
 
@@ -526,7 +474,6 @@ async def _run_gc(dry_run: bool, settings: Settings) -> None:
 async def start_garbage_collect(
     background_tasks: BackgroundTasks,
     dry_run: bool = False,
-    settings: Settings = Depends(get_settings),
     _: UserInfo = Depends(require_admin),
 ):
     """Trigger a registry garbage-collect run (one job at a time)."""
@@ -536,7 +483,7 @@ async def start_garbage_collect(
             detail="A garbage-collect is already running",
         )
 
-    background_tasks.add_task(_run_gc, dry_run, settings)
+    background_tasks.add_task(_run_gc, dry_run)
     return GCStatus(
         status="running",
         started_at=datetime.now(timezone.utc).isoformat(),

@@ -105,27 +105,6 @@ async def get_oidc_public_config(settings: Settings = Depends(get_settings)):
     return await build_public_config(settings)
 
 
-@router.get("/oidc", response_model=OidcConfig)
-async def get_oidc_config(
-    settings: Settings = Depends(get_settings),
-    _: UserInfo = Depends(require_admin),
-):
-    """
-    Return the OIDC configuration relevant to the frontend.
-    Used to determine whether OIDC login is enabled and to configure the OIDC client.
-    """
-    return OidcConfig(
-        oidc_enabled=settings.oidc_enabled,
-        oidc_authority=settings.oidc_issuer,
-        oidc_client_id=settings.oidc_client_id,
-        oidc_client_secret=settings.oidc_client_secret,
-        oidc_redirect_uri=settings.oidc_redirect_uri,
-        oidc_post_logout_redirect_uri=settings.oidc_post_logout_redirect_uri,
-        oidc_response_type=settings.oidc_response_type,
-        oidc_scope=settings.oidc_scope,
-    )
-
-
 # ─── Callback (no authentication required — called by the browser redirect) ──
 
 

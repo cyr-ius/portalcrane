@@ -43,7 +43,7 @@ from jose import jwt
 from pydantic import BaseModel
 
 from ..config import ALGORITHM, DATA_DIR, Settings, get_settings
-from ..core.jwt import UserInfo, get_current_user, require_admin
+from ..core.jwt import UserInfo, get_current_user
 from ..core.security import hash_password, verify_password
 
 router = APIRouter()
@@ -322,11 +322,3 @@ async def revoke_token(
         )
 
     _save_tokens([t for t in tokens if t["id"] != token_id])
-
-
-@router.get("/tokens/all", response_model=list[PersonalTokenPublic])
-async def list_all_tokens(
-    _: UserInfo = Depends(require_admin),
-) -> list[PersonalTokenPublic]:
-    """Return all personal access tokens for all users (admin only)."""
-    return [_token_to_public(t) for t in _load_tokens()]

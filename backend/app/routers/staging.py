@@ -19,13 +19,14 @@ from ..config import (
     Settings,
     get_settings,
 )
-from .external_registries import get_registry_by_id, build_target_path
+from .external_registries import get_registry_by_id
 from ..core.jwt import (
     UserInfo,
     require_pull_access,
     require_push_access,
     is_admin_user,
 )
+from ..services.providers import build_target_path
 from ..routers.folders import check_folder_access
 from ..services.job_service import (
     PullRequest,
