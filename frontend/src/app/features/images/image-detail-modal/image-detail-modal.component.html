@@ -12,6 +12,10 @@
 
   Source routing is handled entirely in the component TypeScript;
   the template is source-agnostic.
+
+  NG8107 fix: replaced optional chaining (?.) with direct access (.) on
+  fields that are never null/undefined in the ImageDetail interface:
+  layers, env, cmd, entrypoint (all typed as non-nullable arrays).
 -->
 <div class="modal fade show d-block" tabindex="-1" style="background: rgba(0, 0, 0, 0.45)" (click)="close()">
   <div class="modal-dialog modal-xl modal-dialog-scrollable" (click)="$event.stopPropagation()">
@@ -286,7 +290,7 @@
               }
 
               <!-- Labels -->
-              @if (objectKeys(tagDetail()!.labels ?? {}).length > 0) {
+              @if (objectKeys(tagDetail()!.labels).length > 0) {
                 <div class="mb-3">
                   <label class="text-muted small d-block mb-1">Labels</label>
                   <div class="d-flex flex-wrap gap-1">
@@ -300,7 +304,7 @@
               }
 
               <!-- Environment variables -->
-              @if ((tagDetail()!.env?.length ?? 0) > 0) {
+              @if (tagDetail()!.env.length > 0) {
                 <div class="mb-3">
                   <label class="text-muted small d-block mb-1">Environment Variables</label>
                   <div class="p-2 bg-body-secondary rounded">
@@ -312,25 +316,25 @@
               }
 
               <!-- CMD / Entrypoint -->
-              @if ((tagDetail()!.entrypoint?.length ?? 0) > 0 || (tagDetail()!.cmd?.length ?? 0) > 0) {
+              @if (tagDetail()!.entrypoint.length > 0 || tagDetail()!.cmd.length > 0) {
                 <div class="mb-3">
                   <label class="text-muted small d-block mb-1">Command</label>
                   <code class="small text-break d-block p-2 bg-body-secondary rounded">
-                    @if ((tagDetail()!.entrypoint?.length ?? 0) > 0) {
+                    @if (tagDetail()!.entrypoint.length > 0) {
                       <span class="text-warning">ENTRYPOINT</span>
-                      {{ tagDetail()!.entrypoint?.join(" ") }}
+                      {{ tagDetail()!.entrypoint.join(" ") }}
                     }
-                    @if ((tagDetail()!.cmd?.length ?? 0) > 0) {
-                      @if ((tagDetail()!.entrypoint?.length ?? 0) > 0) { &nbsp; }
+                    @if (tagDetail()!.cmd.length > 0) {
+                      @if (tagDetail()!.entrypoint.length > 0) { &nbsp; }
                       <span class="text-success">CMD</span>
-                      {{ tagDetail()!.cmd?.join(" ") }}
+                      {{ tagDetail()!.cmd.join(" ") }}
                     }
                   </code>
                 </div>
               }
 
               <!-- Advanced: layer list toggle -->
-              @if ((tagDetail()!.layers?.length ?? 0) > 0) {
+              @if (tagDetail()!.layers.length > 0) {
                 <div class="mb-2">
                   <button
                     class="btn btn-sm btn-outline-secondary"

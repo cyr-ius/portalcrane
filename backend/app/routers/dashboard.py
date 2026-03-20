@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from ..config import Settings, get_settings
 from ..services.registry_service import RegistryService
 from .auth import UserInfo, _load_users, get_current_user  # import user helpers
+from ..helpers import bytes_to_human
 
 router = APIRouter()
 
@@ -30,15 +31,6 @@ class DashboardStats(BaseModel):
     registry_status: str
     total_users: int  # total number of accounts (including env-admin)
     total_admins: int  # total number of admin accounts (including env-admin)
-
-
-def bytes_to_human(size: int) -> str:
-    """Convert bytes to human-readable string."""
-    for unit in ["B", "KB", "MB", "GB", "TB"]:
-        if size < 1024:
-            return f"{size:.2f} {unit}"
-        size /= 1024
-    return f"{size:.2f} PB"
 
 
 def get_registry(settings: Settings = Depends(get_settings)) -> RegistryService:

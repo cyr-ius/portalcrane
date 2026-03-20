@@ -333,20 +333,6 @@ async def browse_registry_images(
     return result
 
 
-@router.get("/registries/{registry_id}/browse/tags")
-async def browse_registry_tags(
-    registry_id: str,
-    repository: str = Query(..., description="Repository name, e.g. myorg/myimage"),
-    _: UserInfo = Depends(require_pull_access),
-):
-    """List tags for a specific repository in an external registry."""
-    registry = get_registry_by_id(registry_id)
-    if not registry:
-        raise HTTPException(status_code=404, detail="Registry not found")
-
-    return await browse_external_tags(registry_id=registry_id, repository=repository)
-
-
 @router.delete("/registries/{registry_id}/browse/image")
 async def delete_registry_image(
     registry_id: str,
@@ -412,6 +398,20 @@ async def browse_registry_tag_detail(
             status_code=404, detail="Tag not found or registry type unsupported"
         )
     return detail
+
+
+@router.get("/registries/{registry_id}/browse/tags")
+async def browse_registry_tags(
+    registry_id: str,
+    repository: str = Query(..., description="Repository name, e.g. myorg/myimage"),
+    _: UserInfo = Depends(require_pull_access),
+):
+    """List tags for a specific repository in an external registry."""
+    registry = get_registry_by_id(registry_id)
+    if not registry:
+        raise HTTPException(status_code=404, detail="Registry not found")
+
+    return await browse_external_tags(registry_id=registry_id, repository=repository)
 
 
 @router.delete("/registries/{registry_id}/browse/tags")

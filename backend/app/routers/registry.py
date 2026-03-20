@@ -10,12 +10,10 @@ as query parameters (?repository=...) instead of path segments to avoid
 import asyncio
 import logging
 import shutil
-from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import (
     APIRouter,
-    BackgroundTasks,
     Body,
     Depends,
     HTTPException,
@@ -46,17 +44,6 @@ SUPERVISORD_RPC_URL = "http://127.0.0.1:9001/RPC2"
 
 
 # ─── Models ───────────────────────────────────────────────────────────────────
-
-
-class TagInfo(BaseModel):
-    """Tag information model."""
-
-    name: str
-    digest: str = ""
-    size: int = 0
-    created: str = ""
-    architecture: str = ""
-    os: str = ""
 
 
 class ImageInfo(BaseModel):
@@ -103,25 +90,6 @@ class AddTagRequest(BaseModel):
     new_tag: str
 
 
-class RenameImageRequest(BaseModel):
-    """Request to retag an image to a new repository/tag."""
-
-    new_repository: str
-    new_tag: str
-
-
-class GCStatus(BaseModel):
-    """Garbage collection job status."""
-
-    status: str
-    started_at: str | None
-    finished_at: str | None
-    output: str
-    freed_bytes: int
-    freed_human: str
-    error: str | None
-
-
 class CopyImageRequest(BaseModel):
     """Copy an image to a new repository path (with optional tag rename)."""
 
@@ -137,28 +105,6 @@ class CopyImageRequest(BaseModel):
 def get_registry(settings: Settings = Depends(get_settings)) -> RegistryService:
     """Dependency: return an authenticated RegistryService instance."""
     return RegistryService(settings)
-
-
-# ─── In-memory GC state ───────────────────────────────────────────────────────
-
-_gc_state: dict = GCStatus(
-    status="idle",
-    started_at=None,
-    finished_at=None,
-    output="",
-    freed_bytes=0,
-    freed_human="0 B",
-    error=None,
-).model_dump()
-
-
-def _bytes_to_human(size: int) -> str:
-    """Convert a byte count to a human-readable string."""
-    for unit in ["B", "KB", "MB", "GB", "TB"]:
-        if size < 1024:
-            return f"{size:.2f} {unit}"
-        size //= 1024
-    return f"{size:.2f} PB"
 
 
 def _ensure_folder_permission(
@@ -381,135 +327,6 @@ async def ping_registry(
     """Check registry connectivity."""
     is_up = await registry.ping()
     return {"status": "ok" if is_up else "unreachable", "url": registry.base_url}
-
-
-# ─── Garbage Collection ───────────────────────────────────────────────────────
-
-
-async def _run_gc(dry_run: bool) -> None:
-    """Run registry garbage-collect inside the container via supervisord."""
-    import xmlrpc.client
-
-    global _gc_state
-    _gc_state = GCStatus(
-        status="running",
-        started_at=datetime.now(timezone.utc).isoformat(),
-        finished_at=None,
-        output="Garbage collection started...",
-        freed_bytes=0,
-        freed_human="0 B",
-        error=None,
-    ).model_dump()
-
-    output_lines: list[str] = []
-
-    try:
-        try:
-            size_before: int = shutil.disk_usage(REGISTRY_DATA_DIR).used
-        except Exception:
-            size_before = 0
-
-        proxy = xmlrpc.client.ServerProxy(SUPERVISORD_RPC_URL)
-        output_lines.append("Stopping registry process via supervisord...")
-        try:
-            proxy.supervisor.stopProcess("registry")
-            await asyncio.sleep(2)
-            output_lines.append("Registry stopped.")
-        except Exception as exc:
-            output_lines.append(f"Warning: could not stop registry cleanly: {exc}")
-
-        try:
-            cmd = [REGISTRY_BINARY, "garbage-collect", REGISTRY_CONFIG]
-            if dry_run:
-                cmd.append("--dry-run")
-
-            output_lines.append(f"Running: {' '.join(cmd)}")
-
-            proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            gc_out, gc_err = await proc.communicate()
-            output_lines.append(gc_out.decode())
-            if gc_err.decode().strip():
-                output_lines.append(gc_err.decode())
-
-            if proc.returncode != 0:
-                raise RuntimeError(
-                    f"garbage-collect exited with code {proc.returncode}"
-                )
-            output_lines.append("Garbage collection completed.")
-
-        finally:
-            try:
-                proxy.supervisor.startProcess("registry")
-                output_lines.append("Registry restarted.")
-            except Exception as exc:
-                output_lines.append(f"Warning: could not restart registry: {exc}")
-
-        try:
-            size_after: int = shutil.disk_usage(REGISTRY_DATA_DIR).used
-            freed: int = max(0, size_before - size_after)
-        except Exception:
-            freed = 0
-
-        _gc_state["freed_bytes"] = freed
-        _gc_state["freed_human"] = _bytes_to_human(freed)
-        _gc_state["output"] = "\n".join(output_lines).strip()
-        _gc_state["status"] = "done"
-        _gc_state["finished_at"] = datetime.now(timezone.utc).isoformat()
-        _gc_state = GCStatus.model_validate(_gc_state).model_dump()
-
-    except Exception:
-        logger.exception("GC failed")
-        _gc_state["status"] = "failed"
-        _gc_state["error"] = "Garbage collection failed — check server logs"
-        _gc_state["output"] = "\n".join(output_lines).strip()
-        _gc_state["finished_at"] = datetime.now(timezone.utc).isoformat()
-        _gc_state = GCStatus.model_validate(_gc_state).model_dump()
-
-
-@router.post("/gc", response_model=GCStatus)
-async def start_garbage_collect(
-    background_tasks: BackgroundTasks,
-    dry_run: bool = False,
-    _: UserInfo = Depends(require_admin),
-):
-    """Trigger a registry garbage-collect run (one job at a time)."""
-    if _gc_state["status"] == "running":
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="A garbage-collect is already running",
-        )
-
-    background_tasks.add_task(_run_gc, dry_run)
-    return GCStatus(
-        status="running",
-        started_at=datetime.now(timezone.utc).isoformat(),
-        finished_at=None,
-        output="Garbage collection started...",
-        freed_bytes=0,
-        freed_human="0 B",
-        error=None,
-    )
-
-
-@router.get("/gc", response_model=GCStatus)
-async def get_gc_status(_: UserInfo = Depends(require_admin)):
-    """Get the current or last garbage-collect job status."""
-    return GCStatus(
-        status=_gc_state["status"],
-        started_at=_gc_state["started_at"],
-        finished_at=_gc_state["finished_at"],
-        output=_gc_state["output"],
-        freed_bytes=int(_gc_state["freed_bytes"]),
-        freed_human=_bytes_to_human(int(_gc_state["freed_bytes"])),
-        error=_gc_state["error"],
-    )
-
-
-# ─── Empty / Ghost Repository Cleanup ────────────────────────────────────────
 
 
 @router.get("/empty-repositories")

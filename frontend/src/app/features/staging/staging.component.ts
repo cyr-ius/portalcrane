@@ -2,6 +2,15 @@
  * Portalcrane - Staging Component
  * Pull pipeline: source registry selection → image pull → CVE scan → push
  * (local or external registry with optional folder prefix).
+ *
+ * Changes:
+ *   - localRegistryHost now comes from the shared LOCAL_REGISTRY_HOST constant
+ *     (registry.constants.ts) instead of being hardcoded as "localhost:5000".
+ *   - Polling is delegated to JobService.startPolling() so that the job list
+ *     survives navigation away from and back to this page.
+ *   - triggerRefresh() (not a second subscription) is called on every ngOnInit()
+ *     to restart the polling timer from zero, giving an immediate fetch on
+ *     page entry without creating a concurrent request that could race.
  */
 import {
   Component,
@@ -11,6 +20,7 @@ import {
   signal
 } from "@angular/core";
 import { RouterLink } from "@angular/router";
+import { LOCAL_REGISTRY_HOST } from "../../core/constants/registry.constants";
 import { AuthService } from "../../core/services/auth.service";
 import {
   ExternalRegistry,
@@ -39,10 +49,10 @@ export class StagingComponent implements OnInit {
   private extRegistrySvc = inject(ExternalRegistryService);
   private authService = inject(AuthService);
   private jobSvc = inject(JobService);
-  private folderSvc = inject(FolderService)
-  trivySvc= inject(TrivyService)
+  private folderSvc = inject(FolderService);
+  trivySvc = inject(TrivyService);
 
-  readonly externalRegistries = computed<ExternalRegistry[]>(() => this.extRegistrySvc.externalRegistries())
+  readonly externalRegistries = computed<ExternalRegistry[]>(() => this.extRegistrySvc.externalRegistries());
 
   searchQuery = signal("");
   searchResults = signal<DockerHubResult[]>([]);
@@ -69,7 +79,13 @@ export class StagingComponent implements OnInit {
     () => this.authService.currentUser()?.is_admin ?? false,
   );
 
-  readonly localRegistryHost = "localhost:5000";
+  /**
+   * Bare host:port of the local embedded registry.
+   * Sourced from the shared constant that mirrors REGISTRY_HOST on the backend.
+   * Used to detect when a saved or ad-hoc source points to the local registry
+   * so that folder access rules are enforced before the pull is started.
+   */
+  readonly localRegistryHost = LOCAL_REGISTRY_HOST;
 
   readonly isPullingFromLocal = computed(() => {
     if (this.pullSourceMode() === "adhoc") {
@@ -132,7 +148,7 @@ export class StagingComponent implements OnInit {
       default:
         return "";
     }
-  })
+  });
 
   readonly pushFolderOptions = computed(() => this.folderSvc.allowedPushFolders());
 
@@ -140,6 +156,15 @@ export class StagingComponent implements OnInit {
     this.trivySvc.loadConfig().subscribe();
     this.extRegistrySvc.loadRegistries();
     this.folderSvc.loadPermissions();
+
+    // Ensure the background polling loop is running (idempotent on re-entry).
+    this.jobSvc.startPolling();
+
+    // Restart the polling timer from zero so an immediate fetch happens now.
+    // Using triggerRefresh() (BehaviorSubject emit + switchMap) ensures there
+    // is always exactly ONE active HTTP request — no concurrent calls that
+    // could race and flash the list empty.
+    this.jobSvc.triggerRefresh();
   }
 
   setPullSourceMode(mode: PullSourceMode): void {
@@ -172,17 +197,17 @@ export class StagingComponent implements OnInit {
 
   selectImage(name: string): void {
     this.pullImage.set(name);
-    // Do NOT clear searchResults — the list must remain displayed
+    // Do NOT clear searchResults — the list must remain displayed after selection
     // Tags are only fetched from Docker Hub; external registries require manual input
     if (this.pullSourceMode() === "dockerhub") {
       this.staging.getDockerHubTags(name).subscribe({
         next: ({ tags }) => {
           this.availableTags.set(tags);
-            if (tags.length > 0) {
-              this.pullTag.set(tags[0]);
-            }
-         },
-         error: () => this.availableTags.set([]),
+          if (tags.length > 0) {
+            this.pullTag.set(tags[0]);
+          }
+        },
+        error: () => this.availableTags.set([]),
       });
     }
   }
@@ -218,7 +243,7 @@ export class StagingComponent implements OnInit {
       })
       .subscribe({
         next: (job) => {
-          this.jobSvc.updateJob(job)
+          this.jobSvc.updateJob(job);
           this.pulling.set(false);
           this.pullImage.set("");
           this.pullTag.set("latest");
@@ -233,5 +258,4 @@ export class StagingComponent implements OnInit {
     if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
     return `${n}`;
   }
-
 }

@@ -73,7 +73,7 @@ export interface ExternalPaginatedImages extends PaginatedImages {
   error: string | null;
 }
 
-/** Garbage-collection job status returned by GET /api/registry/gc. */
+/** Garbage-collection job status returned by GET /api/system/gc. */
 export interface GCStatus {
   status: string;
   started_at: string | null;
@@ -88,14 +88,10 @@ export interface GCStatus {
 
 @Injectable({ providedIn: "root" })
 export class RegistryService {
-  /** Base URL for all local registry endpoints (main.py: prefix="/api/registry"). */
   private readonly BASE = "/api/registry";
-
-  /** Base URL for folder permission endpoints (main.py: prefix="/api/folders"). */
   private readonly FOLDERS = "/api/folders";
-
-  /** Base URL for external registry endpoints (main.py: prefix="/api/external"). */
   private readonly EXTERNAL = "/api/external";
+  private readonly SYSTEM = "/api/system";
 
   private http = inject(HttpClient);
 
@@ -334,22 +330,22 @@ export class RegistryService {
   /**
    * Fetch the current garbage-collection job status.
    *
-   * Backend: GET /api/registry/gc
+   * Backend: GET /api/system/gc
    */
   getGCStatus(): Observable<GCStatus> {
-    return this.http.get<GCStatus>(`${this.BASE}/gc`);
+    return this.http.get<GCStatus>(`${this.SYSTEM}/gc`);
   }
 
   /**
    * Start a garbage-collection run (admin only).
    *
-   * Backend: POST /api/registry/gc?dry_run=…
+   * Backend: POST /api/system/gc?dry_run=…
    *
    * @param dryRun  When true, runs without actually deleting blobs.
    */
   startGarbageCollect(dryRun = false): Observable<GCStatus> {
     const params = new HttpParams().set("dry_run", dryRun);
-    return this.http.post<GCStatus>(`${this.BASE}/gc`, null, { params });
+    return this.http.post<GCStatus>(`${this.SYSTEM}/gc`, null, { params });
   }
 
   // ── Ghost / empty repositories ─────────────────────────────────────────────
