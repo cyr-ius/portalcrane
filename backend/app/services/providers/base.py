@@ -17,6 +17,9 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
+# Sentinel used to distinguish "caller did not pass include_empty" from False.
+_UNSET = object()
+
 
 class BaseRegistryProvider(ABC):
     """Abstract base class for all external registry providers.
@@ -74,7 +77,7 @@ class BaseRegistryProvider(ABC):
         scheme = "https" if self.use_tls else "http"
         return f"{scheme}://{self.host}"
 
-    # ── Abstract interface — every provider MUST implement these methods ───────
+    # ── Computed properties ───────────────────────────────────────────────────
 
     @property
     def base_url(self) -> str:
@@ -90,6 +93,8 @@ class BaseRegistryProvider(ABC):
     def provider_name(self) -> str:
         """Provider name"""
         ...
+
+    # ── Abstract interface — every provider MUST implement these methods ───────
 
     @abstractmethod
     def ping(self) -> bool:
@@ -196,6 +201,131 @@ class BaseRegistryProvider(ABC):
             list[str]: Tag names; empty list on error.
         """
         ...
+
+    async def list_repositories(
+        self,
+        n: int = 1000,
+        last: str = "",
+        include_empty: bool = False,
+    ) -> list[str]:
+        """List repository names from the registry.
+
+        Default implementation returns an empty list.
+        V2Provider overrides this with /v2/_catalog queries.
+
+        Args:
+            n:             Maximum number of repositories to fetch.
+            last:          Pagination cursor (last repository name seen).
+            include_empty: When True, include repositories with no tags.
+                           When False (default), exclude tag-less repositories.
+
+        Returns:
+            list[str]: Repository names; empty list when unsupported.
+        """
+        logger.debug(
+            "%s.list_repositories: not supported for this provider type",
+            self.__class__.__name__,
+        )
+        return []
+
+    async def list_empty_repositories(self) -> list[str]:
+        """Return repositories that have no tags (ghost entries).
+
+        Default implementation delegates to list_repositories(include_empty=True)
+        and list_repositories(include_empty=False) to compute the difference.
+        V2Provider overrides this with a more efficient single-pass approach.
+
+        Returns:
+            list[str]: Repository names with no tags.
+        """
+        all_repos = await self.list_repositories(include_empty=True)
+        non_empty = set(await self.list_repositories(include_empty=False))
+        return [r for r in all_repos if r not in non_empty]
+
+    async def get_manifest(self, repository: str, reference: str) -> dict[str, Any]:
+        """Fetch a manifest by tag or digest.
+
+        Default implementation returns an empty dict (unsupported).
+        V2Provider overrides this with GET /v2/{repository}/manifests/{reference}.
+
+        Args:
+            repository: Repository path.
+            reference:  Tag name or digest (sha256:...).
+
+        Returns:
+            dict[str, Any]: Manifest payload with private _digest / _content_length
+                            keys added; empty dict when not found or unsupported.
+        """
+        logger.debug(
+            "%s.get_manifest: not supported for this provider type",
+            self.__class__.__name__,
+        )
+        return {}
+
+    async def delete_manifest(self, repository: str, digest: str) -> bool:
+        """Delete an image manifest by digest.
+
+        Default implementation returns False (unsupported).
+        V2Provider overrides this with DELETE /v2/{repository}/manifests/{digest}.
+
+        Args:
+            repository: Repository path.
+            digest:     Manifest digest (sha256:...).
+
+        Returns:
+            bool: True on success, False otherwise.
+        """
+        logger.debug(
+            "%s.delete_manifest: not supported for this provider type",
+            self.__class__.__name__,
+        )
+        return False
+
+    async def put_manifest(
+        self,
+        repository: str,
+        reference: str,
+        manifest: dict[str, Any],
+        content_type: str,
+    ) -> bool:
+        """Push a manifest to create or update a tag.
+
+        Default implementation returns False (unsupported).
+        V2Provider overrides this with PUT /v2/{repository}/manifests/{reference}.
+
+        Args:
+            repository:   Repository path.
+            reference:    Tag name or digest.
+            manifest:     Manifest payload as a dict.
+            content_type: Manifest media type string.
+
+        Returns:
+            bool: True on success, False otherwise.
+        """
+        logger.debug(
+            "%s.put_manifest: not supported for this provider type",
+            self.__class__.__name__,
+        )
+        return False
+
+    async def get_image_config(self, repository: str, digest: str) -> dict[str, Any]:
+        """Fetch an image configuration blob.
+
+        Default implementation returns an empty dict (unsupported).
+        V2Provider overrides this with GET /v2/{repository}/blobs/{digest}.
+
+        Args:
+            repository: Repository path.
+            digest:     Config blob digest (sha256:...).
+
+        Returns:
+            dict[str, Any]: Image config payload; empty dict when unsupported.
+        """
+        logger.debug(
+            "%s.get_image_config: not supported for this provider type",
+            self.__class__.__name__,
+        )
+        return {}
 
     async def get_tag_detail(self, repository: str, tag: str) -> dict[str, Any]:
         """Return detailed metadata for a specific tag.

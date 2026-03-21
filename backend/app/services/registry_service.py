@@ -1,6 +1,5 @@
-"""
-Portalcrane - Internal Registry Service
-========================================
+"""Portalcrane - Internal Registry Service.
+
 High-level service for the embedded Docker Registry (OCI Distribution v2).
 
 Design: composition over inheritance.
@@ -9,12 +8,13 @@ low-level HTTP calls to it.  This keeps a clear "has-a" relationship:
   - RegistryService  → orchestrates business logic for the internal registry
   - V2Provider       → handles raw OCI Distribution v2 HTTP calls
 
-Only operations specific to the internal registry live here:
-  - get_registry_stats()  : aggregate image / tag / size statistics
-  - _get_repo_stats()     : per-repository statistics helper
+Delegation strategy:
+  Every method in RegistryService that maps 1-to-1 with a V2Provider method
+  is a thin wrapper.  Only operations that are unique to the internal registry
+  (aggregate statistics, empty-repository listing with filesystem cleanup,
+  registry ping) add logic here.
 
-All other operations are forwarded to the V2Provider instance without
-any reimplementation — a single source of truth for V2 HTTP logic.
+No V2 HTTP calls are duplicated between this class and V2Provider.
 """
 
 import asyncio
@@ -32,10 +32,6 @@ class RegistryService:
     Uses a V2Provider instance internally to handle all OCI Distribution v2
     HTTP calls.  Adds aggregate statistics methods specific to the internal
     registry context.
-
-    The V2Provider is instantiated once in __init__ with PROXY_TIMEOUT so
-    that large manifest / blob operations do not time out prematurely compared
-    to the default 30 s used for external registries.
 
     Args:
         settings: Application settings — stored for future use by callers.
@@ -59,19 +55,26 @@ class RegistryService:
         # Expose base_url for callers that need it (e.g. router for logging).
         self.base_url = self._v2.base_url
 
-    # ── Delegated V2 operations ───────────────────────────────────────────────
-    # Explicit delegation — each method forwards to _v2 by name.
-    # This makes the contract visible and avoids silent breakage if V2Provider
-    # changes its interface.
+    # ── Connectivity ──────────────────────────────────────────────────────────
 
     async def ping(self) -> bool:
         """Check registry connectivity."""
         return await self._v2.ping()
 
+    # ── Repository listing ────────────────────────────────────────────────────
+
     async def list_repositories(
         self, n: int = 1000, last: str = "", include_empty: bool = False
     ) -> list[str]:
-        """List all repositories, optionally excluding empty ones."""
+        """List all repositories.
+
+        Delegates directly to V2Provider.list_repositories() — single source.
+
+        Args:
+            n:             Maximum repositories per catalog request.
+            last:          Pagination cursor.
+            include_empty: When True, include repositories with no tags.
+        """
         return await self._v2.list_repositories(
             n=n, last=last, include_empty=include_empty
         )
@@ -80,9 +83,34 @@ class RegistryService:
         """Return repositories that have no tags (ghost entries)."""
         return await self._v2.list_empty_repositories()
 
+    # ── Tag operations ────────────────────────────────────────────────────────
+
     async def list_tags(self, repository: str) -> list[str]:
         """List all tags for a repository."""
         return await self._v2.browse_tags(repository)
+
+    async def get_tag_detail(self, repository: str, tag: str) -> dict:
+        """Fetch detailed metadata for a specific tag.
+
+        Delegates to V2Provider.get_tag_detail() which builds on
+        get_manifest() + get_image_config() — no duplication.
+        """
+        return await self._v2.get_tag_detail(repository, tag)
+
+    async def add_tag(self, repository: str, source_tag: str, new_tag: str) -> dict:
+        """Create a new tag by copying an existing manifest."""
+        return await self._v2.add_tag(repository, source_tag, new_tag)
+
+    async def delete_tag(self, repository: str, tag: str) -> bool:
+        """Delete a specific tag (resolves the manifest digest first).
+
+        Adapts the dict return of V2Provider.delete_tag() to the bool
+        expected by the existing registry router.
+        """
+        result = await self._v2.delete_tag(repository, tag)
+        return result.get("success", False)
+
+    # ── Manifest operations ───────────────────────────────────────────────────
 
     async def get_manifest(self, repository: str, reference: str) -> dict:
         """Fetch a manifest by tag or digest."""
@@ -92,22 +120,9 @@ class RegistryService:
         """Fetch an image configuration blob."""
         return await self._v2.get_image_config(repository, digest)
 
-    async def get_image_size(self, repository: str, tag: str) -> int:
-        """Calculate total image size in bytes by summing layer sizes."""
-        return await self._v2.get_image_size(repository, tag)
-
     async def delete_manifest(self, repository: str, digest: str) -> bool:
         """Delete an image manifest by digest."""
         return await self._v2.delete_manifest(repository, digest)
-
-    async def delete_tag(self, repository: str, tag: str) -> bool:
-        """Delete a specific tag (resolves the manifest digest first).
-
-        Adapts the dict return of V2Provider.delete_tag() to the bool
-        expected by the existing registry router — no router changes required.
-        """
-        result = await self._v2.delete_tag(repository, tag)
-        return result.get("success", False)
 
     async def put_manifest(
         self,
@@ -120,14 +135,6 @@ class RegistryService:
         return await self._v2.put_manifest(
             repository, reference, manifest, content_type
         )
-
-    async def get_tag_detail(self, repository: str, tag: str) -> dict:
-        """Fetch detailed metadata for a specific tag."""
-        return await self._v2.get_tag_detail(repository, tag)
-
-    async def add_tag(self, repository: str, source_tag: str, new_tag: str) -> dict:
-        """Create a new tag by copying an existing manifest."""
-        return await self._v2.add_tag(repository, source_tag, new_tag)
 
     # ── Internal-registry-specific statistics ─────────────────────────────────
 
@@ -149,9 +156,9 @@ class RegistryService:
                 "largest": {"name": "", "size": 0},
             }
 
-        # Fetch all tag sizes concurrently
+        # Fetch all tag sizes concurrently using V2Provider.get_image_size()
         sizes: list[int] = await asyncio.gather(
-            *[self.get_image_size(repo, tag) for tag in tags],
+            *[self._v2.get_image_size(repo, tag) for tag in tags],
             return_exceptions=False,
         )
 
