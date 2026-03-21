@@ -1,208 +1,144 @@
 """
-Portalcrane - Registry Service
-Async service layer for Docker Registry API (OCI Distribution Spec)
+Portalcrane - Internal Registry Service
+========================================
+High-level service for the embedded Docker Registry (OCI Distribution v2).
+
+Design: composition over inheritance.
+RegistryService holds a V2Provider instance (_v2) and delegates all
+low-level HTTP calls to it.  This keeps a clear "has-a" relationship:
+  - RegistryService  → orchestrates business logic for the internal registry
+  - V2Provider       → handles raw OCI Distribution v2 HTTP calls
+
+Only operations specific to the internal registry live here:
+  - get_registry_stats()  : aggregate image / tag / size statistics
+  - _get_repo_stats()     : per-repository statistics helper
+
+All other operations are forwarded to the V2Provider instance without
+any reimplementation — a single source of truth for V2 HTTP logic.
 """
 
 import asyncio
-
-import httpx
+import logging
 
 from ..config import Settings, REGISTRY_URL, PROXY_TIMEOUT
+from ..services.providers.external_v2 import V2Provider
+
+logger = logging.getLogger(__name__)
 
 
 class RegistryService:
-    """Async client for Docker Registry HTTP API v2."""
+    """Async client for the embedded Portalcrane Docker Registry.
 
-    def __init__(self, settings: Settings):
-        self.base_url = REGISTRY_URL.rstrip("/")
-        self.auth = None
-        self._proxies = settings.httpx_proxy
-        self._timeout = PROXY_TIMEOUT
+    Uses a V2Provider instance internally to handle all OCI Distribution v2
+    HTTP calls.  Adds aggregate statistics methods specific to the internal
+    registry context.
 
-    def _client(self) -> httpx.AsyncClient:
-        """Create authenticated async HTTP client."""
-        headers = {
-            "Accept": "application/vnd.docker.distribution.manifest.v2+json, application/json"
-        }
-        return httpx.AsyncClient(
-            auth=self.auth,
-            headers=headers,
-            timeout=self._timeout,
-            follow_redirects=True,
-            # No proxy for registry — it runs on the internal network
+    The V2Provider is instantiated once in __init__ with PROXY_TIMEOUT so
+    that large manifest / blob operations do not time out prematurely compared
+    to the default 30 s used for external registries.
+
+    Args:
+        settings: Application settings — stored for future use by callers.
+    """
+
+    def __init__(self, settings: Settings) -> None:
+        self._settings = settings
+
+        # Internal V2Provider instance configured for the embedded registry.
+        # The registry runs on the local network — no proxy, plain HTTP.
+        # PROXY_TIMEOUT replaces the default 30 s for long-running operations.
+        self._v2 = V2Provider(
+            host=REGISTRY_URL,
+            username="",
+            password="",
+            use_tls=REGISTRY_URL.startswith("https://"),
+            tls_verify=True,
+            timeout=PROXY_TIMEOUT,
         )
+
+        # Expose base_url for callers that need it (e.g. router for logging).
+        self.base_url = self._v2.base_url
+
+    # ── Delegated V2 operations ───────────────────────────────────────────────
+    # Explicit delegation — each method forwards to _v2 by name.
+    # This makes the contract visible and avoids silent breakage if V2Provider
+    # changes its interface.
 
     async def ping(self) -> bool:
         """Check registry connectivity."""
-        try:
-            async with self._client() as client:
-                response = await client.get(f"{self.base_url}/v2/")
-                return response.status_code in (200, 401)
-        except Exception:
-            return False
+        return await self._v2.ping()
 
     async def list_repositories(
         self, n: int = 1000, last: str = "", include_empty: bool = False
     ) -> list[str]:
-        """
-        List all repositories in the registry.
-
-        By default, repositories with no tags are excluded — they are ghost
-        entries left behind after all tags were deleted.  Tag-presence checks
-        are now performed concurrently instead of sequentially.
-        """
-        url = f"{self.base_url}/v2/_catalog?n={n}"
-        if last:
-            url += f"&last={last}"
-
-        async with self._client() as client:
-            response = await client.get(url)
-            response.raise_for_status()
-            repositories = response.json().get("repositories", [])
-
-        if include_empty:
-            return repositories
-
-        # Check all repositories concurrently for the presence of at least one tag
-        tags_results: list[list[str]] = await asyncio.gather(
-            *[self.list_tags(repo) for repo in repositories],
-            return_exceptions=False,
+        """List all repositories, optionally excluding empty ones."""
+        return await self._v2.list_repositories(
+            n=n, last=last, include_empty=include_empty
         )
-
-        return [repo for repo, tags in zip(repositories, tags_results) if tags]
 
     async def list_empty_repositories(self) -> list[str]:
-        """
-        Return repositories that have no tags (ghost entries).
-
-        Tag-presence checks are performed concurrently.
-        """
-        url = f"{self.base_url}/v2/_catalog?n=1000"
-        async with self._client() as client:
-            response = await client.get(url)
-            response.raise_for_status()
-            all_repos = response.json().get("repositories", [])
-
-        if not all_repos:
-            return []
-
-        # Fetch all tag lists concurrently
-        tags_results: list[list[str]] = await asyncio.gather(
-            *[self.list_tags(repo) for repo in all_repos],
-            return_exceptions=False,
-        )
-
-        return [repo for repo, tags in zip(all_repos, tags_results) if not tags]
+        """Return repositories that have no tags (ghost entries)."""
+        return await self._v2.list_empty_repositories()
 
     async def list_tags(self, repository: str) -> list[str]:
         """List all tags for a repository."""
-        async with self._client() as client:
-            response = await client.get(f"{self.base_url}/v2/{repository}/tags/list")
-            if response.status_code == 404:
-                return []
-            response.raise_for_status()
-            return response.json().get("tags", []) or []
+        return await self._v2.browse_tags(repository)
 
     async def get_manifest(self, repository: str, reference: str) -> dict:
-        """Get image manifest for a repository:tag or digest."""
-        async with self._client() as client:
-            headers = {
-                "Accept": (
-                    "application/vnd.docker.distribution.manifest.v2+json,"
-                    "application/vnd.docker.distribution.manifest.list.v2+json,"
-                    "application/vnd.oci.image.manifest.v1+json,"
-                    "application/vnd.oci.image.index.v1+json"
-                )
-            }
-            response = await client.get(
-                f"{self.base_url}/v2/{repository}/manifests/{reference}",
-                headers=headers,
-            )
-            if response.status_code == 404:
-                return {}
-            response.raise_for_status()
-            digest = response.headers.get("Docker-Content-Digest", "")
-            manifest = response.json()
-            manifest["_digest"] = digest
-            manifest["_content_length"] = int(response.headers.get("Content-Length", 0))
-            return manifest
+        """Fetch a manifest by tag or digest."""
+        return await self._v2.get_manifest(repository, reference)
 
     async def get_image_config(self, repository: str, digest: str) -> dict:
-        """Get image configuration blob (labels, env, created date, etc.)."""
-        async with self._client() as client:
-            response = await client.get(
-                f"{self.base_url}/v2/{repository}/blobs/{digest}"
-            )
-            if response.status_code == 404:
-                return {}
-            response.raise_for_status()
-            return response.json()
+        """Fetch an image configuration blob."""
+        return await self._v2.get_image_config(repository, digest)
 
     async def get_image_size(self, repository: str, tag: str) -> int:
-        """Calculate total image size in bytes from manifest layers."""
-        manifest = await self.get_manifest(repository, tag)
-        if not manifest:
-            return 0
-
-        total_size = 0
-
-        # Handle manifest list (multi-arch)
-        if manifest.get("mediaType") in (
-            "application/vnd.docker.distribution.manifest.list.v2+json",
-            "application/vnd.oci.image.index.v1+json",
-        ):
-            # Use first manifest
-            manifests = manifest.get("manifests", [])
-            if manifests:
-                sub_manifest = await self.get_manifest(
-                    repository, manifests[0]["digest"]
-                )
-                layers = sub_manifest.get("layers", [])
-                total_size = sum(layer.get("size", 0) for layer in layers)
-        else:
-            layers = manifest.get("layers", [])
-            total_size = sum(layer.get("size", 0) for layer in layers)
-
-        return total_size
+        """Calculate total image size in bytes by summing layer sizes."""
+        return await self._v2.get_image_size(repository, tag)
 
     async def delete_manifest(self, repository: str, digest: str) -> bool:
-        """Delete an image manifest by digest (deletes the image/tag)."""
-        async with self._client() as client:
-            response = await client.delete(
-                f"{self.base_url}/v2/{repository}/manifests/{digest}"
-            )
-            return response.status_code in (200, 202)
+        """Delete an image manifest by digest."""
+        return await self._v2.delete_manifest(repository, digest)
 
     async def delete_tag(self, repository: str, tag: str) -> bool:
-        """Delete a specific tag by getting its digest first."""
-        manifest = await self.get_manifest(repository, tag)
-        digest = manifest.get("_digest")
-        if not digest:
-            return False
-        return await self.delete_manifest(repository, digest)
+        """Delete a specific tag (resolves the manifest digest first).
+
+        Adapts the dict return of V2Provider.delete_tag() to the bool
+        expected by the existing registry router — no router changes required.
+        """
+        result = await self._v2.delete_tag(repository, tag)
+        return result.get("success", False)
 
     async def put_manifest(
-        self, repository: str, reference: str, manifest: dict, content_type: str
+        self,
+        repository: str,
+        reference: str,
+        manifest: dict,
+        content_type: str,
     ) -> bool:
-        """Push a manifest to create/update a tag."""
-        import json
+        """Push a manifest to create or update a tag."""
+        return await self._v2.put_manifest(
+            repository, reference, manifest, content_type
+        )
 
-        async with self._client() as client:
-            headers = {"Content-Type": content_type}
-            response = await client.put(
-                f"{self.base_url}/v2/{repository}/manifests/{reference}",
-                content=json.dumps(manifest),
-                headers=headers,
-            )
-            return response.status_code in (200, 201)
+    async def get_tag_detail(self, repository: str, tag: str) -> dict:
+        """Fetch detailed metadata for a specific tag."""
+        return await self._v2.get_tag_detail(repository, tag)
+
+    async def add_tag(self, repository: str, source_tag: str, new_tag: str) -> dict:
+        """Create a new tag by copying an existing manifest."""
+        return await self._v2.add_tag(repository, source_tag, new_tag)
+
+    # ── Internal-registry-specific statistics ─────────────────────────────────
 
     async def _get_repo_stats(self, repo: str) -> dict:
-        """
-        Fetch all tag sizes for a single repository in parallel.
+        """Fetch all tag sizes for a single repository in parallel.
 
-        Returns a dict summarising the repository's tag count and total size,
-        plus the name/size of its largest tagged image so the caller can
-        determine the registry-wide largest image without a second pass.
+        Returns a summary dict:
+          - repo (str)      : repository name
+          - tags (list)     : all tag names
+          - total_size (int): sum of all tag sizes in bytes
+          - largest (dict)  : {"name": "repo:tag", "size": int}
         """
         tags = await self.list_tags(repo)
         if not tags:
@@ -213,7 +149,7 @@ class RegistryService:
                 "largest": {"name": "", "size": 0},
             }
 
-        # Fetch all tag sizes concurrently instead of one-by-one
+        # Fetch all tag sizes concurrently
         sizes: list[int] = await asyncio.gather(
             *[self.get_image_size(repo, tag) for tag in tags],
             return_exceptions=False,
@@ -221,7 +157,6 @@ class RegistryService:
 
         total_size = sum(sizes)
 
-        # Identify the largest tag within this repository
         largest_size = 0
         largest_name = ""
         for tag, size in zip(tags, sizes):
@@ -237,15 +172,18 @@ class RegistryService:
         }
 
     async def get_registry_stats(self) -> dict:
-        """
-        Compute registry-wide statistics (image count, tag count, total size,
-        largest image).
+        """Compute registry-wide statistics.
 
-        Performance: all repositories are queried concurrently, and within each
-        repository all tag sizes are fetched concurrently as well.  This reduces
-        wall-clock time from O(repos × tags) sequential HTTP round-trips to
-        roughly O(max_tags_per_repo) — a significant improvement on large
-        registries.
+        All repositories are queried concurrently and within each repository
+        all tag sizes are fetched concurrently, reducing wall-clock time from
+        O(repos × tags) to approximately O(max_tags_per_repo).
+
+        Returns:
+            dict with keys:
+                total_images (int)     : number of non-empty repositories
+                total_tags (int)       : total number of tags across all repos
+                total_size_bytes (int) : combined size of all images in bytes
+                largest_image (dict)   : {"name": str, "size": int}
         """
         repositories = await self.list_repositories()
 
@@ -257,13 +195,11 @@ class RegistryService:
                 "largest_image": {"name": "", "size": 0},
             }
 
-        # Query every repository concurrently
         repo_results: list[dict] = await asyncio.gather(
             *[self._get_repo_stats(repo) for repo in repositories],
             return_exceptions=False,
         )
 
-        # Aggregate results in a single pass
         total_size = 0
         total_tags = 0
         largest_image: dict = {"name": "", "size": 0}
@@ -272,7 +208,6 @@ class RegistryService:
             total_size += result["total_size"]
             total_tags += len(result["tags"])
 
-            # Track the registry-wide largest tagged image
             if result["largest"]["size"] > largest_image["size"]:
                 largest_image = result["largest"]
 

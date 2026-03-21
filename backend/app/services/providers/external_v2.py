@@ -1,13 +1,29 @@
-"""Portalcrane - OCI / Docker Distribution V2 Registry Service."""
+"""Portalcrane - OCI / Docker Distribution V2 Registry Provider.
+
+This class is the single authoritative implementation of the OCI Distribution
+Specification v2 HTTP API. It is used as:
+  1. A standalone provider for external V2-compatible registries.
+  2. The internal provider held by RegistryService via composition.
+
+All V2 operations — ping, catalog listing, tag listing, manifest fetch/push/
+delete, config blob fetch, tag detail, tag copy, tag delete — live here.
+Higher-level logic (statistics, internal-registry-specific operations) lives
+in RegistryService which delegates to an instance of this class.
+"""
 
 import asyncio
 import logging
+import json as _json
+
 from typing import Any
-from .base import BaseRegistryProvider
+
 import httpx
+
+from .base import BaseRegistryProvider
 
 logger = logging.getLogger(__name__)
 
+# Accept header covering all common manifest media types.
 _MANIFEST_ACCEPT = ", ".join(
     [
         "application/vnd.oci.image.manifest.v1+json",
@@ -17,9 +33,34 @@ _MANIFEST_ACCEPT = ", ".join(
     ]
 )
 
+# Media types that indicate a manifest list / image index (multi-arch).
+_MANIFEST_LIST_TYPES = frozenset(
+    [
+        "application/vnd.docker.distribution.manifest.list.v2+json",
+        "application/vnd.oci.image.index.v1+json",
+    ]
+)
+
+_DEFAULT_TIMEOUT = 30.0
+
 
 class V2Provider(BaseRegistryProvider):
-    """Registry V2 Provider."""
+    """OCI Distribution Specification v2 provider.
+
+    Implements every standard registry operation defined by the OCI
+    Distribution Spec: ping, catalog, tags, manifests, blobs, and
+    manifest management (push, delete, retag).
+
+    Args:
+        host:       Registry hostname with or without scheme.
+        username:   Optional username for Basic Auth.
+        password:   Optional password for Basic Auth.
+        use_tls:    Use HTTPS when True (default True).
+        tls_verify: Validate TLS certificates when True (default True).
+        timeout:    Default HTTP timeout in seconds; overrides the per-method
+                    defaults for long-running operations (manifest fetch, blob
+                    download).  Probe and catalog timeouts are not affected.
+    """
 
     def __init__(
         self,
@@ -28,16 +69,8 @@ class V2Provider(BaseRegistryProvider):
         password: str = "",
         use_tls: bool = True,
         tls_verify: bool = True,
+        timeout: float = _DEFAULT_TIMEOUT,
     ) -> None:
-        """Initialize provider with registry credentials.
-
-        Args:
-            host:       Registry hostname, with or without scheme.
-            username:   Registry username or GitHub owner login.
-            password:   Registry password or access token.
-            use_tls:    Use HTTPS when True (default).
-            tls_verify: Validate TLS certificate when True (default).
-        """
         super().__init__(
             host=host,
             username=username,
@@ -45,60 +78,70 @@ class V2Provider(BaseRegistryProvider):
             use_tls=use_tls,
             tls_verify=tls_verify,
         )
+        # Configurable default timeout used for manifest and blob operations.
+        self.timeout = timeout
+
+    # ── Provider identity ─────────────────────────────────────────────────────
 
     @property
     def provider_name(self) -> str:
         return "v2"
 
-    def _build_base_url(self) -> str:
-        """Build the base HTTPS/HTTP URL for a registry host.
+    @property
+    def _auth(self) -> tuple[str, str] | None:
+        """Return a Basic Auth tuple when credentials are configured."""
+        if self.username and self.password:
+            return (self.username, self.password)
+        return None
 
-        When the host already contains a scheme (http:// or https://) it is
-        preserved as-is so callers that stored the full URL are unaffected.
-        When *use_tls* is False the scheme is http://, otherwise https://.
+    def _client(self, timeout: float | None = None) -> httpx.AsyncClient:
+        """Create an authenticated async HTTP client for registry calls.
 
         Args:
-            host:    Registry hostname, optionally prefixed with a scheme.
-            use_tls: When True (default) use https://, otherwise http://.
-
-        Returns:
-            Base URL string without trailing slash.
+            timeout: Override the instance timeout for this specific client.
+                     Falls back to self.timeout when not provided.
         """
-        if "://" in self.host:
-            return self.host.rstrip("/")
-        scheme = "https" if self.use_tls else "http"
-        return f"{scheme}://{self.host}"
+        headers = {
+            "Accept": (
+                "application/vnd.docker.distribution.manifest.v2+json,application/json"
+            )
+        }
+        return httpx.AsyncClient(
+            auth=self._auth,
+            headers=headers,
+            timeout=timeout if timeout is not None else self.timeout,
+            follow_redirects=True,
+            verify=self.verify,
+        )
+
+    # ── BaseRegistryProvider abstract implementations ─────────────────────────
+
+    async def ping(self) -> bool:
+        """Return True when the registry responds to the /v2/ ping endpoint."""
+        try:
+            async with self._client(timeout=self.probe_timeout) as client:
+                resp = await client.get(f"{self.base_url}/v2/")
+                return resp.status_code in (200, 401)
+        except Exception:
+            return False
 
     async def test_connection(self) -> dict[str, Any]:
-        """Probe a V2-compatible registry to check reachability and credentials.
+        """Probe the registry to check reachability and validate credentials.
 
         Strategy:
-        Step 1 — GET /v2/ to verify the registry speaks the V2 protocol.
-                HTTP 200 or 401 confirms a live OCI/Docker registry.
-        Step 2 — When credentials are provided, re-request /v2/ with Basic
-                Auth to validate them.  HTTP 200 = accepted; 401 = rejected;
-                403 = accepted but catalog access is restricted.
-
-        Args:
-            host:       Registry hostname (bare or with scheme).
-            username:   Registry username (may be empty for anonymous access).
-            password:   Registry password or access token.
-            use_tls:    Use HTTPS (default True).
-            tls_verify: Enforce TLS certificate validation (default True).
+          Step 1 — GET /v2/ without auth to verify the endpoint is alive.
+          Step 2 — GET /v2/ with Basic Auth to validate credentials when supplied.
 
         Returns:
-            Dict with keys: reachable (bool), auth_ok (bool), message (str).
+            dict with keys: reachable (bool), auth_ok (bool), message (str).
         """
-        base_url = self._build_base_url()
-        has_credentials = bool(self.username and self.password)
-        auth = (self.username, self.password) if has_credentials else None
 
         try:
             async with httpx.AsyncClient(
-                timeout=10, verify=self.verify, follow_redirects=True
+                timeout=self.probe_timeout, verify=self.verify, follow_redirects=True
             ) as client:
-                # ── Step 1: reachability ping ──────────────────────────────────
-                ping_resp = await client.get(f"{base_url}/v2/")
+                # Step 1: reachability ping (no auth)
+                ping_resp = await client.get(f"{self.base_url}/v2/")
 
                 if ping_resp.status_code not in (200, 401):
                     return {
@@ -107,7 +150,7 @@ class V2Provider(BaseRegistryProvider):
                         "message": f"Unexpected status {ping_resp.status_code}",
                     }
 
-                if not has_credentials:
+                if not self.has_credentials:
                     auth_ok = ping_resp.status_code == 200
                     return {
                         "reachable": True,
@@ -119,8 +162,11 @@ class V2Provider(BaseRegistryProvider):
                         ),
                     }
 
-                # ── Step 2: credential validation ──────────────────────────────
-                cred_resp = await client.get(f"{base_url}/v2/", auth=auth)
+                # Step 2: credential validation
+                cred_resp = await client.get(
+                    f"{self.base_url}/v2/",
+                    auth=(self.username, self.password),
+                )
 
                 if cred_resp.status_code == 200:
                     return {
@@ -128,7 +174,6 @@ class V2Provider(BaseRegistryProvider):
                         "auth_ok": True,
                         "message": "Registry reachable — credentials accepted",
                     }
-
                 if cred_resp.status_code == 403:
                     return {
                         "reachable": True,
@@ -138,7 +183,6 @@ class V2Provider(BaseRegistryProvider):
                             " (catalog access restricted)"
                         ),
                     }
-
                 if cred_resp.status_code == 401:
                     return {
                         "reachable": True,
@@ -147,8 +191,7 @@ class V2Provider(BaseRegistryProvider):
                     }
 
                 logger.debug(
-                    "test_v2_connection: /v2/ returned %s for host=%s; "
-                    "falling back to ping-only result",
+                    "test_connection: /v2/ returned %s for host=%s",
                     cred_resp.status_code,
                     self.host,
                 )
@@ -174,7 +217,7 @@ class V2Provider(BaseRegistryProvider):
                 "message": "Connection timed out",
             }
         except Exception as exc:
-            logger.warning("test_v2_connection failed host=%s: %s", self.host, exc)
+            logger.warning("test_connection failed host=%s: %s", self.host, exc)
             return {
                 "reachable": False,
                 "auth_ok": False,
@@ -182,84 +225,56 @@ class V2Provider(BaseRegistryProvider):
             }
 
     async def check_catalog(self) -> bool:
-        """Probe /v2/_catalog to determine whether this registry supports listing.
+        """Return True when /v2/_catalog is accessible (HTTP 200 or 401).
 
-        HTTP 200 (OK) or 401 (auth required but endpoint exists) are both
-        treated as "browsable" because the endpoint is reachable.
-        HTTP 403, 404, or network errors indicate the registry does not expose
-        its catalog and browsing will not be possible.
-
-        Args:
-            host:       Registry hostname (bare or with scheme).
-            username:   Registry username (may be empty).
-            password:   Registry password or access token.
-            use_tls:    Use HTTPS (default True).
-            tls_verify: Enforce TLS certificate validation (default True).
-
-        Returns:
-            True when the registry exposes /v2/_catalog, False otherwise.
+        HTTP 403, 404, or network errors all map to False (not browsable).
         """
-        base_url = self._build_base_url()
-        auth = (
-            (self.username, self.password) if self.username and self.password else None
-        )
-
         try:
             async with httpx.AsyncClient(
-                timeout=10, verify=self.verify, follow_redirects=True
+                timeout=self.probe_timeout, verify=self.verify, follow_redirects=True
             ) as client:
-                resp = await client.get(f"{base_url}/v2/_catalog?n=1", auth=auth)
+                resp = await client.get(
+                    f"{self.base_url}/v2/_catalog?n=1", auth=self._auth
+                )
             browsable = resp.status_code in (200, 401)
             logger.debug(
-                "check_v2_catalog host=%s status=%s browsable=%s",
+                "check_catalog host=%s status=%s browsable=%s",
                 self.host,
                 resp.status_code,
                 browsable,
             )
             return browsable
         except Exception as exc:
-            logger.warning("check_v2_catalog host=%s error: %s", self.host, exc)
+            logger.warning("check_catalog host=%s error: %s", self.host, exc)
             return False
 
     async def browse_repositories(
-        self, search: str | None = None, page: int = 1, page_size: int = 20
+        self,
+        search: str | None = None,
+        page: int = 1,
+        page_size: int = 20,
+        **_kwargs: Any,
     ) -> dict[str, Any]:
-        """List repositories available in a V2-compatible registry via /v2/_catalog.
-
-        The catalog endpoint is fetched with n=1000 (maximum supported by most
-        registries).  Pagination and optional keyword filtering are applied
-        client-side because the V2 spec does not mandate server-side search.
+        """List repositories via /v2/_catalog with optional filtering and pagination.
 
         Args:
-            host:       Registry hostname (bare or with scheme).
-            username:   Registry username (may be empty for public registries).
-            password:   Registry password or access token.
-            use_tls:    Use HTTPS (default True).
-            tls_verify: Enforce TLS certificate validation (default True).
-            search:     Optional substring filter applied to repository names.
-            page:       1-based page number (default 1).
-            page_size:  Number of items per page (default 20).
+            search:    Optional substring filter on repository names.
+            page:      1-based page number.
+            page_size: Number of items per page.
 
         Returns:
-            Paginated dict compatible with ExternalPaginatedImages:
+            Paginated dict compatible with ExternalPaginatedImages frontend model:
             { items, total, page, page_size, total_pages, error? }
-            Each item has at least a ``name`` key containing the repository path.
         """
-        base_url = self._build_base_url()
-        auth = (
-            (self.username, self.password) if self.username and self.password else None
-        )
 
         try:
-            async with httpx.AsyncClient(
-                timeout=20, verify=self.verify, follow_redirects=True
-            ) as client:
-                resp = await client.get(f"{base_url}/v2/_catalog?n=1000", auth=auth)
+            async with self._client(timeout=self.catalog_timeout) as client:
+                resp = await client.get(f"{self.base_url}/v2/_catalog?n=1000")
                 resp.raise_for_status()
                 repositories: list[str] = resp.json().get("repositories") or []
         except httpx.HTTPStatusError as exc:
             logger.warning(
-                "browse_v2_repositories: HTTP %s for host=%s",
+                "browse_repositories: HTTP %s for host=%s",
                 exc.response.status_code,
                 self.host,
             )
@@ -272,7 +287,7 @@ class V2Provider(BaseRegistryProvider):
                 "error": f"Registry returned HTTP {exc.response.status_code}",
             }
         except Exception as exc:
-            logger.warning("browse_v2_repositories: error host=%s: %s", self.host, exc)
+            logger.warning("browse_repositories: error host=%s: %s", self.host, exc)
             return {
                 "items": [],
                 "total": 0,
@@ -282,7 +297,6 @@ class V2Provider(BaseRegistryProvider):
                 "error": str(exc),
             }
 
-        # Apply optional client-side keyword filter
         if search:
             repositories = [r for r in repositories if search.lower() in r.lower()]
 
@@ -291,24 +305,15 @@ class V2Provider(BaseRegistryProvider):
         start = (page - 1) * page_size
         page_repos = repositories[start : start + page_size]
 
-        # Fetch tags via GitHub API for each package
-        async def _fetch_github_tags(repo: str) -> list[str]:
-            """Fetch versions/tags for a GitHub package."""
-            try:
-                return await self.browse_tags(repo)
-            except Exception:
-                pass
-            return []
-
-        tags_results = await asyncio.gather(
-            *[_fetch_github_tags(r) for r in page_repos]
+        tags_results: list[list[str]] = await asyncio.gather(
+            *[self.browse_tags(r) for r in page_repos]
         )
 
         items = [
             {
                 "name": repo,
-                "tags": tags,
-                "tag_count": len(tags),
+                "tags": tags if isinstance(tags, list) else [],
+                "tag_count": len(tags) if isinstance(tags, list) else 0,
                 "total_size": 0,
             }
             for repo, tags in zip(page_repos, tags_results)
@@ -324,213 +329,312 @@ class V2Provider(BaseRegistryProvider):
         }
 
     async def browse_tags(self, repository: str) -> list[str]:
-        """List all tags for a repository in a V2-compatible registry.
-
-        Uses GET /v2/{repository}/tags/list as specified by the OCI Distribution
-        Specification.
+        """List all tags for a repository via /v2/{repository}/tags/list.
 
         Args:
-            host:       Registry hostname (bare or with scheme).
-            username:   Registry username (may be empty).
-            password:   Registry password or access token.
             repository: Repository path, e.g. "myorg/myimage".
-            use_tls:    Use HTTPS (default True).
-            tls_verify: Enforce TLS certificate validation (default True).
 
         Returns:
-            Dict with keys: repository (str), tags (list[str]).
-            The tags list is empty when the repository does not exist or
-            an error occurs (errors are logged, not raised).
+            List of tag name strings; empty list on error or 404.
         """
-        base_url = self._build_base_url()
-        auth = (
-            (self.username, self.password) if self.username and self.password else None
-        )
-
         try:
-            async with httpx.AsyncClient(
-                timeout=15, verify=self.verify, follow_redirects=True
-            ) as client:
-                resp = await client.get(
-                    f"{base_url}/v2/{repository}/tags/list", auth=auth
-                )
+            async with self._client(timeout=self.tags_timeout) as client:
+                resp = await client.get(f"{self.base_url}/v2/{repository}/tags/list")
+                if resp.status_code == 404:
+                    return []
                 resp.raise_for_status()
-                tags: list[str] = resp.json().get("tags") or []
+                return resp.json().get("tags", []) or []
         except Exception as exc:
             logger.warning(
-                "browse_v2_tags error host=%s repo=%s: %s", self.host, repository, exc
+                "browse_tags error host=%s repo=%s: %s", self.host, repository, exc
             )
-            tags = []
+            return []
 
-        return tags
+    async def delete_repository(self, repository: str) -> str | None:
+        """Delete all tags of a repository in this V2 registry.
 
-    async def delete_repository(self, repository: str) -> dict[str, Any]:
-        """Delete all tags of a repository in a V2-compatible registry.
-
-        For each tag the manifest digest is resolved via
-        GET /v2/{repository}/manifests/{tag} (reading the Docker-Content-Digest
-        response header), then the manifest is deleted via
-        DELETE /v2/{repository}/manifests/{digest}.
-
-        The registry must have ``delete`` enabled in its configuration
-        (REGISTRY_STORAGE_DELETE_ENABLED=true for Docker Distribution).
+        Resolves each tag to its manifest digest then issues DELETE by digest,
+        as required by the OCI Distribution Spec.
 
         Args:
-            host:       Registry hostname (bare or with scheme).
-            username:   Registry username.
-            password:   Registry password or access token.
             repository: Repository path, e.g. "myorg/myimage".
-            use_tls:    Use HTTPS (default True).
-            tls_verify: Enforce TLS certificate validation (default True).
 
         Returns:
-            Dict with keys: deleted_tags (list), failed_tags (list), message (str).
+            None on success; an error string describing the failure.
         """
-        base_url = self._build_base_url()
-        auth = (
-            (self.username, self.password) if self.username and self.password else None
-        )
+        tags = await self.browse_tags(repository)
+        if not tags:
+            return None  # Nothing to delete — treat as success
 
-        deleted_tags: list[str] = []
-        failed_tags: list[str] = []
+        failed: list[str] = []
 
         try:
-            async with httpx.AsyncClient(
-                timeout=20, verify=self.verify, follow_redirects=True
-            ) as client:
-                # Retrieve tag list first
-                tags_resp = await client.get(
-                    f"{base_url}/v2/{repository}/tags/list", auth=auth
-                )
-                tags_resp.raise_for_status()
-                tags: list[str] = tags_resp.json().get("tags") or []
-
-                if not tags:
-                    return {
-                        "repository": repository,
-                        "deleted_tags": [],
-                        "failed_tags": [],
-                        "message": "No tags found for this repository",
-                    }
-
-                # For each tag: resolve digest then delete by digest
+            async with self._client(timeout=self.manifest_timeout) as client:
                 for tag in tags:
                     try:
                         manifest_resp = await client.get(
-                            f"{base_url}/v2/{repository}/manifests/{tag}",
-                            auth=auth,
+                            f"{self.base_url}/v2/{repository}/manifests/{tag}",
                             headers={"Accept": _MANIFEST_ACCEPT},
                         )
                         manifest_resp.raise_for_status()
-
                         digest = manifest_resp.headers.get("Docker-Content-Digest")
                         if not digest:
-                            logger.warning(
-                                "delete_v2_image: no digest header for %s:%s",
-                                repository,
-                                tag,
-                            )
-                            failed_tags.append(tag)
+                            failed.append(tag)
                             continue
 
-                        delete_resp = await client.delete(
-                            f"{base_url}/v2/{repository}/manifests/{digest}",
-                            auth=auth,  # type: ignore[arg-type]
+                        del_resp = await client.delete(
+                            f"{self.base_url}/v2/{repository}/manifests/{digest}"
                         )
-                        if delete_resp.status_code in (200, 202):
-                            deleted_tags.append(tag)
-                        else:
-                            logger.warning(
-                                "delete_v2_image: DELETE returned %s for %s:%s",
-                                delete_resp.status_code,
-                                repository,
-                                tag,
-                            )
-                            failed_tags.append(tag)
+                        if del_resp.status_code not in (200, 202):
+                            failed.append(tag)
                     except Exception as exc:
                         logger.warning(
-                            "delete_v2_image: error deleting %s:%s — %s",
+                            "delete_repository: error deleting %s:%s — %s",
                             repository,
                             tag,
                             exc,
                         )
-                        failed_tags.append(tag)
-
+                        failed.append(tag)
         except Exception as exc:
-            logger.warning("delete_v2_image: error repo=%s: %s", repository, exc)
-            return {
-                "deleted_tags": [],
-                "failed_tags": [repository],
-                "message": "Delete v2 image error, please view log",
-            }
+            logger.warning(
+                "delete_repository: client error repo=%s: %s", repository, exc
+            )
+            return str(exc)
 
-        return {
-            "deleted_tags": deleted_tags,
-            "failed_tags": failed_tags,
-            "message": (
-                f"Deleted {len(deleted_tags)} tag(s)"
-                + (f", {len(failed_tags)} failed" if failed_tags else "")
-            ),
-        }
+        return f"Failed to delete tags: {', '.join(failed)}" if failed else None
 
     async def get_tags_for_import(self, repository: str) -> list[str]:
-        """Retrieve tag names for a V2 repository, used by import jobs.
+        """Return tag list for import jobs (always a plain list[str])."""
+        return await self.browse_tags(repository=repository)
 
-        Thin wrapper around browse_v2_tags that guarantees a list[str] return
-        suitable for use inside run_import_job() tag resolution loops.
+    # ── Core V2 operations ────────────────────────────────────────────────────
+
+    async def list_repositories(
+        self, n: int = 1000, last: str = "", include_empty: bool = False
+    ) -> list[str]:
+        """List all repository names from /v2/_catalog.
+
+        By default, repositories with no tags are excluded.
+        Tag-presence checks are performed concurrently for performance.
 
         Args:
-            host:       Registry hostname (bare or with scheme).
-            username:   Registry username (may be empty).
-            password:   Registry password or access token.
-            repository: Repository path, e.g. "myorg/myimage".
-            use_tls:    Use HTTPS (default True).
-            tls_verify: Enforce TLS certificate validation (default True).
+            n:             Maximum repositories per catalog request.
+            last:          Pagination cursor (last repository name seen).
+            include_empty: When True, include repositories with no tags.
+        """
+        url = f"{self.base_url}/v2/_catalog?n={n}"
+        if last:
+            url += f"&last={last}"
+
+        async with self._client(timeout=self.catalog_timeout) as client:
+            resp = await client.get(url)
+            resp.raise_for_status()
+            repositories: list[str] = resp.json().get("repositories", [])
+
+        if include_empty:
+            return repositories
+
+        # Check all repositories concurrently for the presence of at least one tag
+        tags_results: list[list[str]] = await asyncio.gather(
+            *[self.browse_tags(repo) for repo in repositories],
+            return_exceptions=False,
+        )
+        return [repo for repo, tags in zip(repositories, tags_results) if tags]
+
+    async def list_empty_repositories(self) -> list[str]:
+        """Return repositories that have no tags (ghost entries)."""
+        url = f"{self.base_url}/v2/_catalog?n=1000"
+        async with self._client(timeout=self.catalog_timeout) as client:
+            resp = await client.get(url)
+            resp.raise_for_status()
+            all_repos: list[str] = resp.json().get("repositories", [])
+
+        if not all_repos:
+            return []
+
+        tags_results: list[list[str]] = await asyncio.gather(
+            *[self.browse_tags(repo) for repo in all_repos],
+            return_exceptions=False,
+        )
+        return [repo for repo, tags in zip(all_repos, tags_results) if not tags]
+
+    async def get_manifest(self, repository: str, reference: str) -> dict[str, Any]:
+        """Fetch a manifest by tag or digest, enriched with private metadata keys.
+
+        Adds two private keys to the returned dict:
+            _digest         : Docker-Content-Digest response header.
+            _content_length : Content-Length response header (int).
+
+        Returns an empty dict on HTTP 404.
+        """
+        try:
+            async with self._client(timeout=self.timeout) as client:
+                resp = await client.get(
+                    f"{self.base_url}/v2/{repository}/manifests/{reference}",
+                    headers={"Accept": _MANIFEST_ACCEPT},
+                )
+                if resp.status_code == 404:
+                    return {}
+                resp.raise_for_status()
+                manifest = resp.json()
+                manifest["_digest"] = resp.headers.get("Docker-Content-Digest", "")
+                manifest["_content_length"] = int(resp.headers.get("Content-Length", 0))
+                return manifest
+        except Exception as exc:
+            logger.warning(
+                "get_manifest error host=%s repo=%s ref=%s: %s",
+                self.host,
+                repository,
+                reference,
+                exc,
+            )
+            return {}
+
+    async def delete_manifest(self, repository: str, digest: str) -> bool:
+        """Delete an image manifest by digest.
+
+        Returns True when the delete succeeded (HTTP 200 or 202).
+        """
+        async with self._client(timeout=self.manifest_timeout) as client:
+            resp = await client.delete(
+                f"{self.base_url}/v2/{repository}/manifests/{digest}"
+            )
+            return resp.status_code in (200, 202)
+
+    async def put_manifest(
+        self,
+        repository: str,
+        reference: str,
+        manifest: dict[str, Any],
+        content_type: str,
+    ) -> bool:
+        """Push a manifest to create or update a tag.
+
+        Returns True when the push succeeded (HTTP 200 or 201).
+        """
+        async with self._client(timeout=self.timeout) as client:
+            resp = await client.put(
+                f"{self.base_url}/v2/{repository}/manifests/{reference}",
+                content=_json.dumps(manifest),
+                headers={"Content-Type": content_type},
+            )
+            return resp.status_code in (200, 201)
+
+    async def add_tag(
+        self, repository: str, source_tag: str, new_tag: str
+    ) -> dict[str, Any]:
+        """Create a new tag by copying the raw manifest of an existing tag.
+
+        No data transfer occurs — only the manifest reference changes.
 
         Returns:
-            List of tag name strings (may be empty on error).
+            dict with keys: success (bool), message (str).
         """
-        tags = await self.browse_tags(repository=repository)
-        return tags or []
+        try:
+            async with self._client(timeout=self.manifest_timeout) as client:
+                # Fetch raw manifest bytes to avoid JSON re-serialisation drift
+                manifest_resp = await client.get(
+                    f"{self.base_url}/v2/{repository}/manifests/{source_tag}",
+                    headers={"Accept": _MANIFEST_ACCEPT},
+                )
+                if manifest_resp.status_code == 404:
+                    return {
+                        "success": False,
+                        "message": f"Source tag '{source_tag}' not found",
+                    }
+                manifest_resp.raise_for_status()
+
+                content_type = manifest_resp.headers.get(
+                    "Content-Type",
+                    "application/vnd.docker.distribution.manifest.v2+json",
+                )
+                raw_manifest = manifest_resp.content
+
+                put_resp = await client.put(
+                    f"{self.base_url}/v2/{repository}/manifests/{new_tag}",
+                    content=raw_manifest,
+                    headers={"Content-Type": content_type},
+                )
+                if put_resp.status_code in (200, 201):
+                    return {
+                        "success": True,
+                        "message": f"Tag '{new_tag}' created from '{source_tag}'",
+                    }
+                return {
+                    "success": False,
+                    "message": f"Registry returned HTTP {put_resp.status_code}",
+                }
+        except Exception as exc:
+            logger.warning(
+                "add_tag error host=%s repo=%s src=%s new=%s: %s",
+                self.host,
+                repository,
+                source_tag,
+                new_tag,
+                exc,
+            )
+            return {"success": False, "message": str(exc)}
+
+    async def delete_tag(self, repository: str, tag: str) -> dict[str, Any]:
+        """Delete a specific tag by resolving its digest then deleting the manifest.
+
+        Returns:
+            dict with keys: success (bool), message (str).
+        """
+        try:
+            async with self._client(timeout=self.manifest_timeout) as client:
+                # Resolve the digest from the tag name
+                manifest_resp = await client.get(
+                    f"{self.base_url}/v2/{repository}/manifests/{tag}",
+                    headers={"Accept": _MANIFEST_ACCEPT},
+                )
+                if manifest_resp.status_code == 404:
+                    return {"success": False, "message": f"Tag '{tag}' not found"}
+                manifest_resp.raise_for_status()
+
+                digest = manifest_resp.headers.get("Docker-Content-Digest")
+                if not digest:
+                    return {
+                        "success": False,
+                        "message": "Registry did not return a Docker-Content-Digest header",
+                    }
+
+                del_resp = await client.delete(
+                    f"{self.base_url}/v2/{repository}/manifests/{digest}"
+                )
+                if del_resp.status_code in (200, 202):
+                    return {"success": True, "message": f"Tag '{tag}' deleted"}
+
+                return {
+                    "success": False,
+                    "message": f"Registry returned HTTP {del_resp.status_code}",
+                }
+        except Exception as exc:
+            logger.warning(
+                "delete_tag error host=%s repo=%s tag=%s: %s",
+                self.host,
+                repository,
+                tag,
+                exc,
+            )
+            return {"success": False, "message": str(exc)}
 
     async def get_tag_detail(self, repository: str, tag: str) -> dict[str, Any]:
-        """Fetch detailed metadata for a specific tag in a V2 registry.
+        """Fetch detailed metadata for a specific tag.
 
-        Resolves the image manifest and then the config blob to extract
-        architecture, OS, creation date, labels, environment variables,
-        exposed ports, entrypoint, cmd and layer list.
-
-        This mirrors RegistryService.get_manifest / get_image_config for the
-        local registry but targets an arbitrary external V2 endpoint.
-
-        Args:
-            host:       Registry hostname (bare or with scheme).
-            username:   Registry username (may be empty).
-            password:   Registry password or access token.
-            repository: Repository path, e.g. "myorg/myimage".
-            tag:        Tag name, e.g. "latest".
-            use_tls:    Use HTTPS (default True).
-            tls_verify: Enforce TLS certificate validation (default True).
+        Resolves manifest → config blob → extracts architecture, OS,
+        creation date, labels, env vars, exposed ports, entrypoint,
+        cmd and layer list.  Handles manifest lists (multi-arch) by
+        resolving the first platform manifest before fetching the config.
 
         Returns:
-            Dict matching the ImageDetail schema used by the local registry router:
-            name, tag, digest, size, created, architecture, os, layers,
-            labels, env, cmd, entrypoint, exposed_ports.
-            Returns an empty dict when the tag is not found.
+            Dict matching the ImageDetail schema or empty dict on 404 / error.
         """
-        base_url = self._build_base_url()
-        auth = (
-            (self.username, self.password) if self.username and self.password else None
-        )
-
         try:
-            async with httpx.AsyncClient(
-                timeout=20, verify=self.verify, follow_redirects=True
-            ) as client:
-                # ── Step 1: fetch manifest ─────────────────────────────────────
+            async with self._client(timeout=self.timeout) as client:
+                # Fetch manifest
                 manifest_resp = await client.get(
-                    f"{base_url}/v2/{repository}/manifests/{tag}",
-                    auth=auth,
+                    f"{self.base_url}/v2/{repository}/manifests/{tag}",
                     headers={"Accept": _MANIFEST_ACCEPT},
                 )
                 if manifest_resp.status_code == 404:
@@ -540,18 +644,14 @@ class V2Provider(BaseRegistryProvider):
                 digest = manifest_resp.headers.get("Docker-Content-Digest", "")
                 manifest: dict[str, Any] = manifest_resp.json()
 
-                # Handle manifest list (multi-arch): resolve first platform manifest
+                # Resolve first sub-manifest for manifest lists (multi-arch)
                 media_type = manifest.get("mediaType", "")
-                if media_type in (
-                    "application/vnd.docker.distribution.manifest.list.v2+json",
-                    "application/vnd.oci.image.index.v1+json",
-                ):
+                if media_type in _MANIFEST_LIST_TYPES:
                     sub_manifests = manifest.get("manifests", [])
                     if sub_manifests:
                         sub_digest = sub_manifests[0]["digest"]
                         sub_resp = await client.get(
-                            f"{base_url}/v2/{repository}/manifests/{sub_digest}",
-                            auth=auth,
+                            f"{self.base_url}/v2/{repository}/manifests/{sub_digest}",
                             headers={"Accept": _MANIFEST_ACCEPT},
                         )
                         sub_resp.raise_for_status()
@@ -560,13 +660,12 @@ class V2Provider(BaseRegistryProvider):
                 layers: list[dict[str, Any]] = manifest.get("layers", [])
                 total_size: int = sum(int(layer.get("size", 0)) for layer in layers)
 
-                # ── Step 2: fetch config blob ──────────────────────────────────
+                # Fetch config blob
                 config_digest: str = manifest.get("config", {}).get("digest", "")
                 config: dict[str, Any] = {}
                 if config_digest:
                     blob_resp = await client.get(
-                        f"{base_url}/v2/{repository}/blobs/{config_digest}",
-                        auth=auth,
+                        f"{self.base_url}/v2/{repository}/blobs/{config_digest}"
                     )
                     if blob_resp.status_code == 200:
                         config = blob_resp.json()
@@ -593,7 +692,7 @@ class V2Provider(BaseRegistryProvider):
 
         except Exception as exc:
             logger.warning(
-                "get_v2_tag_detail error host=%s repo=%s tag=%s: %s",
+                "get_tag_detail error host=%s repo=%s tag=%s: %s",
                 self.host,
                 repository,
                 tag,
@@ -601,149 +700,39 @@ class V2Provider(BaseRegistryProvider):
             )
             return {}
 
-    async def delete_tag(self, repository: str, tag: str) -> dict[str, Any]:
-        """Delete a single tag from a V2 registry by resolving its manifest digest.
+    async def get_image_config(self, repository: str, digest: str) -> dict[str, Any]:
+        """Fetch an image configuration blob (labels, env vars, creation date, etc.)."""
+        async with self._client(timeout=self.timeout) as client:
+            resp = await client.get(f"{self.base_url}/v2/{repository}/blobs/{digest}")
+            if resp.status_code == 404:
+                return {}
+            resp.raise_for_status()
+            return resp.json()
 
-        The registry must have delete enabled
-        (REGISTRY_STORAGE_DELETE_ENABLED=true for Docker Distribution).
+    async def get_image_size(self, repository: str, tag: str) -> int:
+        """Calculate total image size in bytes by summing layer sizes.
 
-        Args:
-            host:       Registry hostname (bare or with scheme).
-            username:   Registry username.
-            password:   Registry password or access token.
-            repository: Repository path, e.g. "myorg/myimage".
-            tag:        Tag name to delete, e.g. "v1.0.0".
-            use_tls:    Use HTTPS (default True).
-            tls_verify: Enforce TLS certificate validation (default True).
-
-        Returns:
-            Dict with keys: success (bool), message (str).
-        """
-        base_url = self._build_base_url()
-        auth = (
-            (self.username, self.password) if self.username and self.password else None
-        )
-
-        try:
-            async with httpx.AsyncClient(
-                timeout=20, verify=self.verify, follow_redirects=True
-            ) as client:
-                # Resolve digest from tag
-                manifest_resp = await client.get(
-                    f"{base_url}/v2/{repository}/manifests/{tag}",
-                    auth=auth,
-                    headers={"Accept": _MANIFEST_ACCEPT},
-                )
-                if manifest_resp.status_code == 404:
-                    return {"success": False, "message": f"Tag '{tag}' not found"}
-                manifest_resp.raise_for_status()
-
-                digest = manifest_resp.headers.get("Docker-Content-Digest")
-                if not digest:
-                    return {
-                        "success": False,
-                        "message": "Registry did not return a Docker-Content-Digest header",
-                    }
-
-                # Delete by digest
-                delete_resp = await client.delete(
-                    f"{base_url}/v2/{repository}/manifests/{digest}",
-                    auth=auth,  # type: ignore[arg-type]
-                )
-                if delete_resp.status_code in (200, 202):
-                    return {"success": True, "message": f"Tag '{tag}' deleted"}
-
-                return {
-                    "success": False,
-                    "message": f"Registry returned HTTP {delete_resp.status_code}",
-                }
-
-        except Exception as exc:
-            logger.warning(
-                "delete_v2_tag error host=%s repo=%s tag=%s: %s",
-                self.host,
-                repository,
-                tag,
-                exc,
-            )
-            return {"success": False, "message": str(exc)}
-
-    async def add_tag(
-        self, repository: str, source_tag: str, new_tag: str
-    ) -> dict[str, Any]:
-        """Create a new tag by copying the manifest of an existing tag.
-
-        Implements a client-side retag: the manifest of *source_tag* is fetched
-        and then PUT under *new_tag*.  No data transfer is involved; only the
-        manifest reference changes.
-
-        Args:
-            host:       Registry hostname (bare or with scheme).
-            username:   Registry username.
-            password:   Registry password or access token.
-            repository: Repository path, e.g. "myorg/myimage".
-            source_tag: Existing tag whose manifest will be copied.
-            new_tag:    New tag name to create.
-            use_tls:    Use HTTPS (default True).
-            tls_verify: Enforce TLS certificate validation (default True).
+        Handles manifest lists (multi-arch) by using the first sub-manifest.
 
         Returns:
-            Dict with keys: success (bool), message (str).
+            Total size in bytes; 0 on error or missing manifest.
         """
-        base_url = self._build_base_url()
-        auth = (
-            (self.username, self.password) if self.username and self.password else None
-        )
+        manifest = await self.get_manifest(repository, tag)
+        if not manifest:
+            return 0
 
-        try:
-            async with httpx.AsyncClient(
-                timeout=20, verify=self.verify, follow_redirects=True
-            ) as client:
-                # Fetch source manifest (raw bytes to preserve exact JSON)
-                manifest_resp = await client.get(
-                    f"{base_url}/v2/{repository}/manifests/{source_tag}",
-                    auth=auth,
-                    headers={"Accept": _MANIFEST_ACCEPT},
+        total_size = 0
+
+        if manifest.get("mediaType") in _MANIFEST_LIST_TYPES:
+            manifests = manifest.get("manifests", [])
+            if manifests:
+                sub_manifest = await self.get_manifest(
+                    repository, manifests[0]["digest"]
                 )
-                if manifest_resp.status_code == 404:
-                    return {
-                        "success": False,
-                        "message": f"Source tag '{source_tag}' not found",
-                    }
-                manifest_resp.raise_for_status()
+                layers = sub_manifest.get("layers", [])
+                total_size = sum(layer.get("size", 0) for layer in layers)
+        else:
+            layers = manifest.get("layers", [])
+            total_size = sum(layer.get("size", 0) for layer in layers)
 
-                content_type = manifest_resp.headers.get(
-                    "Content-Type",
-                    "application/vnd.docker.distribution.manifest.v2+json",
-                )
-                # Use the raw response body to avoid JSON re-serialisation drift
-                raw_manifest = manifest_resp.content
-
-                # PUT manifest under new tag
-                put_resp = await client.put(
-                    f"{base_url}/v2/{repository}/manifests/{new_tag}",
-                    auth=auth,  # type: ignore[arg-type]
-                    content=raw_manifest,
-                    headers={"Content-Type": content_type},
-                )
-                if put_resp.status_code in (200, 201):
-                    return {
-                        "success": True,
-                        "message": f"Tag '{new_tag}' created from '{source_tag}'",
-                    }
-
-                return {
-                    "success": False,
-                    "message": f"Registry returned HTTP {put_resp.status_code}",
-                }
-
-        except Exception as exc:
-            logger.warning(
-                "add_v2_tag error host=%s repo=%s src=%s new=%s: %s",
-                self.host,
-                repository,
-                source_tag,
-                new_tag,
-                exc,
-            )
-            return {"success": False, "message": str(exc)}
+        return total_size

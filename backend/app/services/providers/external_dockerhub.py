@@ -9,9 +9,9 @@ from .base import BaseRegistryProvider
 
 logger = logging.getLogger(__name__)
 
-_HUB_API = "https://hub.docker.com/v2"
-_HUB_AUTH_URL = f"{_HUB_API}/users/login"
+_HUB_API = "https://hub.docker.com"
 _PAGE_SIZE_MAX = 100  # Docker Hub maximum page size for repository listing
+_DEFAULT_TIMEOUT = 30.0
 
 
 class DockerHubProvider(BaseRegistryProvider):
@@ -24,6 +24,7 @@ class DockerHubProvider(BaseRegistryProvider):
         password: str = "",
         use_tls: bool = True,
         tls_verify: bool = True,
+        timeout: float = _DEFAULT_TIMEOUT,
     ) -> None:
         """Initialize provider with registry credentials.
 
@@ -35,12 +36,14 @@ class DockerHubProvider(BaseRegistryProvider):
             tls_verify: Validate TLS certificate when True (default).
         """
         super().__init__(
-            host=host,
+            host=_HUB_API,
             username=username,
             password=password,
             use_tls=use_tls,
             tls_verify=tls_verify,
         )
+        # Configurable default timeout
+        self.timeout = timeout
 
     @property
     def provider_name(self) -> str:
@@ -57,10 +60,10 @@ class DockerHubProvider(BaseRegistryProvider):
         """
         try:
             async with httpx.AsyncClient(
-                timeout=15, verify=self.verify, follow_redirects=True
+                timeout=self.timeout, verify=self.verify, follow_redirects=True
             ) as client:
                 resp = await client.post(
-                    _HUB_AUTH_URL,
+                    f"{self.base_url}/v2/users/login",
                     json={"username": self.username, "password": self.password},
                 )
                 if resp.status_code == 200:
@@ -81,6 +84,17 @@ class DockerHubProvider(BaseRegistryProvider):
             "Content-Type": "application/json",
         }
 
+    async def ping(self) -> bool:
+        """Return True when the registry responds to the /v2/ ping endpoint."""
+        try:
+            async with httpx.AsyncClient(
+                timeout=self.probe_timeout, verify=self.verify, follow_redirects=True
+            ) as client:
+                resp = await client.get(f"{self.base_url}")
+                return resp.status_code in (200, 401)
+        except Exception:
+            return False
+
     async def test_connection(self) -> dict[str, Any]:
         """Probe a Docker hub registry to check reachability and credentials.
         Returns:
@@ -95,9 +109,11 @@ class DockerHubProvider(BaseRegistryProvider):
 
         try:
             async with httpx.AsyncClient(
-                timeout=15, verify=self.verify, follow_redirects=True
+                timeout=self.probe_timeout, verify=self.verify, follow_redirects=True
             ) as client:
-                cred_resp = await client.post(_HUB_AUTH_URL, json=auth)
+                cred_resp = await client.post(
+                    f"{self.base_url}/v2/users/login", json=auth
+                )
                 if cred_resp.status_code == 200:
                     if not has_credentials:
                         return {
@@ -203,7 +219,7 @@ class DockerHubProvider(BaseRegistryProvider):
 
         try:
             async with httpx.AsyncClient(
-                timeout=20, verify=self.verify, follow_redirects=True
+                timeout=self.catalog_timeout, verify=self.verify, follow_redirects=True
             ) as client:
                 # The Hub API supports server-side search via the `name` query param
                 params: dict[str, Any] = {
@@ -214,7 +230,7 @@ class DockerHubProvider(BaseRegistryProvider):
                     params["name"] = search
 
                 resp = await client.get(
-                    f"{_HUB_API}/repositories/{namespace}/",
+                    f"{self.base_url}/v2/repositories/{namespace}/",
                     headers=headers,
                     params=params,
                 )
@@ -342,11 +358,11 @@ class DockerHubProvider(BaseRegistryProvider):
             namespace, name = "library", repository
 
         tags: list[str] = []
-        url: str | None = f"{_HUB_API}/repositories/{namespace}/{name}/tags/"
+        url: str | None = f"{self.base_url}/v2/repositories/{namespace}/{name}/tags/"
 
         try:
             async with httpx.AsyncClient(
-                timeout=20, verify=self.verify, follow_redirects=True
+                timeout=self.tags_timeout, verify=self.verify, follow_redirects=True
             ) as client:
                 while url:
                     resp = await client.get(
@@ -409,10 +425,10 @@ class DockerHubProvider(BaseRegistryProvider):
 
         try:
             async with httpx.AsyncClient(
-                timeout=20, verify=self.verify, follow_redirects=True
+                timeout=self.tags_timeout, verify=self.verify, follow_redirects=True
             ) as client:
                 resp = await client.delete(
-                    f"{_HUB_API}/repositories/{namespace}/{name}/",
+                    f"{self.base_url}/v2/repositories/{namespace}/{name}/",
                     headers=headers,
                 )
                 if resp.status_code in (200, 202, 204):

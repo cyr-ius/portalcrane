@@ -28,6 +28,12 @@ class BaseRegistryProvider(ABC):
         └── DockerHubProvider (Docker Hub — Hub REST API)
     """
 
+    # Default timeouts (seconds)
+    probe_timeout = 10.0
+    catalog_timeout = 20.0
+    tags_timeout = 15.0
+    manifest_timeout = 20.0
+
     def __init__(
         self,
         host: str,
@@ -52,12 +58,42 @@ class BaseRegistryProvider(ABC):
         self.tls_verify = tls_verify
         self.verify: bool = False if not self.use_tls else self.tls_verify
 
+    # ── URL / client helpers ──────────────────────────────────────────────────
+
+    def _build_base_url(self) -> str:
+        """Build the base HTTPS/HTTP URL from the host field.
+
+        When the host already carries a scheme (http:// or https://) it is
+        preserved unchanged.  Otherwise the scheme is derived from use_tls.
+
+        Returns:
+            Base URL string without trailing slash.
+        """
+        if "://" in self.host:
+            return self.host.rstrip("/")
+        scheme = "https" if self.use_tls else "http"
+        return f"{scheme}://{self.host}"
+
     # ── Abstract interface — every provider MUST implement these methods ───────
+
+    @property
+    def base_url(self) -> str:
+        """Convenience property — returns the computed base URL."""
+        return self._build_base_url()
+
+    @property
+    def has_credentials(self) -> bool:
+        return bool(self.username and self.password)
 
     @property
     @abstractmethod
     def provider_name(self) -> str:
         """Provider name"""
+        ...
+
+    @abstractmethod
+    def ping(self) -> bool:
+        """Return True when the registry responds to the ping endpoint."""
         ...
 
     @abstractmethod

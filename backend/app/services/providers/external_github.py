@@ -10,6 +10,8 @@ logger = logging.getLogger(__name__)
 
 _GITHUB_API = "https://api.github.com"
 
+_DEFAULT_TIMEOUT = 30.0
+
 
 class GithubProvider(BaseRegistryProvider):
     """Github provider"""
@@ -21,6 +23,7 @@ class GithubProvider(BaseRegistryProvider):
         password: str = "",
         use_tls: bool = True,
         tls_verify: bool = True,
+        timeout: float = _DEFAULT_TIMEOUT,
     ) -> None:
         """Initialize provider with registry credentials.
 
@@ -32,12 +35,14 @@ class GithubProvider(BaseRegistryProvider):
             tls_verify: Validate TLS certificate when True (default).
         """
         super().__init__(
-            host=host,
+            host=_GITHUB_API,
             username=username,
             password=password,
             use_tls=use_tls,
             tls_verify=tls_verify,
         )
+        # Configurable default timeout
+        self.timeout = timeout
 
     @property
     def provider_name(self) -> str:
@@ -62,9 +67,20 @@ class GithubProvider(BaseRegistryProvider):
     def _get_urls(self) -> list[str]:
         """Return urls for GitHub user or organisation."""
         return [
-            f"{_GITHUB_API}/users/{self.owner}/packages",
-            f"{_GITHUB_API}/orgs/{self.owner}/packages",
+            f"{self.base_url}/users/{self.owner}/packages",
+            f"{self.base_url}/orgs/{self.owner}/packages",
         ]
+
+    async def ping(self) -> bool:
+        """Return True when the registry responds to the /v2/ ping endpoint."""
+        try:
+            async with httpx.AsyncClient(
+                timeout=self.probe_timeout, verify=self.verify, follow_redirects=True
+            ) as client:
+                resp = await client.get(f"{self.base_url}/octocat/")
+                return resp.status_code in (200, 401)
+        except Exception:
+            return False
 
     async def test_connection(self) -> dict[str, Any]:
         """Probe a Docker hub registry to check reachability and credentials.
@@ -81,10 +97,11 @@ class GithubProvider(BaseRegistryProvider):
 
         try:
             async with httpx.AsyncClient(
-                timeout=15, verify=self.verify, follow_redirects=True
+                timeout=self.probe_timeout, verify=self.verify, follow_redirects=True
             ) as client:
-                auth_url = f"{_GITHUB_API}/octocat"
-                cred_resp = await client.get(auth_url, headers=self._auth_headers())
+                cred_resp = await client.get(
+                    f"{self.base_url}/octocat/", headers=self._auth_headers()
+                )
                 if cred_resp.status_code == 200:
                     return {
                         "reachable": True,
@@ -168,7 +185,7 @@ class GithubProvider(BaseRegistryProvider):
         last_error: str | None = None
 
         async with httpx.AsyncClient(
-            timeout=30, verify=self.verify, follow_redirects=True
+            timeout=self.catalog_timeout, verify=self.verify, follow_redirects=True
         ) as client:
             for url in urls_to_try:
                 try:
@@ -247,7 +264,7 @@ class GithubProvider(BaseRegistryProvider):
         """List all tags for a GitHub repository.Get package (user or organisation)."""
         headers = self._auth_headers()
         async with httpx.AsyncClient(
-            timeout=30, verify=self.verify, follow_redirects=True
+            timeout=self.tags_timeout, verify=self.verify, follow_redirects=True
         ) as client:
             for base_url in self._get_urls():
                 try:
@@ -277,7 +294,7 @@ class GithubProvider(BaseRegistryProvider):
         last_error: str | None = None
 
         async with httpx.AsyncClient(
-            timeout=30, verify=self.verify, follow_redirects=True
+            timeout=self.tags_timeout, verify=self.verify, follow_redirects=True
         ) as client:
             for base_url in self._get_urls():
                 try:
@@ -323,7 +340,7 @@ class GithubProvider(BaseRegistryProvider):
         repository = repository.split("/", 1)[-1] if "/" in repository else repository
 
         async with httpx.AsyncClient(
-            timeout=30, verify=self.verify, follow_redirects=True
+            timeout=self.manifest_timeout, verify=self.verify, follow_redirects=True
         ) as client:
             for base_url in self._get_urls():
                 try:
