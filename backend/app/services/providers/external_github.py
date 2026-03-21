@@ -3,7 +3,9 @@
 import asyncio
 import logging
 from typing import Any
+
 import httpx
+
 from .base import BaseRegistryProvider
 
 logger = logging.getLogger(__name__)
@@ -162,8 +164,76 @@ class GithubProvider(BaseRegistryProvider):
                 "message": "Connection failed",
             }
 
+    async def check_catalog(self) -> bool:
+        browsable = bool(self.password)
+        logger.debug(
+            "check_catalog_browsable: GHCR — browsable=%s (token present=%s)",
+            browsable,
+            browsable,
+        )
+        return browsable
+
+    async def list_repositories(
+        self,
+        page_size: int = 1000,
+        page: int = 1,
+        last: str = "",
+        include_empty: bool = False,
+    ) -> list[str]:
+        """List all repository names from /v2/_catalog.
+
+        This is the ONLY method that directly calls /v2/_catalog. All other
+        methods that need a repository list (browse_repositories,
+        list_empty_repositories, RegistryService helpers) delegate here.
+
+        Args:
+            n:             Maximum repositories per catalog request.
+            last:          Pagination cursor (last repository name seen).
+            include_empty: When True,  return all repositories including
+                           those with no tags.
+                           When False (default), exclude tag-less repositories
+                           (concurrent tag-presence check performed).
+
+        Returns:
+            list[str]: Repository names.
+        """
+        headers = self._auth_headers()
+        urls_to_try = self._get_urls()
+        repositories: list[str] = []
+
+        async with httpx.AsyncClient(
+            timeout=self.catalog_timeout, verify=self.verify, follow_redirects=True
+        ) as client:
+            params = {"package_type": "container", "per_page": page_size}
+            for url in urls_to_try:
+                try:
+                    resp = await client.get(url, headers=headers, params=params)
+                    resp.raise_for_status()
+                    packages = resp.json()
+                    repositories = [
+                        f"{self.owner}/{pkg['name']}"
+                        for pkg in packages
+                        if isinstance(pkg, dict) and "name" in pkg
+                    ]
+                except httpx.HTTPStatusError as exc:
+                    logger.warning(
+                        "HTTP %s for host=%s", exc.response.status_code, self.host
+                    )
+                except Exception as exc:
+                    logger.warning("Unknown Error host=%s: %s", self.host, exc)
+
+        if include_empty:
+            return repositories
+
+        # Filter out repositories with no tags (concurrent checks for speed).
+        tags_results: list[list[str]] = await asyncio.gather(
+            *[self.browse_tags(repo) for repo in repositories],
+            return_exceptions=False,
+        )
+        return [repo for repo, tags in zip(repositories, tags_results) if tags]
+
     async def browse_repositories(
-        self, search: str | None, page: int, page_size: int
+        self, search: str | None, page: int, page_size: int = 20
     ) -> dict:
         """
         List container packages for a GitHub user or organisation via the
@@ -176,69 +246,48 @@ class GithubProvider(BaseRegistryProvider):
         Authentication: GitHub personal access token with `read:packages` scope,
         stored as the registry password.
         """
-        headers = self._auth_headers()
-
-        # Try user packages first, fall back to org packages
-        urls_to_try = self._get_urls()
-
         repositories: list[str] = []
-        last_error: str | None = None
-
-        async with httpx.AsyncClient(
-            timeout=self.catalog_timeout, verify=self.verify, follow_redirects=True
-        ) as client:
-            for url in urls_to_try:
-                try:
-                    params = {"package_type": "container", "per_page": 100}
-                    resp = await client.get(url, headers=headers, params=params)
-                    if resp.status_code == 200:
-                        packages = resp.json()
-                        repositories = [
-                            f"{self.owner}/{pkg['name']}"
-                            for pkg in packages
-                            if isinstance(pkg, dict) and "name" in pkg
-                        ]
-                        last_error = None
-                        break
-                    elif resp.status_code == 404:
-                        # Not a user, try org endpoint
-                        continue
-                    else:
-                        last_error = f"GitHub API returned HTTP {resp.status_code}"
-                except Exception as exc:
-                    last_error = str(exc)
-
-        if last_error and not repositories:
+        try:
+            repositories = await self.list_repositories(
+                page_size == page_size, include_empty=True
+            )
+        except httpx.HTTPStatusError as exc:
+            logger.warning(
+                "HTTP %s for host=%s",
+                exc.response.status_code,
+                self.host,
+            )
             return {
                 "items": [],
                 "total": 0,
                 "page": page,
                 "page_size": page_size,
                 "total_pages": 1,
-                "error": last_error,
+                "error": f"Registry returned HTTP {exc.response.status_code}",
+            }
+        except Exception as exc:
+            logger.warning("Unknown error host=%s: %s", self.host, exc)
+            return {
+                "items": [],
+                "total": 0,
+                "page": page,
+                "page_size": page_size,
+                "total_pages": 1,
+                "error": str(exc),
             }
 
         # Apply search filter
         if search:
             repositories = [r for r in repositories if search.lower() in r.lower()]
 
+        # ── Build paginated response ───────────────────────────────────────────
         total = len(repositories)
         total_pages = max(1, (total + page_size - 1) // page_size)
         start = (page - 1) * page_size
         page_repos = repositories[start : start + page_size]
 
-        # Fetch tags via GitHub API for each package
-        async def _fetch_github_tags(repo: str) -> list[str]:
-            """Fetch versions/tags for a GitHub package."""
-            pkg_name = repo.split("/", 1)[-1]
-            try:
-                return await self.browse_tags(pkg_name)
-            except Exception:
-                pass
-            return []
-
-        tags_results = await asyncio.gather(
-            *[_fetch_github_tags(r) for r in page_repos]
+        tags_results: list[list[str]] = await asyncio.gather(
+            *[self.browse_tags(r) for r in page_repos]
         )
 
         items = [
@@ -268,7 +317,8 @@ class GithubProvider(BaseRegistryProvider):
         ) as client:
             for base_url in self._get_urls():
                 try:
-                    tag_url = f"{base_url}/container/{repository}/versions"
+                    package = repository.split("/", 1)[-1]
+                    tag_url = f"{base_url}/container/{package}/versions"
                     resp = await client.get(tag_url, headers=headers)
                     if resp.status_code == 200:
                         versions = resp.json()
@@ -357,12 +407,3 @@ class GithubProvider(BaseRegistryProvider):
                     last_error = str(exc)
 
         return last_error
-
-    async def check_catalog(self) -> bool:
-        browsable = bool(self.password)
-        logger.debug(
-            "check_catalog_browsable: GHCR — browsable=%s (token present=%s)",
-            browsable,
-            browsable,
-        )
-        return browsable

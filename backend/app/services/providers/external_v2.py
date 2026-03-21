@@ -259,11 +259,10 @@ class V2Provider(BaseRegistryProvider):
             logger.warning("check_catalog host=%s error: %s", self.host, exc)
             return False
 
-    # ── Single source of truth: repository listing ────────────────────────────
-
     async def list_repositories(
         self,
-        n: int = 1000,
+        page_size: int = 1000,
+        page: int = 1,
         last: str = "",
         include_empty: bool = False,
     ) -> list[str]:
@@ -284,7 +283,7 @@ class V2Provider(BaseRegistryProvider):
         Returns:
             list[str]: Repository names.
         """
-        url = f"{self.base_url}/v2/_catalog?n={n}"
+        url = f"{self.base_url}/v2/_catalog?n={page_size}"
         if last:
             url += f"&last={last}"
 
@@ -302,90 +301,6 @@ class V2Provider(BaseRegistryProvider):
             return_exceptions=False,
         )
         return [repo for repo, tags in zip(repositories, tags_results) if tags]
-
-    # ── Abstract implementation: paginated browse (delegates to list_repositories)
-
-    async def browse_repositories(
-        self,
-        search: str | None = None,
-        page: int = 1,
-        page_size: int = 20,
-        **_kwargs: Any,
-    ) -> dict[str, Any]:
-        """List repositories with optional filtering and pagination.
-
-        Delegates to list_repositories() for the data fetch — no direct
-        /v2/_catalog call here.  Only pagination and tag-fetching live here.
-
-        Args:
-            search:    Optional substring filter on repository names.
-            page:      1-based page number.
-            page_size: Number of items per page.
-
-        Returns:
-            Paginated dict compatible with ExternalPaginatedImages frontend model.
-        """
-        try:
-            # include_empty=True so pagination counts are stable; the result
-            # already excludes truly invisible repos via /v2/_catalog.
-            repositories = await self.list_repositories(n=1000, include_empty=True)
-        except httpx.HTTPStatusError as exc:
-            logger.warning(
-                "browse_repositories: HTTP %s for host=%s",
-                exc.response.status_code,
-                self.host,
-            )
-            return {
-                "items": [],
-                "total": 0,
-                "page": page,
-                "page_size": page_size,
-                "total_pages": 1,
-                "error": f"Registry returned HTTP {exc.response.status_code}",
-            }
-        except Exception as exc:
-            logger.warning("browse_repositories: error host=%s: %s", self.host, exc)
-            return {
-                "items": [],
-                "total": 0,
-                "page": page,
-                "page_size": page_size,
-                "total_pages": 1,
-                "error": str(exc),
-            }
-
-        if search:
-            repositories = [r for r in repositories if search.lower() in r.lower()]
-
-        total = len(repositories)
-        total_pages = max(1, (total + page_size - 1) // page_size)
-        start = (page - 1) * page_size
-        page_repos = repositories[start : start + page_size]
-
-        tags_results: list[list[str]] = await asyncio.gather(
-            *[self.browse_tags(r) for r in page_repos]
-        )
-
-        items = [
-            {
-                "name": repo,
-                "tags": tags if isinstance(tags, list) else [],
-                "tag_count": len(tags) if isinstance(tags, list) else 0,
-                "total_size": 0,
-            }
-            for repo, tags in zip(page_repos, tags_results)
-        ]
-
-        return {
-            "items": items,
-            "total": total,
-            "page": page,
-            "page_size": page_size,
-            "total_pages": total_pages,
-            "error": None,
-        }
-
-    # ── Tag operations ────────────────────────────────────────────────────────
 
     async def browse_tags(self, repository: str) -> list[str]:
         """List all tags for a repository via /v2/{repository}/tags/list.
@@ -412,12 +327,6 @@ class V2Provider(BaseRegistryProvider):
     async def get_tags_for_import(self, repository: str) -> list[str]:
         """Return tag list for import jobs (always a plain list[str])."""
         return await self.browse_tags(repository=repository)
-
-    # ── Low-level V2 building blocks ──────────────────────────────────────────
-    #
-    # These four methods are the only ones that issue raw V2 HTTP requests for
-    # manifests and blobs.  All higher-level operations call them rather than
-    # duplicating httpx calls.
 
     async def get_manifest(self, repository: str, reference: str) -> dict[str, Any]:
         """Fetch a manifest by tag or digest.
@@ -533,8 +442,6 @@ class V2Provider(BaseRegistryProvider):
                 exc,
             )
             return {}
-
-    # ── Higher-level V2 operations (built on the building blocks) ─────────────
 
     async def get_tag_detail(self, repository: str, tag: str) -> dict[str, Any]:
         """Fetch detailed metadata for a specific tag.

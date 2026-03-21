@@ -5,6 +5,7 @@ import logging
 from typing import Any
 
 import httpx
+
 from .base import BaseRegistryProvider
 
 logger = logging.getLogger(__name__)
@@ -181,155 +182,69 @@ class DockerHubProvider(BaseRegistryProvider):
                 "message": "Connection failed",
             }
 
-    async def browse_repositories(
-        self, search: str | None = None, page: int = 1, page_size: int = 20
-    ) -> dict[str, Any]:
-        """
-        List container repositories for a Docker Hub namespace (user or organisation).
+    async def check_catalog(self) -> bool:
+        has_creds = bool(
+            (self.username or "").strip() and (self.password or "").strip()
+        )
+        logger.debug(
+            "check_catalog_browsable: Docker Hub — browsable=%s (creds present=%s)",
+            has_creds,
+            has_creds,
+        )
+        return has_creds
 
-        Uses GET /v2/repositories/{namespace}/?page={page}&page_size={page_size}.
-
-        The `namespace` stored in the registry entry corresponds to the Docker Hub
-        username or organisation name.  When the registry was created with
-        username=john, namespace defaults to john.
-
-        Args:
-            search:    Optional substring filter applied client-side on repo name.
-            page:      1-based page number.
-            page_size: Number of items per page.
+    async def list_repositories(
+        self,
+        page_size: int = 1000,
+        page: int = 1,
+        last: str = "",
+        include_empty: bool = False,
+    ) -> list[str]:
+        """List all repository names.
 
         Returns:
-            Paginated dict compatible with ExternalPaginatedImages:
-            { items, total, page, page_size, total_pages, error }
+            list[str]: Repository names.
         """
+        repositories: list[str] = []
+        namespace = self.username
         token = await self._get_token()
         if not token:
-            return {
-                "items": [],
-                "total": 0,
-                "page": page,
-                "page_size": page_size,
-                "total_pages": 1,
-                "error": "Docker Hub authentication failed. Check your credentials.",
-            }
-
+            return repositories
         headers = self._auth_headers(token)
-        repositories: list[str] = []
-        namespace = self.username  # Docker Hub namespace to browse (user or org name).
 
-        try:
-            async with httpx.AsyncClient(
-                timeout=self.catalog_timeout, verify=self.verify, follow_redirects=True
-            ) as client:
-                # The Hub API supports server-side search via the `name` query param
-                params: dict[str, Any] = {
-                    "page": page,
-                    "page_size": min(page_size, _PAGE_SIZE_MAX),
-                }
-                if search:
-                    params["name"] = search
-
+        async with httpx.AsyncClient(
+            timeout=self.catalog_timeout, verify=self.verify, follow_redirects=True
+        ) as client:
+            try:
+                params = {"page": page, "page_size": min(page_size, 1000)}
                 resp = await client.get(
                     f"{self.base_url}/v2/repositories/{namespace}/",
                     headers=headers,
                     params=params,
                 )
-
-                if resp.status_code == 401:
-                    return {
-                        "items": [],
-                        "total": 0,
-                        "page": page,
-                        "page_size": page_size,
-                        "total_pages": 1,
-                        "error": "Docker Hub authentication failed. Check your credentials.",
-                    }
-
-                if resp.status_code == 404:
-                    return {
-                        "items": [],
-                        "total": 0,
-                        "page": page,
-                        "page_size": page_size,
-                        "total_pages": 1,
-                        "error": f"Docker Hub namespace '{namespace}' not found.",
-                    }
-
                 resp.raise_for_status()
-                data = resp.json()
-                packages = data.get("results", {})
+                packages = resp.json()
                 repositories = [
                     f"{self.username}/{pkg['name']}"
-                    for pkg in packages
+                    for pkg in packages.get("results", {})
                     if isinstance(pkg, dict) and "name" in pkg
                 ]
+            except httpx.HTTPStatusError as exc:
+                logger.warning(
+                    "HTTP %s for host=%s", exc.response.status_code, self.host
+                )
+            except Exception as exc:
+                logger.warning("Unknown Error host=%s: %s", self.host, exc)
 
-        except httpx.HTTPStatusError as exc:
-            logger.warning(
-                "browse_dockerhub_repositories HTTP error namespace=%s: %s",
-                namespace,
-                exc,
-            )
-            return {
-                "items": [],
-                "total": 0,
-                "page": page,
-                "page_size": page_size,
-                "total_pages": 1,
-                "error": f"Docker Hub API error: {exc.response.status_code}",
-            }
-        except Exception as exc:
-            logger.warning(
-                "browse_dockerhub_repositories error namespace=%s: %s", namespace, exc
-            )
-            return {
-                "items": [],
-                "total": 0,
-                "page": page,
-                "page_size": page_size,
-                "total_pages": 1,
-                "error": "Docker Hub API unreachable.",
-            }
+        if include_empty:
+            return repositories
 
-        # Apply search filter
-        if search:
-            repositories = [r for r in repositories if search.lower() in r.lower()]
-
-        # ── Build paginated response ───────────────────────────────────────────
-        total = len(repositories)
-        total_pages = max(1, (total + page_size - 1) // page_size)
-        start = (page - 1) * page_size
-        page_repos = repositories[start : start + page_size]
-
-        # Fetch tags for each package
-        async def _fetch_tags(repo: str) -> list[str]:
-            """Fetch versions/tags for a GitHub package."""
-            try:
-                return await self.browse_tags(repo)
-            except Exception:
-                pass
-            return []
-
-        tags_results = await asyncio.gather(*[_fetch_tags(r) for r in page_repos])
-
-        items = [
-            {
-                "name": repo,
-                "tags": tags,
-                "tag_count": len(tags),
-                "total_size": 0,
-            }
-            for repo, tags in zip(page_repos, tags_results)
-        ]
-
-        return {
-            "items": items,
-            "total": total,
-            "page": page,
-            "page_size": page_size,
-            "total_pages": total_pages,
-            "error": None,
-        }
+        # Filter out repositories with no tags (concurrent checks for speed).
+        tags_results: list[list[str]] = await asyncio.gather(
+            *[self.browse_tags(repo) for repo in repositories],
+            return_exceptions=False,
+        )
+        return [repo for repo, tags in zip(repositories, tags_results) if tags]
 
     async def browse_tags(self, repository: str) -> list[str]:
         """
@@ -448,14 +363,3 @@ class DockerHubProvider(BaseRegistryProvider):
                 "delete_dockerhub_repository error repo=%s: %s", repository, exc
             )
             return f"Delete failed: {exc}"
-
-    async def check_catalog(self) -> bool:
-        has_creds = bool(
-            (self.username or "").strip() and (self.password or "").strip()
-        )
-        logger.debug(
-            "check_catalog_browsable: Docker Hub — browsable=%s (creds present=%s)",
-            has_creds,
-            has_creds,
-        )
-        return has_creds

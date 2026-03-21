@@ -20,7 +20,7 @@ No V2 HTTP calls are duplicated between this class and V2Provider.
 import asyncio
 import logging
 
-from ..config import Settings, REGISTRY_URL, PROXY_TIMEOUT
+from ..config import PROXY_TIMEOUT, REGISTRY_URL, Settings
 from ..services.providers.external_v2 import V2Provider
 
 logger = logging.getLogger(__name__)
@@ -76,7 +76,7 @@ class RegistryService:
             include_empty: When True, include repositories with no tags.
         """
         return await self._v2.list_repositories(
-            n=n, last=last, include_empty=include_empty
+            page_size=n, last=last, include_empty=include_empty
         )
 
     async def list_empty_repositories(self) -> list[str]:

@@ -11,9 +11,12 @@ Provider hierarchy:
     └── DockerHubProvider (Docker Hub — Hub REST API)
 """
 
+import asyncio
 import logging
 from abc import ABC, abstractmethod
 from typing import Any
+
+from httpx import HTTPStatusError
 
 logger = logging.getLogger(__name__)
 
@@ -129,40 +132,31 @@ class BaseRegistryProvider(ABC):
         ...
 
     @abstractmethod
-    async def browse_repositories(
+    async def list_repositories(
         self,
-        search: str | None = None,
+        page_size: int = 1000,
         page: int = 1,
-        page_size: int = 20,
-        **kwargs: Any,
-    ) -> dict[str, Any]:
-        """List repositories/images available in this registry.
+        last: str = "",
+        include_empty: bool = False,
+    ) -> list[str]:
+        """List repository names from the registry.
 
-        The return value must be a paginated dict compatible with the
-        ExternalPaginatedImages frontend model:
-
-            {
-                "items":       list[dict],   # Each item has at least "name"
-                "total":       int,
-                "page":        int,
-                "page_size":   int,
-                "total_pages": int,
-                "error":       str | None,   # Present only on partial failure
-            }
+        Default implementation returns an empty list.
 
         Args:
-            search:    Optional substring filter on repository name.
-            page:      1-based page number.
-            page_size: Number of items per page.
-            **kwargs:  Provider-specific parameters (e.g. namespace for DockerHub).
+            page_size:     Maximum number of repositories to fetch.
+            page:          Page number.
+            last:          Pagination cursor (last repository name seen).
+            include_empty: When True, include repositories with no tags.
+                           When False (default), exclude tag-less repositories.
 
         Returns:
-            dict[str, Any]: Paginated repository list.
+            list[str]: Repository names; empty list when unsupported.
         """
         ...
 
     @abstractmethod
-    async def browse_tags(self, repository: str) -> list[str] | dict[str, Any]:
+    async def browse_tags(self, repository: str) -> list[str]:
         """List tags available for a repository.
 
         Args:
@@ -202,31 +196,89 @@ class BaseRegistryProvider(ABC):
         """
         ...
 
-    async def list_repositories(
-        self,
-        n: int = 1000,
-        last: str = "",
-        include_empty: bool = False,
-    ) -> list[str]:
-        """List repository names from the registry.
+    async def browse_repositories(
+        self, search: str | None, page: int = 1, page_size: int = 20
+    ) -> dict[str, Any]:
+        """List repositories/images available in this registry.
 
-        Default implementation returns an empty list.
-        V2Provider overrides this with /v2/_catalog queries.
+        The return value must be a paginated dict compatible with the
+        ExternalPaginatedImages frontend model:
+
+            {
+                "items":       list[dict],   # Each item has at least "name"
+                "total":       int,
+                "page":        int,
+                "page_size":   int,
+                "total_pages": int,
+                "error":       str | None,   # Present only on partial failure
+            }
 
         Args:
-            n:             Maximum number of repositories to fetch.
-            last:          Pagination cursor (last repository name seen).
-            include_empty: When True, include repositories with no tags.
-                           When False (default), exclude tag-less repositories.
+            search:    Optional substring filter on repository name.
+            page:      1-based page number.
+            page_size: Number of items per page.
+            **kwargs:  Provider-specific parameters (e.g. namespace for DockerHub).
 
         Returns:
-            list[str]: Repository names; empty list when unsupported.
+            dict[str, Any]: Paginated repository list.
         """
-        logger.debug(
-            "%s.list_repositories: not supported for this provider type",
-            self.__class__.__name__,
+        try:
+            repositories = await self.list_repositories(
+                page_size=page_size, include_empty=True
+            )
+        except HTTPStatusError as exc:
+            logger.warning("HTTP %s for host=%s", exc.response.status_code, self.host)
+            return {
+                "items": [],
+                "total": 0,
+                "page": page,
+                "page_size": page_size,
+                "total_pages": 1,
+                "error": f"Registry returned HTTP {exc.response.status_code}",
+            }
+        except Exception as exc:
+            logger.warning("Unknown error host=%s: %s", self.host, exc)
+            return {
+                "items": [],
+                "total": 0,
+                "page": page,
+                "page_size": page_size,
+                "total_pages": 1,
+                "error": str(exc),
+            }
+
+        # Apply search filter
+        if search:
+            repositories = [r for r in repositories if search.lower() in r.lower()]
+
+        # ── Build paginated response ───────────────────────────────────────────
+        total = len(repositories)
+        total_pages = max(1, (total + page_size - 1) // page_size)
+        start = (page - 1) * page_size
+        page_repos = repositories[start : start + page_size]
+
+        tags_results: list[list[str]] = await asyncio.gather(
+            *[self.browse_tags(r) for r in page_repos]
         )
-        return []
+
+        items = [
+            {
+                "name": repo,
+                "tags": tags if isinstance(tags, list) else [],
+                "tag_count": len(tags) if isinstance(tags, list) else 0,
+                "total_size": 0,
+            }
+            for repo, tags in zip(page_repos, tags_results)
+        ]
+
+        return {
+            "items": items,
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": total_pages,
+            "error": None,
+        }
 
     async def list_empty_repositories(self) -> list[str]:
         """Return repositories that have no tags (ghost entries).
