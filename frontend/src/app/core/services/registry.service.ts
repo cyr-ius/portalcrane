@@ -8,11 +8,11 @@
  *   Tag management   → /api/external/registries/__local__/browse/tags
  *   Tag detail       → /api/external/registries/__local__/browse/tags/detail
  *   Delete image     → /api/external/registries/__local__/browse/image
+ *   Ping             → /api/external/registries/__local__/ping
+ *   Empty repos      → /api/external/registries/__local__/empty-repositories*
  *   Copy image       → /api/system/copy
- *   Ping             → /api/system/ping
- *   Empty repos      → /api/system/empty-repositories
  *   GC               → /api/system/gc
- *   Folder access    → /api/folders/mine  /api/folders/pushable  (unchanged)
+ *   Folder access    → /api/folders/mine  /api/folders/pushable
  *
  * The LOCAL_REGISTRY_SYSTEM_ID constant ('__local__') is the canonical
  * identifier for the embedded local registry across all Angular services.
@@ -98,10 +98,6 @@ export interface CopyImageRequest {
 
 @Injectable({ providedIn: "root" })
 export class RegistryService {
-  /**
-   * All local registry browse/tag operations use the __local__ system entry
-   * via the unified external registries infrastructure.
-   */
   private readonly FOLDERS = "/api/folders";
   private readonly EXTERNAL = "/api/external";
   private readonly SYSTEM = "/api/system";
@@ -112,9 +108,6 @@ export class RegistryService {
 
   /**
    * Browse images from a registry (local or external).
-   *
-   * For the local registry pass LOCAL_REGISTRY_SYSTEM_ID ('__local__').
-   * Routes to: GET /api/external/registries/{id}/browse
    *
    * @param registryId  ID of the registry (use __local__ for local).
    * @param page        Page number (1-based).
@@ -144,8 +137,6 @@ export class RegistryService {
   /**
    * Fetch all tags for a repository in any registry.
    *
-   * Routes to: GET /api/external/registries/{id}/browse/tags
-   *
    * @param registryId  ID of the registry (use __local__ for local).
    * @param repository  Repository name.
    */
@@ -162,8 +153,6 @@ export class RegistryService {
 
   /**
    * Fetch detailed metadata for a specific tag in any registry.
-   *
-   * Routes to: GET /api/external/registries/{id}/browse/tags/detail
    *
    * @param registryId  ID of the registry.
    * @param repository  Repository name.
@@ -186,8 +175,6 @@ export class RegistryService {
   /**
    * Create a new tag by copying a manifest in any registry.
    *
-   * Routes to: POST /api/external/registries/{id}/browse/tags
-   *
    * @param registryId  ID of the registry.
    * @param repository  Repository name.
    * @param sourceTag   Existing tag to copy from.
@@ -209,8 +196,6 @@ export class RegistryService {
 
   /**
    * Delete a single tag from any registry.
-   *
-   * Routes to: DELETE /api/external/registries/{id}/browse/tags
    *
    * @param registryId  ID of the registry.
    * @param repository  Repository name.
@@ -235,8 +220,6 @@ export class RegistryService {
   /**
    * Delete all tags of a repository in any registry.
    *
-   * Routes to: DELETE /api/external/registries/{id}/browse/image
-   *
    * @param registryId  ID of the registry.
    * @param repository  Repository name.
    */
@@ -259,10 +242,18 @@ export class RegistryService {
   }
 
   /**
+   * Check local registry connectivity.
+   *
+   */
+  pingRegistry(registryId: string,): Observable<{ status: string; url: string }> {
+    return this.http.get<{ status: string; url: string }>(
+      `${this.EXTERNAL}/registries/${registryId}/ping`,
+    );
+  }
+
+  /**
    * Copy an image to a new repository path within the local registry.
    *
-   * Replaces: POST /api/registry/images/copy
-   * Now uses: POST /api/system/copy
    *
    * @param sourceRepository  Source repository name.
    * @param sourceTag         Source tag name.
@@ -275,7 +266,7 @@ export class RegistryService {
     destRepository: string,
     destTag?: string,
   ): Observable<{ message: string }> {
-    return this.http.post<{ message: string }>(`${this.SYSTEM}/copy`, {
+    return this.http.post<{ message: string }>(`${this.EXTERNAL}/copy`, {
       source_repository: sourceRepository,
       source_tag: sourceTag,
       dest_repository: destRepository,
@@ -289,7 +280,6 @@ export class RegistryService {
    * Return the list of folder names the current user can pull from.
    * Admins receive an empty list (meaning full access).
    *
-   * Routes to: GET /api/folders/mine  (unchanged)
    */
   getMyFolders(): Observable<string[]> {
     return this.http.get<string[]>(`${this.FOLDERS}/mine`);
@@ -299,7 +289,6 @@ export class RegistryService {
    * Return the list of folder names the current user can push to.
    * Admins receive an empty list (meaning full access).
    *
-   * Routes to: GET /api/folders/pushable  (unchanged)
    */
   getPushableFolders(): Observable<string[]> {
     return this.http.get<string[]>(`${this.FOLDERS}/pushable`);
@@ -310,7 +299,6 @@ export class RegistryService {
   /**
    * Fetch the current garbage-collection job status.
    *
-   * Routes to: GET /api/system/gc  (unchanged URL)
    */
   getGCStatus(): Observable<GCStatus> {
     return this.http.get<GCStatus>(`${this.SYSTEM}/gc`);
@@ -318,8 +306,6 @@ export class RegistryService {
 
   /**
    * Start a garbage-collection run (admin only).
-   *
-   * Routes to: POST /api/system/gc  (unchanged URL)
    *
    * @param dryRun  When true, runs without actually deleting blobs.
    */
@@ -333,23 +319,19 @@ export class RegistryService {
   /**
    * List repositories that have no tags (ghost / empty repositories).
    *
-   * Replaces: GET /api/registry/empty-repositories
-   * Now uses: GET /api/system/empty-repositories
    */
   getEmptyRepositories(): Observable<{
     empty_repositories: string[];
     count: number;
   }> {
     return this.http.get<{ empty_repositories: string[]; count: number }>(
-      `${this.SYSTEM}/empty-repositories`,
+      `${this.EXTERNAL}/registries/__local__/empty-repositories`,
     );
   }
 
   /**
    * Purge all empty repositories from the local filesystem.
    *
-   * Replaces: DELETE /api/registry/empty-repositories
-   * Now uses: DELETE /api/system/empty-repositories
    */
   purgeEmptyRepositories(): Observable<{
     message: string;
@@ -360,20 +342,7 @@ export class RegistryService {
       message: string;
       purged: string[];
       errors: { repo: string; error: string }[];
-    }>(`${this.SYSTEM}/empty-repositories`);
+    }>(`${this.EXTERNAL}/registries/__local__/empty-repositories`);
   }
 
-  // ── Registry ping ──────────────────────────────────────────────────────────
-
-  /**
-   * Check local registry connectivity.
-   *
-   * Replaces: GET /api/registry/ping
-   * Now uses: GET /api/system/ping
-   */
-  ping(): Observable<{ status: string; url: string }> {
-    return this.http.get<{ status: string; url: string }>(
-      `${this.SYSTEM}/ping`,
-    );
-  }
 }

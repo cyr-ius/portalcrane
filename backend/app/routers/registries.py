@@ -17,37 +17,43 @@ import logging
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 
-from ..config import REGISTRY_URL, Settings, get_settings
+from ..config import REGISTRY_HOST, REGISTRY_URL, Settings, get_settings
 from ..core.jwt import (
     UserInfo,
     get_current_user,
+    require_admin,
     require_pull_access,
     require_push_access,
 )
-from ..services.external_registry import (
-    add_external_tag,
-    browse_external_images,
-    browse_external_tags,
+from ..services.job_service import normalize_sync_job
+from ..services.registries_service import (
+    append_tag,
+    browse_images,
+    browse_tags,
     check_catalog_browsable,
     create_registry,
-    delete_external_image,
-    delete_external_tag,
     delete_registry,
-    get_external_tag_detail,
+    empty_tags,
     get_registries,
     get_registry_by_id,
     list_sync_jobs,
+    metadata_by_tag,
+    ping_catalog,
+    purge_registry,
+    remove_image,
+    remove_tag,
     run_export_job,
     run_import_job,
+    skopeo_copy_image_image,
     test_registry_connection,
     update_registry,
     validate_folder_path,
 )
-from ..services.job_service import normalize_sync_job
+from .folders import check_folder_access
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
-
+settings = get_settings()
 
 # ── Pydantic models ───────────────────────────────────────────────────────────
 
@@ -118,6 +124,35 @@ class ImportRequest(BaseModel):
 class AddExternalTagRequest(BaseModel):
     source_tag: str
     new_tag: str
+
+
+class CopyImageRequest(BaseModel):
+    """Copy an image to a new repository path within the local registry."""
+
+    source_repository: str
+    source_tag: str
+    dest_repository: str
+    dest_tag: str | None = None
+
+
+def _ensure_folder_permission(
+    *, current_user: UserInfo, image_path: str, is_pull: bool
+) -> None:
+    """Enforce folder pull/push permission on a repository path for non-admins."""
+    if current_user.is_admin:
+        return
+    has_access = check_folder_access(
+        current_user.username,
+        image_path,
+        is_pull=is_pull,
+    )
+    if has_access:
+        return
+    action = "pull" if is_pull else "push"
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail=f"No {action} access on folder for '{image_path}'",
+    )
 
 
 # ── Registry CRUD ─────────────────────────────────────────────────────────────
@@ -324,7 +359,7 @@ async def list_images(
     if not registry:
         raise HTTPException(status_code=404, detail="Registry not found")
 
-    result = await browse_external_images(
+    result = await browse_images(
         registry_id=registry_id,
         search=search,
         page=page,
@@ -344,7 +379,7 @@ async def delete_image(
     if not registry:
         raise HTTPException(status_code=404, detail="Registry not found")
 
-    result = await delete_external_image(registry_id=registry_id, repository=repository)
+    result = await remove_image(registry_id=registry_id, repository=repository)
     if result.get("failed_tags") and not result.get("deleted_tags"):
         raise HTTPException(
             status_code=502, detail=result.get("message", "Delete failed")
@@ -390,7 +425,7 @@ async def get_tag_detail(
     if not registry:
         raise HTTPException(status_code=404, detail="Registry not found")
 
-    detail = await get_external_tag_detail(
+    detail = await metadata_by_tag(
         registry_id=registry_id, repository=repository, tag=tag
     )
     if not detail:
@@ -411,7 +446,7 @@ async def get_tags(
     if not registry:
         raise HTTPException(status_code=404, detail="Registry not found")
 
-    return await browse_external_tags(registry_id=registry_id, repository=repository)
+    return await browse_tags(registry_id=registry_id, repository=repository)
 
 
 @router.delete("/registries/{registry_id}/browse/tags")
@@ -430,9 +465,7 @@ async def delete_tag(
     if not registry:
         raise HTTPException(status_code=404, detail="Registry not found")
 
-    result = await delete_external_tag(
-        registry_id=registry_id, repository=repository, tag=tag
-    )
+    result = await remove_tag(registry_id=registry_id, repository=repository, tag=tag)
     if not result.get("success"):
         raise HTTPException(
             status_code=400, detail=result.get("message", "Delete tag failed")
@@ -457,7 +490,7 @@ async def add_tag(
     if not registry:
         raise HTTPException(status_code=404, detail="Registry not found")
 
-    result = await add_external_tag(
+    result = await append_tag(
         registry_id=registry_id,
         repository=repository,
         source_tag=request.source_tag,
@@ -468,6 +501,109 @@ async def add_tag(
             status_code=400, detail=result.get("message", "Add tag failed")
         )
     return result
+
+
+@router.get("/registries/{registry_id}/ping")
+async def ping(
+    registry_id: str,
+    _: UserInfo = Depends(require_push_access),
+):
+    """Check local registry connectivity."""
+    registry = get_registry_by_id(registry_id)
+    if not registry:
+        raise HTTPException(status_code=404, detail="Registry not found")
+
+    is_up = await ping_catalog(registry_id=registry_id)
+    return {
+        "status": "ok" if is_up else "unreachable",
+        "name": registry.get("name", ""),
+    }
+
+
+@router.get("/registries/{registry_id}/empty-repositories")
+async def list_empty_repositories(
+    registry_id: str, _: UserInfo = Depends(require_admin)
+):
+    """List repositories that have no tags (ghost entries).
+
+    Uses the local V2 provider which delegates to V2Provider.list_empty_repositories().
+    This replaces the former GET /api/registry/empty-repositories endpoint.
+    """
+    registry = get_registry_by_id(registry_id)
+    if not registry:
+        raise HTTPException(status_code=404, detail="Registry not found")
+
+    empty = await empty_tags(registry_id=registry_id)
+    return {"empty_repositories": empty, "count": len(empty)}
+
+
+@router.delete("/registries/{registry_id}/empty-repositories")
+async def purge_empty_repositories(
+    registry_id: str, _: UserInfo = Depends(require_admin)
+):
+    """Purge ghost repositories directly from the local filesystem.
+
+    Resolves the list from the V2 provider then removes directories on disk.
+    This replaces the former DELETE /api/registry/empty-repositories endpoint.
+    """
+    registry = get_registry_by_id(registry_id)
+    if not registry:
+        raise HTTPException(status_code=404, detail="Registry not found")
+
+    purged, errors = await purge_registry(registry_id=registry_id)
+
+    return {
+        "message": f"Purged {len(purged)} empty repositories",
+        "purged": purged,
+        "errors": errors,
+    }
+
+
+@router.post("/copy")
+async def copy_image(
+    request: CopyImageRequest,
+    current_user: UserInfo = Depends(get_current_user),
+):
+    """Copy an image to a new repository path within the local registry via skopeo.
+
+    Non-admin users must have pull access on the source folder and push access
+    on the destination folder.
+
+    This replaces the former POST /api/registry/images/copy endpoint.
+    """
+    _ensure_folder_permission(
+        current_user=current_user,
+        image_path=request.source_repository,
+        is_pull=True,
+    )
+    _ensure_folder_permission(
+        current_user=current_user,
+        image_path=request.dest_repository,
+        is_pull=False,
+    )
+
+    dest_tag = request.dest_tag or request.source_tag
+    source = (
+        f"docker://{REGISTRY_HOST}/{request.source_repository}:{request.source_tag}"
+    )
+    dest = f"docker://{REGISTRY_HOST}/{request.dest_repository}:{dest_tag}"
+
+    state, message = await skopeo_copy_image_image(
+        src_ref=source,
+        settings=settings,
+        dest_ref=dest,
+        dest_username="",
+        dest_password="",
+        dest_tls_verify=False,
+    )
+
+    if state is False:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Copy failed: {message}",
+        )
+
+    return {"message": message}
 
 
 # ── List Sync Jobs ──────────────────────────────────────────────────

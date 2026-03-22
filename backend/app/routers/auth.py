@@ -29,7 +29,7 @@ from ..core.jwt import (
     require_admin,
 )
 from ..core.security import hash_password, verify_user
-from ..services.external_registry import (
+from ..services.registries_service import (
     delete_registries_for_owner,
 )
 from .folders import remove_permissions_for_username

@@ -23,11 +23,11 @@ from .routers import (
     about,
     auth,
     dashboard,
-    external_registries,
     folders,
     network,
     oidc,
     personal_tokens,
+    registries,
     registry_proxy,
     staging,
     system,
@@ -150,7 +150,7 @@ app.include_router(trivy.router, prefix="/api/trivy", tags=["Trivy"])
 app.include_router(network.router, prefix="/api/network", tags=["Network"])
 app.include_router(system.router, prefix="/api/system", tags=["System"])
 app.include_router(
-    external_registries.router, prefix="/api/external", tags=["External Registries"]
+    registries.router, prefix="/api/external", tags=["External Registries"]
 )
 
 

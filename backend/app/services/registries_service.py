@@ -20,6 +20,7 @@ import json
 import logging
 import os
 import re
+import shutil
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -35,6 +36,8 @@ from .providers import (
 
 logger = logging.getLogger(__name__)
 
+_REGISTRY_DATA_DIR = f"{DATA_DIR}/registry"
+_REGISTRY_REPOS_DIR = f"{_REGISTRY_DATA_DIR}/docker/registry/v2/repositories"
 _REGISTRIES_FILE = Path(f"{DATA_DIR}/external_registries.json")
 
 _sync_jobs: dict[str, dict] = {}
@@ -195,6 +198,44 @@ def delete_registries_for_owner(owner: str) -> int:
     if deleted_count:
         _save_registries(new_list)
     return deleted_count
+
+
+async def purge_registry(registry_id: str) -> tuple[list[str], list[dict]]:
+    """Purge ghost repositories directly from the local filesystem.
+
+    Returns a tuple (purged, errors)
+    """
+    registry = get_registry_by_id(registry_id)
+    if not registry:
+        raise ValueError(f"Registry {registry_id} not found")
+
+    purged: list[str] = []
+    errors: list[dict] = []
+
+    empty = await empty_tags(registry_id=registry_id)
+
+    if not empty:
+        errors.append({"repo": "", "error": "No empty repositories found"})
+
+    for repo in empty:
+        repo_path = Path(_REGISTRY_REPOS_DIR) / repo
+        try:
+            resolved = repo_path.resolve()
+            base = Path(_REGISTRY_REPOS_DIR).resolve()
+            if not str(resolved).startswith(str(base)):
+                errors.append({"repo": repo, "error": "Path traversal attempt blocked"})
+                continue
+            if resolved.exists():
+                shutil.rmtree(resolved)
+            purged.append(repo)
+        except OSError as exc:
+            logger.error("Failed to purge repository %s: %s", repo, exc)
+            errors.append({"repo": repo, "error": "Deletion failed"})
+        except Exception:
+            logger.exception("Unexpected error purging repository %s", repo)
+            errors.append({"repo": repo, "error": "Unexpected error"})
+
+    return purged, errors
 
 
 # ── Registry create / update ──────────────────────────────────────────────────
@@ -401,10 +442,21 @@ async def check_catalog_browsable(
     return await provider.check_catalog()
 
 
+async def ping_catalog(registry_id: str) -> bool:
+    """Check local registry connectivity."""
+    registry = get_registry_by_id(registry_id)
+    if not registry:
+        raise ValueError(f"Registry {registry_id} not found")
+
+    provider = resolve_provider_from_registry(registry)
+
+    return await provider.ping()
+
+
 # ── Browse — public orchestration API ─────────────────────────────────────────
 
 
-async def browse_external_images(
+async def browse_images(
     registry_id: str,
     search: str | None = None,
     page: int = 1,
@@ -431,7 +483,7 @@ async def browse_external_images(
     )
 
 
-async def browse_external_tags(registry_id: str, repository: str) -> dict:
+async def browse_tags(registry_id: str, repository: str) -> dict:
     """List tags for a repository in an external registry.
 
     Routing:
@@ -452,7 +504,7 @@ async def browse_external_tags(registry_id: str, repository: str) -> dict:
     return {"repository": repository, "tags": tags}
 
 
-async def delete_external_image(registry_id: str, repository: str) -> dict:
+async def remove_image(registry_id: str, repository: str) -> dict:
     """Delete all tags for a repository in an external registry.
 
     The local system registry (__local__) is protected — deletion is delegated
@@ -478,7 +530,7 @@ async def delete_external_image(registry_id: str, repository: str) -> dict:
     }
 
 
-async def get_external_tag_detail(registry_id: str, repository: str, tag: str) -> dict:
+async def metadata_by_tag(registry_id: str, repository: str, tag: str) -> dict:
     """Return full image metadata for a specific tag in an external V2 registry.
 
     Works for both external registries and the local system registry (__local__).
@@ -502,7 +554,7 @@ async def get_external_tag_detail(registry_id: str, repository: str, tag: str) -
     return await provider.get_tag_detail(repository, tag)
 
 
-async def delete_external_tag(registry_id: str, repository: str, tag: str) -> dict:
+async def remove_tag(registry_id: str, repository: str, tag: str) -> dict:
     """Delete a single tag from an external V2 registry or the local registry.
 
     Args:
@@ -521,7 +573,7 @@ async def delete_external_tag(registry_id: str, repository: str, tag: str) -> di
     return await provider.delete_tag(repository, tag)
 
 
-async def add_external_tag(
+async def append_tag(
     registry_id: str, repository: str, source_tag: str, new_tag: str
 ) -> dict:
     """Create a new tag by copying a manifest in an external V2 registry.
@@ -545,11 +597,22 @@ async def add_external_tag(
     return await provider.add_tag(repository, source_tag, new_tag)
 
 
+async def empty_tags(registry_id: str) -> list[str]:
+    """List repositories that have no tags."""
+    registry = get_registry_by_id(registry_id)
+    if not registry:
+        raise ValueError(f"Registry {registry_id} not found")
+
+    provider = resolve_provider_from_registry(registry)
+    return await provider.list_empty_repositories()
+
+
 # ── Validation helpers ────────────────────────────────────────────────────────
 
 
 def validate_folder_path(folder: str) -> str | None:
     """Validate an optional folder/prefix path. Returns sanitised path or raises ValueError."""
+
     if not folder:
         return None
     if ".." in folder.split("/"):
@@ -641,7 +704,7 @@ async def skopeo_copy_image_image(
     )
     stdout, stderr = await proc.communicate()
     if proc.returncode == 0:
-        return True, f"Copied {src_ref} -> {dest_ref}"
+        return True, f"Copied {src_ref} → {dest_ref}"
     return False, stderr.decode().strip() or stdout.decode().strip()
 
 

@@ -62,15 +62,4 @@ export class SystemService {
     return response.events;
   }
 
-  /**
-   * Check local registry connectivity.
-   *
-   * Replaces: GET /api/registry/ping
-   * Now uses: GET /api/system/ping
-   */
-  async pingRegistry(): Promise<{ status: string; url: string }> {
-    return firstValueFrom(
-      this.http.get<{ status: string; url: string }>(`${this.BASE}/ping`),
-    );
-  }
 }

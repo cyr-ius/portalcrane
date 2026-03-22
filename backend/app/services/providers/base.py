@@ -100,7 +100,7 @@ class BaseRegistryProvider(ABC):
     # ── Abstract interface — every provider MUST implement these methods ───────
 
     @abstractmethod
-    def ping(self) -> bool:
+    async def ping(self) -> bool:
         """Return True when the registry responds to the ping endpoint."""
         ...
 
