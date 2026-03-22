@@ -51,6 +51,7 @@ import {
 } from "@angular/core";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { FormsModule } from "@angular/forms";
+import { LOCAL_REGISTRY_SYSTEM_ID } from "../../../core/constants/registry.constants";
 import { formatBytes } from "../../../core/helpers/storage";
 import {
   ImageDetail,
@@ -150,7 +151,7 @@ export class ImageDetailModalComponent implements OnInit {
     this.loadingDetail.set(true);
 
     const fetch$ = this.isLocal()
-      ? this.registrySvc.getTagDetail(this.image().name, tag)
+      ? this.registrySvc.getExternalTagDetail(LOCAL_REGISTRY_SYSTEM_ID, this.image().name, tag)
       : this.registrySvc.getExternalTagDetail(this.source(), this.image().name, tag);
 
     fetch$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
@@ -187,7 +188,7 @@ export class ImageDetailModalComponent implements OnInit {
     this.addMessage.set(null);
 
     const add$ = this.isLocal()
-      ? this.registrySvc.addTag(this.image().name, src, newT)
+      ? this.registrySvc.addExternalTag(LOCAL_REGISTRY_SYSTEM_ID, this.image().name, src, newT)
       : this.registrySvc.addExternalTag(this.source(), this.image().name, src, newT);
 
     add$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
@@ -233,7 +234,7 @@ export class ImageDetailModalComponent implements OnInit {
     this.deleteMessage.set(null);
 
     const del$ = this.isLocal()
-      ? this.registrySvc.deleteTag(this.image().name, tag)
+      ? this.registrySvc.deleteExternalTag(LOCAL_REGISTRY_SYSTEM_ID, this.image().name, tag)
       : this.registrySvc.deleteExternalTag(this.source(), this.image().name, tag);
 
     del$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({

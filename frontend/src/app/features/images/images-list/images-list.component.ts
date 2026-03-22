@@ -655,7 +655,7 @@ export class ImagesListComponent implements OnInit {
     }
 
     // Local registry delete via standard endpoint
-    this.registry.deleteImage(target.name).subscribe({
+    this.registry.deleteExternalImage(LOCAL_REGISTRY_SYSTEM_ID, target.name).subscribe({
       next: () => {
         this.deleteTarget.set(null);
         this.deleting.set(false);

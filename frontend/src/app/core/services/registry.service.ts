@@ -113,24 +113,6 @@ export class RegistryService {
   // ── Image list ─────────────────────────────────────────────────────────────
 
   /**
-   * Fetch a paginated, optionally filtered list of local registry images.
-   *
-   * Replaces: GET /api/registry/images
-   * Now uses: GET /api/external/registries/__local__/browse
-   *
-   * @param page      Page number (1-based).
-   * @param pageSize  Number of items per page.
-   * @param search    Optional search string to filter by repository name.
-   */
-  getImages(
-    page = 1,
-    pageSize = 20,
-    search = "",
-  ): Observable<PaginatedImages> {
-    return this.getExternalImages(LOCAL_REGISTRY_SYSTEM_ID, page, pageSize, search);
-  }
-
-  /**
    * Browse images from a registry (local or external).
    *
    * For the local registry pass LOCAL_REGISTRY_SYSTEM_ID ('__local__').
@@ -162,20 +144,6 @@ export class RegistryService {
   // ── Tags ───────────────────────────────────────────────────────────────────
 
   /**
-   * Fetch all tags for a repository in the local registry.
-   *
-   * Replaces: GET /api/registry/images/tags
-   * Now uses: GET /api/external/registries/__local__/browse/tags
-   *
-   * @param repository  Repository name, e.g. "biocontainers/swarm".
-   */
-  getImageTags(
-    repository: string,
-  ): Observable<{ repository: string; tags: string[] }> {
-    return this.getExternalImageTags(LOCAL_REGISTRY_SYSTEM_ID, repository);
-  }
-
-  /**
    * Fetch all tags for a repository in any registry.
    *
    * Routes to: GET /api/external/registries/{id}/browse/tags
@@ -192,19 +160,6 @@ export class RegistryService {
       `${this.EXTERNAL}/registries/${registryId}/browse/tags`,
       { params },
     );
-  }
-
-  /**
-   * Fetch detailed metadata for a specific tag in the local registry.
-   *
-   * Replaces: GET /api/registry/images/tags/detail
-   * Now uses: GET /api/external/registries/__local__/browse/tags/detail
-   *
-   * @param repository  Repository name.
-   * @param tag         Tag name, e.g. "latest".
-   */
-  getTagDetail(repository: string, tag: string): Observable<ImageDetail> {
-    return this.getExternalTagDetail(LOCAL_REGISTRY_SYSTEM_ID, repository, tag);
   }
 
   /**
@@ -228,29 +183,6 @@ export class RegistryService {
       `${this.EXTERNAL}/registries/${registryId}/browse/tags/detail`,
       { params },
     );
-  }
-
-  /**
-   * Add a new tag to an existing image in the local registry.
-   *
-   * Replaces: POST /api/registry/images/tags
-   * Now uses: POST /api/external/registries/__local__/browse/tags
-   *
-   * @param repository  Repository name.
-   * @param sourceTag   Existing tag to copy from.
-   * @param newTag      New tag name to create.
-   */
-  addTag(
-    repository: string,
-    sourceTag: string,
-    newTag: string,
-  ): Observable<{ message: string }> {
-    return this.addExternalTag(
-      LOCAL_REGISTRY_SYSTEM_ID,
-      repository,
-      sourceTag,
-      newTag,
-    ) as Observable<{ message: string }>;
   }
 
   /**
@@ -278,26 +210,6 @@ export class RegistryService {
   }
 
   /**
-   * Delete a specific tag from a repository in the local registry.
-   *
-   * Replaces: DELETE /api/registry/images/tags
-   * Now uses: DELETE /api/external/registries/__local__/browse/tags
-   *
-   * @param repository  Repository name.
-   * @param tag         Tag to delete.
-   */
-  deleteTag(
-    repository: string,
-    tag: string,
-  ): Observable<{ message: string }> {
-    return this.deleteExternalTag(
-      LOCAL_REGISTRY_SYSTEM_ID,
-      repository,
-      tag,
-    ) as Observable<{ message: string }>;
-  }
-
-  /**
    * Delete a single tag from any registry.
    *
    * Routes to: DELETE /api/external/registries/{id}/browse/tags
@@ -321,18 +233,6 @@ export class RegistryService {
   }
 
   // ── Image management ───────────────────────────────────────────────────────
-
-  /**
-   * Delete all tags of an image in the local registry.
-   *
-   * Replaces: DELETE /api/registry/images
-   * Now uses: DELETE /api/external/registries/__local__/browse/image
-   *
-   * @param repository  Repository name to delete entirely.
-   */
-  deleteImage(repository: string): Observable<{ message: string }> {
-    return this.deleteExternalImage(LOCAL_REGISTRY_SYSTEM_ID, repository) as Observable<{ message: string }>;
-  }
 
   /**
    * Delete all tags of a repository in any registry.
