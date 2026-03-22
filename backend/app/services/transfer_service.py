@@ -26,7 +26,7 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from ..config import REGISTRY_HOST, REGISTRY_URL, STAGING_DIR, Settings
+from ..config import REGISTRY_HOST, REGISTRY_URL, Settings, staging_root
 from ..services.providers import resolve_provider_from_registry
 from ..services.registries_service import get_registry_by_id
 from ..services.trivy_service import (
@@ -118,14 +118,9 @@ class TransferJob(BaseModel):
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 
-def _staging_root() -> Path:
-    """Return the resolved absolute path to the staging root directory."""
-    return Path(STAGING_DIR).resolve()
-
-
 def safe_transfer_path(job_id: str) -> Path:
     """Resolve and validate the OCI layout path for a transfer job."""
-    root = _staging_root()
+    root = staging_root()
     oci_dir = (root / f"transfer_{job_id}").resolve()
     root_str = str(root)
     oci_str = str(oci_dir)

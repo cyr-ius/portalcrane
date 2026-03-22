@@ -20,12 +20,11 @@ import asyncio
 import logging
 import shutil
 from datetime import datetime, timezone
-from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 
-from ..config import DATA_DIR, STAGING_DIR
+from ..config import DATA_DIR, staging_root
 from ..core.jwt import UserInfo, require_admin
 from ..helpers import bytes_to_human
 from ..services.audit_service import get_recent_audit_events
@@ -42,11 +41,6 @@ REGISTRY_BINARY = "/usr/local/bin/registry"
 REGISTRY_CONFIG = "/etc/registry/config.yml"
 REGISTRY_DATA_DIR = f"{DATA_DIR}/registry"
 SUPERVISORD_RPC_URL = "http://127.0.0.1:9001/RPC2"
-
-
-def _staging_root() -> Path:
-    """Return the resolved absolute path to the staging root directory."""
-    return Path(STAGING_DIR).resolve()
 
 
 # ── Pydantic models ───────────────────────────────────────────────────────────
@@ -119,7 +113,7 @@ async def get_audit_logs(
 @router.get("/orphan-oci", response_model=OrphanOCIResult)
 async def get_orphan_oci(_: UserInfo = Depends(require_admin)):
     """List OCI layout directories in the staging area with no matching job."""
-    root = _staging_root()
+    root = staging_root()
     orphans = []
     total_bytes = 0
     for entry in root.iterdir():
@@ -138,7 +132,7 @@ async def get_orphan_oci(_: UserInfo = Depends(require_admin)):
 @router.delete("/orphan-oci")
 async def purge_orphan_oci(_: UserInfo = Depends(require_admin)):
     """Delete all orphan OCI layout directories."""
-    root = _staging_root()
+    root = staging_root()
     purged = []
     for entry in root.iterdir():
         if entry.is_dir() and entry.name not in jobs_list:

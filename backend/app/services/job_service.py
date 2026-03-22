@@ -7,7 +7,7 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from ..config import REGISTRY_HOST, REGISTRY_URL, STAGING_DIR, Settings
+from ..config import REGISTRY_HOST, REGISTRY_URL, Settings, staging_root
 from ..core.jwt import UserInfo, is_admin_user
 from ..routers.folders import check_folder_access
 from ..services.trivy_service import (
@@ -96,11 +96,6 @@ class PushRequest(BaseModel):
     external_registry_password: str | None = None
 
 
-def _staging_root() -> Path:
-    """Return the resolved absolute path to the staging root directory."""
-    return Path(STAGING_DIR).resolve()
-
-
 def safe_job_path(job_id: str) -> Path:
     """
     Resolve the OCI layout directory for a given job_id.
@@ -109,7 +104,7 @@ def safe_job_path(job_id: str) -> Path:
     This acts as a defence-in-depth guard against path traversal attacks even
     though job_id is currently always a UUID generated internally.
     """
-    root = _staging_root()
+    root = staging_root()
     oci_dir = (root / job_id).resolve()
     # Ensure the resolved path is within the staging root, guarding against
     # path traversal even if a malicious job_id is supplied.

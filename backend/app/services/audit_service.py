@@ -40,14 +40,15 @@ from fastapi import Request
 from jose import JWTError, jwt
 from pydantic import BaseModel
 
-from ..config import ALGORITHM
 from ..config import DATA_DIR, Settings
+from ..core.jwt import ALGORITHM
 
 audit_logger = logging.getLogger("portalcrane.audit")
+
 _audit_max_events = 100
 _recent_audit_events: deque[dict[str, Any]] = deque(maxlen=_audit_max_events)
 _audit_events_lock = Lock()
-_AUDIT_FILE_PATH = Path(DATA_DIR) / "audit-events.jsonl"
+_AUDIT_FILE_PATH = Path(f"{DATA_DIR}/audit-events.jsonl")
 _AUDIT_FILE_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 

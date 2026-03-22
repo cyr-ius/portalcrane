@@ -4,19 +4,21 @@ Provides application metadata: current version, latest GitHub release, author an
 """
 
 import os
+
 import httpx
 from fastapi import APIRouter, Depends
+from packaging.version import InvalidVersion, Version
 from pydantic import BaseModel
-from packaging.version import Version, InvalidVersion
 
-from ..config import (
-    APP_AI_GENERATOR,
-    APP_AUTHOR,
-    GITHUB_LATEST_RELEASE_URL,
-    GITHUB_REPO_URL,
-    Settings,
-    get_settings,
-    HTTPX_TIMEOUT,
+from ..config import DEFAULT_TIMEOUT, Settings, get_settings
+
+APP_AUTHOR = "cyr-ius"
+APP_AI_GENERATOR = "Claude (Anthropic)"
+GITHUB_OWNER = APP_AUTHOR
+GITHUB_REPO = "portalcrane"
+GITHUB_REPO_URL = f"https://github.com/{GITHUB_OWNER}/{GITHUB_REPO}"
+GITHUB_LATEST_RELEASE_URL = (
+    f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/releases/latest"
 )
 
 router = APIRouter()
@@ -66,7 +68,7 @@ async def get_about(settings: Settings = Depends(get_settings)) -> dict:
     # ── Query the GitHub Releases API ─────────────────────────────────────────
     proxy = getattr(settings, "httpx_proxy", None)
     try:
-        async with httpx.AsyncClient(proxy=proxy, timeout=HTTPX_TIMEOUT) as client:
+        async with httpx.AsyncClient(proxy=proxy, timeout=DEFAULT_TIMEOUT) as client:
             resp = await client.get(
                 GITHUB_LATEST_RELEASE_URL,
                 headers={"Accept": "application/vnd.github+json"},

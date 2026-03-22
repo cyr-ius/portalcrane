@@ -19,8 +19,8 @@ import httpx
 from fastapi import APIRouter, Request, Response, status
 from jose import JWTError, jwt
 
-from ..config import ALGORITHM, PROXY_TIMEOUT, REGISTRY_URL, get_settings
-from ..core.jwt import is_admin_user
+from ..config import REGISTRY_URL, get_settings
+from ..core.jwt import ALGORITHM, is_admin_user
 from ..core.security import verify_user
 from ..routers.folders import check_folder_access
 from ..routers.personal_tokens import verify_personal_token
@@ -45,7 +45,7 @@ _HOP_BY_HOP = frozenset(
         "host",
     ]
 )
-
+_PROXY_TIMEOUT: float = 300.0
 _PULL_METHODS = frozenset(["GET", "HEAD"])
 _PUSH_METHODS = frozenset(["POST", "PUT", "PATCH", "DELETE"])
 _OCI_ACCEPT_TYPES = (
@@ -312,7 +312,7 @@ async def _proxy(request: Request, v2_path: str) -> Response:
 
     try:
         async with httpx.AsyncClient(
-            timeout=PROXY_TIMEOUT, follow_redirects=False
+            timeout=_PROXY_TIMEOUT, follow_redirects=False
         ) as client:
             upstream = await client.request(
                 method=method,

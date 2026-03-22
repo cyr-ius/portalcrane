@@ -11,7 +11,7 @@ from pathlib import Path
 
 import httpx
 
-from ..config import REGISTRY_HOST, Settings
+from ..config import DEFAULT_TIMEOUT, REGISTRY_HOST, Settings
 from .providers import build_target_path, resolve_provider_from_registry
 from .registries_service import REGISTRY_REPOS_DIR, get_registry_by_id
 
@@ -407,7 +407,7 @@ async def _run_export_job_task(
     try:
         # Resolve image list from local registry
         if source_image == "(all)":
-            async with httpx.AsyncClient(timeout=30) as client:
+            async with httpx.AsyncClient(timeout=DEFAULT_TIMEOUT) as client:
                 resp = await client.get(f"{local_registry_url}/v2/_catalog?n=1000")
                 resp.raise_for_status()
                 images: list[str] = resp.json().get("repositories", [])
@@ -419,7 +419,7 @@ async def _run_export_job_task(
         errors: list[str] = []
         for img in images:
             # Fetch tags from local registry
-            async with httpx.AsyncClient(timeout=30) as client:
+            async with httpx.AsyncClient(timeout=DEFAULT_TIMEOUT) as client:
                 tr = await client.get(f"{local_registry_url}/v2/{img}/tags/list")
                 tags: list[str] = (
                     tr.json().get("tags") or [] if tr.status_code == 200 else []

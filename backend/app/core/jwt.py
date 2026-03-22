@@ -15,10 +15,11 @@ from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from pydantic import BaseModel
 
-from ..config import ALGORITHM, DATA_DIR, Settings, get_settings
+from ..config import DATA_DIR, Settings, get_settings
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/token")
 
+ALGORITHM = "HS256"
 _USERS_FILE = Path(f"{DATA_DIR}/local_users.json")
 
 

@@ -42,8 +42,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from jose import jwt
 from pydantic import BaseModel
 
-from ..config import ALGORITHM, DATA_DIR, Settings, get_settings
-from ..core.jwt import UserInfo, get_current_user
+from ..config import DATA_DIR, Settings, get_settings
+from ..core.jwt import ALGORITHM, UserInfo, get_current_user
 from ..core.security import hash_password, verify_password
 
 router = APIRouter()

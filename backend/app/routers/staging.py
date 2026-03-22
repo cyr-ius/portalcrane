@@ -12,13 +12,7 @@ import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from pydantic import BaseModel
 
-from ..config import (
-    DOCKERHUB_API_URL,
-    HTTPX_TIMEOUT,
-    REGISTRY_HOST,
-    Settings,
-    get_settings,
-)
+from ..config import DEFAULT_TIMEOUT, REGISTRY_HOST, Settings, get_settings
 from ..core.jwt import UserInfo, is_admin_user, require_pull_access, require_push_access
 from ..routers.folders import check_folder_access
 from ..services.job_service import (
@@ -38,6 +32,8 @@ from .registries import get_registry_by_id
 router = APIRouter()
 
 _logger = logging.getLogger(__name__)
+
+_DOCKERHUB_API_URL: str = "https://hub.docker.com"
 
 
 class DockerHubSearchResult(BaseModel):
@@ -341,12 +337,12 @@ async def search_dockerhub(
     params = {"q": q, "query": q, "page": page, "page_size": 25}
     try:
         async with httpx.AsyncClient(
-            timeout=HTTPX_TIMEOUT, follow_redirects=True
+            timeout=DEFAULT_TIMEOUT, follow_redirects=True
         ) as client:
 
             async def _search() -> httpx.Response:
                 return await client.get(
-                    f"{DOCKERHUB_API_URL}/search/repositories/",
+                    f"{_DOCKERHUB_API_URL}/v2/search/repositories/",
                     params=params,
                 )
 
@@ -389,10 +385,10 @@ async def get_dockerhub_tags(
 ):
     """Fetch available tags for a Docker Hub image."""
     namespace, name = image.split("/", 1) if "/" in image else ("library", image)
-    url = f"{DOCKERHUB_API_URL}/repositories/{namespace}/{name}/tags/"
+    url = f"{_DOCKERHUB_API_URL}/v2/repositories/{namespace}/{name}/tags/"
     try:
         async with httpx.AsyncClient(
-            timeout=HTTPX_TIMEOUT, follow_redirects=True
+            timeout=DEFAULT_TIMEOUT, follow_redirects=True
         ) as client:
             resp = await client.get(url, params={"page_size": 50})
             resp.raise_for_status()

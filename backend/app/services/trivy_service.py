@@ -15,7 +15,7 @@ from ..config import DATA_DIR, Settings
 
 TRIVY_SERVER_URL: str = "http://127.0.0.1:4954"
 TRIVY_CACHE_DIR = f"{DATA_DIR}/cache/trivy"
-TRIVY_DB_METADATA = Path(TRIVY_CACHE_DIR) / "db" / "metadata.json"
+TRIVY_DB_METADATA = Path(f"{TRIVY_CACHE_DIR}/db/metadata.json")
 TRIVY_BINARY = "/usr/local/bin/trivy"
 
 # ── Override persistence ──────────────────────────────────────────────────────

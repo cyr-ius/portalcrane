@@ -6,6 +6,7 @@ All settings loaded from environment variables
 import logging
 import os
 from functools import lru_cache
+from pathlib import Path
 from urllib.parse import urlparse
 
 from pydantic import model_validator
@@ -19,35 +20,12 @@ logger = logging.getLogger(__name__)
 DATA_DIR = os.getenv("DATA_DIR", "/var/lib/portalcrane")
 STAGING_DIR = f"{DATA_DIR}/cache/staging"
 
-# GitHub repository coordinates (owner/repo)
-GITHUB_OWNER = "cyr-ius"
-GITHUB_REPO = "portalcrane"
-
-# Application metadata shown in the Settings page
-APP_AUTHOR = GITHUB_OWNER
-APP_AI_GENERATOR = "Claude (Anthropic)"
-
-# GitHub API endpoint to fetch the latest published release
-GITHUB_LATEST_RELEASE_URL = (
-    f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/releases/latest"
-)
-
-# GitHub repository HTML URL displayed as a clickable link in the UI
-GITHUB_REPO_URL = f"https://github.com/{GITHUB_OWNER}/{GITHUB_REPO}"
-
-# JWT configuration
-ALGORITHM = "HS256"
-
 # Container registry URL (used for skopeo copy operations)
 REGISTRY_URL: str = "http://localhost:5000"
 REGISTRY_HOST: str = urlparse(REGISTRY_URL).netloc
 
 # HTTP client timeout for GitHub API calls (in seconds)
-HTTPX_TIMEOUT: float = 10.0
-PROXY_TIMEOUT: float = 300.0
-
-# Docker Hub API v2 endpoint (for search/tags).
-DOCKERHUB_API_URL: str = "https://hub.docker.com/v2"
+DEFAULT_TIMEOUT: float = 10.0
 
 
 # ── Settings ─────────────────────────────────────────────────────────────────
@@ -154,3 +132,8 @@ class Settings(BaseSettings):
 def get_settings() -> Settings:
     """Get cached application settings."""
     return Settings()
+
+
+def staging_root() -> Path:
+    """Return the resolved absolute path to the staging root directory."""
+    return Path(STAGING_DIR).resolve()

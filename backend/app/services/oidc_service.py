@@ -11,7 +11,7 @@ import httpx
 from jose import jwt as jose_jwt
 from pydantic import BaseModel
 
-from ..config import DATA_DIR, HTTPX_TIMEOUT, Settings
+from ..config import DATA_DIR, DEFAULT_TIMEOUT, Settings
 
 # Persistent OIDC configuration file (overrides env vars at runtime)
 _OIDC_CONFIG_FILE = Path(f"{DATA_DIR}/oidc_config.json")
@@ -103,7 +103,7 @@ async def fetch_oidc_discovery(issuer: str, proxy: str | None) -> dict:
         async with httpx.AsyncClient(proxy=proxy) as client:
             response = await client.get(
                 f"{issuer}/.well-known/openid-configuration",
-                timeout=HTTPX_TIMEOUT,
+                timeout=DEFAULT_TIMEOUT,
             )
             if response.status_code == 200:
                 return response.json()
@@ -172,7 +172,7 @@ async def exchange_code_for_username(
         # Step 1 — discovery
         discovery_resp = await client.get(
             f"{merged.issuer}/.well-known/openid-configuration",
-            timeout=HTTPX_TIMEOUT,
+            timeout=DEFAULT_TIMEOUT,
         )
         discovery_resp.raise_for_status()
         discovery = discovery_resp.json()
@@ -188,7 +188,7 @@ async def exchange_code_for_username(
                 "redirect_uri": merged.redirect_uri,
             },
             auth=(merged.client_id, merged.client_secret),
-            timeout=HTTPX_TIMEOUT,
+            timeout=DEFAULT_TIMEOUT,
         )
         token_resp.raise_for_status()
         token_data = token_resp.json()
@@ -202,7 +202,7 @@ async def exchange_code_for_username(
             userinfo_resp = await client.get(
                 userinfo_endpoint,
                 headers={"Authorization": f"Bearer {access_token_oidc}"},
-                timeout=HTTPX_TIMEOUT,
+                timeout=DEFAULT_TIMEOUT,
             )
             userinfo_resp.raise_for_status()
             userinfo = userinfo_resp.json()

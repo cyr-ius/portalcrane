@@ -21,7 +21,6 @@ import logging.handlers
 import os
 import ssl
 from pathlib import Path
-from typing import Optional
 from urllib.parse import urlparse, urlunparse
 
 from pydantic import BaseModel
@@ -32,7 +31,7 @@ logger = logging.getLogger(__name__)
 
 # ── Persistence file ──────────────────────────────────────────────────────────
 
-_PROXY_CONFIG_FILE = Path(DATA_DIR) / "proxy_config.json"
+_PROXY_CONFIG_FILE = Path(f"{DATA_DIR}/proxy_config.json")
 
 # ── OS environment variable names managed by this service ────────────────────
 
@@ -187,12 +186,7 @@ def apply_proxy_to_os_environ(proxy: ProxySettings) -> None:
 
 
 def _embed_credentials(url: str, username: str, password: str) -> str:
-    """
-    Embed username:password into a proxy URL.
-
-    http://proxy.corp:3128  +  user  +  secret
-    → http://user:secret@proxy.corp:3128
-    """
+    """Embed username:password into a proxy URL."""
     if not url:
         return ""
     if username and password:
@@ -301,7 +295,7 @@ class _TlsSysLogHandler(logging.handlers.SysLogHandler):
         return self._ssl_context.wrap_socket(plain_sock, server_hostname=self._tls_host)
 
 
-def _build_syslog_handler(cfg: SyslogSettings) -> Optional[logging.Handler]:
+def _build_syslog_handler(cfg: SyslogSettings) -> logging.Handler | None:
     """
     Build a logging handler that forwards to a remote syslog server.
 
