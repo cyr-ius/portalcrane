@@ -3,14 +3,6 @@
  * Pull pipeline: source registry selection → image pull → CVE scan → push
  * (local or external registry with optional folder prefix).
  *
- * Changes:
- *   - localRegistryHost now comes from the shared LOCAL_REGISTRY_HOST constant
- *     (registry.constants.ts) instead of being hardcoded as "localhost:5000".
- *   - Polling is delegated to JobService.startPolling() so that the job list
- *     survives navigation away from and back to this page.
- *   - triggerRefresh() (not a second subscription) is called on every ngOnInit()
- *     to restart the polling timer from zero, giving an immediate fetch on
- *     page entry without creating a concurrent request that could race.
  */
 import {
   Component,
@@ -20,7 +12,7 @@ import {
   signal
 } from "@angular/core";
 import { RouterLink } from "@angular/router";
-import { LOCAL_REGISTRY_HOST } from "../../core/constants/registry.constants";
+import { LOCAL_REGISTRY_SYSTEM_ID } from "../../core/constants/registry.constants";
 import { AuthService } from "../../core/services/auth.service";
 import {
   ExternalRegistry,
@@ -85,17 +77,12 @@ export class StagingComponent implements OnInit {
    * Used to detect when a saved or ad-hoc source points to the local registry
    * so that folder access rules are enforced before the pull is started.
    */
-  readonly localRegistryHost = LOCAL_REGISTRY_HOST;
-
   readonly isPullingFromLocal = computed(() => {
     if (this.pullSourceMode() === "adhoc") {
-      return this.pullSourceHost() === this.localRegistryHost;
+      return false;
     }
     if (this.pullSourceMode() === "saved") {
-      const reg = this.externalRegistries().find(
-        (r) => r.id === this.pullSourceRegistryId(),
-      );
-      return reg ? reg.host === this.localRegistryHost : false;
+      return this.pullSourceRegistryId() === LOCAL_REGISTRY_SYSTEM_ID;
     }
     return false;
   });

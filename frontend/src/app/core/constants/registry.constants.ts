@@ -11,16 +11,6 @@
  * runtime via an API call.
  */
 
-/** Internal HTTP URL of the local Docker registry (same as backend REGISTRY_URL). */
-export const LOCAL_REGISTRY_URL = "http://localhost:5000";
-
-/**
- * Bare host:port of the local Docker registry (same as backend REGISTRY_HOST).
- * Used to detect when a pull/push source points to the embedded registry
- * so that folder access rules can be enforced on the frontend.
- */
-export const LOCAL_REGISTRY_HOST = "localhost:5000";
-
 /**
  * Reserved registry ID for the local embedded registry exposed as a hidden
  * V2 system entry. Matches LOCAL_REGISTRY_SYSTEM_ID in backend/app/services/external_registry.py.
