@@ -14,27 +14,13 @@ import shutil
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
-from ..config import REGISTRY_URL
 from ..core.jwt import UserInfo, get_current_user
 from ..helpers import bytes_to_human
 from ..routers.auth import _load_users
+from ..services.providers import local_provider
 from ..services.providers.external_v2 import V2Provider
 
 router = APIRouter()
-
-
-# ── Local V2 provider factory ─────────────────────────────────────────────────
-
-
-def _local_v2() -> V2Provider:
-    """Return a V2Provider configured for the embedded local registry."""
-    return V2Provider(
-        host=REGISTRY_URL,
-        username="",
-        password="",
-        use_tls=REGISTRY_URL.startswith("https://"),
-        tls_verify=True,
-    )
 
 
 # ── Pydantic models ───────────────────────────────────────────────────────────
@@ -138,7 +124,7 @@ async def get_dashboard_stats(
 
     Uses V2Provider directly — no dependency on the removed RegistryService.
     """
-    provider = _local_v2()
+    provider = local_provider()
 
     # Registry connectivity and stats
     registry_status = "ok" if await provider.ping() else "unreachable"

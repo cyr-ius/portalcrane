@@ -23,9 +23,11 @@ export interface DashboardStats {
 
 @Injectable({ providedIn: "root" })
 export class DashboardService {
+  private readonly BASE = "/api/dashboard";
+
   private http = inject(HttpClient);
 
   getStats(): Observable<DashboardStats> {
-    return this.http.get<DashboardStats>("/api/dashboard/stats");
+    return this.http.get<DashboardStats>(`${this.BASE}/stats`);
   }
 }

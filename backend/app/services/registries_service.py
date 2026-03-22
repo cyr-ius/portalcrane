@@ -70,7 +70,7 @@ def _get_local_registry_entry() -> dict:
         "use_tls": False,
         "tls_verify": False,
         "browsable": True,
-        "system": True,  # Hidden from External Registries settings panel
+        "system": True,
     }
 
 

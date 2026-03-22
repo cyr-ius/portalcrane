@@ -1,15 +1,16 @@
-from typing import Any
+from typing import Any, cast
 
-from .external_github import GithubProvider
-from .external_dockerhub import DockerHubProvider
-from .external_v2 import V2Provider
+from ...config import REGISTRY_URL
 from .base import BaseRegistryProvider
+from .external_dockerhub import DockerHubProvider
+from .external_github import GithubProvider
+from .external_v2 import V2Provider
 
 _DOCKERHUB_HOSTS = {"docker.io", "registry-1.docker.io", "index.docker.io"}
 _GHCR_HOSTS = {"ghcr.io"}
 
 
-def _normalize_host(host: str) -> str:
+def normalize_host(host: str) -> str:
     """Strip scheme and path, return bare hostname in lowercase."""
     return host.lower().removeprefix("https://").removeprefix("http://").split("/")[0]
 
@@ -38,7 +39,7 @@ def resolve_provider(
     Returns:
         BaseRegistryProvider: Configured provider instance ready for use.
     """
-    normalized = _normalize_host(host)
+    normalized = normalize_host(host)
     kwargs: dict[str, Any] = dict(
         host=host,
         username=username,
@@ -81,6 +82,14 @@ def build_target_path(
     if not registry_host:
         return f"docker://{path}:{tag}"
     return f"docker://{registry_host}/{path}:{tag}"
+
+
+def local_provider() -> V2Provider:
+    v2provider = resolve_provider(
+        host=REGISTRY_URL, use_tls=REGISTRY_URL.startswith("https://"), tls_verify=False
+    )
+
+    return cast(V2Provider, v2provider)
 
 
 __all__ = [
