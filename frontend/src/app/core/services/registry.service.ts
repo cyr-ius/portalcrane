@@ -20,7 +20,6 @@
 import { HttpClient, HttpParams } from "@angular/common/http";
 import { inject, Injectable } from "@angular/core";
 import { Observable } from "rxjs";
-import { LOCAL_REGISTRY_SYSTEM_ID } from "../constants/registry.constants";
 
 // ── Shared interfaces ──────────────────────────────────────────────────────
 
@@ -103,7 +102,6 @@ export class RegistryService {
    * All local registry browse/tag operations use the __local__ system entry
    * via the unified external registries infrastructure.
    */
-  private readonly LOCAL = `/api/external/registries/${LOCAL_REGISTRY_SYSTEM_ID}`;
   private readonly FOLDERS = "/api/folders";
   private readonly EXTERNAL = "/api/external";
   private readonly SYSTEM = "/api/system";
