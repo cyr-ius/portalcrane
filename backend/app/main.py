@@ -29,6 +29,7 @@ from .routers import (
     personal_tokens,
     registries,
     registry_proxy,
+    repositories,
     staging,
     system,
     trivy,
@@ -135,23 +136,21 @@ async def audit_web_ui_actions(request, call_next):
 
 
 # ── Routers ───────────────────────────────────────────────────────────────────
-
+app.include_router(about.router, prefix="/api", tags=["About"])
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
+app.include_router(dashboard.router, prefix="/api/dashboard", tags=["Dashboard"])
+app.include_router(folders.router, prefix="/api/folders", tags=["Folders"])
+app.include_router(repositories.router, prefix="/api/images", tags=["Images"])
+app.include_router(network.router, prefix="/api/network", tags=["Network"])
+app.include_router(oidc.router, prefix="/api/oidc", tags=["OIDC"])
 app.include_router(
     personal_tokens.router, prefix="/api/auth", tags=["Personal Access Tokens"]
 )
-app.include_router(oidc.router, prefix="/api/oidc", tags=["OIDC"])
-app.include_router(staging.router, prefix="/api/staging", tags=["Staging"])
-app.include_router(dashboard.router, prefix="/api/dashboard", tags=["Dashboard"])
-app.include_router(about.router, prefix="/api", tags=["About"])
+app.include_router(registries.router, prefix="/api/registries", tags=["Registries"])
 app.include_router(registry_proxy.router, prefix="", tags=["Registry Proxy"])
-app.include_router(folders.router, prefix="/api/folders", tags=["Folders"])
-app.include_router(trivy.router, prefix="/api/trivy", tags=["Trivy"])
-app.include_router(network.router, prefix="/api/network", tags=["Network"])
+app.include_router(staging.router, prefix="/api/staging", tags=["Staging"])
 app.include_router(system.router, prefix="/api/system", tags=["System"])
-app.include_router(
-    registries.router, prefix="/api/external", tags=["External Registries"]
-)
+app.include_router(trivy.router, prefix="/api/trivy", tags=["Trivy"])
 
 
 # ── Health check ──────────────────────────────────────────────────────────────

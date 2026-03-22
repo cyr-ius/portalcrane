@@ -4,12 +4,12 @@
  * Migration note: all local registry operations now route through the unified
  * V2 provider layer instead of the legacy /api/registry/* endpoints:
  *
- *   Image browsing   → /api/external/registries/__local__/browse
- *   Tag management   → /api/external/registries/__local__/browse/tags
- *   Tag detail       → /api/external/registries/__local__/browse/tags/detail
- *   Delete image     → /api/external/registries/__local__/browse/image
- *   Ping             → /api/external/registries/__local__/ping
- *   Empty repos      → /api/external/registries/__local__/empty-repositories*
+ *   Image browsing   → /api/registries/__local__/browse
+ *   Tag management   → /api/registries/__local__/browse/tags
+ *   Tag detail       → /api/registries/__local__/browse/tags/detail
+ *   Delete image     → /api/registries/__local__/browse/image
+ *   Ping             → /api/registries/__local__/ping
+ *   Empty repos      → /api/registries/__local__/empty-repositories*
  *   Copy image       → /api/system/copy
  *   GC               → /api/system/gc
  *   Folder access    → /api/folders/mine  /api/folders/pushable
@@ -99,7 +99,8 @@ export interface CopyImageRequest {
 @Injectable({ providedIn: "root" })
 export class RegistryService {
   private readonly FOLDERS = "/api/folders";
-  private readonly EXTERNAL = "/api/external";
+  private readonly REGISTRIES = "/api/registries";
+  private readonly IMAGES = "/api/images";
   private readonly SYSTEM = "/api/system";
 
   private http = inject(HttpClient);
@@ -127,7 +128,7 @@ export class RegistryService {
       params = params.set("search", search.trim());
     }
     return this.http.get<ExternalPaginatedImages>(
-      `${this.EXTERNAL}/registries/${registryId}/browse`,
+      `${this.IMAGES}/${registryId}`,
       { params },
     );
   }
@@ -146,7 +147,7 @@ export class RegistryService {
   ): Observable<{ repository: string; tags: string[] }> {
     const params = new HttpParams().set("repository", repository);
     return this.http.get<{ repository: string; tags: string[] }>(
-      `${this.EXTERNAL}/registries/${registryId}/browse/tags`,
+      `${this.IMAGES}/${registryId}/tags`,
       { params },
     );
   }
@@ -167,7 +168,7 @@ export class RegistryService {
       .set("repository", repository)
       .set("tag", tag);
     return this.http.get<ImageDetail>(
-      `${this.EXTERNAL}/registries/${registryId}/browse/tags/detail`,
+      `${this.IMAGES}/${registryId}/tags/detail`,
       { params },
     );
   }
@@ -188,7 +189,7 @@ export class RegistryService {
   ): Observable<{ success: boolean; message: string }> {
     const params = new HttpParams().set("repository", repository);
     return this.http.post<{ success: boolean; message: string }>(
-      `${this.EXTERNAL}/registries/${registryId}/browse/tags`,
+      `${this.IMAGES}/${registryId}/tags`,
       { source_tag: sourceTag, new_tag: newTag },
       { params },
     );
@@ -210,7 +211,7 @@ export class RegistryService {
       .set("repository", repository)
       .set("tag", tag);
     return this.http.delete<{ success: boolean; message: string }>(
-      `${this.EXTERNAL}/registries/${registryId}/browse/tags`,
+      `${this.IMAGES}/${registryId}/tags`,
       { params },
     );
   }
@@ -238,7 +239,7 @@ export class RegistryService {
       deleted_tags: string[];
       failed_tags: string[];
       message: string;
-    }>(`${this.EXTERNAL}/registries/${registryId}/browse/image`, { params });
+    }>(`${this.IMAGES}/${registryId}`, { params });
   }
 
   /**
@@ -247,7 +248,7 @@ export class RegistryService {
    */
   pingRegistry(registryId: string,): Observable<{ status: string; url: string }> {
     return this.http.get<{ status: string; url: string }>(
-      `${this.EXTERNAL}/registries/${registryId}/ping`,
+      `${this.REGISTRIES}/${registryId}/ping`,
     );
   }
 
@@ -266,7 +267,7 @@ export class RegistryService {
     destRepository: string,
     destTag?: string,
   ): Observable<{ message: string }> {
-    return this.http.post<{ message: string }>(`${this.EXTERNAL}/copy`, {
+    return this.http.post<{ message: string }>(`${this.IMAGES}/copy`, {
       source_repository: sourceRepository,
       source_tag: sourceTag,
       dest_repository: destRepository,
@@ -325,7 +326,7 @@ export class RegistryService {
     count: number;
   }> {
     return this.http.get<{ empty_repositories: string[]; count: number }>(
-      `${this.EXTERNAL}/registries/__local__/empty-repositories`,
+      `${this.IMAGES}/__local__/empty`,
     );
   }
 
@@ -342,7 +343,7 @@ export class RegistryService {
       message: string;
       purged: string[];
       errors: { repo: string; error: string }[];
-    }>(`${this.EXTERNAL}/registries/__local__/empty-repositories`);
+    }>(`${this.IMAGES}/__local__/empty`);
   }
 
 }

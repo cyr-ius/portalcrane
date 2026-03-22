@@ -29,9 +29,7 @@ from ..core.jwt import (
     require_admin,
 )
 from ..core.security import hash_password, verify_user
-from ..services.registries_service import (
-    delete_registries_for_owner,
-)
+from ..services.registries_service import delete_registries_for_owner
 from .folders import remove_permissions_for_username
 from .personal_tokens import revoke_tokens_for_username
 

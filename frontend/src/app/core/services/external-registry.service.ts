@@ -1,6 +1,6 @@
 /**
  * Portalcrane - External Registry Service
- * HTTP client for /api/external endpoints.
+ * HTTP client for /api/registries endpoints.
  *
  * Change: system field added to ExternalRegistry interface.
  * The backend injects the local embedded registry as a hidden system entry
@@ -92,36 +92,19 @@ export interface ImportRequest {
 
 @Injectable({ providedIn: "root" })
 export class ExternalRegistryService {
-  private readonly BASE = "/api/external";
+  private readonly REGISTRIES = "/api/registries";
+  private readonly IMAGES = "/api/images";
   private http = inject(HttpClient);
 
   private _externalRegistries = signal<ExternalRegistry[]>([]);
 
-  /** All registries including the hidden local system entry. */
   readonly externalRegistries = this._externalRegistries.asReadonly();
-
-  /**
-   * Only user-managed registries (system=false or undefined).
-   * Used by the External Registries settings panel — the local registry
-   * is hidden here so it cannot be edited or deleted by the user.
-   */
   readonly userRegistries = computed<ExternalRegistry[]>(() =>
     this._externalRegistries().filter((r) => !r.system),
   );
-
-  /**
-   * Registries that support catalog browsing (browsable !== false).
-   * Includes the local system registry. Used by the Images source selector.
-   */
   readonly browsableRegistries = computed<ExternalRegistry[]>(() =>
     this._externalRegistries().filter((r) => r.browsable !== false),
   );
-
-  /**
-   * Browsable non-system registries only.
-   * Used by the Sync panel as export/import destinations — the local registry
-   * cannot be an export destination (it is the source).
-   */
   readonly browsableUserRegistries = computed<ExternalRegistry[]>(() =>
     this._externalRegistries().filter((r) => r.browsable !== false && !r.system),
   );
@@ -129,7 +112,7 @@ export class ExternalRegistryService {
   // ── Registry CRUD ──────────────────────────────────────────────────────────
 
   listRegistries(): Observable<ExternalRegistry[]> {
-    return this.http.get<ExternalRegistry[]>(`${this.BASE}/registries`);
+    return this.http.get<ExternalRegistry[]>(`${this.REGISTRIES}`);
   }
 
   loadRegistries(): void {
@@ -147,21 +130,18 @@ export class ExternalRegistryService {
   }
 
   createRegistry(payload: CreateRegistryPayload): Observable<ExternalRegistry> {
-    return this.http.post<ExternalRegistry>(`${this.BASE}/registries`, payload);
+    return this.http.post<ExternalRegistry>(`${this.REGISTRIES}`, payload);
   }
 
   updateRegistry(
     id: string,
     payload: UpdateRegistryPayload,
   ): Observable<ExternalRegistry> {
-    return this.http.patch<ExternalRegistry>(
-      `${this.BASE}/registries/${id}`,
-      payload,
-    );
+    return this.http.patch<ExternalRegistry>(`${this.REGISTRIES}/${id}`, payload);
   }
 
   deleteRegistry(id: string): Observable<void> {
-    return this.http.delete<void>(`${this.BASE}/registries/${id}`);
+    return this.http.delete<void>(`${this.REGISTRIES}/${id}`);
   }
 
   // ── Connectivity test ──────────────────────────────────────────────────────
@@ -177,7 +157,7 @@ export class ExternalRegistryService {
       reachable: boolean;
       auth_ok: boolean;
       message: string;
-    }>(`${this.BASE}/registries/test`, {
+    }>(`${this.REGISTRIES}/test`, {
       host,
       username,
       password,
@@ -190,21 +170,21 @@ export class ExternalRegistryService {
 
   checkCatalog(id: string): Observable<{ available: boolean; reason: string }> {
     return this.http.get<{ available: boolean; reason: string }>(
-      `${this.BASE}/registries/${id}/catalog-check`,
+      `${this.REGISTRIES}/${id}/catalog-check`,
     );
   }
 
   // ── List Sync Jobs ────────────────────────────────────────────────
 
   listSyncJobs(): Observable<SyncJob[]> {
-    return this.http.get<SyncJob[]>(`${this.BASE}/sync/jobs`);
+    return this.http.get<SyncJob[]>(`${this.IMAGES}/sync/jobs`);
   }
 
   // ── Export (local -> external) ────────────────────────────────────────────────
 
   startSync(request: SyncRequest): Observable<{ job_id: string; status: string }> {
     return this.http.post<{ job_id: string; status: string }>(
-      `${this.BASE}/export`,
+      `${this.IMAGES}/export`,
       request,
     );
   }
@@ -215,7 +195,7 @@ export class ExternalRegistryService {
     request: ImportRequest,
   ): Observable<{ job_id: string; status: string }> {
     return this.http.post<{ job_id: string; status: string }>(
-      `${this.BASE}/import`,
+      `${this.IMAGES}/import`,
       request,
     );
   }

@@ -19,12 +19,7 @@ from ..config import (
     Settings,
     get_settings,
 )
-from ..core.jwt import (
-    UserInfo,
-    is_admin_user,
-    require_pull_access,
-    require_push_access,
-)
+from ..core.jwt import UserInfo, is_admin_user, require_pull_access, require_push_access
 from ..routers.folders import check_folder_access
 from ..services.job_service import (
     JobStatus,
@@ -37,7 +32,7 @@ from ..services.job_service import (
     safe_job_path,
 )
 from ..services.providers import build_target_path, resolve_provider_from_registry
-from ..services.registries_service import skopeo_copy_oci_image
+from ..services.repositories_service import skopeo_copy_oci_image
 from .registries import get_registry_by_id
 
 router = APIRouter()

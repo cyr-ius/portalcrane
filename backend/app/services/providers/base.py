@@ -20,9 +20,6 @@ from httpx import HTTPStatusError
 
 logger = logging.getLogger(__name__)
 
-# Sentinel used to distinguish "caller did not pass include_empty" from False.
-_UNSET = object()
-
 
 class BaseRegistryProvider(ABC):
     """Abstract base class for all external registry providers.
