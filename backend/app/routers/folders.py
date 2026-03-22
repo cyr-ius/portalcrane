@@ -25,7 +25,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, field_validator
 
 from ..config import DATA_DIR
-from ..core.jwt import get_current_user, UserInfo, require_admin
+from ..core.jwt import UserInfo, get_current_user, require_admin
 
 router = APIRouter()
 
@@ -136,56 +136,8 @@ def _dict_to_folder(d: dict) -> Folder:
 # ─── Migration helper ─────────────────────────────────────────────────────────
 
 
-def migrate_root_folder(users: list[dict]) -> None:
-    """
-    One-time migration: create the __root__ folder and populate it from the
-    legacy can_pull_images / can_push_images flags stored on each user account.
-
-    Called at application startup via main.py lifespan.
-    Safe to call multiple times — does nothing when __root__ already exists.
-    """
-    folders = _load_folders()
-
-    if any(f["name"] == ROOT_FOLDER_NAME for f in folders):
-        return  # Already migrated
-
-    perms: list[dict] = []
-    for user in users:
-        if user.get("is_admin"):
-            continue  # Admins bypass all folder checks, skip them
-        can_pull = user.get("can_pull_images", False)
-        can_push = user.get("can_push_images", False)
-        if can_pull or can_push:
-            perms.append(
-                {
-                    "username": user["username"],
-                    "can_pull": can_pull,
-                    "can_push": can_push,
-                }
-            )
-
-    root_entry = {
-        "id": str(uuid.uuid4()),
-        "name": ROOT_FOLDER_NAME,
-        "description": "Default folder — covers images with no known namespace prefix",
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "permissions": perms,
-    }
-    folders.append(root_entry)
-    _save_folders(folders)
-
-
 def ensure_root_folder_exists() -> None:
-    """
-    Ensure the __root__ folder always exists at startup.
-
-    Creates it with an empty permissions list if it is absent.
-    This prevents the situation where an admin does not know to create it
-    manually in order to grant access to images in the root namespace.
-
-    Safe to call multiple times — does nothing when __root__ is already present.
-    Called at application startup via main.py lifespan, after migrate_root_folder.
-    """
+    """Ensure the __root__ folder always exists at startup."""
     folders = _load_folders()
 
     if any(f["name"] == ROOT_FOLDER_NAME for f in folders):
