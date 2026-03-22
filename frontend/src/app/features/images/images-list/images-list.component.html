@@ -68,16 +68,6 @@
             <i class="bi bi-hdd-network me-1"></i>Source:
           </span>
 
-          <!-- Local registry -->
-          <button
-            class="btn btn-sm"
-            [class.btn-primary]="!isExternalSource()"
-            [class.btn-outline-secondary]="isExternalSource()"
-            (click)="selectSource('local')"
-          >
-            <i class="bi bi-hdd me-1"></i>Local Registry
-          </button>
-
           <!-- One button per browsable external registry -->
           @for (reg of externalRegistries(); track reg.id) {
             <button
@@ -87,7 +77,9 @@
               (click)="selectSource(reg.id)"
               [title]="reg.host"
             >
-              @if (reg.host === 'ghcr.io' || reg.host.includes('ghcr.io')) {
+              @if (reg.id === '__local__') {
+                <i class="bi bi-hdd me-1"></i>
+              } @else if (reg.host === 'ghcr.io' || reg.host.includes('ghcr.io')) {
                 <i class="bi bi-github me-1"></i>
               } @else if (
                 reg.host === 'docker.io' ||
