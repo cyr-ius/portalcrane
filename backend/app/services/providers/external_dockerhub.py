@@ -11,8 +11,29 @@ from .base import BaseRegistryProvider
 logger = logging.getLogger(__name__)
 
 _HUB_API = "https://hub.docker.com"
+_HUB_REGISTRY = "https://registry-1.docker.io"
+_AUTH_SERVICE = "registry.docker.io"
+_AUTH_URL = "https://auth.docker.io/token"
 _PAGE_SIZE_MAX = 100  # Docker Hub maximum page size for repository listing
 _DEFAULT_TIMEOUT = 30.0
+
+# Accept header covering all common manifest media types
+_MANIFEST_ACCEPT = ", ".join(
+    [
+        "application/vnd.oci.image.manifest.v1+json",
+        "application/vnd.oci.image.index.v1+json",
+        "application/vnd.docker.distribution.manifest.v2+json",
+        "application/vnd.docker.distribution.manifest.list.v2+json",
+    ]
+)
+
+# Media types that indicate a manifest list / image index (multi-arch)
+_MANIFEST_LIST_TYPES = frozenset(
+    [
+        "application/vnd.docker.distribution.manifest.list.v2+json",
+        "application/vnd.oci.image.index.v1+json",
+    ]
+)
 
 
 class DockerHubProvider(BaseRegistryProvider):
@@ -37,7 +58,7 @@ class DockerHubProvider(BaseRegistryProvider):
             tls_verify: Validate TLS certificate when True (default).
         """
         super().__init__(
-            host=_HUB_API,
+            host=host,
             username=username,
             password=password,
             use_tls=use_tls,
@@ -50,7 +71,7 @@ class DockerHubProvider(BaseRegistryProvider):
     def provider_name(self) -> str:
         return "dockerhub"
 
-    async def _get_token(self) -> str | None:
+    async def _get_hub_jwt(self) -> str | None:
         """
         Obtain a short-lived JWT from the Docker Hub login endpoint.
 
@@ -64,7 +85,7 @@ class DockerHubProvider(BaseRegistryProvider):
                 timeout=self.timeout, verify=self.verify, follow_redirects=True
             ) as client:
                 resp = await client.post(
-                    f"{self.base_url}/v2/users/login",
+                    f"{_HUB_API}/v2/users/login",
                     json={"username": self.username, "password": self.password},
                 )
                 if resp.status_code == 200:
@@ -78,12 +99,72 @@ class DockerHubProvider(BaseRegistryProvider):
             logger.warning("Docker Hub login error user=%s: %s", self.username, exc)
         return None
 
-    def _auth_headers(self, token: str) -> dict[str, str]:
+    async def _get_v2_token(self, repository: str, actions: str = "pull") -> str | None:
+        """Obtain a Bearer token for registry-1.docker.io V2 API calls.
+
+        Docker Hub V2 requires a scoped token obtained from auth.docker.io.
+        The token scope is per-repository and per-action (pull / push / *).
+
+        Endpoint: GET https://auth.docker.io/token
+        Params:
+            service = registry.docker.io
+            scope   = repository:{repository}:{actions}
+        Auth:   Basic Auth with username:password (or anonymous)
+
+        Args:
+            repository: Full repository path e.g. "library/nginx" or "myuser/myimage".
+            actions:    Comma-separated action list e.g. "pull" or "pull,push".
+
+        Returns:
+            Bearer token string on success; None on failure.
+        """
+        params = {
+            "service": _AUTH_SERVICE,
+            "scope": f"repository:{repository}:{actions}",
+        }
+        auth = (self.username, self.password) if self.has_credentials else None
+
+        try:
+            async with httpx.AsyncClient(
+                timeout=self.probe_timeout, verify=self.verify, follow_redirects=True
+            ) as client:
+                resp = await client.get(_AUTH_URL, params=params, auth=auth)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    return data.get("token") or data.get("access_token")
+                logger.warning(
+                    "_get_v2_token: status=%s repo=%s", resp.status_code, repository
+                )
+        except Exception as exc:
+            logger.warning("_get_v2_token error repo=%s: %s", repository, exc)
+        return None
+
+    def _hub_auth_headers(self, token: str) -> dict[str, str]:
         """Return HTTP headers for an authenticated Docker Hub API request."""
         return {
             "Authorization": f"JWT {token}",
             "Content-Type": "application/json",
         }
+
+    def _v2_headers(
+        self, token: str, extra: dict[str, str] | None = None
+    ) -> dict[str, str]:
+        """Return headers for registry-1.docker.io V2 API calls."""
+        headers: dict[str, str] = {"Authorization": f"Bearer {token}"}
+        if extra:
+            headers.update(extra)
+        return headers
+
+    def _normalize_repository(self, repository: str) -> str:
+        """Ensure official images are prefixed with 'library/'.
+
+        Docker Hub stores official images under the 'library' namespace
+        (e.g. 'nginx' → 'library/nginx') for V2 API calls.
+        User images already have a namespace (e.g. 'myuser/myimage').
+        """
+        if "/" not in repository:
+            return f"library/{repository}"
+        return repository
 
     async def ping(self) -> bool:
         """Return True when the registry responds to the /v2/ ping endpoint."""
@@ -91,7 +172,7 @@ class DockerHubProvider(BaseRegistryProvider):
             async with httpx.AsyncClient(
                 timeout=self.probe_timeout, verify=self.verify, follow_redirects=True
             ) as client:
-                resp = await client.get(f"{self.base_url}")
+                resp = await client.get(_HUB_API)
                 return resp.status_code in (200, 401)
         except Exception:
             return False
@@ -112,9 +193,7 @@ class DockerHubProvider(BaseRegistryProvider):
             async with httpx.AsyncClient(
                 timeout=self.probe_timeout, verify=self.verify, follow_redirects=True
             ) as client:
-                cred_resp = await client.post(
-                    f"{self.base_url}/v2/users/login", json=auth
-                )
+                cred_resp = await client.post(f"{_HUB_API}/v2/users/login", json=auth)
                 if cred_resp.status_code == 200:
                     if not has_credentials:
                         return {
@@ -207,10 +286,10 @@ class DockerHubProvider(BaseRegistryProvider):
         """
         repositories: list[str] = []
         namespace = self.username
-        token = await self._get_token()
+        token = await self._get_hub_jwt()
         if not token:
             return repositories
-        headers = self._auth_headers(token)
+        headers = self._hub_auth_headers(token)
 
         async with httpx.AsyncClient(
             timeout=self.catalog_timeout, verify=self.verify, follow_redirects=True
@@ -218,7 +297,7 @@ class DockerHubProvider(BaseRegistryProvider):
             try:
                 params = {"page": page, "page_size": min(page_size, 1000)}
                 resp = await client.get(
-                    f"{self.base_url}/v2/repositories/{namespace}/",
+                    f"{_HUB_API}/v2/repositories/{namespace}/",
                     headers=headers,
                     params=params,
                 )
@@ -259,12 +338,12 @@ class DockerHubProvider(BaseRegistryProvider):
         Returns:
             List of tag name strings (may be empty on error).
         """
-        token = await self._get_token()
+        token = await self._get_hub_jwt()
         if not token:
             logger.warning("browse_dockerhub_tags: auth failed for repo=%s", repository)
             return []
 
-        headers = self._auth_headers(token)
+        headers = self._hub_auth_headers(token)
 
         # Normalise namespace/name split
         if "/" in repository:
@@ -273,7 +352,7 @@ class DockerHubProvider(BaseRegistryProvider):
             namespace, name = "library", repository
 
         tags: list[str] = []
-        url: str | None = f"{self.base_url}/v2/repositories/{namespace}/{name}/tags/"
+        url: str | None = f"{_HUB_API}/v2/repositories/{namespace}/{name}/tags/"
 
         try:
             async with httpx.AsyncClient(
@@ -312,26 +391,330 @@ class DockerHubProvider(BaseRegistryProvider):
         """
         return await self.browse_tags(repository)
 
-    async def delete_repository(self, repository: str) -> str | None:
-        """
-        Delete a Docker Hub repository via the Hub REST API.
+    async def get_manifest(self, repository: str, reference: str) -> dict[str, Any]:
+        """Fetch a manifest from registry-1.docker.io using the native V2 API.
 
-        Requires the account to be the owner of the repository, or have admin
-        access to the organisation that owns it.
+        Docker Hub V2 authentication flow:
+          1. GET auth.docker.io/token?service=registry.docker.io&scope=repository:{repo}:pull
+             with Basic Auth → returns a scoped Bearer token
+          2. GET registry-1.docker.io/v2/{repository}/manifests/{reference}
+             with Authorization: Bearer <token>
+
+        Official images must be prefixed with "library/" for the V2 API.
+
+        Adds private metadata keys:
+            _digest        : Docker-Content-Digest header.
+            _content_type  : Content-Type header.
+            _content_length: Content-Length header (int).
 
         Args:
-            username:   Docker Hub account username.
-            password:   Docker Hub account password or access token.
-            repository: Full repository reference, e.g. "myuser/myimage".
+            repository: Repository path e.g. "nginx" or "myuser/myimage".
+            reference:  Tag name or digest (sha256:...).
 
         Returns:
-            None on success, or an error string on failure.
+            dict: Manifest payload with private keys; empty dict on 404 or error.
         """
-        token = await self._get_token()
+        normalized = self._normalize_repository(repository)
+        token = await self._get_v2_token(normalized, actions="pull")
+        if not token:
+            logger.warning(
+                "get_manifest: V2 token acquisition failed repo=%s", repository
+            )
+            return {}
+
+        headers = self._v2_headers(token, extra={"Accept": _MANIFEST_ACCEPT})
+        url = f"{_HUB_REGISTRY}/v2/{normalized}/manifests/{reference}"
+
+        try:
+            async with httpx.AsyncClient(
+                timeout=self.timeout, verify=self.verify, follow_redirects=True
+            ) as client:
+                resp = await client.get(url, headers=headers)
+                if resp.status_code == 404:
+                    return {}
+                resp.raise_for_status()
+
+                manifest = resp.json()
+                manifest["_digest"] = resp.headers.get("Docker-Content-Digest", "")
+                manifest["_content_type"] = resp.headers.get("Content-Type", "")
+                manifest["_content_length"] = int(resp.headers.get("Content-Length", 0))
+                return manifest
+
+        except Exception as exc:
+            logger.warning(
+                "get_manifest error repo=%s ref=%s: %s", repository, reference, exc
+            )
+            return {}
+
+    async def get_image_config(self, repository: str, digest: str) -> dict[str, Any]:
+        """Fetch an image configuration blob from registry-1.docker.io.
+
+        Docker Hub V2 blob endpoint:
+          GET registry-1.docker.io/v2/{repository}/blobs/{digest}
+        Auth: Bearer token scoped to pull for this repository.
+
+        Args:
+            repository: Repository path e.g. "nginx" or "myuser/myimage".
+            digest:     Config blob digest (sha256:...).
+
+        Returns:
+            dict: Image config payload; empty dict on 404 or error.
+        """
+        normalized = self._normalize_repository(repository)
+        token = await self._get_v2_token(normalized, actions="pull")
+        if not token:
+            logger.warning(
+                "get_image_config: V2 token acquisition failed repo=%s", repository
+            )
+            return {}
+
+        headers = self._v2_headers(token)
+        url = f"{_HUB_REGISTRY}/v2/{normalized}/blobs/{digest}"
+
+        try:
+            async with httpx.AsyncClient(
+                timeout=self.timeout, verify=self.verify, follow_redirects=True
+            ) as client:
+                resp = await client.get(url, headers=headers)
+                if resp.status_code == 404:
+                    return {}
+                resp.raise_for_status()
+                return resp.json()
+
+        except Exception as exc:
+            logger.warning(
+                "get_image_config error repo=%s digest=%s: %s",
+                repository,
+                digest,
+                exc,
+            )
+            return {}
+
+    async def get_tag_detail(self, repository: str, tag: str) -> dict[str, Any]:
+        """Fetch detailed metadata for a Docker Hub image tag via native V2 API.
+
+        Two native registry-1.docker.io V2 API calls:
+          1. GET /v2/{repository}/manifests/{tag}      → layers, config digest
+          2. GET /v2/{repository}/blobs/{config_digest} → env, cmd, labels…
+
+        Each call requires its own scoped Bearer token from auth.docker.io.
+        Handles manifest lists (multi-arch) by resolving the first sub-manifest.
+
+        Args:
+            repository: Repository path e.g. "nginx" or "myuser/myimage".
+            tag:        Tag name, e.g. "latest".
+
+        Returns:
+            dict: ImageDetail-compatible payload; empty dict on 404 or error.
+        """
+        manifest = await self.get_manifest(repository, tag)
+        if not manifest:
+            return {}
+
+        digest = manifest.get("_digest", "")
+        media_type = manifest.get("mediaType", "")
+
+        # Resolve first sub-manifest for multi-arch manifest lists
+        if media_type in _MANIFEST_LIST_TYPES:
+            sub_manifests = manifest.get("manifests", [])
+            if sub_manifests:
+                sub = await self.get_manifest(repository, sub_manifests[0]["digest"])
+                if sub:
+                    manifest = sub
+
+        layers: list[dict[str, Any]] = manifest.get("layers", [])
+        total_size: int = sum(int(layer.get("size", 0)) for layer in layers)
+
+        config_digest: str = manifest.get("config", {}).get("digest", "")
+        config: dict[str, Any] = {}
+        if config_digest:
+            config = await self.get_image_config(repository, config_digest)
+
+        container_config: dict[str, Any] = config.get(
+            "config", config.get("container_config", {})
+        )
+
+        return {
+            "name": repository,
+            "tag": tag,
+            "digest": digest,
+            "size": total_size,
+            "created": str(config.get("created", "")),
+            "architecture": str(config.get("architecture", "")),
+            "os": str(config.get("os", "")),
+            "layers": layers,
+            "labels": container_config.get("Labels", {}) or {},
+            "env": container_config.get("Env", []) or [],
+            "cmd": container_config.get("Cmd", []) or [],
+            "entrypoint": container_config.get("Entrypoint", []) or [],
+            "exposed_ports": container_config.get("ExposedPorts", {}) or {},
+        }
+
+    async def add_tag(
+        self, repository: str, source_tag: str, new_tag: str
+    ) -> dict[str, Any]:
+        """Create a new tag by copying a manifest on registry-1.docker.io.
+
+        Requires a push-scoped token from auth.docker.io.
+
+        Native V2 endpoints on registry-1.docker.io:
+          GET  /v2/{repository}/manifests/{source_tag} (pull scope)
+          PUT  /v2/{repository}/manifests/{new_tag}    (push scope)
+
+        Args:
+            repository: Repository path.
+            source_tag: Existing tag to copy from.
+            new_tag:    New tag name to create.
+
+        Returns:
+            dict: {"success": bool, "message": str}
+        """
+        normalized = self._normalize_repository(repository)
+
+        # Pull token to fetch the source manifest
+        pull_token = await self._get_v2_token(normalized, actions="pull")
+        if not pull_token:
+            return {
+                "success": False,
+                "message": "Failed to obtain pull token from auth.docker.io",
+            }
+
+        # Push token to write the new manifest
+        push_token = await self._get_v2_token(normalized, actions="pull,push")
+        if not push_token:
+            return {
+                "success": False,
+                "message": "Failed to obtain push token from auth.docker.io",
+            }
+
+        get_url = f"{_HUB_REGISTRY}/v2/{normalized}/manifests/{source_tag}"
+        get_headers = self._v2_headers(pull_token, extra={"Accept": _MANIFEST_ACCEPT})
+
+        try:
+            async with httpx.AsyncClient(
+                timeout=self.manifest_timeout, verify=self.verify, follow_redirects=True
+            ) as client:
+                # Step 1 — fetch raw manifest bytes preserving exact wire format
+                get_resp = await client.get(get_url, headers=get_headers)
+                if get_resp.status_code == 404:
+                    return {
+                        "success": False,
+                        "message": f"Source tag '{source_tag}' not found",
+                    }
+                get_resp.raise_for_status()
+
+                content_type = get_resp.headers.get(
+                    "Content-Type",
+                    "application/vnd.docker.distribution.manifest.v2+json",
+                )
+                raw_manifest = get_resp.content
+
+                # Step 2 — PUT raw manifest bytes under the new tag name
+                put_url = f"{_HUB_REGISTRY}/v2/{normalized}/manifests/{new_tag}"
+                put_headers = self._v2_headers(
+                    push_token, extra={"Content-Type": content_type}
+                )
+                put_resp = await client.put(
+                    put_url, content=raw_manifest, headers=put_headers
+                )
+
+                if put_resp.status_code in (200, 201):
+                    return {
+                        "success": True,
+                        "message": f"Tag '{new_tag}' created from '{source_tag}'",
+                    }
+                return {
+                    "success": False,
+                    "message": f"registry-1.docker.io returned HTTP {put_resp.status_code}",
+                }
+
+        except Exception as exc:
+            logger.warning(
+                "add_tag error repo=%s src=%s new=%s: %s",
+                repository,
+                source_tag,
+                new_tag,
+                exc,
+            )
+            return {"success": False, "message": str(exc)}
+
+    async def delete_tag(self, repository: str, tag: str) -> dict[str, Any]:
+        """Delete a single tag from Docker Hub via native registry V2 API.
+
+        Docker Hub requires manifests to be deleted by digest, not by tag.
+        Steps:
+          1. GET /v2/{repository}/manifests/{tag}      → resolve digest
+          2. DELETE /v2/{repository}/manifests/{digest} → remove manifest
+
+        Both calls use tokens scoped to pull,push (or * for delete).
+
+        Note: Docker Hub requires "Delete" permission on the repository.
+        Personal access tokens need "Read & Write" or "Admin" access.
+
+        Args:
+            repository: Repository path.
+            tag:        Tag name to delete.
+
+        Returns:
+            dict: {"success": bool, "message": str}
+        """
+        manifest = await self.get_manifest(repository, tag)
+        if not manifest:
+            return {"success": False, "message": f"Tag '{tag}' not found"}
+
+        digest = manifest.get("_digest", "")
+        if not digest:
+            return {
+                "success": False,
+                "message": "registry-1.docker.io did not return a Docker-Content-Digest header",
+            }
+
+        normalized = self._normalize_repository(repository)
+
+        # Delete requires a token with delete scope
+        token = await self._get_v2_token(normalized, actions="pull,push,delete")
+        if not token:
+            return {
+                "success": False,
+                "message": "Failed to obtain delete token from auth.docker.io",
+            }
+
+        delete_url = f"{_HUB_REGISTRY}/v2/{normalized}/manifests/{digest}"
+        headers = self._v2_headers(token)
+
+        try:
+            async with httpx.AsyncClient(
+                timeout=self.manifest_timeout, verify=self.verify, follow_redirects=True
+            ) as client:
+                resp = await client.delete(delete_url, headers=headers)
+                if resp.status_code in (200, 202):
+                    return {"success": True, "message": f"Tag '{tag}' deleted"}
+                return {
+                    "success": False,
+                    "message": f"registry-1.docker.io returned HTTP {resp.status_code}",
+                }
+
+        except Exception as exc:
+            logger.warning("delete_tag error repo=%s tag=%s: %s", repository, tag, exc)
+            return {"success": False, "message": str(exc)}
+
+    async def delete_repository(self, repository: str) -> str | None:
+        """Delete a Docker Hub repository via the Hub REST API.
+
+        Endpoint: DELETE https://hub.docker.com/v2/repositories/{namespace}/{name}/
+        Auth:     JWT token from Hub login.
+
+        Args:
+            repository: Full repository name e.g. "myuser/myimage".
+
+        Returns:
+            None on success; error string on failure.
+        """
+        token = await self._get_hub_jwt()
         if not token:
             return "Docker Hub authentication failed. Check your credentials."
 
-        headers = self._auth_headers(token)
+        headers = self._hub_auth_headers(token)
 
         if "/" in repository:
             namespace, name = repository.split("/", 1)
@@ -343,14 +726,12 @@ class DockerHubProvider(BaseRegistryProvider):
                 timeout=self.tags_timeout, verify=self.verify, follow_redirects=True
             ) as client:
                 resp = await client.delete(
-                    f"{self.base_url}/v2/repositories/{namespace}/{name}/",
+                    f"{_HUB_API}/v2/repositories/{namespace}/{name}/",
                     headers=headers,
                 )
                 if resp.status_code in (200, 202, 204):
-                    logger.info(
-                        "delete_dockerhub_repository: deleted %s/%s", namespace, name
-                    )
-                    return None  # success
+                    logger.info("delete_repository: deleted %s/%s", namespace, name)
+                    return None
                 if resp.status_code == 401:
                     return "Docker Hub authentication failed."
                 if resp.status_code == 403:
@@ -358,8 +739,7 @@ class DockerHubProvider(BaseRegistryProvider):
                 if resp.status_code == 404:
                     return f"Repository '{repository}' not found on Docker Hub."
                 return f"Docker Hub API returned HTTP {resp.status_code}."
+
         except Exception as exc:
-            logger.warning(
-                "delete_dockerhub_repository error repo=%s: %s", repository, exc
-            )
+            logger.warning("delete_repository error repo=%s: %s", repository, exc)
             return f"Delete failed: {exc}"

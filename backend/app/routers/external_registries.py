@@ -17,33 +17,33 @@ import logging
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 
-from ..config import Settings, get_settings, REGISTRY_URL
-from ..services.job_service import normalize_sync_job
-from ..services.external_registry import (
-    browse_external_images,
-    browse_external_tags,
-    delete_external_image,
-    check_catalog_browsable,
-    create_registry,
-    delete_registry,
-    get_registries,
-    get_registry_by_id,
-    list_sync_jobs,
-    run_import_job,
-    run_export_job,
-    test_registry_connection,
-    update_registry,
-    validate_folder_path,
-    get_external_tag_detail,
-    delete_external_tag,
-    add_external_tag,
-)
+from ..config import REGISTRY_URL, Settings, get_settings
 from ..core.jwt import (
     UserInfo,
     get_current_user,
-    require_push_access,
     require_pull_access,
+    require_push_access,
 )
+from ..services.external_registry import (
+    add_external_tag,
+    browse_external_images,
+    browse_external_tags,
+    check_catalog_browsable,
+    create_registry,
+    delete_external_image,
+    delete_external_tag,
+    delete_registry,
+    get_external_tag_detail,
+    get_registries,
+    get_registry_by_id,
+    list_sync_jobs,
+    run_export_job,
+    run_import_job,
+    test_registry_connection,
+    update_registry,
+    validate_folder_path,
+)
+from ..services.job_service import normalize_sync_job
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -309,7 +309,7 @@ async def test_saved_connection(
 
 
 @router.get("/registries/{registry_id}/browse")
-async def browse_registry_images(
+async def list_images(
     registry_id: str,
     search: str | None = Query(None, description="Filter repositories by name"),
     page: int = Query(1, ge=1),
@@ -334,7 +334,7 @@ async def browse_registry_images(
 
 
 @router.delete("/registries/{registry_id}/browse/image")
-async def delete_registry_image(
+async def delete_image(
     registry_id: str,
     repository: str = Query(..., description="Repository name, e.g. myorg/myimage"),
     _: UserInfo = Depends(require_push_access),
@@ -374,7 +374,7 @@ async def catalog_check(
 
 
 @router.get("/registries/{registry_id}/browse/tags/detail")
-async def browse_registry_tag_detail(
+async def get_tag_detail(
     registry_id: str,
     repository: str = Query(..., description="Repository name, e.g. myorg/myimage"),
     tag: str = Query(..., description="Tag name, e.g. latest"),
@@ -401,7 +401,7 @@ async def browse_registry_tag_detail(
 
 
 @router.get("/registries/{registry_id}/browse/tags")
-async def browse_registry_tags(
+async def get_tags(
     registry_id: str,
     repository: str = Query(..., description="Repository name, e.g. myorg/myimage"),
     _: UserInfo = Depends(require_pull_access),
@@ -415,7 +415,7 @@ async def browse_registry_tags(
 
 
 @router.delete("/registries/{registry_id}/browse/tags")
-async def delete_registry_tag(
+async def delete_tag(
     registry_id: str,
     repository: str = Query(..., description="Repository name, e.g. myorg/myimage"),
     tag: str = Query(..., description="Tag name to delete"),
@@ -441,7 +441,7 @@ async def delete_registry_tag(
 
 
 @router.post("/registries/{registry_id}/browse/tags")
-async def add_registry_tag(
+async def add_tag(
     registry_id: str,
     repository: str = Query(..., description="Repository name, e.g. myorg/myimage"),
     request: AddExternalTagRequest = Body(...),

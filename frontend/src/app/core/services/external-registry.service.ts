@@ -2,23 +2,22 @@
  * Portalcrane - External Registry Service
  * HTTP client for /api/external endpoints.
  *
- * Change: browsable field added to ExternalRegistry interface.
- * The backend sets this automatically by probing /v2/_catalog when a registry
- * is created or updated. The frontend uses it to filter registries in:
- *   - Images source selector (images-list component)
- *   - Staging pull source selector (staging component)
- * Only registries with browsable === true appear in those selectors.
+ * Change: system field added to ExternalRegistry interface.
+ * The backend injects the local embedded registry as a hidden system entry
+ * with id="__local__" and system=true. The frontend uses two derived signals:
  *
- * Refactor (catalog-check removal from images-list):
- *   - loadRegistries() is now the single entry point for populating the shared
- *     cache. It fetches GET /api/external/registries and updates the
- *     _externalRegistries signal so all consumers react automatically.
- *   - browsableRegistries computed signal filters on browsable !== false;
- *     components must use this signal instead of calling catalog-check
- *     individually on each registry at display time.
- *   - refreshRegistries() is a public alias of loadRegistries() intended for
- *     use after create/update/delete operations in the config panel so the
- *     shared cache stays in sync without requiring a page reload.
+ *   - externalRegistries      : ALL registries including system entries.
+ *                                Used by images-list and staging to list sources.
+ *   - userRegistries           : Only non-system registries (system=false/undefined).
+ *                                Used by External Registries settings panel.
+ *   - browsableRegistries      : Registries with browsable !== false (includes system).
+ *                                Used by images-list source selector.
+ *   - browsableUserRegistries  : browsable + non-system registries only.
+ *                                Used by sync panel (export/import destination).
+ *
+ * The local system registry (__local__) is shown in the Images source selector
+ * and Staging pull source, but hidden from the External Registries settings panel
+ * and sync destinations.
  */
 import { HttpClient } from "@angular/common/http";
 import { computed, inject, Injectable, signal } from "@angular/core";
@@ -36,6 +35,8 @@ export interface ExternalRegistry {
   use_tls: boolean;
   tls_verify: boolean;
   browsable: boolean;
+  /** When true, this is a hidden system registry (e.g. the local embedded registry). */
+  system?: boolean;
   created_at?: string;
 }
 
@@ -95,9 +96,34 @@ export class ExternalRegistryService {
   private http = inject(HttpClient);
 
   private _externalRegistries = signal<ExternalRegistry[]>([]);
+
+  /** All registries including the hidden local system entry. */
   readonly externalRegistries = this._externalRegistries.asReadonly();
+
+  /**
+   * Only user-managed registries (system=false or undefined).
+   * Used by the External Registries settings panel — the local registry
+   * is hidden here so it cannot be edited or deleted by the user.
+   */
+  readonly userRegistries = computed<ExternalRegistry[]>(() =>
+    this._externalRegistries().filter((r) => !r.system),
+  );
+
+  /**
+   * Registries that support catalog browsing (browsable !== false).
+   * Includes the local system registry. Used by the Images source selector.
+   */
   readonly browsableRegistries = computed<ExternalRegistry[]>(() =>
     this._externalRegistries().filter((r) => r.browsable !== false),
+  );
+
+  /**
+   * Browsable non-system registries only.
+   * Used by the Sync panel as export/import destinations — the local registry
+   * cannot be an export destination (it is the source).
+   */
+  readonly browsableUserRegistries = computed<ExternalRegistry[]>(() =>
+    this._externalRegistries().filter((r) => r.browsable !== false && !r.system),
   );
 
   // ── Registry CRUD ──────────────────────────────────────────────────────────

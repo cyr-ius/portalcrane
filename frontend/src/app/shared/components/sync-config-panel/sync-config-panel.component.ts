@@ -4,32 +4,21 @@
  * Allows admins to trigger image synchronisations to/from external registries
  * and view the sync/import job history.
  *
+ * Change (local system registry):
+ *   - Uses extRegSvc.browsableUserRegistries for the source/destination selectors.
+ *     This excludes the hidden local system registry (__local__) because:
+ *     - Export: local IS the source, not a valid destination.
+ *     - Import: importing FROM local TO local makes no sense.
+ *   The local registry still appears in Images and Staging via browsableRegistries.
+ *
  * Refactor (unified card):
  *   - Export (local → external) and Import (external → local) are merged into
  *     a single card controlled by the `syncDirection` signal.
  *   - New `setSyncDirection()` method switches between 'export' and 'import'.
  *   - Both Signal Forms (syncForm / importForm) and all helpers are unchanged.
  *
- * Previous changes preserved:
- *   - ImportFormModel interface (Évolution 2).
- *   - importModel signal + importForm Signal Form.
- *   - startImport() method calling ExternalRegistryService.startImport().
- *   - getRegistryHost() resolves both source_registry_id (import) and
- *     dest_registry_id (export) for the history list.
- *   - jobDirectionLabel() / jobDirectionClass() helpers for direction badges.
- *   - getSyncPreview() mirrors the corrected _rewrite_image_name_for_sync()
- *     backend logic (full source path preserved when no folder/username is set).
- *
  * Anti-flicker fix:
  *   - setupSyncPolling() uses a simple timer(0, 3000) without a Subject trigger.
- *     A Subject + switchMap was causing the timer to restart on every manual
- *     refresh, creating a gap where syncJobs() was briefly empty → flicker.
- *   - loadingSyncJobs is only set to true when syncJobs is already empty
- *     (first load). Subsequent polls are silent background refreshes.
- *   - loadSyncData() no longer restarts the polling chain; it only refreshes
- *     the local images list and performs a one-shot jobs fetch.
- *   - stopPollingWhenIdle: polling stops automatically after all jobs reach a
- *     terminal status and resumes on the next user action.
  *
  * NOTE: All <select> values are strings; [formField] works correctly here
  * without manual coercion.
@@ -86,6 +75,12 @@ export class SyncConfigPanelComponent implements OnInit {
   readonly settingsSvc = inject(SettingsService);
 
   // ── Data ───────────────────────────────────────────────────────────────────
+
+  /**
+   * User-managed external registries excluding the hidden local system entry.
+   * The local registry is never a valid export destination or import source
+   * in the sync panel — it is always the implicit local registry.
+   */
   readonly registries = signal<ExternalRegistry[]>([]);
   readonly syncJobs = signal<SyncJob[]>([]);
   readonly localImages = signal<string[]>([]);
@@ -110,7 +105,6 @@ export class SyncConfigPanelComponent implements OnInit {
 
   // ── Signal Form – export sync trigger ─────────────────────────────────────
 
-  /** Blank defaults; spread on every reset to avoid shared-reference bugs. */
   private readonly syncInit: SyncFormModel = {
     source: "(all)",
     destId: "",
@@ -119,10 +113,6 @@ export class SyncConfigPanelComponent implements OnInit {
 
   readonly syncModel = signal<SyncFormModel>({ ...this.syncInit });
 
-  /**
-   * Signal Form definition for the export form.
-   * destId is required; source and folder have safe defaults.
-   */
   readonly syncForm = form(this.syncModel, (p) => {
     required(p.destId);
   });
@@ -137,10 +127,6 @@ export class SyncConfigPanelComponent implements OnInit {
 
   readonly importModel = signal<ImportFormModel>({ ...this.importInit });
 
-  /**
-   * Signal Form definition for the import form.
-   * sourceId is required; image defaults to "(all)"; destFolder is optional.
-   */
   readonly importForm = form(this.importModel, (p) => {
     required(p.sourceId);
   });
@@ -158,15 +144,10 @@ export class SyncConfigPanelComponent implements OnInit {
    *
    * Anti-flicker design:
    *   - A simple timer(0, 3000) is used instead of Subject + switchMap.
-   *     switchMap was restarting the timer on every manual trigger, creating
-   *     a window where syncJobs() was empty → template flashed spinner/empty state.
-   *   - loadingSyncJobs is set to true ONLY when syncJobs is currently empty
-   *     (i.e. first load). Background refreshes are fully silent.
-   *   - syncJobs signal is updated in-place; Angular's @for tracks by job.id
-   *     so existing DOM nodes are reused (no full re-render → no flicker).
+   *   - loadingSyncJobs is set to true ONLY when syncJobs is currently empty.
+   *   - syncJobs signal is updated in-place; no full re-render.
    */
   private setupSyncPolling(): void {
-    // Show spinner only on initial load when list is empty
     if (this.syncJobs().length === 0) {
       this.loadingSyncJobs.set(true);
     }
@@ -177,40 +158,36 @@ export class SyncConfigPanelComponent implements OnInit {
         takeUntilDestroyed(this.destroyRef),
       )
       .subscribe((jobs) => {
-        // Silent update — never clears the list before repopulating it
         this.syncJobs.set(jobs);
-        // Clear spinner after first successful response
         if (this.loadingSyncJobs()) {
           this.loadingSyncJobs.set(false);
         }
       });
   }
 
-  /** Fetch the list of configured external registries. */
+  /**
+   * Fetch user-managed external registries excluding the local system entry.
+   * Uses browsableUserRegistries which filters out system=true entries.
+   */
   loadRegistries(): void {
     this.extRegSvc.listRegistries().subscribe({
       next: (regs) => {
-        this.registries.set(regs);
+        this.extRegSvc.setRegistriesCache(regs);
+        // Use only non-system (user-managed) registries for sync destinations
+        const userRegs = this.extRegSvc.browsableUserRegistries();
+        this.registries.set(userRegs);
         // Pre-select first registry when none is selected yet
-        if (!this.syncModel().destId && regs.length > 0) {
-          this.syncModel.update((m) => ({ ...m, destId: regs[0].id }));
+        if (!this.syncModel().destId && userRegs.length > 0) {
+          this.syncModel.update((m) => ({ ...m, destId: userRegs[0].id }));
         }
-        if (!this.importModel().sourceId && regs.length > 0) {
-          this.importModel.update((m) => ({ ...m, sourceId: regs[0].id }));
+        if (!this.importModel().sourceId && userRegs.length > 0) {
+          this.importModel.update((m) => ({ ...m, sourceId: userRegs[0].id }));
         }
       },
     });
   }
 
-  /**
-   * Reload local images for the export source dropdown.
-   *
-   * No longer restarts the polling chain (removing the flicker source).
-   * The polling timer runs independently at a fixed 3 s interval.
-   * The refresh button icon spins via loadingSyncJobs only on first load.
-   */
   loadSyncData(): void {
-    // Perform a one-shot immediate jobs refresh (no timer restart)
     this.extRegSvc.listSyncJobs().subscribe({
       next: (jobs) => this.syncJobs.set(jobs),
     });
@@ -253,7 +230,6 @@ export class SyncConfigPanelComponent implements OnInit {
           next: () => {
             this.startingSync.set(false);
             this.syncModel.set({ ...this.syncInit });
-            // Immediate one-shot refresh — the timer will also catch it at next tick
             this.extRegSvc.listSyncJobs().subscribe({
               next: (jobs) => this.syncJobs.set(jobs),
             });
@@ -281,14 +257,12 @@ export class SyncConfigPanelComponent implements OnInit {
           next: () => {
             this.startingImport.set(false);
             this.importModel.set({ ...this.importInit });
-            // Re-select first registry so the form stays usable after submit
             if (this.registries().length > 0) {
               this.importModel.update((m) => ({
                 ...m,
                 sourceId: this.registries()[0].id,
               }));
             }
-            // Immediate one-shot refresh — the timer will also catch it at next tick
             this.extRegSvc.listSyncJobs().subscribe({
               next: (jobs) => this.syncJobs.set(jobs),
             });
@@ -300,18 +274,16 @@ export class SyncConfigPanelComponent implements OnInit {
 
   // ── Utility helpers ────────────────────────────────────────────────────────
 
-  /** Resolve a registry ID to its display host (works for both import and export). */
+  /** Resolve a registry ID to its display host. */
   getRegistryHost(registryId: string | null): string {
     if (!registryId) return "(local)";
     return this.registries().find((r) => r.id === registryId)?.host ?? registryId;
   }
 
-  /** Resolve the currently selected export destination registry host. */
   getSyncDestHost(): string {
     return this.registries().find((r) => r.id === this.syncModel().destId)?.host ?? "";
   }
 
-  /** Resolve the currently selected import source registry host. */
   getImportSrcHost(): string {
     return (
       this.registries().find((r) => r.id === this.importModel().sourceId)?.host ?? ""
@@ -321,17 +293,10 @@ export class SyncConfigPanelComponent implements OnInit {
   /**
    * Build a preview of the destination image reference for the export form.
    *
-   * Mirrors the backend _rewrite_image_name_for_sync() logic (fixed version):
-   *
+   * Mirrors the backend _rewrite_image_name_for_sync() logic:
    *   1. dest_folder set → folder + leaf only
-   *      "editeur/nginx" + folder="prod" → "prod/nginx"
-   *
    *   2. No folder, dest_username set → username + leaf (Docker Hub compat)
-   *      "editeur/nginx" + username="jdoe" → "jdoe/nginx"
-   *
    *   3. No folder, no username → preserve the FULL source path
-   *      "editeur/nginx" → "editeur/nginx"  ✓
-   *      "nginx"         → "nginx"
    */
   getSyncPreview(): string {
     const host = this.getSyncDestHost();
@@ -353,9 +318,6 @@ export class SyncConfigPanelComponent implements OnInit {
 
   /**
    * Build a preview of the destination image reference for the import form.
-   *
-   * Mirrors backend _rewrite_image_name_for_sync() with dest_username="" (import
-   * always lands in the local registry without a username prefix).
    */
   getImportPreview(): string {
     const destFolder = this.importModel().destFolder?.trim() ?? "";
@@ -396,16 +358,10 @@ export class SyncConfigPanelComponent implements OnInit {
     return map[status] ?? "bi-circle";
   }
 
-  /**
-   * Human-readable label for the job direction badge.
-   * "export" → "↑ Export"   (local → external)
-   * "import" → "↓ Import"   (external → local)
-   */
   jobDirectionLabel(job: SyncJob): string {
     return job.direction === "import" ? "↓ Import" : "↑ Export";
   }
 
-  /** Bootstrap badge class for the job direction badge. */
   jobDirectionClass(job: SyncJob): string {
     return job.direction === "import"
       ? "badge bg-secondary-subtle text-secondary"

@@ -7,6 +7,12 @@ Registry type routing:
   - ghcr.io            -> external_github   (GitHub Packages REST API)
   - docker.io variants -> external_dockerhub (Docker Hub REST API)
   - everything else    -> external_v2        (OCI Distribution V2 spec)
+
+Local registry system entry:
+  A hidden system registry with ID "__local__" is injected into the registry
+  list so the frontend can use the unified V2 browse / tag-detail infrastructure
+  for the local embedded registry without it appearing in the External Registries
+  settings panel (filtered by the system=True flag).
 """
 
 import asyncio
@@ -20,12 +26,11 @@ from pathlib import Path
 
 import httpx
 
-from ..config import DATA_DIR, Settings, REGISTRY_HOST
-
+from ..config import DATA_DIR, REGISTRY_HOST, Settings
 from .providers import (
-    resolve_provider_from_registry,
-    resolve_provider,
     build_target_path,
+    resolve_provider,
+    resolve_provider_from_registry,
 )
 
 logger = logging.getLogger(__name__)
@@ -33,6 +38,37 @@ logger = logging.getLogger(__name__)
 _REGISTRIES_FILE = Path(f"{DATA_DIR}/external_registries.json")
 
 _sync_jobs: dict[str, dict] = {}
+
+# ── Local registry system entry ────────────────────────────────────────────────
+# Reserved ID for the embedded local registry exposed as a hidden V2 source.
+# This entry is injected into the registry list at runtime so the frontend
+# can use the unified V2 browse/tag-detail infrastructure for the local registry
+# without it appearing in the External Registries settings panel.
+LOCAL_REGISTRY_SYSTEM_ID = "__local__"
+
+
+def _get_local_registry_entry() -> dict:
+    """Return the embedded local registry as a hidden system registry entry.
+
+    This entry is marked with system=True so the frontend can filter it out
+    of the External Registries settings panel while still using it as a source
+    in the Images browser and Staging pipeline.
+
+    The local registry runs on plain HTTP (no TLS) on localhost:5000 inside
+    the container, managed by supervisord.
+    """
+    return {
+        "id": LOCAL_REGISTRY_SYSTEM_ID,
+        "name": "Local Registry",
+        "host": REGISTRY_HOST,
+        "username": "",
+        "password": "",
+        "owner": "global",
+        "use_tls": False,
+        "tls_verify": False,
+        "browsable": True,
+        "system": True,  # Hidden from External Registries settings panel
+    }
 
 
 # ── Registry CRUD helpers ─────────────────────────────────────────────────────
@@ -60,8 +96,8 @@ def _save_registries(registries: list[dict]) -> None:
 def _redact(r: dict) -> dict:
     """Return a copy of the registry dict with the password redacted.
 
-    tls_verify, use_tls and browsable are preserved as-is; defaults applied
-    for old entries that predate these fields.
+    tls_verify, use_tls, browsable and system fields are preserved as-is;
+    defaults applied for old entries that predate these fields.
 
     browsable defaults to True for backward compatibility: existing entries
     continue to appear in source selectors until they are saved again, at
@@ -73,31 +109,59 @@ def _redact(r: dict) -> dict:
         "use_tls": r.get("use_tls", True),
         "tls_verify": r.get("tls_verify", True),
         "browsable": r.get("browsable", True),
+        "system": r.get("system", False),
     }
 
 
 # ── Registry store public API ─────────────────────────────────────────────────
 
 
-def get_registries(owner: str | None = None) -> list[dict]:
+def get_registries(owner: str | None = None, include_system: bool = True) -> list[dict]:
     """Return saved external registries (passwords redacted).
 
     When *owner* is provided only global + owner registries are returned.
     When *owner* is None (admin) all registries are returned.
+
+    The hidden local registry system entry is prepended when include_system=True
+    so the frontend can use it as a source without it persisting to disk.
+
+    Args:
+        owner:          Filter by owner username; None returns all registries.
+        include_system: When True (default), prepend the local system registry.
     """
     registries = _load_registries()
     logger.debug(
         "External registry list requested (owner=%s, total=%d)", owner, len(registries)
     )
+
+    result: list[dict] = []
+
+    # Prepend the hidden local system registry entry
+    if include_system:
+        result.append(_get_local_registry_entry())
+
     if owner is None:
-        return [_redact(r) for r in registries]
-    return [
-        _redact(r) for r in registries if r.get("owner", "global") in ("global", owner)
-    ]
+        result += [_redact(r) for r in registries]
+    else:
+        result += [
+            _redact(r)
+            for r in registries
+            if r.get("owner", "global") in ("global", owner)
+        ]
+
+    return result
 
 
 def get_registry_by_id(registry_id: str) -> dict | None:
-    """Return a registry by ID (with real password for internal use)."""
+    """Return a registry by ID (with real password for internal use).
+
+    The special LOCAL_REGISTRY_SYSTEM_ID returns the local system entry
+    without any disk lookup.
+    """
+    # Intercept the reserved local registry ID
+    if registry_id == LOCAL_REGISTRY_SYSTEM_ID:
+        return _get_local_registry_entry()
+
     for r in _load_registries():
         if r["id"] == registry_id:
             if "use_tls" not in r:
@@ -109,7 +173,12 @@ def get_registry_by_id(registry_id: str) -> dict | None:
 
 
 def delete_registry(registry_id: str) -> bool:
-    """Delete a registry entry. Returns True if deleted, False if not found."""
+    """Delete a registry entry. Returns True if deleted, False if not found.
+
+    The local system registry cannot be deleted.
+    """
+    if registry_id == LOCAL_REGISTRY_SYSTEM_ID:
+        return False
     registries = _load_registries()
     new_list = [r for r in registries if r["id"] != registry_id]
     if len(new_list) == len(registries):
@@ -178,6 +247,7 @@ async def create_registry(
         "use_tls": use_tls,
         "tls_verify": tls_verify,
         "browsable": browsable,
+        "system": False,
     }
     registries = _load_registries()
     registries.append(registry)
@@ -204,10 +274,16 @@ async def update_registry(
 ) -> dict | None:
     """Update a registry entry (partial update — only supplied fields are changed).
 
+    The local system registry cannot be updated via this function.
+
     use_tls/tls_verify are only changed when explicitly supplied.
     browsable is re-evaluated whenever any connectivity-related field
     (host, username, password, use_tls, tls_verify) changes.
     """
+    # Protect the local system registry from accidental modification
+    if registry_id == LOCAL_REGISTRY_SYSTEM_ID:
+        return None
+
     registries = _load_registries()
     for r in registries:
         if r["id"] == registry_id:
@@ -339,6 +415,7 @@ async def browse_external_images(
     Routing:
       - GHCR (ghcr.io)   -> external_github.browse_github_packages
       - Docker Hub        -> external_dockerhub.browse_dockerhub_repositories
+      - __local__         -> external_v2 on REGISTRY_HOST (local embedded registry)
       - All other V2      -> external_v2.browse_v2_repositories
 
     Returns a paginated dict compatible with the local PaginatedImages shape:
@@ -360,6 +437,7 @@ async def browse_external_tags(registry_id: str, repository: str) -> dict:
     Routing:
       - Docker Hub -> external_dockerhub.browse_dockerhub_tags
       - GHCR       -> external_v2.browse_v2_tags (standard /v2/ tags endpoint)
+      - __local__  -> external_v2.browse_v2_tags on local registry
       - All other  -> external_v2.browse_v2_tags
 
     Returns {"repository": str, "tags": list[str]}.
@@ -375,7 +453,11 @@ async def browse_external_tags(registry_id: str, repository: str) -> dict:
 
 
 async def delete_external_image(registry_id: str, repository: str) -> dict:
-    """Delete all tags for a repository in an external registry."""
+    """Delete all tags for a repository in an external registry.
+
+    The local system registry (__local__) is protected — deletion is delegated
+    to the standard V2Provider which enforces registry-level delete permission.
+    """
     registry = get_registry_by_id(registry_id)
     if not registry:
         raise ValueError(f"Registry {registry_id} not found")
@@ -399,11 +481,11 @@ async def delete_external_image(registry_id: str, repository: str) -> dict:
 async def get_external_tag_detail(registry_id: str, repository: str, tag: str) -> dict:
     """Return full image metadata for a specific tag in an external V2 registry.
 
-    Only standard V2 registries are supported (not Docker Hub, not GHCR).
+    Works for both external registries and the local system registry (__local__).
     Returns an empty dict when the registry type is unsupported or on error.
 
     Args:
-        registry_id: ID of the saved external registry.
+        registry_id: ID of the saved external registry or "__local__".
         repository:  Repository path, e.g. "myorg/myimage".
         tag:         Tag name, e.g. "latest".
 
@@ -421,10 +503,10 @@ async def get_external_tag_detail(registry_id: str, repository: str, tag: str) -
 
 
 async def delete_external_tag(registry_id: str, repository: str, tag: str) -> dict:
-    """Delete a single tag from an external V2 registry.
+    """Delete a single tag from an external V2 registry or the local registry.
 
     Args:
-        registry_id: ID of the saved external registry.
+        registry_id: ID of the saved external registry or "__local__".
         repository:  Repository path.
         tag:         Tag name to delete.
 
@@ -444,8 +526,10 @@ async def add_external_tag(
 ) -> dict:
     """Create a new tag by copying a manifest in an external V2 registry.
 
+    Works for both external registries and the local system registry (__local__).
+
     Args:
-        registry_id: ID of the saved external registry.
+        registry_id: ID of the saved external registry or "__local__".
         repository:  Repository path.
         source_tag:  Existing tag whose manifest will be copied.
         new_tag:     New tag name to create.

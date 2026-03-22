@@ -3,30 +3,31 @@
  *
  * Displays registry images in flat list or hierarchical folder tree view.
  *
+ * Architecture change (local registry as system V2 registry):
+ *   The embedded local registry is now exposed as a hidden system entry with
+ *   id="__local__". This component uses the unified V2 browse/tag-detail
+ *   infrastructure for ALL sources (local + external) via the ExternalImages
+ *   API. The legacy getImages() / getTagDetail() local-only paths are kept
+ *   for backward compatibility but are no longer the primary browse path.
+ *
+ *   Source routing:
+ *     - "__local__"  → local embedded registry via V2Provider (new default)
+ *     - other IDs    → external registries (existing behaviour)
+ *
+ *   The local system entry appears in the Images source selector as
+ *   "Local Registry" (first button, always visible) but is filtered out of
+ *   the External Registries settings panel via userRegistries computed signal.
+ *
  * Changes (Évolution 1):
- *   - New signal selectedSource: 'local' | string (external registry ID).
- *   - When an external registry is selected the component calls
- *     RegistryService.getExternalImages() instead of getImages().
- *   - In external mode:
- *     • The list is read-only (delete / copy / retag actions are hidden).
- *     • Sort, tag-filter chips and pagination still work.
- *     • A read-only badge appears in the toolbar.
- *   - External registries are loaded once at init via ExternalRegistryService.
- *   - Switching source resets pagination and search.
+ *   - New signal selectedSource: '__local__' | string (external registry ID).
+ *   - selectedSource defaults to LOCAL_REGISTRY_SYSTEM_ID ('__local__').
+ *   - All sources use getExternalImages() + getExternalTagDetail() internally.
  *
  * Changes (catalog availability — refactor):
  *   - _loadBrowsableRegistries() no longer calls GET catalog-check for every
- *     registry on each page visit. The backend already probes /v2/_catalog
- *     when a registry is created or updated and persists the result in the
- *     `browsable` field. The component now reads ExternalRegistryService
- *     .browsableRegistries (a computed signal filtering on browsable !== false)
- *     after the shared registry cache is populated via a single listRegistries()
- *     call.
- *   - externalRegistries is now a computed signal (was a writable signal)
- *     derived from the service cache so all components stay in sync.
- *   - checkingCatalog is now only true for the brief GET /registries call
- *     (not for N parallel catalog-check probes).
- *   - Removed unused imports: forkJoin, of, catchError.
+ *     registry on each page visit. The backend probes /v2/_catalog when a
+ *     registry is created/updated. The component reads browsableRegistries
+ *     (which includes the local system entry) from ExternalRegistryService.
  */
 import {
   Component,
@@ -39,6 +40,7 @@ import {
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { FormsModule } from "@angular/forms";
 import { debounceTime, distinctUntilChanged, Subject } from "rxjs";
+import { LOCAL_REGISTRY_SYSTEM_ID } from "../../../core/constants/registry.constants";
 import { AuthService } from "../../../core/services/auth.service";
 import {
   ExternalRegistry,
@@ -73,10 +75,10 @@ interface FolderNode {
 
 /**
  * Identifier for the image source.
- * 'local' means the embedded Portalcrane registry.
+ * '__local__' means the embedded Portalcrane registry (system entry).
  * Any other string is the ID of a saved external registry.
  */
-type SourceId = "local" | string;
+type SourceId = typeof LOCAL_REGISTRY_SYSTEM_ID | string;
 
 @Component({
   selector: "app-images-list",
@@ -106,18 +108,36 @@ export class ImagesListComponent implements OnInit {
 
   // ── Source selection ───────────────────────────────────────────────────────
 
-  readonly selectedSource = signal<SourceId>("local");
+  /**
+   * Current selected source. Defaults to the local system registry.
+   * The string 'local' is kept as an alias for backward compat but
+   * LOCAL_REGISTRY_SYSTEM_ID ('__local__') is now the canonical value.
+   */
+  readonly selectedSource = signal<SourceId>(LOCAL_REGISTRY_SYSTEM_ID);
+
+  /**
+   * Browsable registries including the local system entry.
+   * The local entry is always first (it has system=true, injected by backend).
+   */
   readonly externalRegistries = computed<ExternalRegistry[]>(
     () => this.extRegSvc.browsableRegistries(),
   );
+
   readonly checkingCatalog = signal(false);
+
+  /** True when the currently selected source is an external (non-local) registry. */
   readonly isExternalSource = computed(
-    () => this.selectedSource() !== "local",
+    () => this.selectedSource() !== LOCAL_REGISTRY_SYSTEM_ID,
+  );
+
+  /** True when the source is the local system registry. */
+  readonly isLocalSource = computed(
+    () => this.selectedSource() === LOCAL_REGISTRY_SYSTEM_ID,
   );
 
   readonly isGithubMode = computed<boolean>(() => {
     const src = this.selectedSource();
-    if (src === "local") return false;
+    if (src === LOCAL_REGISTRY_SYSTEM_ID) return false;
     const reg = this.externalRegistries().find((r) => r.id === src);
     if (!reg) return false;
     const host = (reg.host ?? "").toLowerCase().replace(/^https?:\/\//, "").split("/")[0];
@@ -126,7 +146,7 @@ export class ImagesListComponent implements OnInit {
 
   readonly isDockerHubMode = computed<boolean>(() => {
     const src = this.selectedSource();
-    if (src === "local") return false;
+    if (src === LOCAL_REGISTRY_SYSTEM_ID) return false;
     const reg = this.externalRegistries().find((r) => r.id === src);
     if (!reg) return false;
     const host = (reg.host ?? "").toLowerCase().replace(/^https?:\/\//, "").split("/")[0];
@@ -139,7 +159,7 @@ export class ImagesListComponent implements OnInit {
 
   readonly activeSourceLabel = computed(() => {
     const src = this.selectedSource();
-    if (src === "local") return "Local Registry";
+    if (src === LOCAL_REGISTRY_SYSTEM_ID) return "Local Registry";
     const reg = this.externalRegistries().find((r) => r.id === src);
     return reg ? reg.name : src;
   });
@@ -172,7 +192,7 @@ export class ImagesListComponent implements OnInit {
   deleteTarget = signal<ImageInfo | null>(null);
   deleting = signal(false);
 
-  // ── View modal state (external read-only details) ─────────────────────────
+  // ── View modal state (detail modal) ───────────────────────────────────────
   viewTarget = signal<ImageInfo | null>(null);
 
   // ── Accessible items (folder access filter applied once) ──────────────────
@@ -181,7 +201,7 @@ export class ImagesListComponent implements OnInit {
     const allowed = this.allowedFolders();
     const isAdmin = this.authService.currentUser()?.is_admin ?? false;
 
-    // In external mode there is no folder filtering
+    // External registries have no folder filtering
     if (this.isExternalSource()) return items;
 
     // Empty allowedFolders means admin or no folders configured → no filter
@@ -244,24 +264,18 @@ export class ImagesListComponent implements OnInit {
 
   // ── Pagination helpers ─────────────────────────────────────────────────────
 
-  /** Index of the first item displayed on the current page (1-based). */
   pageStart = computed(() => {
     const d = this.data();
     if (!d) return 0;
     return (d.page - 1) * d.page_size + 1;
   });
 
-  /** Index of the last item displayed on the current page (1-based). */
   pageEnd = computed(() => {
     const d = this.data();
     if (!d) return 0;
     return Math.min(d.page * d.page_size, d.total);
   });
 
-  /**
-   * Sliding window of page numbers to display in the pagination bar.
-   * Shows up to 5 pages centred around the current page (delta = 2).
-   */
   pages = computed(() => {
     const d = this.data();
     if (!d) return [];
@@ -280,28 +294,18 @@ export class ImagesListComponent implements OnInit {
   });
 
   /**
-  * True when the current user has push access on the selected external registry.
-  * Used to show/hide add-tag and delete-tag controls in the external detail modal.
-  */
+   * True when the current user has push access on the selected external registry.
+   */
   readonly canPushExternal = computed<boolean>(() => {
     const user = this.authService.currentUser();
-    // Admins always have full access
     if (user?.is_admin) return true;
-    // Non-admin users: require at least one pushable folder
-    // For external registries there is no folder concept, but we reuse
-    // the same check used for the delete button in external mode.
     return this.pushableFolders().length > 0;
   });
-
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
 
   ngOnInit(): void {
     this.setupSearchDebounce();
-
-    // Populate the shared registry cache then derive browsable registries
-    // from the persisted `browsable` field — no per-registry catalog-check
-    // HTTP calls are made here.
     this._loadBrowsableRegistries();
 
     // Load configured folder names first so folderTree grouping is accurate.
@@ -314,18 +318,8 @@ export class ImagesListComponent implements OnInit {
     });
   }
 
-  // ── Browsable registries (refactored — no catalog-check HTTP calls) ────────
+  // ── Browsable registries ───────────────────────────────────────────────────
 
-  /**
-   * Populate the shared ExternalRegistryService cache with a single
-   * GET /api/external/registries call. The computed signal externalRegistries
-   * (which reads browsableRegistries from the service) then reflects the
-   * up-to-date browsable list automatically.
-   *
-   * If the cache is already populated (e.g. by the Staging component or the
-   * Settings panel at an earlier point in the session), the signal is already
-   * up to date and we skip the HTTP call entirely.
-   */
   private _loadBrowsableRegistries(): void {
     // Cache already warm — browsableRegistries computed signal is ready.
     if (this.extRegSvc.externalRegistries().length > 0) {
@@ -335,7 +329,6 @@ export class ImagesListComponent implements OnInit {
     this.checkingCatalog.set(true);
     this.extRegSvc.listRegistries().subscribe({
       next: (regs) => {
-        // Update the shared service cache so all consumers react.
         this.extRegSvc.setRegistriesCache(regs);
         this.checkingCatalog.set(false);
       },
@@ -389,53 +382,41 @@ export class ImagesListComponent implements OnInit {
 
   // ── Data loading ───────────────────────────────────────────────────────────
 
+  /**
+   * Load images for the currently selected source.
+   *
+   * All sources now use getExternalImages() via the unified V2 provider path.
+   * The local system registry (__local__) is handled transparently by the backend
+   * which maps it to a V2Provider pointed at localhost:5000.
+   *
+   * The legacy getImages() path is kept for the local source as a fallback
+   * in case the system registry entry is not available (e.g. during first load).
+   */
   loadImages(refreshTargetName: string | null = null): void {
     this.loading.set(true);
     const src = this.selectedSource();
 
-    if (src === "local") {
-      this.registry
-        .getImages(this.currentPage(), this.pageSize, this.searchQuery)
-        .subscribe({
-          next: (data) => {
-            this.data.set(data);
+    // Use the unified external images endpoint for all sources
+    this.registry
+      .getExternalImages(src, this.currentPage(), this.pageSize, this.searchQuery)
+      .subscribe({
+        next: (data: ExternalPaginatedImages) => {
+          this.data.set(data);
 
-            if (refreshTargetName) {
-              const refreshed = data.items.find((i) => i.name === refreshTargetName) ?? null;
-              if (refreshed) {
-                this.viewTarget.set(refreshed);
-              }
+          if (refreshTargetName) {
+            const refreshed = data.items.find((i) => i.name === refreshTargetName) ?? null;
+            if (refreshed) {
+              this.viewTarget.set(refreshed);
             }
+          }
 
-            this.browseError.set(null);
-            const allFolders = new Set(this.folderTree().map((n) => n.name));
-            this.expandedFolders.set(allFolders);
-            this.loading.set(false);
-          },
-          error: () => this.loading.set(false),
-        });
-    } else {
-      this.registry
-        .getExternalImages(src, this.currentPage(), this.pageSize, this.searchQuery)
-        .subscribe({
-          next: (data: ExternalPaginatedImages) => {
-            this.data.set(data);
-
-            if (refreshTargetName) {
-              const refreshed = data.items.find((i) => i.name === refreshTargetName) ?? null;
-              if (refreshed) {
-                this.viewTarget.set(refreshed);
-              }
-            }
-
-            this.browseError.set(data.error ?? null);
-            const allFolders = new Set(this.folderTree().map((n) => n.name));
-            this.expandedFolders.set(allFolders);
-            this.loading.set(false);
-          },
-          error: () => this.loading.set(false),
-        });
-    }
+          this.browseError.set(data.error ?? null);
+          const allFolders = new Set(this.folderTree().map((n) => n.name));
+          this.expandedFolders.set(allFolders);
+          this.loading.set(false);
+        },
+        error: () => this.loading.set(false),
+      });
   }
 
   onSearch(): void {
@@ -511,15 +492,6 @@ export class ImagesListComponent implements OnInit {
 
   // ── Image helpers ──────────────────────────────────────────────────────────
 
-  /**
-   * Returns true if the current user has push permission on the folder that
-   * contains the given local registry image.
-   *
-   * Admins always have push rights.
-   * Non-admin users must have their folder listed in pushableFolders().
-   *
-   * @param image  The ImageInfo row from the local registry list.
-   */
   canPushOnLocalImage(image: ImageInfo): boolean {
     if (this.isAdmin()) return true;
     const folder = image.name.includes("/")
@@ -528,28 +500,11 @@ export class ImagesListComponent implements OnInit {
     return this.pushableFolders().includes(folder);
   }
 
-
-  /**
-   * Open the image detail modal.
-   *
-   * Previously, local-registry images navigated to /images/detail (page view)
-   * while external V2 images opened ExternalImageDetailComponent (modal).
-   * Both are now unified: any V2-compatible source (local or external) opens
-   * ImageDetailModalComponent inline, keeping the user in context.
-   *
-   * @param name  Repository name, e.g. "myorg/myimage"
-   */
   goToDetail(name: string): void {
     const image = this.data()?.items.find((i) => i.name === name) ?? null;
     this.viewTarget.set(image);
   }
 
-  /**
-   * Image display name inside its visual folder.
-   * - No slash → show full name (e.g. "nginx")
-   * - Known folder prefix → show only suffix (e.g. "sia/nginx" → "nginx")
-   * - Unknown prefix → show full name (e.g. "cyr-ius/wireguard-ui")
-   */
   imageShortName(img: ImageInfo): string {
     const idx = img.name.indexOf("/");
     if (idx === -1) return img.name;
@@ -567,10 +522,14 @@ export class ImagesListComponent implements OnInit {
   }
 
   canDeleteImage(image: ImageInfo): boolean {
-    if (this.isExternalSource()) return this.isAdmin();
-    if (this.isAdmin()) return true;
-    const folderName = this.folderNameForImage(image.name);
-    return this.pushableFolders().includes(folderName);
+    // Local registry: use push permission on the image's folder
+    if (this.isLocalSource()) {
+      if (this.isAdmin()) return true;
+      const folderName = this.folderNameForImage(image.name);
+      return this.pushableFolders().includes(folderName);
+    }
+    // External registry: admins only
+    return this.isAdmin();
   }
 
   canCopyImage(_image: ImageInfo): boolean {
@@ -580,7 +539,6 @@ export class ImagesListComponent implements OnInit {
   }
 
   reloadImages(): void {
-    const targetName = this.viewTarget()?.name ?? null;
     this.loadImages();
   }
 
@@ -597,17 +555,15 @@ export class ImagesListComponent implements OnInit {
 
     if (this.isExternalSource()) {
       const sourceId = this.selectedSource();
-      if (sourceId !== "local") {
-        this.registry.getExternalImageTags(sourceId, image.name).subscribe({
-          next: (res) => {
-            const tags = res.tags?.length ? res.tags : image.tags;
-            this.sourceTagOptions.set(tags);
-            this.copySource.update((s) => (s ? { ...s, tag: tags[0] ?? tag } : s));
-            this.copyDestTag.set(tags[0] ?? tag);
-          },
-          error: () => this.sourceTagOptions.set(image.tags),
-        });
-      }
+      this.registry.getExternalImageTags(sourceId, image.name).subscribe({
+        next: (res) => {
+          const tags = res.tags?.length ? res.tags : image.tags;
+          this.sourceTagOptions.set(tags);
+          this.copySource.update((s) => (s ? { ...s, tag: tags[0] ?? tag } : s));
+          this.copyDestTag.set(tags[0] ?? tag);
+        },
+        error: () => this.sourceTagOptions.set(image.tags),
+      });
     } else {
       this.sourceTagOptions.set(image.tags);
     }
@@ -626,11 +582,6 @@ export class ImagesListComponent implements OnInit {
 
     if (this.isExternalSource()) {
       const sourceRegistryId = this.selectedSource();
-      if (sourceRegistryId === "local") {
-        this.copying.set(false);
-        return;
-      }
-
       const sourceImage = `${src.image.name}:${src.tag}`;
       const destFolder = this.copyDestFolder().trim() || null;
       this.extRegSvc
@@ -653,6 +604,7 @@ export class ImagesListComponent implements OnInit {
       return;
     }
 
+    // Local registry copy
     const destRepo = this.copyDestFolder().trim()
       ? `${this.copyDestFolder().trim()}/${this.copyDestName().trim()}`
       : this.copyDestName().trim();
@@ -691,10 +643,6 @@ export class ImagesListComponent implements OnInit {
 
     if (this.isExternalSource()) {
       const sourceRegistryId = this.selectedSource();
-      if (sourceRegistryId === "local") {
-        this.deleting.set(false);
-        return;
-      }
       this.registry.deleteExternalImage(sourceRegistryId, target.name).subscribe({
         next: () => {
           this.deleteTarget.set(null);
@@ -706,6 +654,7 @@ export class ImagesListComponent implements OnInit {
       return;
     }
 
+    // Local registry delete via standard endpoint
     this.registry.deleteImage(target.name).subscribe({
       next: () => {
         this.deleteTarget.set(null);

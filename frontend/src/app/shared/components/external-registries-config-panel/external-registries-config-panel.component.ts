@@ -2,6 +2,10 @@
  * Portalcrane - ExternalRegistriesConfigPanelComponent
  * Admin settings panel to manage global and personal external registries.
  *
+ * Change: uses extRegSvc.userRegistries (non-system registries only) instead of
+ * externalRegistries so that the hidden local system registry (__local__) is
+ * never shown in this settings panel.
+ *
  * Change: use_tls + tls_verify fields added to the registry form model.
  * tls_verify is only shown when use_tls is enabled.
  * Both are forwarded in create/update payloads and to testConnection().
@@ -48,6 +52,7 @@ export class ExternalRegistriesConfigPanelComponent implements OnInit {
   readonly loading = signal(false);
 
   // ── Registry list ──────────────────────────────────────────────────────────
+  // Uses userRegistries (non-system) so the hidden local registry never appears here.
 
   readonly registries = signal<ExternalRegistry[]>([]);
   readonly showAddForm = signal(false);
@@ -75,7 +80,10 @@ export class ExternalRegistriesConfigPanelComponent implements OnInit {
     tls_verify: true,
   };
 
-  /** Reactive model backing the Signal Form. */
+  /**
+   * Reactive model backing the Signal Form.
+   * Spread to avoid mutating the init object on reset.
+   */
   readonly registryModel = signal<RegistryFormModel>({ ...this.registryInit });
 
   /**
@@ -94,29 +102,25 @@ export class ExternalRegistriesConfigPanelComponent implements OnInit {
     this.extRegSvc.listRegistries().subscribe({
       next: (regs) => {
         this.extRegSvc.setRegistriesCache(regs);
-        this.loading.set(false); // ← maintenant APRÈS la réponse
+        this.loading.set(false);
       },
       error: () => this.loading.set(false),
     });
   }
 
   constructor() {
+    // Derive the displayed list from userRegistries (system entries excluded)
     effect(() => {
-      this.registries.set(this.extRegSvc.externalRegistries());
+      this.registries.set(this.extRegSvc.userRegistries());
     });
   }
 
   // ── Registry list helpers ──────────────────────────────────────────────────
 
-  private syncLocalList(): void {
-    this.registries.set(this.extRegSvc.externalRegistries());
-  }
-
   private refreshAndSync(): void {
     this.extRegSvc.listRegistries().subscribe({
       next: (regs) => {
         this.extRegSvc.setRegistriesCache(regs);
-        this.syncLocalList();
       },
     });
   }
@@ -162,7 +166,6 @@ export class ExternalRegistriesConfigPanelComponent implements OnInit {
   }
 
   // ── Form actions ───────────────────────────────────────────────────────────
-
 
   saveRegistry(): void {
     submit(this.registryForm, async (f) => {
@@ -212,7 +215,10 @@ export class ExternalRegistriesConfigPanelComponent implements OnInit {
 
     const effectiveTlsVerify = (use_tls ?? true) ? (tls_verify ?? true) : false;
     this.extRegSvc
-      .testConnection(host, username, password, { use_tls: use_tls ?? true, tls_verify: effectiveTlsVerify })
+      .testConnection(host, username, password, {
+        use_tls: use_tls ?? true,
+        tls_verify: effectiveTlsVerify,
+      })
       .subscribe({
         next: (res) => {
           this.testResult.set(res);

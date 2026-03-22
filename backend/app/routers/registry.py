@@ -22,13 +22,13 @@ from fastapi import (
 )
 from pydantic import BaseModel
 
-from ..config import DATA_DIR, REGISTRY_URL, REGISTRY_HOST, Settings, get_settings
+from ..config import DATA_DIR, REGISTRY_HOST, REGISTRY_URL, Settings, get_settings
 from ..core.jwt import (
     UserInfo,
+    get_current_user,
     require_admin,
     require_pull_access,
     require_push_access,
-    get_current_user,
 )
 from ..services.registry_service import RegistryService
 from .folders import check_folder_access
@@ -168,17 +168,36 @@ async def list_images(
     )
 
 
-@router.get("/images/tags")
-async def get_image_tags(
-    repository: str = Query(
-        ..., description="Repository name, e.g. biocontainers/swarm"
-    ),
+@router.delete("/images")
+async def delete_image(
+    repository: str = Query(..., description="Repository name to delete entirely"),
     registry: RegistryService = Depends(get_registry),
-    _: UserInfo = Depends(require_pull_access),
+    current_user: UserInfo = Depends(require_push_access),
 ):
-    """Get all tags for a specific image repository."""
+    """Delete all tags (and the image) from a repository."""
+    _ensure_folder_permission(
+        current_user=current_user,
+        image_path=repository,
+        is_pull=False,
+    )
     tags = await registry.list_tags(repository)
-    return {"repository": repository, "tags": tags}
+    if not tags:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Repository not found or has no tags",
+        )
+
+    errors: list[str] = []
+    for tag in tags:
+        if not await registry.delete_tag(repository, tag):
+            errors.append(tag)
+
+    if errors:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete tags: {errors}",
+        )
+    return {"message": f"Image '{repository}' and all its tags deleted"}
 
 
 @router.get("/images/tags/detail", response_model=ImageDetail)
@@ -223,6 +242,19 @@ async def get_tag_detail(
     )
 
 
+@router.get("/images/tags")
+async def get_tags(
+    repository: str = Query(
+        ..., description="Repository name, e.g. biocontainers/swarm"
+    ),
+    registry: RegistryService = Depends(get_registry),
+    _: UserInfo = Depends(require_pull_access),
+):
+    """Get all tags for a specific image repository."""
+    tags = await registry.list_tags(repository)
+    return {"repository": repository, "tags": tags}
+
+
 @router.delete("/images/tags")
 async def delete_tag(
     repository: str = Query(..., description="Repository name"),
@@ -243,38 +275,6 @@ async def delete_tag(
             detail="Failed to delete tag",
         )
     return {"message": f"Tag '{tag}' deleted from '{repository}'"}
-
-
-@router.delete("/images")
-async def delete_image(
-    repository: str = Query(..., description="Repository name to delete entirely"),
-    registry: RegistryService = Depends(get_registry),
-    current_user: UserInfo = Depends(require_push_access),
-):
-    """Delete all tags (and the image) from a repository."""
-    _ensure_folder_permission(
-        current_user=current_user,
-        image_path=repository,
-        is_pull=False,
-    )
-    tags = await registry.list_tags(repository)
-    if not tags:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Repository not found or has no tags",
-        )
-
-    errors: list[str] = []
-    for tag in tags:
-        if not await registry.delete_tag(repository, tag):
-            errors.append(tag)
-
-    if errors:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to delete tags: {errors}",
-        )
-    return {"message": f"Image '{repository}' and all its tags deleted"}
 
 
 @router.post("/images/tags")
