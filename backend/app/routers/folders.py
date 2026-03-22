@@ -14,6 +14,11 @@ Access rules:
       named "editeur" exists)
     * only the FIRST segment matters   ("production/editeur/image" → "production")
 - A user without an explicit entry in the matched folder is always denied.
+
+Protection rules for __root__:
+- __root__ is created automatically at startup and cannot be deleted.
+- Its description can still be edited by admins.
+- Its permissions are managed the same way as any other folder.
 """
 
 import json
@@ -31,11 +36,11 @@ router = APIRouter()
 
 _FOLDERS_FILE = Path(f"{DATA_DIR}/folders.json")
 
-# Reserved name for the catch-all folder
+# Reserved name for the catch-all folder — cannot be deleted
 ROOT_FOLDER_NAME = "__root__"
 
 
-# ─── Models ──────────────────────────────────────────────────────────────────
+# ── Models ────────────────────────────────────────────────────────────────────
 
 
 class FolderPermission(BaseModel):
@@ -71,6 +76,9 @@ class CreateFolderRequest(BaseModel):
             raise ValueError("Folder name must not be empty")
         if any(c in v for c in " /\\"):
             raise ValueError("Folder name must not contain spaces or slashes")
+        # Prevent creation of a folder named __root__ via the API
+        if v == ROOT_FOLDER_NAME:
+            raise ValueError(f"The name '{ROOT_FOLDER_NAME}' is reserved")
         return v
 
 
@@ -96,7 +104,7 @@ class SetPermissionRequest(BaseModel):
         return v
 
 
-# ─── Storage helpers ──────────────────────────────────────────────────────────
+# ── Storage helpers ───────────────────────────────────────────────────────────
 
 
 def _load_folders() -> list[dict]:
@@ -133,7 +141,7 @@ def _dict_to_folder(d: dict) -> Folder:
     )
 
 
-# ─── Migration helper ─────────────────────────────────────────────────────────
+# ── Migration helper ──────────────────────────────────────────────────────────
 
 
 def ensure_root_folder_exists() -> None:
@@ -154,12 +162,11 @@ def ensure_root_folder_exists() -> None:
     _save_folders(folders)
 
 
-# ─── Public helpers used by registry_proxy and registry routers ───────────────
+# ── Public helpers used by registry_proxy and registry routers ────────────────
 
 
 def get_folder_for_path(image_path: str) -> dict | None:
-    """
-    Return the folder dict that governs access to image_path.
+    """Return the folder dict that governs access to image_path.
 
     Resolution order:
     1. If image_path contains '/', extract the first segment and look for
@@ -191,8 +198,7 @@ def get_folder_for_path(image_path: str) -> dict | None:
 
 
 def check_folder_access(username: str, image_path: str, is_pull: bool) -> bool | None:
-    """
-    Check whether username is allowed to pull or push image_path.
+    """Check whether username is allowed to pull or push image_path.
 
     Returns:
         True  — access granted by folder rules
@@ -213,7 +219,7 @@ def check_folder_access(username: str, image_path: str, is_pull: bool) -> bool |
     return False
 
 
-# ─── Endpoints ───────────────────────────────────────────────────────────────
+# ── Endpoints ─────────────────────────────────────────────────────────────────
 
 
 @router.get("", response_model=list[Folder])
@@ -227,7 +233,10 @@ async def create_folder(
     payload: CreateFolderRequest,
     _: UserInfo = Depends(require_admin),
 ) -> Folder:
-    """Create a new folder. Requires admin."""
+    """Create a new folder. Requires admin.
+
+    The name '__root__' is reserved and cannot be created via this endpoint.
+    """
     folders = _load_folders()
     if any(f["name"] == payload.name for f in folders):
         raise HTTPException(
@@ -252,7 +261,10 @@ async def update_folder(
     payload: UpdateFolderRequest,
     _: UserInfo = Depends(require_admin),
 ) -> Folder:
-    """Update a folder's description. Requires admin."""
+    """Update a folder's description. Requires admin.
+
+    The __root__ folder description can be updated.
+    """
     folders = _load_folders()
     for f in folders:
         if f["id"] == folder_id:
@@ -269,14 +281,31 @@ async def delete_folder(
     folder_id: str,
     _: UserInfo = Depends(require_admin),
 ) -> None:
-    """Delete a folder and all its permissions. Requires admin."""
+    """Delete a folder and all its permissions. Requires admin.
+
+    The system folder '__root__' is protected and cannot be deleted,
+    even by an administrator. This is enforced at the backend level.
+    """
     folders = _load_folders()
-    new_list = [f for f in folders if f["id"] != folder_id]
-    if len(new_list) == len(folders):
+
+    # Locate the target folder first to check if it is __root__
+    target = next((f for f in folders if f["id"] == folder_id), None)
+    if target is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Folder not found"
         )
-    _save_folders(new_list)
+
+    # Guard: __root__ cannot be deleted — it is a system folder
+    if target["name"] == ROOT_FOLDER_NAME:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "The root namespace folder cannot be deleted. "
+                "It is a system folder required for access control."
+            ),
+        )
+
+    _save_folders([f for f in folders if f["id"] != folder_id])
 
 
 @router.put("/{folder_id}/permissions", response_model=Folder)
@@ -343,8 +372,8 @@ async def remove_permission(
 async def list_my_folders(
     current_user: UserInfo = Depends(get_current_user),
 ) -> list[str]:
-    """
-    Return folder names the current user can pull from.
+    """Return folder names the current user can pull from.
+
     Admins receive an empty list meaning 'all folders allowed'.
     __root__ is excluded — it is implicit and has no display name in the UI.
     """
@@ -365,8 +394,8 @@ async def list_my_folders(
 async def list_pushable_folders(
     current_user: UserInfo = Depends(get_current_user),
 ) -> list[str]:
-    """
-    Return folder names the user can push to.
+    """Return folder names the user can push to.
+
     Empty list means admin (all folders allowed).
     __root__ is excluded — pushing to root namespace has no folder prefix.
     """
@@ -387,8 +416,8 @@ async def list_pushable_folders(
 async def list_folder_names(
     _: UserInfo = Depends(get_current_user),
 ) -> list[str]:
-    """
-    Return all configured folder names (excluding __root__).
+    """Return all configured folder names (excluding __root__).
+
     Accessible to any authenticated user.
 
     Used by the frontend to determine which visual tree nodes map to a real

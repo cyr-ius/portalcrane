@@ -4,13 +4,12 @@
  * Migration note: all local registry operations now route through the unified
  * V2 provider layer instead of the legacy /api/registry/* endpoints:
  *
- *   Image browsing   → /api/registries/__local__/browse
- *   Tag management   → /api/registries/__local__/browse/tags
- *   Tag detail       → /api/registries/__local__/browse/tags/detail
- *   Delete image     → /api/registries/__local__/browse/image
- *   Ping             → /api/registries/__local__/ping
- *   Empty repos      → /api/registries/__local__/empty-repositories*
- *   Copy image       → /api/system/copy
+ *   Image browsing   → /api/images/{registryId}
+ *   Tag management   → /api/images/{registryId}/tags
+ *   Tag detail       → /api/images/{registryId}/tags/detail
+ *   Delete image     → /api/images/{registryId}
+ *   Empty repos      → /api/images/__local__/empty
+ *   Copy image       → /api/images/copy
  *   GC               → /api/system/gc
  *   Folder access    → /api/folders/mine  /api/folders/pushable
  *
@@ -21,7 +20,7 @@ import { HttpClient, HttpParams } from "@angular/common/http";
 import { inject, Injectable } from "@angular/core";
 import { Observable } from "rxjs";
 
-// ── Shared interfaces ──────────────────────────────────────────────────────
+// ── Shared interfaces ─────────────────────────────────────────────────────────
 
 /** Basic image / repository information returned by the list endpoint. */
 export interface ImageInfo {
@@ -31,9 +30,7 @@ export interface ImageInfo {
   total_size: number;
 }
 
-/**
- * A single layer entry inside an ImageDetail manifest.
- */
+/** A single layer entry inside an ImageDetail manifest. */
 export interface ImageLayer {
   digest: string;
   size: number;
@@ -86,26 +83,17 @@ export interface GCStatus {
   error: string | null;
 }
 
-/** Copy image request payload. */
-export interface CopyImageRequest {
-  source_repository: string;
-  source_tag: string;
-  dest_repository: string;
-  dest_tag?: string | null;
-}
-
 // ── Service ────────────────────────────────────────────────────────────────
 
 @Injectable({ providedIn: "root" })
 export class RegistryService {
   private readonly FOLDERS = "/api/folders";
-  private readonly REGISTRIES = "/api/registries";
   private readonly IMAGES = "/api/images";
   private readonly SYSTEM = "/api/system";
 
   private http = inject(HttpClient);
 
-  // ── Image list ─────────────────────────────────────────────────────────────
+  // ── Image list ──────────────────────────────────────────────────────────
 
   /**
    * Browse images from a registry (local or external).
@@ -133,7 +121,7 @@ export class RegistryService {
     );
   }
 
-  // ── Tags ───────────────────────────────────────────────────────────────────
+  // ── Tags ────────────────────────────────────────────────────────────────
 
   /**
    * Fetch all tags for a repository in any registry.
@@ -216,7 +204,7 @@ export class RegistryService {
     );
   }
 
-  // ── Image management ───────────────────────────────────────────────────────
+  // ── Image management ────────────────────────────────────────────────────
 
   /**
    * Delete all tags of a repository in any registry.
@@ -243,18 +231,7 @@ export class RegistryService {
   }
 
   /**
-   * Check local registry connectivity.
-   *
-   */
-  pingRegistry(registryId: string,): Observable<{ status: string; url: string }> {
-    return this.http.get<{ status: string; url: string }>(
-      `${this.REGISTRIES}/${registryId}/ping`,
-    );
-  }
-
-  /**
    * Copy an image to a new repository path within the local registry.
-   *
    *
    * @param sourceRepository  Source repository name.
    * @param sourceTag         Source tag name.
@@ -275,12 +252,11 @@ export class RegistryService {
     });
   }
 
-  // ── Folders / access control ───────────────────────────────────────────────
+  // ── Folders / access control ────────────────────────────────────────────
 
   /**
    * Return the list of folder names the current user can pull from.
    * Admins receive an empty list (meaning full access).
-   *
    */
   getMyFolders(): Observable<string[]> {
     return this.http.get<string[]>(`${this.FOLDERS}/mine`);
@@ -289,17 +265,15 @@ export class RegistryService {
   /**
    * Return the list of folder names the current user can push to.
    * Admins receive an empty list (meaning full access).
-   *
    */
   getPushableFolders(): Observable<string[]> {
     return this.http.get<string[]>(`${this.FOLDERS}/pushable`);
   }
 
-  // ── Garbage collection ─────────────────────────────────────────────────────
+  // ── Garbage collection ──────────────────────────────────────────────────
 
   /**
    * Fetch the current garbage-collection job status.
-   *
    */
   getGCStatus(): Observable<GCStatus> {
     return this.http.get<GCStatus>(`${this.SYSTEM}/gc`);
@@ -315,11 +289,10 @@ export class RegistryService {
     return this.http.post<GCStatus>(`${this.SYSTEM}/gc`, null, { params });
   }
 
-  // ── Ghost / empty repositories ─────────────────────────────────────────────
+  // ── Ghost / empty repositories ──────────────────────────────────────────
 
   /**
    * List repositories that have no tags (ghost / empty repositories).
-   *
    */
   getEmptyRepositories(): Observable<{
     empty_repositories: string[];
@@ -332,7 +305,6 @@ export class RegistryService {
 
   /**
    * Purge all empty repositories from the local filesystem.
-   *
    */
   purgeEmptyRepositories(): Observable<{
     message: string;
@@ -345,5 +317,4 @@ export class RegistryService {
       errors: { repo: string; error: string }[];
     }>(`${this.IMAGES}/__local__/empty`);
   }
-
 }

@@ -3,8 +3,8 @@ Portalcrane - OIDC Router
 Routes dedicated to the OpenID Connect flow:
   - GET  /oidc/config          → public config for the login page (unauthenticated)
   - POST /oidc/callback        → exchange authorization code for a local JWT
-  - GET  /oidc/settings        → full config for the settings page (admin)
-  - PUT  /oidc/settings        → persist config overrides (admin)
+  - GET  /oidc/settings        → full config for the settings page (admin only)
+  - PUT  /oidc/settings        → persist config overrides (admin only)
 
 OIDC user provisioning strategy (just-in-time):
   - On first successful SSO login the user is automatically created in
@@ -25,7 +25,6 @@ from ..core.jwt import (
     Token,
     UserInfo,
     create_access_token,
-    get_current_user,
     require_admin,
 )
 from ..routers.auth import AUTH_SOURCE_OIDC, _load_users, _save_users, is_oidc_revoked
@@ -54,7 +53,7 @@ class OidcConfig(BaseModel):
     oidc_scope: str
 
 
-# ─── Just-in-time provisioning ────────────────────────────────────────────────
+# ── Just-in-time provisioning ─────────────────────────────────────────────────
 
 
 def _provision_oidc_user(username: str) -> None:
@@ -91,7 +90,7 @@ def _provision_oidc_user(username: str) -> None:
         _save_users(users)
 
 
-# ─── Public endpoint (no authentication required) ────────────────────────────
+# ── Public endpoint (no authentication required) ──────────────────────────────
 
 
 @router.get("/config", response_model=OidcPublicConfig)
@@ -105,7 +104,7 @@ async def get_oidc_public_config(settings: Settings = Depends(get_settings)):
     return await build_public_config(settings)
 
 
-# ─── Callback (no authentication required — called by the browser redirect) ──
+# ── Callback (no authentication required — called by the browser redirect) ───
 
 
 @router.post("/callback", response_model=Token)
@@ -140,18 +139,18 @@ async def oidc_callback(
     )
 
 
-# ─── Admin settings (authentication required) ────────────────────────────────
+# ── Admin settings (admin role required) ──────────────────────────────────────
 
 
 @router.get("/settings", response_model=OidcAdminSettings)
 async def get_oidc_settings(
     settings: Settings = Depends(get_settings),
-    _: UserInfo = Depends(get_current_user),
+    _: UserInfo = Depends(require_admin),
 ):
-    """Return full OIDC settings (env defaults merged with persisted overrides).
+    """Return full OIDC settings including client_secret (admin only).
 
-    Accessible to any authenticated user so the Settings page can display them.
-    The client_secret is returned because the page needs to allow editing.
+    The client_secret is a sensitive credential and must never be exposed to
+    regular users. Only administrators may access this endpoint.
     """
     return resolve_oidc_settings(settings)
 

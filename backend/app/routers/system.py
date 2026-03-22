@@ -14,10 +14,6 @@ Endpoints:
   POST   /api/system/gc                      — trigger GC run (admin)
   GET    /api/system/orphan-oci              — list orphan OCI dirs (admin)
   DELETE /api/system/orphan-oci              — purge orphan OCI dirs (admin)
-  GET    /api/system/empty-repositories      — list ghost repos (admin)
-  DELETE /api/system/empty-repositories      — purge ghost repos (admin)
-  GET    /api/system/ping                    — registry connectivity check (authenticated)
-  POST   /api/system/copy                    — copy image within local registry (authenticated)
 """
 
 import asyncio
