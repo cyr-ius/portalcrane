@@ -1,0 +1,453 @@
+<!-- Portalcrane - Transfer Modal -->
+<!-- Cross-registry image transfer with integrated Trivy scan (server policy). -->
+<!-- The vulnerability scan section has been removed: the server policy from   -->
+<!-- Settings → Vulnerabilities is always applied, no per-transfer override.   -->
+<div
+  class="modal fade show d-block"
+  tabindex="-1"
+  style="background: rgba(0, 0, 0, 0.45)"
+  (click)="close()"
+>
+  <div
+    class="modal-dialog modal-xl modal-dialog-scrollable"
+    (click)="$event.stopPropagation()"
+  >
+    <div class="modal-content border-0 shadow-lg">
+
+      <!-- ── Header ──────────────────────────────────────────────────────── -->
+      <div class="modal-header border-0 pb-0">
+        <div>
+          <h5 class="modal-title fw-semibold">
+            <i class="bi bi-arrow-left-right me-2 text-primary"></i>Transfer Images
+          </h5>
+          <p class="text-muted small mb-0">
+            Copy images between registries — scan policy from
+            <strong>Settings → Vulnerabilities</strong>
+          </p>
+        </div>
+        <button class="btn-close" (click)="close()"></button>
+      </div>
+
+      <!-- ── Body ───────────────────────────────────────────────────────── -->
+      <div class="modal-body pt-3">
+
+        <!-- ── Job results (shown once transfer has started) ───────────── -->
+        @if (activeJobs().length > 0) {
+          <div class="mb-3">
+            <h6 class="fw-semibold mb-2">
+              <i class="bi bi-list-task me-1"></i>Transfer Jobs
+              <span class="badge bg-secondary-subtle text-secondary ms-1">
+                {{ activeJobs().length }}
+              </span>
+            </h6>
+
+            <div class="d-flex flex-column gap-2">
+              @for (job of activeJobs(); track job.job_id) {
+                <div class="border rounded p-3">
+
+                  <!-- Job header -->
+                  <div
+                    class="d-flex align-items-center justify-content-between gap-2 mb-2"
+                  >
+                    <div class="min-w-0">
+                      <div class="fw-semibold small font-monospace text-truncate">
+                        {{ job.repository }}:{{ job.tag }}
+                        <i class="bi bi-arrow-right mx-1 text-muted"></i>
+                        {{ job.dest_repository }}:{{ job.dest_tag }}
+                      </div>
+                    </div>
+                    <div class="d-flex align-items-center gap-2 flex-shrink-0">
+                      <span [class]="getStatusBadgeClass(job.status)">
+                        {{ job.status }}
+                      </span>
+                      <button
+                        class="btn btn-sm btn-outline-danger p-0"
+                        style="width: 1.6rem; height: 1.6rem; line-height: 1"
+                        (click)="deleteJob(job.job_id)"
+                        title="Remove job"
+                        type="button"
+                      >
+                        <i class="bi bi-x"></i>
+                      </button>
+                    </div>
+                  </div>
+
+                  <!-- Progress bar -->
+                  <div class="progress mb-2" style="height: 4px">
+                    <div
+                      class="progress-bar"
+                      [class.bg-danger]="
+                        job.status === 'failed' ||
+                        job.status === 'scan_vulnerable'
+                      "
+                      [class.bg-success]="
+                        job.status === 'done' || job.status === 'scan_clean'
+                      "
+                      [class.progress-bar-animated]="isActive(job.status)"
+                      [class.progress-bar-striped]="isActive(job.status)"
+                      [style.width.%]="job.progress"
+                    ></div>
+                  </div>
+
+                  <!-- Status message -->
+                  <div class="text-muted small mb-2">{{ job.message }}</div>
+
+                  <!-- CVE table shown when the scan blocked the transfer -->
+                  @if (job.status === "scan_vulnerable" && job.vuln_result) {
+                    <div class="mt-2 pt-2 border-top">
+                      <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
+                        <span class="small fw-semibold text-danger">
+                          <i class="bi bi-shield-x me-1"></i>Vulnerabilities
+                          detected — transfer blocked
+                        </span>
+                        @for (sev of SEVERITY_ORDER; track sev) {
+                          @if (getCveCount(job, sev) > 0) {
+                            <span [class]="severityBadgeClass(sev)">
+                              {{ sev }}: {{ getCveCount(job, sev) }}
+                            </span>
+                          }
+                        }
+                      </div>
+
+                      @if (getVulnerabilities(job).length > 0) {
+                        <div
+                          class="table-responsive"
+                          style="max-height: 200px; overflow-y: auto"
+                        >
+                          <table
+                            class="table table-sm table-hover mb-0"
+                            style="font-size: 0.75rem"
+                          >
+                            <thead class="sticky-top table-light">
+                              <tr>
+                                <th>CVE ID</th>
+                                <th>Sev.</th>
+                                <th>Package</th>
+                                <th>Installed</th>
+                                <th>Fixed</th>
+                                <th>CVSS</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              @for (vuln of getVulnerabilities(job); track vuln.id) {
+                                <tr>
+                                  <td>
+                                    <a
+                                      [href]="'https://nvd.nist.gov/vuln/detail/' + vuln.id"
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      class="text-decoration-none font-monospace"
+                                      style="font-size: 0.72rem"
+                                    >{{ vuln.id }}</a>
+                                  </td>
+                                  <td>
+                                    <span
+                                      [class]="severityBadgeClass(vuln.severity)"
+                                      style="font-size: 0.65rem"
+                                    >{{ vuln.severity }}</span>
+                                  </td>
+                                  <td class="font-monospace">{{ vuln.package }}</td>
+                                  <td>{{ vuln.installed_version }}</td>
+                                  <td>{{ vuln.fixed_version ?? "—" }}</td>
+                                  <td>{{ vuln.cvss_score ?? "—" }}</td>
+                                </tr>
+                              }
+                            </tbody>
+                          </table>
+                        </div>
+                      }
+                    </div>
+                  }
+
+                </div>
+              }
+            </div>
+          </div>
+
+          @if (runningJobs().length === 0) {
+            <hr />
+          }
+        }
+
+        <!-- ── Transfer configuration form ────────────────────────────── -->
+        @if (activeJobs().length === 0) {
+          <div class="row g-3">
+
+            <!-- ── Left column: image + tag selection ──────────────────── -->
+            <div class="col-12 col-md-5">
+              <div class="d-flex align-items-center justify-content-between mb-2">
+                <h6 class="fw-semibold mb-0">
+                  <i class="bi bi-layers me-1"></i>Select Images
+                </h6>
+                <div class="d-flex gap-1">
+                  <button
+                    class="btn btn-sm btn-outline-secondary"
+                    (click)="selectAll()"
+                    type="button"
+                  >All</button>
+                  <button
+                    class="btn btn-sm btn-outline-secondary"
+                    (click)="clearAll()"
+                    type="button"
+                  >None</button>
+                </div>
+              </div>
+
+              <!-- Scrollable image + tag tree -->
+              <div
+                class="border rounded image-selection-list"
+                style="max-height: 420px; overflow-y: auto"
+              >
+                @for (img of allImages(); track img.name; let i = $index) {
+
+                  <!-- Image row — checkbox selects / deselects all its tags -->
+                  <div
+                    class="px-3 py-2 border-bottom bg-body-tertiary d-flex align-items-center gap-2"
+                  >
+                    <!--
+                      #imgCheckbox template ref is used by ViewChildren to collect
+                      all image-level checkboxes so we can set .indeterminate
+                      imperatively (Angular has no [indeterminate] binding).
+                    -->
+                    <input
+                      #imgCheckbox
+                      class="form-check-input flex-shrink-0"
+                      type="checkbox"
+                      [id]="imgCheckboxId(img)"
+                      [checked]="isImageFullySelected(img)"
+                      (change)="toggleImage(img)"
+                    />
+                    <label
+                      class="form-check-label small fw-semibold font-monospace flex-grow-1 mb-0"
+                      [htmlFor]="imgCheckboxId(img)"
+                      style="cursor: pointer"
+                    >
+                      {{ img.name }}
+                    </label>
+                    <span class="badge bg-primary-subtle text-primary">
+                      {{ img.tag_count }}
+                    </span>
+                  </div>
+
+                  <!-- Tag rows (indented) -->
+                  @for (tag of img.tags; track tag) {
+                    <div
+                      class="border-bottom d-flex align-items-center gap-2 py-1"
+                      style="padding-left: 2rem; padding-right: 0.75rem"
+                    >
+                      <input
+                        class="form-check-input flex-shrink-0"
+                        type="checkbox"
+                        [id]="tagCheckboxId(img.name, tag)"
+                        [checked]="isTagSelected(img.name, tag)"
+                        (change)="toggleTag(img.name, tag)"
+                      />
+                      <label
+                        class="form-check-label font-monospace mb-0"
+                        style="font-size: 0.78rem; cursor: pointer"
+                        [htmlFor]="tagCheckboxId(img.name, tag)"
+                      >
+                        @if (tag === "latest") {
+                          <i
+                            class="bi bi-star-fill text-warning me-1"
+                            style="font-size: 0.65rem"
+                          ></i>
+                        } @else {
+                          <i
+                            class="bi bi-tag me-1 text-muted"
+                            style="font-size: 0.65rem"
+                          ></i>
+                        }
+                        {{ tag }}
+                      </label>
+                    </div>
+                  }
+
+                }
+              </div>
+
+              <!-- Selection summary -->
+              <div class="text-muted small mt-1">
+                <i class="bi bi-check2-square me-1"></i>
+                {{ selectedImageRefs().length }} image(s) selected
+              </div>
+            </div>
+
+            <!-- ── Right column: destination configuration ──────────────── -->
+            <div class="col-12 col-md-7">
+
+              <!-- Scan policy banner (read-only, inherited from server) -->
+              <div
+                class="d-flex align-items-center gap-2 rounded p-2 mb-3 small"
+                [class.bg-warning-subtle]="scanOverrideActive()"
+                [class.bg-body-tertiary]="!scanOverrideActive()"
+              >
+                <i
+                  class="bi flex-shrink-0"
+                  [class.bi-shield-exclamation]="scanEnabled()"
+                  [class.bi-shield-slash]="!scanEnabled()"
+                  [class.text-warning]="scanOverrideActive()"
+                  [class.text-muted]="!scanOverrideActive()"
+                ></i>
+                <div class="flex-grow-1">
+                  <span
+                    class="fw-semibold"
+                    [class.text-warning-emphasis]="scanOverrideActive()"
+                    [class.text-muted]="!scanOverrideActive()"
+                  >
+                    Scan: {{ scanEnabled() ? "enabled" : "disabled" }}
+                  </span>
+                  @if (scanEnabled()) {
+                    <span class="text-muted ms-1">
+                      — blocking: <strong>{{ scanSeverities() }}</strong>
+                    </span>
+                  }
+                </div>
+                <span
+                  class="badge"
+                  [class.bg-warning-subtle]="scanOverrideActive()"
+                  [class.text-warning]="scanOverrideActive()"
+                  [class.bg-secondary-subtle]="!scanOverrideActive()"
+                  [class.text-secondary]="!scanOverrideActive()"
+                  style="font-size: 0.65rem"
+                >
+                  {{ scanOverrideActive() ? "custom" : "from env" }}
+                </span>
+                <a
+                  routerLink="/settings"
+                  class="badge bg-body-secondary text-muted text-decoration-none flex-shrink-0"
+                  style="font-size: 0.65rem"
+                  title="Configure in Settings → Vulnerabilities"
+                  (click)="close()"
+                >
+                  <i class="bi bi-gear me-1"></i>Configure
+                </a>
+              </div>
+
+              <!-- Destination registry selector -->
+              <div class="mb-3">
+                <label class="form-label small fw-semibold">
+                  Destination Registry
+                </label>
+                <select
+                  class="form-select form-select-sm"
+                  [(ngModel)]="destRegistryId"
+                  (ngModelChange)="destRegistryId.set($event)"
+                >
+                  <option [value]="null">
+                    <i class="bi bi-hdd me-1"></i>Local Registry (embedded)
+                  </option>
+                  @for (reg of externalRegistries(); track reg.id) {
+                    <option [value]="reg.id">
+                      {{ reg.name }} ({{ reg.host }})
+                    </option>
+                  }
+                </select>
+              </div>
+
+              <!-- Destination folder -->
+              <div class="mb-3">
+                <label class="form-label small fw-semibold">
+                  Destination Folder
+                  <span class="text-muted fw-normal">(optional)</span>
+                </label>
+                <input
+                  type="text"
+                  class="form-control form-control-sm font-monospace"
+                  placeholder="e.g. production or myorg"
+                  [value]="destFolder()"
+                  (input)="destFolder.set($any($event.target).value)"
+                  list="pushFolderList"
+                />
+                <datalist id="pushFolderList">
+                  @for (f of pushFolders(); track f) {
+                    <option [value]="f"></option>
+                  }
+                </datalist>
+              </div>
+
+              <!-- Name / tag override — only available for single selection -->
+              @if (isSingleSelection()) {
+                <div class="row g-2 mb-3">
+                  <div class="col-8">
+                    <label class="form-label small fw-semibold">
+                      Destination Name
+                      <span class="text-muted fw-normal">(optional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      class="form-control form-control-sm font-monospace"
+                      [placeholder]="
+                        selectedImageRefs()[0]?.repository ?? 'image-name'
+                      "
+                      [value]="destNameOverride()"
+                      (input)="destNameOverride.set($any($event.target).value)"
+                    />
+                  </div>
+                  <div class="col-4">
+                    <label class="form-label small fw-semibold">
+                      Destination Tag
+                      <span class="text-muted fw-normal">(optional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      class="form-control form-control-sm font-monospace"
+                      [placeholder]="selectedImageRefs()[0]?.tag ?? 'latest'"
+                      [value]="destTagOverride()"
+                      (input)="destTagOverride.set($any($event.target).value)"
+                    />
+                  </div>
+                </div>
+              }
+
+              <!-- Destination preview -->
+              @if (destPreview()) {
+                <div class="alert alert-info py-2 small mb-3">
+                  <i class="bi bi-arrow-right me-1"></i>
+                  Preview: <code>{{ destPreview() }}</code>
+                </div>
+              }
+
+              <!-- Error banner -->
+              @if (transferError()) {
+                <div class="alert alert-danger py-2 small mb-0">
+                  <i class="bi bi-exclamation-triangle me-1"></i>
+                  {{ transferError() }}
+                </div>
+              }
+
+            </div>
+          </div>
+        }
+
+      </div>
+
+      <!-- ── Footer ─────────────────────────────────────────────────────── -->
+      <div class="modal-footer border-0 pt-0">
+        <button class="btn btn-secondary btn-sm" (click)="close()">
+          Close
+        </button>
+        @if (activeJobs().length === 0) {
+          <button
+            class="btn btn-primary btn-sm d-flex align-items-center gap-1"
+            (click)="startTransfer()"
+            [disabled]="transferring() || selectedImageRefs().length === 0"
+            type="button"
+          >
+            @if (transferring()) {
+              <span class="spinner-border spinner-border-sm"></span>
+              Starting…
+            } @else {
+              <i class="bi bi-arrow-left-right me-1"></i>
+              Transfer
+              @if (selectedImageRefs().length > 0) {
+                ({{ selectedImageRefs().length }})
+              }
+            }
+          </button>
+        }
+      </div>
+
+    </div>
+  </div>
+</div>

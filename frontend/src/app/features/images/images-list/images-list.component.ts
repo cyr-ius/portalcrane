@@ -3,31 +3,22 @@
  *
  * Displays registry images in flat list or hierarchical folder tree view.
  *
+ * Transfer modal integration:
+ *   The "Copy" button has been replaced by a "Transfer" button that opens the
+ *   TransferModalComponent. This modal supports multi-registry transfer with
+ *   integrated Trivy CVE scanning, replacing both the old copy modal and the
+ *   Sync import/export feature.
+ *
+ *   - Toolbar "Transfer" button: opens modal with all visible images available
+ *     for selection (no preselection).
+ *   - Per-image "Transfer" button: opens modal with that image preselected
+ *     (all its tags).
+ *
  * Architecture change (local registry as system V2 registry):
  *   The embedded local registry is now exposed as a hidden system entry with
  *   id="__local__". This component uses the unified V2 browse/tag-detail
  *   infrastructure for ALL sources (local + external) via the ExternalImages
- *   API. The legacy getImages() / getTagDetail() local-only paths are kept
- *   for backward compatibility but are no longer the primary browse path.
- *
- *   Source routing:
- *     - "__local__"  → local embedded registry via V2Provider (new default)
- *     - other IDs    → external registries (existing behaviour)
- *
- *   The local system entry appears in the Images source selector as
- *   "Local Registry" (first button, always visible) but is filtered out of
- *   the External Registries settings panel via userRegistries computed signal.
- *
- * Changes (Évolution 1):
- *   - New signal selectedSource: '__local__' | string (external registry ID).
- *   - selectedSource defaults to LOCAL_REGISTRY_SYSTEM_ID ('__local__').
- *   - All sources use getExternalImages() + getExternalTagDetail() internally.
- *
- * Changes (catalog availability — refactor):
- *   - _loadBrowsableRegistries() no longer calls GET catalog-check for every
- *     registry on each page visit. The backend probes /v2/_catalog when a
- *     registry is created/updated. The component reads browsableRegistries
- *     (which includes the local system entry) from ExternalRegistryService.
+ *   API.
  */
 import {
   Component,
@@ -54,6 +45,7 @@ import {
   RegistryService,
 } from "../../../core/services/registry.service";
 import { ImageDetailModalComponent } from "../image-detail-modal/image-detail-modal.component";
+import { TransferModalComponent } from "../transfer-modal/transfer-modal.component";
 
 /** Available sort fields for the image list. */
 type SortField = "name" | "tag_count";
@@ -82,7 +74,7 @@ type SourceId = typeof LOCAL_REGISTRY_SYSTEM_ID | string;
 
 @Component({
   selector: "app-images-list",
-  imports: [FormsModule, ImageDetailModalComponent],
+  imports: [FormsModule, ImageDetailModalComponent, TransferModalComponent],
   templateUrl: "./images-list.component.html",
   styleUrl: "./images-list.component.css",
 })
@@ -108,29 +100,18 @@ export class ImagesListComponent implements OnInit {
 
   // ── Source selection ───────────────────────────────────────────────────────
 
-  /**
-   * Current selected source. Defaults to the local system registry.
-   * The string 'local' is kept as an alias for backward compat but
-   * LOCAL_REGISTRY_SYSTEM_ID ('__local__') is now the canonical value.
-   */
   readonly selectedSource = signal<SourceId>(LOCAL_REGISTRY_SYSTEM_ID);
 
-  /**
-   * Browsable registries including the local system entry.
-   * The local entry is always first (it has system=true, injected by backend).
-   */
   readonly externalRegistries = computed<ExternalRegistry[]>(
     () => this.extRegSvc.browsableRegistries(),
   );
 
   readonly checkingCatalog = signal(false);
 
-  /** True when the currently selected source is an external (non-local) registry. */
   readonly isExternalSource = computed(
     () => this.selectedSource() !== LOCAL_REGISTRY_SYSTEM_ID,
   );
 
-  /** True when the source is the local system registry. */
   readonly isLocalSource = computed(
     () => this.selectedSource() === LOCAL_REGISTRY_SYSTEM_ID,
   );
@@ -140,7 +121,10 @@ export class ImagesListComponent implements OnInit {
     if (src === LOCAL_REGISTRY_SYSTEM_ID) return false;
     const reg = this.externalRegistries().find((r) => r.id === src);
     if (!reg) return false;
-    const host = (reg.host ?? "").toLowerCase().replace(/^https?:\/\//, "").split("/")[0];
+    const host = (reg.host ?? "")
+      .toLowerCase()
+      .replace(/^https?:\/\//, "")
+      .split("/")[0];
     return host === "ghcr.io";
   });
 
@@ -149,7 +133,10 @@ export class ImagesListComponent implements OnInit {
     if (src === LOCAL_REGISTRY_SYSTEM_ID) return false;
     const reg = this.externalRegistries().find((r) => r.id === src);
     if (!reg) return false;
-    const host = (reg.host ?? "").toLowerCase().replace(/^https?:\/\//, "").split("/")[0];
+    const host = (reg.host ?? "")
+      .toLowerCase()
+      .replace(/^https?:\/\//, "")
+      .split("/")[0];
     return (
       host === "docker.io" ||
       host === "index.docker.io" ||
@@ -177,15 +164,14 @@ export class ImagesListComponent implements OnInit {
   sortDir = signal<SortDir>("asc");
   tagFilter = signal<TagFilter>("all");
 
-  // ── Copy modal state ───────────────────────────────────────────────────────
-  copySource = signal<{ image: ImageInfo; tag: string } | null>(null);
+  // ── Transfer modal state ───────────────────────────────────────────────────
+  /** True when the transfer modal is open. */
+  readonly transferModalOpen = signal(false);
+  /** Images preselected when opening the transfer modal (empty = all). */
+  readonly transferPreselected = signal<ImageInfo[]>([]);
+
+  /** Push access on external registries. */
   pushableFolders = signal<string[]>([]);
-  copyDestFolder = signal("");
-  copyDestName = signal("");
-  copyDestTag = signal("");
-  copying = signal(false);
-  copyMessage = signal<string | null>(null);
-  sourceTagOptions = signal<string[]>([]);
   isAdmin = computed(() => this.authService.currentUser()?.is_admin ?? false);
 
   // ── Delete modal state ─────────────────────────────────────────────────────
@@ -201,19 +187,18 @@ export class ImagesListComponent implements OnInit {
     const allowed = this.allowedFolders();
     const isAdmin = this.authService.currentUser()?.is_admin ?? false;
 
-    // External registries have no folder filtering
     if (this.isExternalSource()) return items;
-
-    // Empty allowedFolders means admin or no folders configured → no filter
     if (isAdmin || allowed.length === 0) return items;
 
     return items.filter((img) => {
-      const folder = img.name.includes("/") ? img.name.split("/")[0] : "(root)";
+      const folder = img.name.includes("/")
+        ? img.name.split("/")[0]
+        : "(root)";
       return allowed.includes(folder);
     });
   });
 
-  // ── Derived: flat list (uses accessibleItems) ─────────────────────────────
+  // ── Derived: flat list ─────────────────────────────────────────────────────
   filteredItems = computed(() => {
     const items = this.accessibleItems();
     const tagF = this.tagFilter();
@@ -250,18 +235,6 @@ export class ImagesListComponent implements OnInit {
       .map(([name, images]) => ({ name, images }));
   });
 
-  // ── Copy preview ───────────────────────────────────────────────────────────
-  readonly copyDestPreview = computed(() => {
-    const folder = this.copyDestFolder().trim();
-    const name = this.copyDestName().trim();
-    const tag = this.copyDestTag().trim();
-    return folder && name && tag
-      ? `${folder}/${name}:${tag}`
-      : name && tag
-        ? `${name}:${tag}`
-        : "";
-  });
-
   // ── Pagination helpers ─────────────────────────────────────────────────────
 
   pageStart = computed(() => {
@@ -293,9 +266,7 @@ export class ImagesListComponent implements OnInit {
     return result;
   });
 
-  /**
-   * True when the current user has push access on the selected external registry.
-   */
+  /** True when the current user has push access on the selected external registry. */
   readonly canPushExternal = computed<boolean>(() => {
     const user = this.authService.currentUser();
     if (user?.is_admin) return true;
@@ -308,7 +279,6 @@ export class ImagesListComponent implements OnInit {
     this.setupSearchDebounce();
     this._loadBrowsableRegistries();
 
-    // Load configured folder names first so folderTree grouping is accurate.
     this.folderSvc.getFolderNames().subscribe({
       next: (names) => {
         this.configuredFolderNames.set(names);
@@ -321,10 +291,7 @@ export class ImagesListComponent implements OnInit {
   // ── Browsable registries ───────────────────────────────────────────────────
 
   private _loadBrowsableRegistries(): void {
-    // Cache already warm — browsableRegistries computed signal is ready.
-    if (this.extRegSvc.externalRegistries().length > 0) {
-      return;
-    }
+    if (this.extRegSvc.externalRegistries().length > 0) return;
 
     this.checkingCatalog.set(true);
     this.extRegSvc.listRegistries().subscribe({
@@ -382,21 +349,10 @@ export class ImagesListComponent implements OnInit {
 
   // ── Data loading ───────────────────────────────────────────────────────────
 
-  /**
-   * Load images for the currently selected source.
-   *
-   * All sources now use getExternalImages() via the unified V2 provider path.
-   * The local system registry (__local__) is handled transparently by the backend
-   * which maps it to a V2Provider pointed at localhost:5000.
-   *
-   * The legacy getImages() path is kept for the local source as a fallback
-   * in case the system registry entry is not available (e.g. during first load).
-   */
   loadImages(refreshTargetName: string | null = null): void {
     this.loading.set(true);
     const src = this.selectedSource();
 
-    // Use the unified external images endpoint for all sources
     this.registry
       .getExternalImages(src, this.currentPage(), this.pageSize, this.searchQuery)
       .subscribe({
@@ -404,7 +360,8 @@ export class ImagesListComponent implements OnInit {
           this.data.set(data);
 
           if (refreshTargetName) {
-            const refreshed = data.items.find((i) => i.name === refreshTargetName) ?? null;
+            const refreshed =
+              data.items.find((i) => i.name === refreshTargetName) ?? null;
             if (refreshed) {
               this.viewTarget.set(refreshed);
             }
@@ -522,111 +479,29 @@ export class ImagesListComponent implements OnInit {
   }
 
   canDeleteImage(image: ImageInfo): boolean {
-    // Local registry: use push permission on the image's folder
     if (this.isLocalSource()) {
       if (this.isAdmin()) return true;
       const folderName = this.folderNameForImage(image.name);
       return this.pushableFolders().includes(folderName);
     }
-    // External registry: admins only
     return this.isAdmin();
-  }
-
-  canCopyImage(_image: ImageInfo): boolean {
-    if (this.isExternalSource()) return this.isAdmin() || this.pushableFolders().length > 0;
-    if (this.isAdmin()) return true;
-    return this.pushableFolders().length > 0;
   }
 
   reloadImages(): void {
     this.loadImages();
   }
 
-  // ── Copy modal ─────────────────────────────────────────────────────────────
+  // ── Transfer modal ─────────────────────────────────────────────────────────
 
-  openCopyModal(image: ImageInfo, tag: string): void {
-    if (!this.canCopyImage(image)) return;
-
-    this.copySource.set({ image, tag });
-    this.copyDestName.set(image.name);
-    this.copyDestTag.set(tag);
-    this.copyDestFolder.set("");
-    this.copyMessage.set(null);
-
-    if (this.isExternalSource()) {
-      const sourceId = this.selectedSource();
-      this.registry.getExternalImageTags(sourceId, image.name).subscribe({
-        next: (res) => {
-          const tags = res.tags?.length ? res.tags : image.tags;
-          this.sourceTagOptions.set(tags);
-          this.copySource.update((s) => (s ? { ...s, tag: tags[0] ?? tag } : s));
-          this.copyDestTag.set(tags[0] ?? tag);
-        },
-        error: () => this.sourceTagOptions.set(image.tags),
-      });
-    } else {
-      this.sourceTagOptions.set(image.tags);
-    }
-  }
-
-  closeCopyModal(): void {
-    this.copySource.set(null);
-  }
-
-  executeCopy(): void {
-    const src = this.copySource();
-    if (!src) return;
-    if (!this.isExternalSource() && !this.copyDestName().trim()) return;
-    this.copying.set(true);
-    this.copyMessage.set(null);
-
-    if (this.isExternalSource()) {
-      const sourceRegistryId = this.selectedSource();
-      const sourceImage = `${src.image.name}:${src.tag}`;
-      const destFolder = this.copyDestFolder().trim() || null;
-      this.extRegSvc
-        .startImport({
-          source_registry_id: sourceRegistryId,
-          source_image: sourceImage,
-          dest_folder: destFolder,
-        })
-        .subscribe({
-          next: (res) => {
-            this.copying.set(false);
-            this.copyMessage.set(`Import started (job ${res.job_id})`);
-            this.loadImages();
-          },
-          error: (err) => {
-            this.copying.set(false);
-            this.copyMessage.set(err?.error?.detail ?? "Import failed");
-          },
-        });
-      return;
-    }
-
-    // Local registry copy
-    const destRepo = this.copyDestFolder().trim()
-      ? `${this.copyDestFolder().trim()}/${this.copyDestName().trim()}`
-      : this.copyDestName().trim();
-
-    this.registry
-      .copyImage(
-        src.image.name,
-        src.tag,
-        destRepo,
-        this.copyDestTag().trim() || undefined,
-      )
-      .subscribe({
-        next: (res) => {
-          this.copying.set(false);
-          this.copyMessage.set(res.message);
-          this.loadImages();
-        },
-        error: (err) => {
-          this.copying.set(false);
-          this.copyMessage.set(err?.error?.detail ?? "Copy failed");
-        },
-      });
+  /**
+   * Open the transfer modal.
+   *
+   * @param preselected Images to preselect (empty = none preselected,
+   *                    user selects from the full list).
+   */
+  openTransferModal(preselected: ImageInfo[]): void {
+    this.transferPreselected.set(preselected);
+    this.transferModalOpen.set(true);
   }
 
   // ── Delete modal ───────────────────────────────────────────────────────────
@@ -643,7 +518,22 @@ export class ImagesListComponent implements OnInit {
 
     if (this.isExternalSource()) {
       const sourceRegistryId = this.selectedSource();
-      this.registry.deleteExternalImage(sourceRegistryId, target.name).subscribe({
+      this.registry
+        .deleteExternalImage(sourceRegistryId, target.name)
+        .subscribe({
+          next: () => {
+            this.deleteTarget.set(null);
+            this.deleting.set(false);
+            this.loadImages();
+          },
+          error: () => this.deleting.set(false),
+        });
+      return;
+    }
+
+    this.registry
+      .deleteExternalImage(LOCAL_REGISTRY_SYSTEM_ID, target.name)
+      .subscribe({
         next: () => {
           this.deleteTarget.set(null);
           this.deleting.set(false);
@@ -651,17 +541,5 @@ export class ImagesListComponent implements OnInit {
         },
         error: () => this.deleting.set(false),
       });
-      return;
-    }
-
-    // Local registry delete via standard endpoint
-    this.registry.deleteExternalImage(LOCAL_REGISTRY_SYSTEM_ID, target.name).subscribe({
-      next: () => {
-        this.deleteTarget.set(null);
-        this.deleting.set(false);
-        this.loadImages();
-      },
-      error: () => this.deleting.set(false),
-    });
   }
 }

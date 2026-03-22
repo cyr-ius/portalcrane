@@ -8,8 +8,8 @@
  * OIDC-specific logic (config fetch, redirect, callback) lives in OidcService.
  *
  * Session isolation fix:
- *   clearSession() now calls jobService.clearState() so that singleton
- *   services that cache user-scoped data are flushed on every logout.
+ *   clearSession() now calls jobService.clearState() and transferService.clearState()
+ *   so that singleton services that cache user-scoped data are flushed on every logout.
  *   Without this, a second user logging in after a logout would briefly
  *   see the previous user's staging jobs (the ~200 ms before the first
  *   polling cycle fires).
@@ -23,6 +23,7 @@ import { tap } from "rxjs";
 import { LoginResponse, UserInfo } from "../models/auth.models";
 import { JobService } from "./job.service";
 import { OidcService } from "./oidc.service";
+import { TransferService } from "./transfer.service";
 
 @Injectable({ providedIn: "root" })
 export class AuthService {
@@ -30,6 +31,7 @@ export class AuthService {
   private readonly router = inject(Router);
   private readonly oidcService = inject(OidcService);
   private readonly jobService = inject(JobService);
+  private readonly transferService = inject(TransferService);
 
   private readonly TOKEN_KEY = "pc_token";
   private readonly USER_KEY = "pc_user";
@@ -37,7 +39,9 @@ export class AuthService {
   // ── Reactive state ────────────────────────────────────────────────────────
 
   private readonly _token = signal<string | null>(
-    typeof window !== "undefined" ? localStorage.getItem(this.TOKEN_KEY) : null,
+    typeof window !== "undefined"
+      ? localStorage.getItem(this.TOKEN_KEY)
+      : null,
   );
 
   private readonly _user = signal<UserInfo | null>(
@@ -120,6 +124,7 @@ export class AuthService {
 
     // Reset singleton service caches that contain user-scoped data.
     this.jobService.clearState();
+    this.transferService.clearState();
   }
 
   /** Return the current JWT token string (or null when not authenticated). */
@@ -135,5 +140,4 @@ export class AuthService {
     this._token.set(token);
     localStorage.setItem(this.TOKEN_KEY, token);
   }
-
 }

@@ -3,10 +3,9 @@ Portalcrane - Application Configuration
 All settings loaded from environment variables
 """
 
-from functools import lru_cache
 import logging
 import os
-from pathlib import Path
+from functools import lru_cache
 from urllib.parse import urlparse
 
 from pydantic import model_validator
@@ -38,12 +37,6 @@ GITHUB_REPO_URL = f"https://github.com/{GITHUB_OWNER}/{GITHUB_REPO}"
 
 # JWT configuration
 ALGORITHM = "HS256"
-
-# Trivy server URL (used for vulnerability scanning)
-TRIVY_SERVER_URL: str = "http://127.0.0.1:4954"
-TRIVY_CACHE_DIR = f"{DATA_DIR}/cache/trivy"
-TRIVY_BINARY = "/usr/local/bin/trivy"
-TRIVY_DB_METADATA = Path(TRIVY_CACHE_DIR) / "db" / "metadata.json"
 
 # Container registry URL (used for skopeo copy operations)
 REGISTRY_URL: str = "http://localhost:5000"

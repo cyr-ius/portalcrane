@@ -33,6 +33,7 @@ from .routers import (
     staging,
     system,
     trivy,
+    transfer,
 )
 from .routers.folders import ensure_root_folder_exists
 from .services.audit_service import log_web_ui_action
@@ -150,6 +151,7 @@ app.include_router(registries.router, prefix="/api/registries", tags=["Registrie
 app.include_router(registry_proxy.router, prefix="", tags=["Registry Proxy"])
 app.include_router(staging.router, prefix="/api/staging", tags=["Staging"])
 app.include_router(system.router, prefix="/api/system", tags=["System"])
+app.include_router(transfer.router, prefix="/api/transfer", tags=["Transfer"])
 app.include_router(trivy.router, prefix="/api/trivy", tags=["Trivy"])
 
 

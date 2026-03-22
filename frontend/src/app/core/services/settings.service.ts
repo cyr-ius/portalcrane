@@ -1,28 +1,28 @@
-import { Injectable, signal } from '@angular/core';
+import { Injectable, signal } from "@angular/core";
 
-/** Tabs available in the Settings page. */
+/**
+ * Tabs available in the Settings page.
+ * Note: the 'sync' tab has been removed — image transfer is now handled
+ * by the Transfer modal in the Images section.
+ */
 export type SettingsTab =
   | "vulnerabilities"
   | "accounts"
   | "folders"
   | "registries"
-  | "sync"
   | "audit"
   | "oidc"
   | "network"
   | "about";
 
-
 @Injectable({
-  providedIn: 'root',
+  providedIn: "root",
 })
 export class SettingsService {
-
   private _activeTab = signal<SettingsTab>("vulnerabilities");
   readonly activeTab = this._activeTab.asReadonly();
 
-  setTab(tab: SettingsTab) {
+  setTab(tab: SettingsTab): void {
     this._activeTab.set(tab);
   }
-
 }

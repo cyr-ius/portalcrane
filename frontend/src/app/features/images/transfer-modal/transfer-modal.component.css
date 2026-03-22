@@ -1,0 +1,12 @@
+/* Portalcrane - Transfer Modal Styles */
+
+/* Image selection list scrollable container */
+.image-selection-list {
+  background: var(--pc-card-bg);
+}
+
+/* Indeterminate checkbox state indicator */
+input[type="checkbox"]:indeterminate {
+  background-color: var(--bs-primary);
+  border-color: var(--bs-primary);
+}

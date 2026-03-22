@@ -6,21 +6,16 @@ from enum import Enum
 from pathlib import Path
 
 from pydantic import BaseModel
+
+from ..config import REGISTRY_HOST, REGISTRY_URL, STAGING_DIR, Settings
 from ..core.jwt import UserInfo, is_admin_user
 from ..routers.folders import check_folder_access
 from ..services.trivy_service import (
+    TRIVY_CACHE_DIR,
+    TRIVY_SERVER_URL,
     effective_severities,
     effective_vuln,
     parse_trivy_output,
-)
-
-from ..config import (
-    STAGING_DIR,
-    TRIVY_CACHE_DIR,
-    TRIVY_SERVER_URL,
-    REGISTRY_HOST,
-    REGISTRY_URL,
-    Settings,
 )
 
 _logger = logging.getLogger(__name__)

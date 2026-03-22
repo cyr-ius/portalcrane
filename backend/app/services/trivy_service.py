@@ -11,7 +11,12 @@ import asyncio
 import json
 from pathlib import Path
 
-from ..config import DATA_DIR, TRIVY_BINARY, TRIVY_CACHE_DIR, Settings
+from ..config import DATA_DIR, Settings
+
+TRIVY_SERVER_URL: str = "http://127.0.0.1:4954"
+TRIVY_CACHE_DIR = f"{DATA_DIR}/cache/trivy"
+TRIVY_DB_METADATA = Path(TRIVY_CACHE_DIR) / "db" / "metadata.json"
+TRIVY_BINARY = "/usr/local/bin/trivy"
 
 # ── Override persistence ──────────────────────────────────────────────────────
 
@@ -82,13 +87,11 @@ def resolve_vuln_config(settings: Settings) -> dict:
 
 # ── Trivy DB helpers ──────────────────────────────────────────────────────────
 
-from ..config import TRIVY_DB_METADATA  # noqa: E402
-
 
 async def get_trivy_db_info() -> dict:
     """Return Trivy vulnerability database metadata and freshness status."""
     import json as _json
-    from datetime import datetime, timezone, timedelta
+    from datetime import datetime, timedelta, timezone
 
     info: dict = {
         "last_update": None,
