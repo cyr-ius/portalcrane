@@ -53,7 +53,6 @@ from .folders import check_folder_access
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
-settings = get_settings()
 
 # ── Pydantic models ───────────────────────────────────────────────────────────
 
@@ -563,6 +562,7 @@ async def purge_empty_repositories(
 async def copy_image(
     request: CopyImageRequest,
     current_user: UserInfo = Depends(get_current_user),
+    settings: Settings = Depends(get_settings),
 ):
     """Copy an image to a new repository path within the local registry via skopeo.
 
