@@ -1,7 +1,18 @@
-// frontend/src/app/shared/services/system.service.ts
+/**
+ * Portalcrane - SystemService
+ *
+ * HTTP client for /api/system/* endpoints.
+ *
+ * Migration note: process statuses, audit logs, GC, orphan OCI, ghost repo
+ * management, registry ping, and image copy are now all served by the
+ * consolidated /api/system router on the backend. No more /api/registry/*
+ * calls are made from this service.
+ */
 import { HttpClient } from "@angular/common/http";
-import { Injectable, inject } from "@angular/core";
+import { inject, Injectable } from "@angular/core";
 import { firstValueFrom } from "rxjs";
+
+// ── Interfaces ────────────────────────────────────────────────────────────────
 
 export interface ProcessStatus {
   name: string;
@@ -23,6 +34,8 @@ export interface AuditEvent {
   client_ip: string;
   username: string | null;
 }
+
+// ── Service ───────────────────────────────────────────────────────────────────
 
 @Injectable({ providedIn: "root" })
 export class SystemService {
@@ -49,4 +62,15 @@ export class SystemService {
     return response.events;
   }
 
+  /**
+   * Check local registry connectivity.
+   *
+   * Replaces: GET /api/registry/ping
+   * Now uses: GET /api/system/ping
+   */
+  async pingRegistry(): Promise<{ status: string; url: string }> {
+    return firstValueFrom(
+      this.http.get<{ status: string; url: string }>(`${this.BASE}/ping`),
+    );
+  }
 }

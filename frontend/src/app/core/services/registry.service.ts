@@ -1,20 +1,26 @@
 /**
  * Portalcrane - RegistryService
  *
- * Angular service for all local registry API calls:
- * images, tags, garbage collection, copy, delete, retag.
+ * Migration note: all local registry operations now route through the unified
+ * V2 provider layer instead of the legacy /api/registry/* endpoints:
  *
- * Folder access queries (/mine and /pushable) are delegated to
- * /api/folders which is the correct backend prefix.
+ *   Image browsing   → /api/external/registries/__local__/browse
+ *   Tag management   → /api/external/registries/__local__/browse/tags
+ *   Tag detail       → /api/external/registries/__local__/browse/tags/detail
+ *   Delete image     → /api/external/registries/__local__/browse/image
+ *   Copy image       → /api/system/copy
+ *   Ping             → /api/system/ping
+ *   Empty repos      → /api/system/empty-repositories
+ *   GC               → /api/system/gc
+ *   Folder access    → /api/folders/mine  /api/folders/pushable  (unchanged)
  *
- * NOTE: This file also exports the shared interfaces (ImageInfo, ImageDetail,
- * PaginatedImages, ExternalPaginatedImages, GCStatus, ImageLayer) consumed by
- * dashboard, images-list, image-detail, sync-config-panel,
- * vuln-config-panel and folder.service.
+ * The LOCAL_REGISTRY_SYSTEM_ID constant ('__local__') is the canonical
+ * identifier for the embedded local registry across all Angular services.
  */
 import { HttpClient, HttpParams } from "@angular/common/http";
 import { inject, Injectable } from "@angular/core";
 import { Observable } from "rxjs";
+import { LOCAL_REGISTRY_SYSTEM_ID } from "../constants/registry.constants";
 
 // ── Shared interfaces ──────────────────────────────────────────────────────
 
@@ -28,8 +34,6 @@ export interface ImageInfo {
 
 /**
  * A single layer entry inside an ImageDetail manifest.
- * Using explicit named properties (not an index signature) so Angular
- * templates can access layer.digest and layer.size directly without TS4111.
  */
 export interface ImageLayer {
   digest: string;
@@ -54,7 +58,7 @@ export interface ImageDetail {
   exposed_ports: Record<string, unknown>;
 }
 
-/** Paginated response for the local registry image list. */
+/** Paginated response for the image list. */
 export interface PaginatedImages {
   items: ImageInfo[];
   total: number;
@@ -66,14 +70,13 @@ export interface PaginatedImages {
 
 /**
  * Paginated response when browsing an external registry.
- * Extends PaginatedImages with an explicit error field so callers
- * can distinguish a partial result from a hard failure.
+ * Extends PaginatedImages with an explicit error field.
  */
 export interface ExternalPaginatedImages extends PaginatedImages {
   error: string | null;
 }
 
-/** Garbage-collection job status returned by GET /api/system/gc. */
+/** Garbage-collection job status. */
 export interface GCStatus {
   status: string;
   started_at: string | null;
@@ -84,11 +87,23 @@ export interface GCStatus {
   error: string | null;
 }
 
+/** Copy image request payload. */
+export interface CopyImageRequest {
+  source_repository: string;
+  source_tag: string;
+  dest_repository: string;
+  dest_tag?: string | null;
+}
+
 // ── Service ────────────────────────────────────────────────────────────────
 
 @Injectable({ providedIn: "root" })
 export class RegistryService {
-  private readonly BASE = "/api/registry";
+  /**
+   * All local registry browse/tag operations use the __local__ system entry
+   * via the unified external registries infrastructure.
+   */
+  private readonly LOCAL = `/api/external/registries/${LOCAL_REGISTRY_SYSTEM_ID}`;
   private readonly FOLDERS = "/api/folders";
   private readonly EXTERNAL = "/api/external";
   private readonly SYSTEM = "/api/system";
@@ -100,7 +115,8 @@ export class RegistryService {
   /**
    * Fetch a paginated, optionally filtered list of local registry images.
    *
-   * Backend: GET /api/registry/images
+   * Replaces: GET /api/registry/images
+   * Now uses: GET /api/external/registries/__local__/browse
    *
    * @param page      Page number (1-based).
    * @param pageSize  Number of items per page.
@@ -111,21 +127,16 @@ export class RegistryService {
     pageSize = 20,
     search = "",
   ): Observable<PaginatedImages> {
-    let params = new HttpParams()
-      .set("page", page)
-      .set("page_size", pageSize);
-    if (search?.trim()) {
-      params = params.set("search", search.trim());
-    }
-    return this.http.get<PaginatedImages>(`${this.BASE}/images`, { params });
+    return this.getExternalImages(LOCAL_REGISTRY_SYSTEM_ID, page, pageSize, search);
   }
 
   /**
-   * Browse images from a saved external registry.
+   * Browse images from a registry (local or external).
    *
-   * Backend: GET /api/external/registries/{id}/browse
+   * For the local registry pass LOCAL_REGISTRY_SYSTEM_ID ('__local__').
+   * Routes to: GET /api/external/registries/{id}/browse
    *
-   * @param registryId  ID of the saved external registry.
+   * @param registryId  ID of the registry (use __local__ for local).
    * @param page        Page number (1-based).
    * @param pageSize    Number of items per page.
    * @param search      Optional search string.
@@ -151,85 +162,26 @@ export class RegistryService {
   // ── Tags ───────────────────────────────────────────────────────────────────
 
   /**
-   * Fetch all tags for a repository.
+   * Fetch all tags for a repository in the local registry.
    *
-   * Backend: GET /api/registry/images/tags?repository=…
+   * Replaces: GET /api/registry/images/tags
+   * Now uses: GET /api/external/registries/__local__/browse/tags
    *
    * @param repository  Repository name, e.g. "biocontainers/swarm".
    */
   getImageTags(
     repository: string,
   ): Observable<{ repository: string; tags: string[] }> {
-    const params = new HttpParams().set("repository", repository);
-    return this.http.get<{ repository: string; tags: string[] }>(
-      `${this.BASE}/images/tags`,
-      { params },
-    );
+    return this.getExternalImageTags(LOCAL_REGISTRY_SYSTEM_ID, repository);
   }
 
   /**
-   * Fetch detailed metadata for a specific image tag.
+   * Fetch all tags for a repository in any registry.
    *
-   * Backend: GET /api/registry/images/tags/detail?repository=…&tag=…
+   * Routes to: GET /api/external/registries/{id}/browse/tags
    *
+   * @param registryId  ID of the registry (use __local__ for local).
    * @param repository  Repository name.
-   * @param tag         Tag name, e.g. "latest".
-   */
-  getTagDetail(repository: string, tag: string): Observable<ImageDetail> {
-    const params = new HttpParams()
-      .set("repository", repository)
-      .set("tag", tag);
-    return this.http.get<ImageDetail>(`${this.BASE}/images/tags/detail`, {
-      params,
-    });
-  }
-
-  /**
-   * Add a new tag to an existing image (retag via manifest copy).
-   *
-   * Backend: POST /api/registry/images/tags?repository=…
-   *
-   * @param repository  Repository name.
-   * @param sourceTag   Existing tag to copy from.
-   * @param newTag      New tag name to create.
-   */
-  addTag(
-    repository: string,
-    sourceTag: string,
-    newTag: string,
-  ): Observable<{ message: string }> {
-    const params = new HttpParams().set("repository", repository);
-    return this.http.post<{ message: string }>(
-      `${this.BASE}/images/tags`,
-      { source_tag: sourceTag, new_tag: newTag },
-      { params },
-    );
-  }
-
-  /**
-   * Delete a specific tag from a repository.
-   *
-   * Backend: DELETE /api/registry/images/tags?repository=…&tag=…
-   *
-   * @param repository  Repository name.
-   * @param tag         Tag to delete.
-   */
-  deleteTag(
-    repository: string,
-    tag: string,
-  ): Observable<{ message: string }> {
-    const params = new HttpParams()
-      .set("repository", repository)
-      .set("tag", tag);
-    return this.http.delete<{ message: string }>(
-      `${this.BASE}/images/tags`,
-      { params },
-    );
-  }
-
-
-  /**
-   * Fetch tags for a repository from an external registry.
    */
   getExternalImageTags(
     registryId: string,
@@ -243,7 +195,152 @@ export class RegistryService {
   }
 
   /**
-   * Delete all tags of a repository from an external registry.
+   * Fetch detailed metadata for a specific tag in the local registry.
+   *
+   * Replaces: GET /api/registry/images/tags/detail
+   * Now uses: GET /api/external/registries/__local__/browse/tags/detail
+   *
+   * @param repository  Repository name.
+   * @param tag         Tag name, e.g. "latest".
+   */
+  getTagDetail(repository: string, tag: string): Observable<ImageDetail> {
+    return this.getExternalTagDetail(LOCAL_REGISTRY_SYSTEM_ID, repository, tag);
+  }
+
+  /**
+   * Fetch detailed metadata for a specific tag in any registry.
+   *
+   * Routes to: GET /api/external/registries/{id}/browse/tags/detail
+   *
+   * @param registryId  ID of the registry.
+   * @param repository  Repository name.
+   * @param tag         Tag name.
+   */
+  getExternalTagDetail(
+    registryId: string,
+    repository: string,
+    tag: string,
+  ): Observable<ImageDetail> {
+    const params = new HttpParams()
+      .set("repository", repository)
+      .set("tag", tag);
+    return this.http.get<ImageDetail>(
+      `${this.EXTERNAL}/registries/${registryId}/browse/tags/detail`,
+      { params },
+    );
+  }
+
+  /**
+   * Add a new tag to an existing image in the local registry.
+   *
+   * Replaces: POST /api/registry/images/tags
+   * Now uses: POST /api/external/registries/__local__/browse/tags
+   *
+   * @param repository  Repository name.
+   * @param sourceTag   Existing tag to copy from.
+   * @param newTag      New tag name to create.
+   */
+  addTag(
+    repository: string,
+    sourceTag: string,
+    newTag: string,
+  ): Observable<{ message: string }> {
+    return this.addExternalTag(
+      LOCAL_REGISTRY_SYSTEM_ID,
+      repository,
+      sourceTag,
+      newTag,
+    ) as Observable<{ message: string }>;
+  }
+
+  /**
+   * Create a new tag by copying a manifest in any registry.
+   *
+   * Routes to: POST /api/external/registries/{id}/browse/tags
+   *
+   * @param registryId  ID of the registry.
+   * @param repository  Repository name.
+   * @param sourceTag   Existing tag to copy from.
+   * @param newTag      New tag name to create.
+   */
+  addExternalTag(
+    registryId: string,
+    repository: string,
+    sourceTag: string,
+    newTag: string,
+  ): Observable<{ success: boolean; message: string }> {
+    const params = new HttpParams().set("repository", repository);
+    return this.http.post<{ success: boolean; message: string }>(
+      `${this.EXTERNAL}/registries/${registryId}/browse/tags`,
+      { source_tag: sourceTag, new_tag: newTag },
+      { params },
+    );
+  }
+
+  /**
+   * Delete a specific tag from a repository in the local registry.
+   *
+   * Replaces: DELETE /api/registry/images/tags
+   * Now uses: DELETE /api/external/registries/__local__/browse/tags
+   *
+   * @param repository  Repository name.
+   * @param tag         Tag to delete.
+   */
+  deleteTag(
+    repository: string,
+    tag: string,
+  ): Observable<{ message: string }> {
+    return this.deleteExternalTag(
+      LOCAL_REGISTRY_SYSTEM_ID,
+      repository,
+      tag,
+    ) as Observable<{ message: string }>;
+  }
+
+  /**
+   * Delete a single tag from any registry.
+   *
+   * Routes to: DELETE /api/external/registries/{id}/browse/tags
+   *
+   * @param registryId  ID of the registry.
+   * @param repository  Repository name.
+   * @param tag         Tag name to delete.
+   */
+  deleteExternalTag(
+    registryId: string,
+    repository: string,
+    tag: string,
+  ): Observable<{ success: boolean; message: string }> {
+    const params = new HttpParams()
+      .set("repository", repository)
+      .set("tag", tag);
+    return this.http.delete<{ success: boolean; message: string }>(
+      `${this.EXTERNAL}/registries/${registryId}/browse/tags`,
+      { params },
+    );
+  }
+
+  // ── Image management ───────────────────────────────────────────────────────
+
+  /**
+   * Delete all tags of an image in the local registry.
+   *
+   * Replaces: DELETE /api/registry/images
+   * Now uses: DELETE /api/external/registries/__local__/browse/image
+   *
+   * @param repository  Repository name to delete entirely.
+   */
+  deleteImage(repository: string): Observable<{ message: string }> {
+    return this.deleteExternalImage(LOCAL_REGISTRY_SYSTEM_ID, repository) as Observable<{ message: string }>;
+  }
+
+  /**
+   * Delete all tags of a repository in any registry.
+   *
+   * Routes to: DELETE /api/external/registries/{id}/browse/image
+   *
+   * @param registryId  ID of the registry.
+   * @param repository  Repository name.
    */
   deleteExternalImage(
     registryId: string,
@@ -263,26 +360,11 @@ export class RegistryService {
     }>(`${this.EXTERNAL}/registries/${registryId}/browse/image`, { params });
   }
 
-  // ── Image management ───────────────────────────────────────────────────────
-
   /**
-   * Delete all tags of an image (effectively deletes the repository).
+   * Copy an image to a new repository path within the local registry.
    *
-   * Backend: DELETE /api/registry/images?repository=…
-   *
-   * @param repository  Repository name to delete entirely.
-   */
-  deleteImage(repository: string): Observable<{ message: string }> {
-    const params = new HttpParams().set("repository", repository);
-    return this.http.delete<{ message: string }>(`${this.BASE}/images`, {
-      params,
-    });
-  }
-
-  /**
-   * Copy an image to a new repository path via skopeo.
-   *
-   * Backend: POST /api/registry/images/copy
+   * Replaces: POST /api/registry/images/copy
+   * Now uses: POST /api/system/copy
    *
    * @param sourceRepository  Source repository name.
    * @param sourceTag         Source tag name.
@@ -295,7 +377,7 @@ export class RegistryService {
     destRepository: string,
     destTag?: string,
   ): Observable<{ message: string }> {
-    return this.http.post<{ message: string }>(`${this.BASE}/images/copy`, {
+    return this.http.post<{ message: string }>(`${this.SYSTEM}/copy`, {
       source_repository: sourceRepository,
       source_tag: sourceTag,
       dest_repository: destRepository,
@@ -309,7 +391,7 @@ export class RegistryService {
    * Return the list of folder names the current user can pull from.
    * Admins receive an empty list (meaning full access).
    *
-   * Backend: GET /api/folders/mine
+   * Routes to: GET /api/folders/mine  (unchanged)
    */
   getMyFolders(): Observable<string[]> {
     return this.http.get<string[]>(`${this.FOLDERS}/mine`);
@@ -319,7 +401,7 @@ export class RegistryService {
    * Return the list of folder names the current user can push to.
    * Admins receive an empty list (meaning full access).
    *
-   * Backend: GET /api/folders/pushable
+   * Routes to: GET /api/folders/pushable  (unchanged)
    */
   getPushableFolders(): Observable<string[]> {
     return this.http.get<string[]>(`${this.FOLDERS}/pushable`);
@@ -330,7 +412,7 @@ export class RegistryService {
   /**
    * Fetch the current garbage-collection job status.
    *
-   * Backend: GET /api/system/gc
+   * Routes to: GET /api/system/gc  (unchanged URL)
    */
   getGCStatus(): Observable<GCStatus> {
     return this.http.get<GCStatus>(`${this.SYSTEM}/gc`);
@@ -339,7 +421,7 @@ export class RegistryService {
   /**
    * Start a garbage-collection run (admin only).
    *
-   * Backend: POST /api/system/gc?dry_run=…
+   * Routes to: POST /api/system/gc  (unchanged URL)
    *
    * @param dryRun  When true, runs without actually deleting blobs.
    */
@@ -353,21 +435,23 @@ export class RegistryService {
   /**
    * List repositories that have no tags (ghost / empty repositories).
    *
-   * Backend: GET /api/registry/empty-repositories
+   * Replaces: GET /api/registry/empty-repositories
+   * Now uses: GET /api/system/empty-repositories
    */
   getEmptyRepositories(): Observable<{
     empty_repositories: string[];
     count: number;
   }> {
     return this.http.get<{ empty_repositories: string[]; count: number }>(
-      `${this.BASE}/empty-repositories`,
+      `${this.SYSTEM}/empty-repositories`,
     );
   }
 
   /**
    * Purge all empty repositories from the local filesystem.
    *
-   * Backend: DELETE /api/registry/empty-repositories
+   * Replaces: DELETE /api/registry/empty-repositories
+   * Now uses: DELETE /api/system/empty-repositories
    */
   purgeEmptyRepositories(): Observable<{
     message: string;
@@ -378,95 +462,20 @@ export class RegistryService {
       message: string;
       purged: string[];
       errors: { repo: string; error: string }[];
-    }>(`${this.BASE}/empty-repositories`);
+    }>(`${this.SYSTEM}/empty-repositories`);
   }
 
   // ── Registry ping ──────────────────────────────────────────────────────────
 
   /**
-   * Check registry connectivity.
+   * Check local registry connectivity.
    *
-   * Backend: GET /api/registry/ping
+   * Replaces: GET /api/registry/ping
+   * Now uses: GET /api/system/ping
    */
   ping(): Observable<{ status: string; url: string }> {
     return this.http.get<{ status: string; url: string }>(
-      `${this.BASE}/ping`,
+      `${this.SYSTEM}/ping`,
     );
   }
-
-
-  // ── External V2 tag detail / add / delete ────────────────────────────────
-
-  /**
-   * Fetch detailed metadata for a specific tag in an external V2 registry.
-   *
-   * Backend: GET /api/external/registries/{id}/browse/tags/detail
-   *
-   * Only available for standard V2 registries (not Docker Hub, not GHCR).
-   *
-   * @param registryId  ID of the saved external registry.
-   * @param repository  Repository name, e.g. "myorg/myimage".
-   * @param tag         Tag name, e.g. "latest".
-   */
-  getExternalTagDetail(
-    registryId: string,
-    repository: string,
-    tag: string,
-  ): Observable<ImageDetail> {
-    const params = new HttpParams()
-      .set("repository", repository)
-      .set("tag", tag);
-    return this.http.get<ImageDetail>(
-      `${this.EXTERNAL}/registries/${registryId}/browse/tags/detail`,
-      { params },
-    );
-  }
-
-  /**
-   * Delete a single tag from an external V2 registry.
-   *
-   * Backend: DELETE /api/external/registries/{id}/browse/tags
-   *
-   * @param registryId  ID of the saved external registry.
-   * @param repository  Repository name.
-   * @param tag         Tag name to delete.
-   */
-  deleteExternalTag(
-    registryId: string,
-    repository: string,
-    tag: string,
-  ): Observable<{ success: boolean; message: string }> {
-    const params = new HttpParams()
-      .set("repository", repository)
-      .set("tag", tag);
-    return this.http.delete<{ success: boolean; message: string }>(
-      `${this.EXTERNAL}/registries/${registryId}/browse/tags`,
-      { params },
-    );
-  }
-
-  /**
-   * Create a new tag by copying a manifest in an external V2 registry.
-   *
-   * Backend: POST /api/external/registries/{id}/browse/tags
-   *
-   * @param registryId  ID of the saved external registry.
-   * @param repository  Repository name.
-   * @param sourceTag   Existing tag to copy from.
-   * @param newTag      New tag name to create.
-   */
-  addExternalTag(
-    registryId: string,
-    repository: string,
-    sourceTag: string,
-    newTag: string,
-  ): Observable<{ success: boolean; message: string }> {
-    const params = new HttpParams().set("repository", repository);
-    return this.http.post<{ success: boolean; message: string }>(
-      `${this.EXTERNAL}/registries/${registryId}/browse/tags`,
-      { source_tag: sourceTag, new_tag: newTag },
-      { params },
-    );
-  }
-
 }

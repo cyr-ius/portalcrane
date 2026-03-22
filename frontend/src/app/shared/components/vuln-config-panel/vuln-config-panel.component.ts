@@ -1,5 +1,6 @@
 // frontend/src/app/shared/components/vuln-config-panel/vuln-config-panel.component.ts
 import { Component, computed, inject, OnInit, signal } from "@angular/core";
+import { LOCAL_REGISTRY_SYSTEM_ID } from "../../../core/constants/registry.constants";
 import { RegistryService } from "../../../core/services/registry.service";
 import {
   ScanResult,
@@ -34,7 +35,8 @@ export class VulnConfigPanelComponent implements OnInit {
   severityFilter = signal<string[]>(["HIGH", "CRITICAL"]);
   ignoreUnfixed = signal(false);
 
-  // Registry image/tag lists for the scan dropdowns
+  // Registry image/tag lists for the scan dropdowns.
+  // Uses the unified external registry path via __local__ system entry.
   registryImages = signal<string[]>([]);
   availableTags = signal<string[]>([]);
   loadingImages = signal(false);
@@ -87,10 +89,13 @@ export class VulnConfigPanelComponent implements OnInit {
 
   // ── Registry image/tag loading ────────────────────────────────────────────
 
+  /**
+   * Load the image list from the local registry via the unified __local__ path.
+   * Uses getExternalImages(LOCAL_REGISTRY_SYSTEM_ID) which replaces getImages().
+   */
   loadRegistryImages(): void {
     this.loadingImages.set(true);
-    // getImages() returns PaginatedImages — extract the items array
-    this.registryService.getImages(1, 100).subscribe({
+    this.registryService.getExternalImages(LOCAL_REGISTRY_SYSTEM_ID, 1, 100).subscribe({
       next: (res) => {
         this.registryImages.set(res.items.map((i) => i.name));
         if (res.items.length > 0 && !this.selectedImage()) {
@@ -109,16 +114,18 @@ export class VulnConfigPanelComponent implements OnInit {
     if (!image) return;
 
     this.loadingTags.set(true);
-    // getImageTags() returns { repository, tags } — not a plain string[]
-    this.registryService.getImageTags(image).subscribe({
-      next: (res) => {
-        const tags = res.tags ?? [];
-        this.availableTags.set(tags);
-        if (tags.length > 0) this.selectedTag.set(tags[0]);
-        this.loadingTags.set(false);
-      },
-      error: () => this.loadingTags.set(false),
-    });
+    // Uses getExternalImageTags via __local__ which replaces getImageTags()
+    this.registryService
+      .getExternalImageTags(LOCAL_REGISTRY_SYSTEM_ID, image)
+      .subscribe({
+        next: (res) => {
+          const tags = res.tags ?? [];
+          this.availableTags.set(tags);
+          if (tags.length > 0) this.selectedTag.set(tags[0]);
+          this.loadingTags.set(false);
+        },
+        error: () => this.loadingTags.set(false),
+      });
   }
 
   // ── Manual image scan ─────────────────────────────────────────────────────
@@ -133,7 +140,7 @@ export class VulnConfigPanelComponent implements OnInit {
       const result = await this.trivySvc.scanImage(
         ref,
         this.severityFilter(),
-        this.ignoreUnfixed()
+        this.ignoreUnfixed(),
       );
       this.scanResult.set(result);
     } finally {
@@ -176,5 +183,4 @@ export class VulnConfigPanelComponent implements OnInit {
     if (Number.isNaN(date.getTime())) return value;
     return date.toLocaleString();
   }
-
 }

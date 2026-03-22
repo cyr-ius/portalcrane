@@ -1,32 +1,18 @@
 /**
  * Portalcrane - SyncConfigPanelComponent
  *
- * Allows admins to trigger image synchronisations to/from external registries
- * and view the sync/import job history.
+ * Migration note: loadLocalImages() now uses getExternalImages(LOCAL_REGISTRY_SYSTEM_ID)
+ * instead of the removed getImages() method. The behaviour is identical — the
+ * __local__ system registry entry transparently maps to the embedded registry
+ * via V2Provider.
  *
- * Change (local system registry):
- *   - Uses extRegSvc.browsableUserRegistries for the source/destination selectors.
- *     This excludes the hidden local system registry (__local__) because:
- *     - Export: local IS the source, not a valid destination.
- *     - Import: importing FROM local TO local makes no sense.
- *   The local registry still appears in Images and Staging via browsableRegistries.
- *
- * Refactor (unified card):
- *   - Export (local → external) and Import (external → local) are merged into
- *     a single card controlled by the `syncDirection` signal.
- *   - New `setSyncDirection()` method switches between 'export' and 'import'.
- *   - Both Signal Forms (syncForm / importForm) and all helpers are unchanged.
- *
- * Anti-flicker fix:
- *   - setupSyncPolling() uses a simple timer(0, 3000) without a Subject trigger.
- *
- * NOTE: All <select> values are strings; [formField] works correctly here
- * without manual coercion.
+ * All other logic is unchanged.
  */
 import { Component, DestroyRef, inject, OnInit, signal } from "@angular/core";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { form, FormField, required, submit } from "@angular/forms/signals";
 import { switchMap, timer } from "rxjs";
+import { LOCAL_REGISTRY_SYSTEM_ID } from "../../../core/constants/registry.constants";
 import {
   ExternalRegistry,
   ExternalRegistryService,
@@ -52,18 +38,8 @@ interface ImportFormModel {
 /** Direction of the unified sync form. */
 type SyncDirection = "export" | "import";
 
-/** Terminal statuses — polling stops when all jobs reach one of these. */
-const TERMINAL_STATUSES = new Set([
-  "done",
-  "done_with_errors",
-  "failed",
-  "error",
-  "partial",
-]);
-
 @Component({
   selector: "app-sync-config-panel",
-  // FormField required for [formField] bindings
   imports: [FormField],
   templateUrl: "./sync-config-panel.component.html",
   styleUrl: "./sync-config-panel.component.css",
@@ -76,29 +52,18 @@ export class SyncConfigPanelComponent implements OnInit {
 
   // ── Data ───────────────────────────────────────────────────────────────────
 
-  /**
-   * User-managed external registries excluding the hidden local system entry.
-   * The local registry is never a valid export destination or import source
-   * in the sync panel — it is always the implicit local registry.
-   */
   readonly registries = signal<ExternalRegistry[]>([]);
   readonly syncJobs = signal<SyncJob[]>([]);
   readonly localImages = signal<string[]>([]);
   readonly loadingLocalImages = signal(false);
   readonly startingSync = signal(false);
   readonly startingImport = signal(false);
-  /**
-   * True only during the very first load when syncJobs is empty.
-   * Background polling cycles never set this to true, preventing flicker.
-   */
   readonly loadingSyncJobs = signal(false);
 
   // ── Direction toggle ───────────────────────────────────────────────────────
 
-  /** Controls which sub-form is visible: 'export' (local→ext) or 'import' (ext→local). */
   readonly syncDirection = signal<SyncDirection>("export");
 
-  /** Switch the active direction and reset both forms to their defaults. */
   setSyncDirection(direction: SyncDirection): void {
     this.syncDirection.set(direction);
   }
@@ -131,7 +96,7 @@ export class SyncConfigPanelComponent implements OnInit {
     required(p.sourceId);
   });
 
-  // ─────────────────────────────────────────────────────────────────────────
+  // ── Lifecycle ──────────────────────────────────────────────────────────────
 
   ngOnInit(): void {
     this.loadRegistries();
@@ -139,14 +104,6 @@ export class SyncConfigPanelComponent implements OnInit {
     this.loadLocalImages();
   }
 
-  /**
-   * Set up automatic polling for job status every 3 seconds.
-   *
-   * Anti-flicker design:
-   *   - A simple timer(0, 3000) is used instead of Subject + switchMap.
-   *   - loadingSyncJobs is set to true ONLY when syncJobs is currently empty.
-   *   - syncJobs signal is updated in-place; no full re-render.
-   */
   private setupSyncPolling(): void {
     if (this.syncJobs().length === 0) {
       this.loadingSyncJobs.set(true);
@@ -165,18 +122,12 @@ export class SyncConfigPanelComponent implements OnInit {
       });
   }
 
-  /**
-   * Fetch user-managed external registries excluding the local system entry.
-   * Uses browsableUserRegistries which filters out system=true entries.
-   */
   loadRegistries(): void {
     this.extRegSvc.listRegistries().subscribe({
       next: (regs) => {
         this.extRegSvc.setRegistriesCache(regs);
-        // Use only non-system (user-managed) registries for sync destinations
         const userRegs = this.extRegSvc.browsableUserRegistries();
         this.registries.set(userRegs);
-        // Pre-select first registry when none is selected yet
         if (!this.syncModel().destId && userRegs.length > 0) {
           this.syncModel.update((m) => ({ ...m, destId: userRegs[0].id }));
         }
@@ -194,27 +145,36 @@ export class SyncConfigPanelComponent implements OnInit {
     this.loadLocalImages();
   }
 
-  /** Load local registry images for the sync source dropdown. */
+  /**
+   * Load local registry images for the sync source dropdown.
+   *
+   * Replaces: this.registrySvc.getImages(1, 200)
+   * Now uses: getExternalImages(LOCAL_REGISTRY_SYSTEM_ID, 1, 200)
+   *
+   * The __local__ system entry transparently routes through V2Provider
+   * to the embedded registry — behaviour is identical.
+   */
   private loadLocalImages(): void {
     this.loadingLocalImages.set(true);
-    this.registrySvc.getImages(1, 200).subscribe({
-      next: (data) => {
-        const imgs: string[] = [];
-        for (const item of data.items) {
-          for (const tag of item.tags) {
-            imgs.push(`${item.name}:${tag}`);
+    this.registrySvc
+      .getExternalImages(LOCAL_REGISTRY_SYSTEM_ID, 1, 200)
+      .subscribe({
+        next: (data) => {
+          const imgs: string[] = [];
+          for (const item of data.items) {
+            for (const tag of item.tags) {
+              imgs.push(`${item.name}:${tag}`);
+            }
           }
-        }
-        this.localImages.set(imgs);
-        this.loadingLocalImages.set(false);
-      },
-      error: () => this.loadingLocalImages.set(false),
-    });
+          this.localImages.set(imgs);
+          this.loadingLocalImages.set(false);
+        },
+        error: () => this.loadingLocalImages.set(false),
+      });
   }
 
   // ── Export sync ────────────────────────────────────────────────────────────
 
-  /** Submit the export sync form via Signal Forms. */
   startSync(): void {
     submit(this.syncForm, async (f) => {
       const { source, destId, folder } = f().value();
@@ -241,7 +201,6 @@ export class SyncConfigPanelComponent implements OnInit {
 
   // ── Import ─────────────────────────────────────────────────────────────────
 
-  /** Submit the import form via Signal Forms. */
   startImport(): void {
     submit(this.importForm, async (f) => {
       const { sourceId, image, destFolder } = f().value();
@@ -274,7 +233,6 @@ export class SyncConfigPanelComponent implements OnInit {
 
   // ── Utility helpers ────────────────────────────────────────────────────────
 
-  /** Resolve a registry ID to its display host. */
   getRegistryHost(registryId: string | null): string {
     if (!registryId) return "(local)";
     return this.registries().find((r) => r.id === registryId)?.host ?? registryId;
@@ -290,14 +248,6 @@ export class SyncConfigPanelComponent implements OnInit {
     );
   }
 
-  /**
-   * Build a preview of the destination image reference for the export form.
-   *
-   * Mirrors the backend _rewrite_image_name_for_sync() logic:
-   *   1. dest_folder set → folder + leaf only
-   *   2. No folder, dest_username set → username + leaf (Docker Hub compat)
-   *   3. No folder, no username → preserve the FULL source path
-   */
   getSyncPreview(): string {
     const host = this.getSyncDestHost();
     if (!host) return "";
@@ -311,14 +261,15 @@ export class SyncConfigPanelComponent implements OnInit {
     const [imgPart, tagPart] = source.split(":");
     const leaf = imgPart.split("/").pop() ?? imgPart;
     const tagSuffix = tagPart ? `:${tagPart}` : "";
-    const destPath = folder ? `${folder}/${leaf}` : username ? `${username}/${leaf}` : imgPart;
+    const destPath = folder
+      ? `${folder}/${leaf}`
+      : username
+        ? `${username}/${leaf}`
+        : imgPart;
 
     return `${host}/${destPath}${tagSuffix}`;
   }
 
-  /**
-   * Build a preview of the destination image reference for the import form.
-   */
   getImportPreview(): string {
     const destFolder = this.importModel().destFolder?.trim() ?? "";
     const image = this.importModel().image ?? "";
@@ -332,28 +283,26 @@ export class SyncConfigPanelComponent implements OnInit {
     return destPath + tagSuffix;
   }
 
-  /** Bootstrap badge class for a sync/import job status. */
   syncStatusBadge(status: string): string {
     const map: Record<string, string> = {
-      running:          "badge bg-info-subtle text-info",
-      done:             "badge bg-success-subtle text-success",
+      running: "badge bg-info-subtle text-info",
+      done: "badge bg-success-subtle text-success",
       done_with_errors: "badge bg-warning-subtle text-warning",
-      partial:          "badge bg-warning-subtle text-warning",
-      failed:           "badge bg-danger-subtle text-danger",
-      error:            "badge bg-danger-subtle text-danger",
+      partial: "badge bg-warning-subtle text-warning",
+      failed: "badge bg-danger-subtle text-danger",
+      error: "badge bg-danger-subtle text-danger",
     };
     return map[status] ?? "badge bg-secondary";
   }
 
-  /** Bootstrap icon class for a sync/import job status. */
   syncStatusIcon(status: string): string {
     const map: Record<string, string> = {
-      running:          "bi-arrow-repeat text-info",
-      done:             "bi-check-circle text-success",
+      running: "bi-arrow-repeat text-info",
+      done: "bi-check-circle text-success",
       done_with_errors: "bi-exclamation-circle text-warning",
-      partial:          "bi-exclamation-circle text-warning",
-      failed:           "bi-x-circle text-danger",
-      error:            "bi-x-circle text-danger",
+      partial: "bi-exclamation-circle text-warning",
+      failed: "bi-x-circle text-danger",
+      error: "bi-x-circle text-danger",
     };
     return map[status] ?? "bi-circle";
   }

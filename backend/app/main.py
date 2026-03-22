@@ -1,20 +1,24 @@
 """
 Portalcrane - Docker Registry Management Application
 Main FastAPI application entry point.
+
+Migration note: registry.py router and RegistryService have been removed.
+All registry operations now route through the unified V2 provider layer via
+external_registries.py (for browsing/tag management) and system.py (for
+maintenance operations: GC, ghost repos, copy, ping).
 """
 
 import asyncio
 import logging
+from contextlib import asynccontextmanager
 from pathlib import Path
 from time import perf_counter
 
-from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from .config import get_settings
-from .services.audit_service import log_web_ui_action
 from .routers import (
     about,
     auth,
@@ -24,13 +28,13 @@ from .routers import (
     network,
     oidc,
     personal_tokens,
-    registry,
     registry_proxy,
     staging,
     system,
     trivy,
 )
 from .routers.folders import ensure_root_folder_exists
+from .services.audit_service import log_web_ui_action
 from .services.proxy_service import (
     apply_proxy_to_os_environ,
     apply_syslog_config,
@@ -56,15 +60,11 @@ logging.basicConfig(
 
 
 async def _trivy_db_updater_loop() -> None:
-    """
-    Background task: download the Trivy vulnerability database at startup,
+    """Background task: download the Trivy vulnerability database at startup,
     then refresh it every 24 hours.
 
     Runs inside the uvicorn process so it inherits os.environ directly —
     including any proxy override applied by apply_proxy_to_os_environ().
-    This makes the proxy configured via the Portalcrane UI effective for
-    all Trivy DB downloads without any shell file sourcing or supervisord
-    environment tricks.
     """
     while True:
         logger.info("Trivy DB updater: starting database download...")
@@ -87,11 +87,12 @@ async def _trivy_db_updater_loop() -> None:
         await asyncio.sleep(_TRIVY_DB_REFRESH_INTERVAL)
 
 
-#  ── Lifespan ──────────────────────────────────────────────────────────────────
+# ── Lifespan ──────────────────────────────────────────────────────────────────
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    """Application startup and shutdown handler."""
     proxy_cfg = resolve_proxy_settings(settings)
     apply_proxy_to_os_environ(proxy_cfg)
     apply_syslog_config(resolve_syslog_settings())
@@ -119,6 +120,7 @@ app = FastAPI(
 
 @app.middleware("http")
 async def audit_web_ui_actions(request, call_next):
+    """Audit middleware: log all non-GET API requests."""
     start = perf_counter()
     response = await call_next(request)
     elapsed = perf_counter() - start
@@ -139,7 +141,6 @@ app.include_router(
     personal_tokens.router, prefix="/api/auth", tags=["Personal Access Tokens"]
 )
 app.include_router(oidc.router, prefix="/api/oidc", tags=["OIDC"])
-app.include_router(registry.router, prefix="/api/registry", tags=["Registry"])
 app.include_router(staging.router, prefix="/api/staging", tags=["Staging"])
 app.include_router(dashboard.router, prefix="/api/dashboard", tags=["Dashboard"])
 app.include_router(about.router, prefix="/api", tags=["About"])
