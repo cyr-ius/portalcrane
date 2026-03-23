@@ -5,25 +5,18 @@
  * /backend-unavailable page. Automatically polls /api/health until the backend
  * recovers, then restores the previous route.
  *
- * Key change: a proactive health-check is started immediately at service
- * creation so that a backend that is already down when the app loads is
- * detected even before the first /api/ request is made.
+ * Important UX rule:
+ *   do not proactively redirect during app bootstrap. On a browser refresh,
+ *   the frontend can briefly outpace the API/proxy warm-up and a startup probe
+ *   would flash a false "Connection unavailable" page for a few seconds.
+ *   Instead, the app only enters the unavailable flow after a real API call
+ *   fails and the interceptor explicitly marks the backend as unavailable.
  */
 
 import { HttpClient } from "@angular/common/http";
 import { Injectable, inject, signal } from "@angular/core";
 import { Router } from "@angular/router";
-import {
-  Subscription,
-  catchError,
-  interval,
-  map,
-  of,
-  startWith,
-  switchMap,
-  take,
-  tap,
-} from "rxjs";
+import { Subscription, catchError, interval, map, of, startWith, switchMap } from "rxjs";
 
 @Injectable({ providedIn: "root" })
 export class BackendAvailabilityService {
@@ -39,15 +32,8 @@ export class BackendAvailabilityService {
   private restoreUrl = "/";
 
   /** True while the backend is considered unreachable. */
-  private  _backendUnavailable = signal(false);
+  private readonly _backendUnavailable = signal(false);
   readonly backendUnavailable = this._backendUnavailable.asReadonly();
-
-  constructor() {
-    // Perform a single health-check immediately after the service is created.
-    // This catches the case where the backend is already down when the app
-    // first loads (before any /api/ request is dispatched by the interceptor).
-    this.probeOnStartup();
-  }
 
   // ── Public API ─────────────────────────────────────────────────────────────
 
@@ -75,42 +61,6 @@ export class BackendAvailabilityService {
   }
 
   // ── Private helpers ────────────────────────────────────────────────────────
-
-  /**
-   * Perform startup health-checks with a short grace period.
-   *
-   * This avoids false positives during app bootstrap (proxy warm-up,
-   * backend cold start, transient network hiccup) where the first probe can
-   * fail even though the backend becomes reachable a moment later.
-   */
-  private probeOnStartup(): void {
-    let recoveredDuringGrace = false;
-
-    interval(1200)
-      .pipe(
-        startWith(0),
-        take(3),
-        switchMap(() =>
-          this.http.get<{ status: string }>("/api/health").pipe(
-            map((response) => response.status === "healthy"),
-            catchError(() => of(false)),
-          ),
-        ),
-        tap((isHealthy) => {
-          if (isHealthy) {
-            recoveredDuringGrace = true;
-          }
-        }),
-      )
-      .subscribe({
-        complete: () => {
-          if (!recoveredDuringGrace) {
-            // Backend appears genuinely unavailable after grace probes.
-            this.markBackendUnavailable();
-          }
-        },
-      });
-  }
 
   /**
    * Start a periodic poll against /api/health.

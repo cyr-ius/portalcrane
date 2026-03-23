@@ -12,6 +12,10 @@ import { AuthService } from "../services/auth.service";
 import { BackendAvailabilityService } from "../services/backend-availability.service";
 import { SessionExpiredService } from "../services/session-expired.service";
 
+const isAbortedRequest = (error: HttpErrorResponse): boolean => {
+  return error.status === 0 && error.error instanceof ProgressEvent && error.error.type === "abort";
+};
+
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const auth = inject(AuthService);
   const sessionExpired = inject(SessionExpiredService);
@@ -33,10 +37,11 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
       }
 
       const isBackendDownError = [0, 502, 503, 504].includes(error.status);
+      const isRequestAbort = isAbortedRequest(error);
       const isApiRequest = req.url.includes("/api/");
       const isHealthCheck = req.url.includes("/api/health");
 
-      if (isBackendDownError && isApiRequest && !isHealthCheck) {
+      if (isBackendDownError && !isRequestAbort && isApiRequest && !isHealthCheck) {
         backendAvailability.markBackendUnavailable();
       }
 
