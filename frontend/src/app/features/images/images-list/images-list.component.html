@@ -23,22 +23,11 @@
     </div>
 
     <!-- External-mode badge -->
-    @if (isExternalSource()) {
-      @if (isGithubMode()) {
-        <span
-          class="badge bg-secondary text-white px-3 py-2 d-flex align-items-center gap-2"
-        >
-          <i class="bi bi-github"></i>
-          GitHub Packages — {{ activeSourceLabel() }} — Read-only
-        </span>
-      } @else {
-        <span
-          class="badge bg-info-subtle text-info border border-info-subtle px-3 py-2"
-        >
-          <i class="bi bi-globe me-1"></i>
-          External — {{ activeSourceLabel() }} — Read-only
-        </span>
-      }
+    @if (isExternalSource() && !isDockerHubMode()) {
+      <span class="badge bg-info-subtle text-info px-3 py-2 d-flex align-items-center gap-2">
+        <i class="bi bi-github"></i>
+        {{ activeSourceLabel() }} — Read-only
+      </span>
     }
   </div>
 
@@ -66,8 +55,8 @@
           @for (reg of externalRegistries(); track reg.id) {
             <button
               class="btn btn-sm"
-              [class.btn-secondary]="selectedSource() === reg.id"
-              [class.btn-outline-secondary]="selectedSource() !== reg.id"
+              [class.btn-primary]="selectedSource() === reg.id"
+              [class.btn-outline-primary]="selectedSource() !== reg.id"
               (click)="selectSource(reg.id)"
               [title]="reg.host"
             >
