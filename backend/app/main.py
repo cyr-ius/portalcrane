@@ -95,8 +95,8 @@ async def _trivy_db_updater_loop() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application startup and shutdown handler."""
-    Path(DATA_DIR).mkdir(exist_ok=True)
-    Path(STAGING_DIR).mkdir(exist_ok=True)
+    Path(DATA_DIR).mkdir(parents=True, exist_ok=True)
+    Path(STAGING_DIR).mkdir(parents=True, exist_ok=True)
     proxy_cfg = resolve_proxy_settings(settings)
     apply_proxy_to_os_environ(proxy_cfg)
     apply_syslog_config(resolve_syslog_settings())
