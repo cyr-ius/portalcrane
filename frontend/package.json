@@ -6,7 +6,8 @@
     "start": "ng serve",
     "build": "ng build",
     "build:prod": "ng build --configuration production",
-    "patch": "npm version patch"
+    "patch": "npm version patch",
+    "expose": "ng serve --host 0.0.0.0"
   },
   "private": true,
   "dependencies": {

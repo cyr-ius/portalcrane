@@ -35,7 +35,9 @@
                 "output": "fonts"
               }
             ],
-            "styles": ["src/styles.css"],
+            "styles": [
+              "src/styles.css"
+            ],
             "scripts": []
           },
           "configurations": {
@@ -74,5 +76,8 @@
         }
       }
     }
+  },
+  "cli": {
+    "analytics": false
   }
 }
