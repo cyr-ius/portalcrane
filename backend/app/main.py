@@ -18,7 +18,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from .config import get_settings
+from .config import DATA_DIR, STAGING_DIR, get_settings
 from .routers import (
     about,
     auth,
@@ -32,8 +32,8 @@ from .routers import (
     repositories,
     staging,
     system,
-    trivy,
     transfer,
+    trivy,
 )
 from .routers.folders import ensure_root_folder_exists
 from .services.audit_service import log_web_ui_action
@@ -95,6 +95,8 @@ async def _trivy_db_updater_loop() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application startup and shutdown handler."""
+    Path(DATA_DIR).mkdir(exist_ok=True)
+    Path(STAGING_DIR).mkdir(exist_ok=True)
     proxy_cfg = resolve_proxy_settings(settings)
     apply_proxy_to_os_environ(proxy_cfg)
     apply_syslog_config(resolve_syslog_settings())
