@@ -16,6 +16,9 @@ Architecture decisions:
     get_manifest() and get_image_config() directly.
   - RegistryService receives a V2Provider instance and delegates all V2 calls
     to it; no duplication exists between the two layers.
+  - All methods catch httpx.ConnectError / httpx.TimeoutException so that a
+    temporarily unavailable registry never propagates an unhandled exception
+    up to the ASGI layer.
 """
 
 import asyncio
@@ -49,29 +52,17 @@ _MANIFEST_LIST_TYPES = frozenset(
 
 _DEFAULT_TIMEOUT = 30.0
 
+# Exceptions that indicate the registry is temporarily unreachable.
+_REGISTRY_CONNECT_ERRORS = (httpx.ConnectError, httpx.TimeoutException)
+
 
 class V2Provider(BaseRegistryProvider):
     """OCI Distribution Specification v2 provider.
 
-    Implements the full OCI Distribution Spec:
-      - ping / test_connection / check_catalog
-      - list_repositories (single source of truth for catalog queries)
-      - browse_repositories (pagination wrapper delegating to list_repositories)
-      - browse_tags / get_tags_for_import
-      - get_manifest / delete_manifest / put_manifest (low-level V2 building blocks)
-      - get_image_config (blob fetch)
-      - get_tag_detail (built on get_manifest + get_image_config — no duplication)
-      - add_tag / delete_tag (built on get_manifest + put/delete_manifest)
-      - delete_repository (built on browse_tags + delete_manifest)
-      - get_image_size (built on get_manifest)
-
-    Args:
-        host:       Registry hostname with or without scheme.
-        username:   Optional username for Basic Auth.
-        password:   Optional password for Basic Auth.
-        use_tls:    Use HTTPS when True (default True).
-        tls_verify: Validate TLS certificates when True (default True).
-        timeout:    Default HTTP timeout in seconds for manifest/blob operations.
+    All public methods catch httpx.ConnectError and httpx.TimeoutException
+    and return safe empty values instead of propagating them. This prevents
+    a temporarily unavailable registry (e.g. the embedded local registry
+    managed by supervisord) from crashing the ASGI application with a 500.
     """
 
     def __init__(
@@ -90,7 +81,6 @@ class V2Provider(BaseRegistryProvider):
             use_tls=use_tls,
             tls_verify=tls_verify,
         )
-        # Configurable default timeout used for manifest and blob operations.
         self.timeout = timeout
 
     # ── Provider identity ─────────────────────────────────────────────────────
@@ -107,12 +97,7 @@ class V2Provider(BaseRegistryProvider):
         return None
 
     def _client(self, timeout: float | None = None) -> httpx.AsyncClient:
-        """Create an authenticated async HTTP client for registry calls.
-
-        Args:
-            timeout: Override the instance timeout for this specific client.
-                     Falls back to self.timeout when not provided.
-        """
+        """Create an authenticated async HTTP client for registry calls."""
         headers = {
             "Accept": (
                 "application/vnd.docker.distribution.manifest.v2+json,application/json"
@@ -138,20 +123,11 @@ class V2Provider(BaseRegistryProvider):
             return False
 
     async def test_connection(self) -> dict[str, Any]:
-        """Probe the registry to check reachability and validate credentials.
-
-        Strategy:
-          Step 1 — GET /v2/ without auth to verify the endpoint is alive.
-          Step 2 — GET /v2/ with Basic Auth to validate credentials when supplied.
-
-        Returns:
-            dict with keys: reachable (bool), auth_ok (bool), message (str).
-        """
+        """Probe the registry to check reachability and validate credentials."""
         try:
             async with httpx.AsyncClient(
                 timeout=self.probe_timeout, verify=self.verify, follow_redirects=True
             ) as client:
-                # Step 1: reachability ping (no auth)
                 ping_resp = await client.get(f"{self.base_url}/v2/")
 
                 if ping_resp.status_code not in (200, 401):
@@ -173,7 +149,6 @@ class V2Provider(BaseRegistryProvider):
                         ),
                     }
 
-                # Step 2: credential validation
                 cred_resp = await client.get(
                     f"{self.base_url}/v2/",
                     auth=(self.username, self.password),
@@ -201,11 +176,6 @@ class V2Provider(BaseRegistryProvider):
                         "message": "Authentication failed — invalid username or password",
                     }
 
-                logger.debug(
-                    "test_connection: /v2/ returned %s for host=%s",
-                    cred_resp.status_code,
-                    self.host,
-                )
                 return {
                     "reachable": True,
                     "auth_ok": False,
@@ -236,10 +206,7 @@ class V2Provider(BaseRegistryProvider):
             }
 
     async def check_catalog(self) -> bool:
-        """Return True when /v2/_catalog is accessible (HTTP 200 or 401).
-
-        HTTP 403, 404, or network errors all map to False (not browsable).
-        """
+        """Return True when /v2/_catalog is accessible."""
         try:
             async with httpx.AsyncClient(
                 timeout=self.probe_timeout, verify=self.verify, follow_redirects=True
@@ -268,49 +235,49 @@ class V2Provider(BaseRegistryProvider):
     ) -> list[str]:
         """List all repository names from /v2/_catalog.
 
-        This is the ONLY method that directly calls /v2/_catalog. All other
-        methods that need a repository list (browse_repositories,
-        list_empty_repositories, RegistryService helpers) delegate here.
-
-        Args:
-            n:             Maximum repositories per catalog request.
-            last:          Pagination cursor (last repository name seen).
-            include_empty: When True,  return all repositories including
-                           those with no tags.
-                           When False (default), exclude tag-less repositories
-                           (concurrent tag-presence check performed).
-
-        Returns:
-            list[str]: Repository names.
+        Returns an empty list when the registry is unreachable instead of
+        raising httpx.ConnectError, so callers never receive an unhandled
+        exception when the embedded registry is temporarily down.
         """
         url = f"{self.base_url}/v2/_catalog?n={page_size}"
         if last:
             url += f"&last={last}"
 
-        async with self._client(timeout=self.catalog_timeout) as client:
-            resp = await client.get(url)
-            resp.raise_for_status()
-            repositories: list[str] = resp.json().get("repositories", [])
+        try:
+            async with self._client(timeout=self.catalog_timeout) as client:
+                resp = await client.get(url)
+                resp.raise_for_status()
+                repositories: list[str] = resp.json().get("repositories", [])
+        except _REGISTRY_CONNECT_ERRORS as exc:
+            logger.warning(
+                "list_repositories: registry unreachable host=%s: %s", self.host, exc
+            )
+            return []
+        except Exception as exc:
+            logger.warning("list_repositories: error host=%s: %s", self.host, exc)
+            return []
 
         if include_empty:
             return repositories
 
         # Filter out repositories with no tags (concurrent checks for speed).
-        tags_results: list[list[str]] = await asyncio.gather(
-            *[self.browse_tags(repo) for repo in repositories],
-            return_exceptions=False,
-        )
+        try:
+            tags_results: list[list[str]] = await asyncio.gather(
+                *[self.browse_tags(repo) for repo in repositories],
+                return_exceptions=False,
+            )
+        except Exception as exc:
+            logger.warning(
+                "list_repositories: error filtering empty repos host=%s: %s",
+                self.host,
+                exc,
+            )
+            return repositories
+
         return [repo for repo, tags in zip(repositories, tags_results) if tags]
 
     async def browse_tags(self, repository: str) -> list[str]:
-        """List all tags for a repository via /v2/{repository}/tags/list.
-
-        Args:
-            repository: Repository path, e.g. "myorg/myimage".
-
-        Returns:
-            List of tag name strings; empty list on error or 404.
-        """
+        """List all tags for a repository via /v2/{repository}/tags/list."""
         try:
             async with self._client(timeout=self.tags_timeout) as client:
                 resp = await client.get(f"{self.base_url}/v2/{repository}/tags/list")
@@ -318,6 +285,14 @@ class V2Provider(BaseRegistryProvider):
                     return []
                 resp.raise_for_status()
                 return resp.json().get("tags", []) or []
+        except _REGISTRY_CONNECT_ERRORS as exc:
+            logger.warning(
+                "browse_tags: registry unreachable host=%s repo=%s: %s",
+                self.host,
+                repository,
+                exc,
+            )
+            return []
         except Exception as exc:
             logger.warning(
                 "browse_tags error host=%s repo=%s: %s", self.host, repository, exc
@@ -329,20 +304,7 @@ class V2Provider(BaseRegistryProvider):
         return await self.browse_tags(repository=repository)
 
     async def get_manifest(self, repository: str, reference: str) -> dict[str, Any]:
-        """Fetch a manifest by tag or digest.
-
-        Adds two private metadata keys to the returned dict:
-            _digest         : Docker-Content-Digest response header.
-            _content_length : Content-Length response header (int).
-            _content_type   : Content-Type response header.
-
-        Args:
-            repository: Repository path.
-            reference:  Tag name or digest (sha256:...).
-
-        Returns:
-            dict with manifest payload + private keys; empty dict on 404.
-        """
+        """Fetch a manifest by tag or digest."""
         try:
             async with self._client(timeout=self.timeout) as client:
                 resp = await client.get(
@@ -360,6 +322,15 @@ class V2Provider(BaseRegistryProvider):
                     "application/vnd.docker.distribution.manifest.v2+json",
                 )
                 return manifest
+        except _REGISTRY_CONNECT_ERRORS as exc:
+            logger.warning(
+                "get_manifest: registry unreachable host=%s repo=%s ref=%s: %s",
+                self.host,
+                repository,
+                reference,
+                exc,
+            )
+            return {}
         except Exception as exc:
             logger.warning(
                 "get_manifest error host=%s repo=%s ref=%s: %s",
@@ -371,20 +342,22 @@ class V2Provider(BaseRegistryProvider):
             return {}
 
     async def delete_manifest(self, repository: str, digest: str) -> bool:
-        """Delete an image manifest by digest.
-
-        Args:
-            repository: Repository path.
-            digest:     Manifest digest (sha256:...).
-
-        Returns:
-            True when the delete succeeded (HTTP 200 or 202), False otherwise.
-        """
-        async with self._client(timeout=self.manifest_timeout) as client:
-            resp = await client.delete(
-                f"{self.base_url}/v2/{repository}/manifests/{digest}"
+        """Delete an image manifest by digest."""
+        try:
+            async with self._client(timeout=self.manifest_timeout) as client:
+                resp = await client.delete(
+                    f"{self.base_url}/v2/{repository}/manifests/{digest}"
+                )
+                return resp.status_code in (200, 202)
+        except Exception as exc:
+            logger.warning(
+                "delete_manifest error host=%s repo=%s digest=%s: %s",
+                self.host,
+                repository,
+                digest,
+                exc,
             )
-            return resp.status_code in (200, 202)
+            return False
 
     async def put_manifest(
         self,
@@ -393,37 +366,28 @@ class V2Provider(BaseRegistryProvider):
         manifest: dict[str, Any],
         content_type: str,
     ) -> bool:
-        """Push a manifest to create or update a tag.
-
-        Args:
-            repository:   Repository path.
-            reference:    Tag name or digest.
-            manifest:     Manifest payload as a dict (private _* keys are stripped).
-            content_type: Manifest media type string.
-
-        Returns:
-            True when the push succeeded (HTTP 200 or 201), False otherwise.
-        """
-        # Strip private metadata keys before serialising
+        """Push a manifest to create or update a tag."""
         clean = {k: v for k, v in manifest.items() if not k.startswith("_")}
-        async with self._client(timeout=self.timeout) as client:
-            resp = await client.put(
-                f"{self.base_url}/v2/{repository}/manifests/{reference}",
-                content=_json.dumps(clean),
-                headers={"Content-Type": content_type},
+        try:
+            async with self._client(timeout=self.timeout) as client:
+                resp = await client.put(
+                    f"{self.base_url}/v2/{repository}/manifests/{reference}",
+                    content=_json.dumps(clean),
+                    headers={"Content-Type": content_type},
+                )
+                return resp.status_code in (200, 201)
+        except Exception as exc:
+            logger.warning(
+                "put_manifest error host=%s repo=%s ref=%s: %s",
+                self.host,
+                repository,
+                reference,
+                exc,
             )
-            return resp.status_code in (200, 201)
+            return False
 
     async def get_image_config(self, repository: str, digest: str) -> dict[str, Any]:
-        """Fetch an image configuration blob.
-
-        Args:
-            repository: Repository path.
-            digest:     Config blob digest (sha256:...).
-
-        Returns:
-            dict: Image config payload; empty dict on 404 or error.
-        """
+        """Fetch an image configuration blob."""
         try:
             async with self._client(timeout=self.timeout) as client:
                 resp = await client.get(
@@ -433,6 +397,15 @@ class V2Provider(BaseRegistryProvider):
                     return {}
                 resp.raise_for_status()
                 return resp.json()
+        except _REGISTRY_CONNECT_ERRORS as exc:
+            logger.warning(
+                "get_image_config: registry unreachable host=%s repo=%s digest=%s: %s",
+                self.host,
+                repository,
+                digest,
+                exc,
+            )
+            return {}
         except Exception as exc:
             logger.warning(
                 "get_image_config error host=%s repo=%s digest=%s: %s",
@@ -444,25 +417,13 @@ class V2Provider(BaseRegistryProvider):
             return {}
 
     async def get_tag_detail(self, repository: str, tag: str) -> dict[str, Any]:
-        """Fetch detailed metadata for a specific tag.
-
-        Builds on get_manifest() and get_image_config() — no direct httpx calls.
-        Handles manifest lists (multi-arch) by resolving the first sub-manifest.
-
-        Args:
-            repository: Repository path.
-            tag:        Tag name, e.g. "latest".
-
-        Returns:
-            dict matching the ImageDetail schema; empty dict on 404 / error.
-        """
+        """Fetch detailed metadata for a specific tag."""
         manifest = await self.get_manifest(repository, tag)
         if not manifest:
             return {}
 
         digest = manifest.get("_digest", "")
 
-        # Resolve first sub-manifest for manifest lists (multi-arch images)
         media_type = manifest.get("mediaType", "")
         if media_type in _MANIFEST_LIST_TYPES:
             sub_manifests = manifest.get("manifests", [])
@@ -476,7 +437,6 @@ class V2Provider(BaseRegistryProvider):
         layers: list[dict[str, Any]] = manifest.get("layers", [])
         total_size: int = sum(int(layer.get("size", 0)) for layer in layers)
 
-        # Fetch config blob using get_image_config() — no duplicate httpx call
         config_digest: str = manifest.get("config", {}).get("digest", "")
         config: dict[str, Any] = {}
         if config_digest:
@@ -505,22 +465,9 @@ class V2Provider(BaseRegistryProvider):
     async def add_tag(
         self, repository: str, source_tag: str, new_tag: str
     ) -> dict[str, Any]:
-        """Create a new tag by copying the raw manifest of an existing tag.
-
-        Uses get_manifest() to fetch and put_manifest() to write — no direct
-        httpx calls.  No data transfer occurs; only the manifest reference changes.
-
-        Args:
-            repository: Repository path.
-            source_tag: Existing tag whose manifest will be copied.
-            new_tag:    New tag name to create.
-
-        Returns:
-            dict: {"success": bool, "message": str}
-        """
+        """Create a new tag by copying the raw manifest of an existing tag."""
         try:
             async with self._client(timeout=self.manifest_timeout) as client:
-                # Fetch raw manifest bytes to preserve exact wire representation
                 manifest_resp = await client.get(
                     f"{self.base_url}/v2/{repository}/manifests/{source_tag}",
                     headers={"Accept": _MANIFEST_ACCEPT},
@@ -552,6 +499,16 @@ class V2Provider(BaseRegistryProvider):
                     "success": False,
                     "message": f"Registry returned HTTP {put_resp.status_code}",
                 }
+        except _REGISTRY_CONNECT_ERRORS as exc:
+            logger.warning(
+                "add_tag: registry unreachable host=%s repo=%s src=%s new=%s: %s",
+                self.host,
+                repository,
+                source_tag,
+                new_tag,
+                exc,
+            )
+            return {"success": False, "message": "Registry unreachable"}
         except Exception as exc:
             logger.warning(
                 "add_tag error host=%s repo=%s src=%s new=%s: %s",
@@ -564,18 +521,7 @@ class V2Provider(BaseRegistryProvider):
             return {"success": False, "message": str(exc)}
 
     async def delete_tag(self, repository: str, tag: str) -> dict[str, Any]:
-        """Delete a specific tag by resolving its digest then calling delete_manifest().
-
-        Uses get_manifest() to resolve the digest, then delete_manifest() to
-        remove it.  No direct httpx calls.
-
-        Args:
-            repository: Repository path.
-            tag:        Tag name to delete.
-
-        Returns:
-            dict: {"success": bool, "message": str}
-        """
+        """Delete a specific tag by resolving its digest then calling delete_manifest."""
         manifest = await self.get_manifest(repository, tag)
         if not manifest:
             return {"success": False, "message": f"Tag '{tag}' not found"}
@@ -596,20 +542,14 @@ class V2Provider(BaseRegistryProvider):
         }
 
     async def delete_repository(self, repository: str) -> str | None:
-        """Delete all tags of a repository.
+        """Delete all tags of a repository."""
+        try:
+            tags = await self.browse_tags(repository)
+        except Exception as exc:
+            return f"Failed to list tags: {exc}"
 
-        Uses browse_tags() + delete_manifest() — no direct httpx calls beyond
-        those two building blocks.
-
-        Args:
-            repository: Repository path.
-
-        Returns:
-            None on success; error string describing failures.
-        """
-        tags = await self.browse_tags(repository)
         if not tags:
-            return None  # Nothing to delete — treat as success
+            return None
 
         failed: list[str] = []
 
@@ -627,23 +567,11 @@ class V2Provider(BaseRegistryProvider):
         return f"Failed to delete tags: {', '.join(failed)}" if failed else None
 
     async def get_image_size(self, repository: str, tag: str) -> int:
-        """Calculate total image size in bytes by summing layer sizes.
-
-        Uses get_manifest() — no direct httpx call.
-        Handles manifest lists (multi-arch) by using the first sub-manifest.
-
-        Args:
-            repository: Repository path.
-            tag:        Tag name.
-
-        Returns:
-            Total size in bytes; 0 on error or missing manifest.
-        """
+        """Calculate total image size in bytes by summing layer sizes."""
         manifest = await self.get_manifest(repository, tag)
         if not manifest:
             return 0
 
-        # Resolve first sub-manifest for multi-arch images
         if manifest.get("mediaType") in _MANIFEST_LIST_TYPES:
             manifests = manifest.get("manifests", [])
             if manifests:

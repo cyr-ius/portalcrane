@@ -1,5 +1,13 @@
+"""Portalcrane - Repositories Router.
+
+All endpoints that contact the local or external registry catch
+httpx.ConnectError / httpx.TimeoutException at the router level and return
+a proper HTTP 503 instead of crashing the ASGI application with a 500.
+"""
+
 import logging
 
+import httpx
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 
@@ -32,6 +40,9 @@ from .folders import check_folder_access
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+# Exceptions indicating the registry is temporarily unavailable
+_REGISTRY_ERRORS = (httpx.ConnectError, httpx.TimeoutException)
 
 
 class AddExternalTagRequest(BaseModel):
@@ -72,20 +83,24 @@ async def list_images(
     page_size: int = Query(20, ge=5, le=200),
     _: UserInfo = Depends(require_pull_access),
 ):
-    """
-    List repositories available in an external registry via /v2/_catalog.
-    Results are paginated and optionally filtered by search keyword.
-    """
+    """List repositories available in an external registry via /v2/_catalog."""
     registry = get_registry_by_id(registry_id)
     if not registry:
         raise HTTPException(status_code=404, detail="Registry not found")
 
-    result = await browse_images(
-        registry_id=registry_id,
-        search=search,
-        page=page,
-        page_size=page_size,
-    )
+    try:
+        result = await browse_images(
+            registry_id=registry_id,
+            search=search,
+            page=page,
+            page_size=page_size,
+        )
+    except _REGISTRY_ERRORS as exc:
+        logger.warning("list_images: registry unreachable id=%s: %s", registry_id, exc)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Registry temporarily unreachable",
+        )
     return result
 
 
@@ -100,7 +115,15 @@ async def delete_image(
     if not registry:
         raise HTTPException(status_code=404, detail="Registry not found")
 
-    result = await remove_image(registry_id=registry_id, repository=repository)
+    try:
+        result = await remove_image(registry_id=registry_id, repository=repository)
+    except _REGISTRY_ERRORS as exc:
+        logger.warning("delete_image: registry unreachable id=%s: %s", registry_id, exc)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Registry temporarily unreachable",
+        )
+
     if result.get("failed_tags") and not result.get("deleted_tags"):
         raise HTTPException(
             status_code=502, detail=result.get("message", "Delete failed")
@@ -115,19 +138,24 @@ async def get_tag_detail(
     tag: str = Query(..., description="Tag name, e.g. latest"),
     _: UserInfo = Depends(require_pull_access),
 ):
-    """Return detailed metadata for a specific tag in an external V2 registry.
-
-    Only available for standard V2 registries (not Docker Hub, not GHCR).
-    Returns HTTP 404 when the registry or tag is not found.
-    Returns HTTP 422 when the registry type does not support this operation.
-    """
+    """Return detailed metadata for a specific tag in an external V2 registry."""
     registry = get_registry_by_id(registry_id)
     if not registry:
         raise HTTPException(status_code=404, detail="Registry not found")
 
-    detail = await metadata_by_tag(
-        registry_id=registry_id, repository=repository, tag=tag
-    )
+    try:
+        detail = await metadata_by_tag(
+            registry_id=registry_id, repository=repository, tag=tag
+        )
+    except _REGISTRY_ERRORS as exc:
+        logger.warning(
+            "get_tag_detail: registry unreachable id=%s: %s", registry_id, exc
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Registry temporarily unreachable",
+        )
+
     if not detail:
         raise HTTPException(
             status_code=404, detail="Tag not found or registry type unsupported"
@@ -146,7 +174,14 @@ async def get_tags(
     if not registry:
         raise HTTPException(status_code=404, detail="Registry not found")
 
-    return await browse_tags(registry_id=registry_id, repository=repository)
+    try:
+        return await browse_tags(registry_id=registry_id, repository=repository)
+    except _REGISTRY_ERRORS as exc:
+        logger.warning("get_tags: registry unreachable id=%s: %s", registry_id, exc)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Registry temporarily unreachable",
+        )
 
 
 @router.delete("/{registry_id}/tags")
@@ -156,16 +191,22 @@ async def delete_tag(
     tag: str = Query(..., description="Tag name to delete"),
     _: UserInfo = Depends(require_push_access),
 ):
-    """Delete a single tag from an external V2 registry.
-
-    The registry must have manifest delete enabled.
-    Returns HTTP 400 when the operation fails on the remote registry.
-    """
+    """Delete a single tag from an external V2 registry."""
     registry = get_registry_by_id(registry_id)
     if not registry:
         raise HTTPException(status_code=404, detail="Registry not found")
 
-    result = await remove_tag(registry_id=registry_id, repository=repository, tag=tag)
+    try:
+        result = await remove_tag(
+            registry_id=registry_id, repository=repository, tag=tag
+        )
+    except _REGISTRY_ERRORS as exc:
+        logger.warning("delete_tag: registry unreachable id=%s: %s", registry_id, exc)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Registry temporarily unreachable",
+        )
+
     if not result.get("success"):
         raise HTTPException(
             status_code=400, detail=result.get("message", "Delete tag failed")
@@ -180,22 +221,25 @@ async def add_tag(
     request: AddExternalTagRequest = Body(...),
     _: UserInfo = Depends(require_push_access),
 ):
-    """Create a new tag by copying a manifest in an external V2 registry.
-
-    The source tag manifest is fetched and PUT under the new tag name.
-    No data transfer occurs; only the manifest reference is created.
-    Returns HTTP 400 when the operation fails on the remote registry.
-    """
+    """Create a new tag by copying a manifest in an external V2 registry."""
     registry = get_registry_by_id(registry_id)
     if not registry:
         raise HTTPException(status_code=404, detail="Registry not found")
 
-    result = await append_tag(
-        registry_id=registry_id,
-        repository=repository,
-        source_tag=request.source_tag,
-        new_tag=request.new_tag,
-    )
+    try:
+        result = await append_tag(
+            registry_id=registry_id,
+            repository=repository,
+            source_tag=request.source_tag,
+            new_tag=request.new_tag,
+        )
+    except _REGISTRY_ERRORS as exc:
+        logger.warning("add_tag: registry unreachable id=%s: %s", registry_id, exc)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Registry temporarily unreachable",
+        )
+
     if not result.get("success"):
         raise HTTPException(
             status_code=400, detail=result.get("message", "Add tag failed")
@@ -205,31 +249,38 @@ async def add_tag(
 
 @router.get("/{registry_id}/empty")
 async def list_empty(registry_id: str, _: UserInfo = Depends(require_admin)):
-    """List repositories that have no tags (ghost entries).
-
-    Uses the local V2 provider which delegates to V2Provider.list_empty_repositories().
-    This replaces the former GET /api/registry/empty-repositories endpoint.
-    """
+    """List repositories that have no tags (ghost entries)."""
     registry = get_registry_by_id(registry_id)
     if not registry:
         raise HTTPException(status_code=404, detail="Registry not found")
 
-    empty = await empty_tags(registry_id=registry_id)
+    try:
+        empty = await empty_tags(registry_id=registry_id)
+    except _REGISTRY_ERRORS as exc:
+        logger.warning("list_empty: registry unreachable id=%s: %s", registry_id, exc)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Registry temporarily unreachable",
+        )
+
     return {"empty_repositories": empty, "count": len(empty)}
 
 
 @router.delete("/{registry_id}/empty")
 async def purge_empty(registry_id: str, _: UserInfo = Depends(require_admin)):
-    """Purge ghost repositories directly from the local filesystem.
-
-    Resolves the list from the V2 provider then removes directories on disk.
-    This replaces the former DELETE /api/registry/empty-repositories endpoint.
-    """
+    """Purge ghost repositories directly from the local filesystem."""
     registry = get_registry_by_id(registry_id)
     if not registry:
         raise HTTPException(status_code=404, detail="Registry not found")
 
-    purged, errors = await purge_registry(registry_id=registry_id)
+    try:
+        purged, errors = await purge_registry(registry_id=registry_id)
+    except _REGISTRY_ERRORS as exc:
+        logger.warning("purge_empty: registry unreachable id=%s: %s", registry_id, exc)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Registry temporarily unreachable",
+        )
 
     return {
         "message": f"Purged {len(purged)} empty repositories",
@@ -244,13 +295,7 @@ async def copy_image(
     current_user: UserInfo = Depends(get_current_user),
     settings: Settings = Depends(get_settings),
 ):
-    """Copy an image to a new repository path within the local registry via skopeo.
-
-    Non-admin users must have pull access on the source folder and push access
-    on the destination folder.
-
-    This replaces the former POST /api/registry/images/copy endpoint.
-    """
+    """Copy an image to a new repository path within the local registry via skopeo."""
     _ensure_folder_permission(
         current_user=current_user,
         image_path=request.source_repository,
@@ -286,7 +331,7 @@ async def copy_image(
     return {"message": message}
 
 
-# ── List Sync Jobs ──────────────────────────────────────────────────
+# ── List Sync Jobs ─────────────────────────────────────────────────────────────
 
 
 @router.get("/sync/jobs")
@@ -306,9 +351,7 @@ async def start_sync(
     _: UserInfo = Depends(require_push_access),
     settings: Settings = Depends(get_settings),
 ):
-    """
-    Trigger a sync job (local -> external). Returns job_id immediately.
-    """
+    """Trigger a sync job (local -> external). Returns job_id immediately."""
     try:
         folder = validate_folder_path(request.dest_folder or "")
     except ValueError as exc:
@@ -337,9 +380,7 @@ async def start_import(
     _: UserInfo = Depends(require_push_access),
     settings: Settings = Depends(get_settings),
 ):
-    """
-    Trigger an import job (external -> local). Returns job_id immediately.
-    """
+    """Trigger an import job (external -> local). Returns job_id immediately."""
     try:
         folder = validate_folder_path(request.dest_folder or "")
     except ValueError as exc:

@@ -9,8 +9,10 @@ codebase which routes all registry operations through the unified provider layer
 """
 
 import asyncio
+import logging
 import shutil
 
+import httpx
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
@@ -21,6 +23,7 @@ from ..services.providers import local_provider
 from ..services.providers.external_v2 import V2Provider
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 # ── Pydantic models ───────────────────────────────────────────────────────────
@@ -79,8 +82,22 @@ async def _get_repo_stats(provider: V2Provider, repo: str) -> dict:
 
 
 async def _get_registry_stats(provider: V2Provider) -> dict:
-    """Compute registry-wide statistics using the V2 provider directly."""
-    repositories = await provider.list_repositories()
+    """Compute registry-wide statistics using the V2 provider directly.
+
+    Returns empty stats dict when the registry is unreachable instead of
+    raising an exception, so the dashboard endpoint can still return a
+    partial response with registry_status="unreachable".
+    """
+    try:
+        repositories = await provider.list_repositories()
+    except (httpx.ConnectError, httpx.TimeoutException, Exception) as exc:
+        logger.warning("Registry unreachable while computing dashboard stats: %s", exc)
+        return {
+            "total_images": 0,
+            "total_tags": 0,
+            "total_size_bytes": 0,
+            "largest_image": {"name": "", "size": 0},
+        }
 
     if not repositories:
         return {
@@ -90,10 +107,19 @@ async def _get_registry_stats(provider: V2Provider) -> dict:
             "largest_image": {"name": "", "size": 0},
         }
 
-    repo_results: list[dict] = await asyncio.gather(
-        *[_get_repo_stats(provider, repo) for repo in repositories],
-        return_exceptions=False,
-    )
+    try:
+        repo_results: list[dict] = await asyncio.gather(
+            *[_get_repo_stats(provider, repo) for repo in repositories],
+            return_exceptions=False,
+        )
+    except (httpx.ConnectError, httpx.TimeoutException, Exception) as exc:
+        logger.warning("Registry unreachable while fetching repo stats: %s", exc)
+        return {
+            "total_images": len(repositories),
+            "total_tags": 0,
+            "total_size_bytes": 0,
+            "largest_image": {"name": "", "size": 0},
+        }
 
     total_size = 0
     total_tags = 0
@@ -122,12 +148,21 @@ async def get_dashboard_stats(
 ):
     """Return all dashboard statistics.
 
-    Uses V2Provider directly — no dependency on the removed RegistryService.
+    Handles registry connectivity errors gracefully: when the embedded registry
+    is unreachable (e.g. still starting up or crashed), the endpoint returns a
+    valid response with registry_status="unreachable" and zeroed counters instead
+    of raising a 500 error that would crash the ASGI application.
     """
     provider = local_provider()
 
-    # Registry connectivity and stats
-    registry_status = "ok" if await provider.ping() else "unreachable"
+    # Registry connectivity check — catches ConnectError gracefully
+    try:
+        registry_status = "ok" if await provider.ping() else "unreachable"
+    except (httpx.ConnectError, httpx.TimeoutException, Exception) as exc:
+        logger.warning("Registry ping failed: %s", exc)
+        registry_status = "unreachable"
+
+    # Registry stats — also catches ConnectError internally
     stats = await _get_registry_stats(provider)
 
     # Disk usage
