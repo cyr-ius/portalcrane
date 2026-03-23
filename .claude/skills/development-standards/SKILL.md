@@ -1564,6 +1564,10 @@ trailing-whitespace # Remove trailing spaces
 mixed-line-ending   # Normalize line endings
 ```
 
+Assurez-vous que les fichiers se terminent par un saut de ligne.
+Supprimez les espaces de fin de ligne.
+Normalisez les fins de ligne.
+
 #### 6. **yamllint** - YAML Validation
 
 Valide la structure YAML selon les standards.
@@ -1825,6 +1829,15 @@ export class MyComponent {
 
 ### Backend - FastAPI
 
+**❌ Backtrace dans le retour client**
+```python
+# WRONG - Information leak
+try:
+  function()
+except Exception as exc:
+  return f"Error {exc}"
+```
+
 **❌ Endpoints non-asynchrones:**
 ```python
 # WRONG - Block thread
@@ -2026,6 +2039,8 @@ async def create_user(
 - [ ] Docstrings complètes
 - [ ] Variables d'environnement via `Settings`
 - [ ] Assurez-vous que les fichiers `.py` se terminent par un saut de ligne.
+
+---
 
 **Pour la documentation:**
 
