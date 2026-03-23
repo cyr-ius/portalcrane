@@ -1,52 +1,61 @@
 /**
  * Portalcrane - BackendAvailabilityService
  *
- * Detects when the backend becomes unreachable and redirects the user to the
- * /backend-unavailable page. Automatically polls /api/health until the backend
- * recovers, then restores the previous route.
+ * Continuously monitors the backend health via a background polling loop
+ * that runs from app startup until the browser tab is closed.
  *
- * Key change: a proactive health-check is started immediately at service
- * creation so that a backend that is already down when the app loads is
- * detected even before the first /api/ request is made.
+ * Two-phase polling strategy:
+ *   - NORMAL mode  : poll every 10 s to detect backend going down while the
+ *                    app is running normally (login page or authenticated).
+ *   - RECOVERY mode: poll every 5 s until the backend comes back online,
+ *                    then restore the previous URL.
+ *
+ * Key design rules to avoid navigation side-effects:
+ *   - Only ONE subscription is ever active at a time (unsubscribe before
+ *     creating a new one).
+ *   - Recovery polling does NOT use startWith(0): we wait the first full
+ *     interval before probing again. This avoids an immediate "healthy" read
+ *     right after switchover when the previous probe had already succeeded.
+ *   - Navigation only happens when _backendUnavailable is actually true.
  */
 
 import { HttpClient } from "@angular/common/http";
 import { Injectable, inject, signal } from "@angular/core";
 import { Router } from "@angular/router";
-import {
-  Subscription,
-  catchError,
-  interval,
-  map,
-  of,
-  startWith,
-  switchMap,
-  take,
-  tap,
-} from "rxjs";
+import { Subscription, catchError, interval, map, of, startWith, switchMap } from "rxjs";
+
+/** Routes that should never be saved as the restore URL after recovery. */
+const EXCLUDED_RESTORE_ROUTES = new Set(["/auth/callback"]);
+
+/** Polling interval while the backend is healthy (normal mode). */
+const HEALTHY_POLL_INTERVAL_MS = 10_000;
+
+/** Polling interval while the backend is down (recovery mode). */
+const RECOVERY_POLL_INTERVAL_MS = 5_000;
 
 @Injectable({ providedIn: "root" })
 export class BackendAvailabilityService {
   private readonly http = inject(HttpClient);
   private readonly router = inject(Router);
 
-  private healthCheckSubscription: Subscription | null = null;
+  /** Single active polling subscription — only one runs at a time. */
+  private pollSubscription: Subscription | null = null;
 
   /**
    * URL to restore after the backend comes back online.
-   * Defaults to "/" and is updated the first time the backend goes down.
+   * "/auth" is a valid restore target so the user lands on the login page.
    */
   private restoreUrl = "/";
 
   /** True while the backend is considered unreachable. */
-  private  _backendUnavailable = signal(false);
+  private readonly _backendUnavailable = signal(false);
   readonly backendUnavailable = this._backendUnavailable.asReadonly();
 
   constructor() {
-    // Perform a single health-check immediately after the service is created.
-    // This catches the case where the backend is already down when the app
-    // first loads (before any /api/ request is dispatched by the interceptor).
-    this.probeOnStartup();
+    // Start normal background polling immediately at service creation.
+    // startWith(0) fires the first probe at t=0 so a backend that is already
+    // down when the app loads is detected before the login page renders.
+    this.startNormalPolling();
   }
 
   // ── Public API ─────────────────────────────────────────────────────────────
@@ -54,92 +63,100 @@ export class BackendAvailabilityService {
   /**
    * Called by the HTTP interceptor when a request to /api/ returns a network
    * or gateway error (status 0, 502, 503, 504).
+   * Switches to recovery polling immediately without waiting for the next
+   * normal-mode poll tick.
    */
   markBackendUnavailable(): void {
-    // Persist the current URL so we can navigate back after recovery.
-    if (!this.backendUnavailable()) {
-      const currentUrl = this.router.url;
-      if (currentUrl && currentUrl !== "/backend-unavailable") {
-        this.restoreUrl = currentUrl;
-      }
-    }
+    // Avoid duplicate state changes
+    if (this._backendUnavailable()) return;
 
+    this.saveRestoreUrl();
     this._backendUnavailable.set(true);
 
-    if (this.router.url !== "/backend-unavailable") {
-      this.router.navigateByUrl("/backend-unavailable");
-    }
-
-    // Ensure the recovery poll is running.
-    this.startHealthChecks();
+    // Switch to faster recovery polling (no startWith — wait first interval)
+    this.switchToRecoveryPolling();
   }
 
   // ── Private helpers ────────────────────────────────────────────────────────
 
-  /**
-   * Perform startup health-checks with a short grace period.
-   *
-   * This avoids false positives during app bootstrap (proxy warm-up,
-   * backend cold start, transient network hiccup) where the first probe can
-   * fail even though the backend becomes reachable a moment later.
-   */
-  private probeOnStartup(): void {
-    let recoveredDuringGrace = false;
+  /** Save the current router URL as the restore target. */
+  private saveRestoreUrl(): void {
+    const currentUrl = this.router.url;
+    if (currentUrl && !EXCLUDED_RESTORE_ROUTES.has(currentUrl)) {
+      this.restoreUrl = currentUrl;
+    }
+  }
 
-    interval(1200)
+  /**
+   * Normal-mode polling: detects backend going down during normal operation.
+   *
+   * Uses startWith(0) for the initial probe at app startup.
+   * On failure: saves URL, sets unavailable flag, switches to recovery mode.
+   * On success: does nothing (app continues normally).
+   */
+  private startNormalPolling(): void {
+    this.pollSubscription?.unsubscribe();
+
+    this.pollSubscription = interval(HEALTHY_POLL_INTERVAL_MS)
       .pipe(
         startWith(0),
-        take(3),
         switchMap(() =>
           this.http.get<{ status: string }>("/api/health").pipe(
-            map((response) => response.status === "healthy"),
+            map((r) => r.status === "healthy"),
             catchError(() => of(false)),
           ),
         ),
-        tap((isHealthy) => {
-          if (isHealthy) {
-            recoveredDuringGrace = true;
-          }
-        }),
       )
-      .subscribe({
-        complete: () => {
-          if (!recoveredDuringGrace) {
-            // Backend appears genuinely unavailable after grace probes.
-            this.markBackendUnavailable();
+      .subscribe((isHealthy) => {
+        if (!isHealthy) {
+          // Guard: only act if not already in unavailable state
+          if (!this._backendUnavailable()) {
+            this.saveRestoreUrl();
+            this._backendUnavailable.set(true);
+            this.switchToRecoveryPolling();
           }
-        },
+        }
+        // isHealthy && normal mode → do nothing, keep polling
       });
   }
 
   /**
-   * Start a periodic poll against /api/health.
-   * Only one poll can run at a time — subsequent calls are no-ops.
-   * When the backend recovers, the poll stops and the user is redirected back.
+   * Recovery-mode polling: waits for the backend to come back online.
+   *
+   * Does NOT use startWith(0) to avoid immediately reading a stale "healthy"
+   * result right after the switchover — we deliberately wait one full interval
+   * before the first recovery probe.
+   *
+   * On recovery: clears the unavailable flag, resumes normal polling,
+   * then navigates to the saved restore URL.
    */
-  private startHealthChecks(): void {
-    if (this.healthCheckSubscription) return;
+  private switchToRecoveryPolling(): void {
+    this.pollSubscription?.unsubscribe();
 
-    this.healthCheckSubscription = interval(5000)
+    this.pollSubscription = interval(RECOVERY_POLL_INTERVAL_MS)
       .pipe(
-        startWith(0),
+        // No startWith(0) here — intentional, see JSDoc above
         switchMap(() =>
           this.http.get<{ status: string }>("/api/health").pipe(
-            map((response) => response.status === "healthy"),
+            map((r) => r.status === "healthy"),
             catchError(() => of(false)),
           ),
         ),
       )
       .subscribe((isHealthy) => {
         if (!isHealthy) return;
+
+        // Guard: only navigate if we were actually in unavailable state
+        if (!this._backendUnavailable()) return;
+
+        // Backend recovered — clear flag first to avoid double navigation
         this._backendUnavailable.set(false);
-        this.stopHealthChecks();
+
+        // Resume normal polling before navigating
+        this.startNormalPolling();
+
+        // Restore the previous URL
         this.router.navigateByUrl(this.restoreUrl || "/");
       });
-  }
-
-  private stopHealthChecks(): void {
-    this.healthCheckSubscription?.unsubscribe();
-    this.healthCheckSubscription = null;
   }
 }

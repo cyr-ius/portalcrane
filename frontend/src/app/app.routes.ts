@@ -60,13 +60,6 @@ export const routes: Routes = [
     ],
   },
   {
-    path: "backend-unavailable",
-    loadComponent: () =>
-      import("./features/backend-unavailable/backend-unavailable.component").then(
-        (m) => m.BackendUnavailableComponent,
-      ),
-  },
-  {
     path: "**",
     redirectTo: "",
   },

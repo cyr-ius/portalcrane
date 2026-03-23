@@ -1,7 +1,16 @@
 /**
  * Portalcrane - Auth Interceptor
- * Attaches the Bearer token to every /api/ request and handles 401 responses
- * by clearing the session and showing the session-expired modal.
+ *
+ * Attaches the Bearer token to every /api/ request and handles:
+ *   - 401 responses: clears the session and shows the session-expired modal
+ *   - 0, 502, 503, 504 errors: marks the backend as unavailable
+ *
+ * Change: the backend unavailability detection now applies to ALL /api/ requests,
+ * including those made from the login page (/api/auth/login, /api/health).
+ * Previously the health check request from the login page was excluded because
+ * the BackendAvailabilityService was only initialised inside the layout.
+ * Now that the service is injected at the root level (app.component.ts), all
+ * API errors are correctly propagated.
  */
 
 import { HttpErrorResponse, HttpInterceptorFn } from "@angular/common/http";
@@ -32,6 +41,8 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
         sessionExpired.show();
       }
 
+      // Detect backend down for all /api/ requests except the health check
+      // (the health check is used by the recovery poller itself)
       const isBackendDownError = [0, 502, 503, 504].includes(error.status);
       const isApiRequest = req.url.includes("/api/");
       const isHealthCheck = req.url.includes("/api/health");

@@ -1,7 +1,17 @@
 /**
  * Portalcrane - Layout Component
  *
- * All sidebar / breakpoint / theme logic is unchanged.
+ * Authenticated application shell with collapsible sidebar, navigation,
+ * theme switcher, user zone, and account modal.
+ *
+ * Change: BackendAvailabilityService is no longer injected here for
+ * backend-down detection. The detection is now handled at the root level
+ * (AppComponent) so it also covers the login page. The layout no longer
+ * needs to redirect to /backend-unavailable; AppComponent renders
+ * BackendUnavailableComponent directly when the backend is unreachable.
+ *
+ * SessionExpiredModalComponent is kept here because it must only appear
+ * when the user is in an authenticated session (inside the layout).
  */
 import { Component, inject, OnDestroy, OnInit, signal } from "@angular/core";
 import { RouterLink, RouterLinkActive, RouterOutlet } from "@angular/router";
@@ -24,7 +34,7 @@ const COLLAPSE_BREAKPOINT = 992;
     RouterLinkActive,
     SessionExpiredModalComponent,
     AccountModalComponent,
-    AppLogo
+    AppLogo,
   ],
   templateUrl: "./layout.component.html",
   styleUrl: "./layout.component.css",
@@ -87,5 +97,4 @@ export class LayoutComponent implements OnInit, OnDestroy {
     this.themeService.setTheme(theme);
     this.themePickerOpen.set(false);
   }
-
 }
