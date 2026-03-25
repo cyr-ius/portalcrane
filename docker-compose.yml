@@ -12,7 +12,7 @@ services:
       dockerfile: Dockerfile
     container_name: portalcrane
     ports:
-      - "8080:8080"
+      - "8000:8000"
     environment:
       # ── Registry configuration ────────────────────────────────────────────
       - REGISTRY_PROXY_AUTH_ENABLED=${REGISTRY_PROXY_AUTH_ENABLED:-true}
@@ -29,7 +29,7 @@ services:
       - OIDC_ISSUER=${OIDC_ISSUER:-}
       - OIDC_CLIENT_ID=${OIDC_CLIENT_ID:-}
       - OIDC_CLIENT_SECRET=${OIDC_CLIENT_SECRET:-}
-      - OIDC_REDIRECT_URI=${OIDC_REDIRECT_URI:-http://localhost:8080/auth/callback}
+      - OIDC_REDIRECT_URI=${OIDC_REDIRECT_URI:-http://localhost:8000/auth/callback}
 
       # ── Docker Hub (optional, for staging pulls) ──────────────────────────
       - DOCKERHUB_USERNAME=${DOCKERHUB_USERNAME:-}
@@ -53,7 +53,7 @@ services:
       - portalcrane_data:/var/lib/portalcrane
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
