@@ -7,20 +7,25 @@ Override priority (highest → lowest):
   2. Environment variables     (Settings.vuln_*)
 """
 
+import os
+import logging
 import asyncio
 import json
+import re
 from pathlib import Path
+from datetime import datetime, timezone
+from ..config import DATA_DIR, Settings, TRIVY_SERVER_URL, get_settings
 
-from ..config import DATA_DIR, Settings
+_TRIVY_CACHE_DIR = Path(f"{DATA_DIR}/cache/trivy")
+_TRIVY_DB_METADATA = Path(f"{_TRIVY_CACHE_DIR}/db/metadata.json")
+_OVERRIDE_FILE = Path(DATA_DIR) / "vuln_override.json"
+_TRIVY_BINARY = "/usr/local/bin/trivy"
+_TRIVY_DB_REFRESH_INTERVAL = 86400
 
-TRIVY_SERVER_URL: str = "http://127.0.0.1:4954"
-TRIVY_CACHE_DIR = f"{DATA_DIR}/cache/trivy"
-TRIVY_DB_METADATA = Path(f"{TRIVY_CACHE_DIR}/db/metadata.json")
-TRIVY_BINARY = "/usr/local/bin/trivy"
+settings = get_settings()
+logger = logging.getLogger(__name__)
 
 # ── Override persistence ──────────────────────────────────────────────────────
-
-_OVERRIDE_FILE = Path(DATA_DIR) / "vuln_override.json"
 
 
 def load_vuln_override() -> dict | None:
@@ -100,8 +105,8 @@ async def get_trivy_db_info() -> dict:
         "up_to_date": False,
     }
     try:
-        if TRIVY_DB_METADATA.exists():
-            meta = _json.loads(TRIVY_DB_METADATA.read_text())
+        if _TRIVY_DB_METADATA.exists():
+            meta = _json.loads(_TRIVY_DB_METADATA.read_text())
             last = meta.get("UpdatedAt") or meta.get("DownloadedAt")
             info["last_update"] = last
             info["version"] = meta.get("Version")
@@ -120,11 +125,11 @@ async def get_trivy_db_info() -> dict:
 async def update_trivy_db() -> dict:
     """Force an immediate Trivy DB update."""
     proc = await asyncio.create_subprocess_exec(
-        TRIVY_BINARY,
+        _TRIVY_BINARY,
         "image",
         "--download-db-only",
         "--cache-dir",
-        TRIVY_CACHE_DIR,
+        _TRIVY_CACHE_DIR,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
@@ -197,8 +202,6 @@ def effective_severities(settings: Settings, override: str | None) -> list[str]:
 
 # ── Image scan ────────────────────────────────────────────────────────────────
 
-import re  # noqa: E402
-
 
 def has_explicit_tag_or_digest(image: str) -> bool:
     """Return True when the image reference contains an explicit tag or digest."""
@@ -214,37 +217,10 @@ async def scan_image(
     Scan a local registry image with Trivy.
     Returns a structured result dict compatible with the ScanResult model.
     """
-    from datetime import datetime, timezone
 
-    if severity is None:
-        severity = ["HIGH", "CRITICAL"]
+    stdout, stderr, returncode = await trivy_raw_scan(image, severity, ignore_unfixed)
 
-    sev_str = ",".join(s.upper() for s in severity)
-
-    cmd = [
-        TRIVY_BINARY,
-        "image",
-        "--server",
-        "http://127.0.0.1:4954",
-        "--cache-dir",
-        TRIVY_CACHE_DIR,
-        "--format",
-        "json",
-        "--severity",
-        sev_str,
-    ]
-    if ignore_unfixed:
-        cmd.append("--ignore-unfixed")
-    cmd.append(image)
-
-    proc = await asyncio.create_subprocess_exec(
-        *cmd,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
-    stdout, stderr = await proc.communicate()
-
-    if proc.returncode != 0:
+    if returncode != 0:
         return {
             "success": False,
             "image": image,
@@ -264,3 +240,77 @@ async def scan_image(
         "total": parsed["total"],
         "vulnerabilities": parsed["vulnerabilities"],
     }
+
+
+async def trivy_raw_scan(
+    image: str,
+    severity: list[str] | None = None,
+    ignore_unfixed: bool = False,
+) -> tuple[bytes, bytes, int]:
+    """Trivy scan.
+
+    Return stdout , stderr , returncode
+    """
+    skopeo_env = {**os.environ, **settings.env_proxy}
+
+    if severity is None:
+        severity = ["HIGH", "CRITICAL"]
+
+    sev_str = ",".join(s.upper() for s in severity)
+
+    cmd = [
+        _TRIVY_BINARY,
+        "image",
+        "--server",
+        TRIVY_SERVER_URL,
+        "--cache-dir",
+        _TRIVY_CACHE_DIR,
+        "--format",
+        "json",
+        "--severity",
+        sev_str,
+    ]
+    if ignore_unfixed:
+        cmd.append("--ignore-unfixed")
+    cmd.append(image)
+
+    proc = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        env=skopeo_env,
+    )
+    stdout, stderr = await proc.communicate()
+
+    return stdout, stderr, proc.returncode
+
+
+# ── Trivy DB background task ──────────────────────────────────────────────────
+
+
+async def db_updater_loop() -> None:
+    """Background task: download the Trivy vulnerability database at startup,
+    then refresh it every 24 hours.
+
+    Runs inside the uvicorn process so it inherits os.environ directly —
+    including any proxy override applied by apply_proxy_to_os_environ().
+    """
+    while True:
+        logger.info("Trivy DB updater: starting database download...")
+        try:
+            result = await update_trivy_db()
+            if result["success"]:
+                logger.info("Trivy DB updater: database updated successfully.")
+            else:
+                logger.warning(
+                    "Trivy DB updater: download failed — %s",
+                    result.get("output", "unknown error"),
+                )
+        except Exception as exc:
+            logger.error("Trivy DB updater: unexpected error — %s", exc)
+
+        logger.info(
+            "Trivy DB updater: next refresh in %dh.",
+            _TRIVY_DB_REFRESH_INTERVAL // 3600,
+        )
+        await asyncio.sleep(_TRIVY_DB_REFRESH_INTERVAL)

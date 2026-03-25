@@ -11,11 +11,10 @@ from ..config import REGISTRY_HOST, REGISTRY_URL, Settings, staging_root
 from ..core.jwt import UserInfo, is_admin_user
 from ..routers.folders import check_folder_access
 from ..services.trivy_service import (
-    TRIVY_CACHE_DIR,
-    TRIVY_SERVER_URL,
     effective_severities,
     effective_vuln,
     parse_trivy_output,
+    trivy_raw_scan,
 )
 
 _logger = logging.getLogger(__name__)
@@ -215,32 +214,7 @@ async def run_pull_pipeline(
             jobs_list[job_id]["status"] = JobStatus.VULN_SCANNING
             jobs_list[job_id]["message"] = "Running Trivy vulnerability scan..."
 
-            trivy_cmd = [
-                "trivy",
-                "image",
-                "--format",
-                "json",
-                "--exit-code",
-                "0",
-                "--cache-dir",
-                TRIVY_CACHE_DIR,
-                "--input",
-                str(oci_dir),
-            ]
-
-            if TRIVY_SERVER_URL:
-                trivy_cmd += ["--server", TRIVY_SERVER_URL]
-
-            if severities:
-                trivy_cmd += ["--severity", ",".join(severities)]
-
-            trivy_proc = await asyncio.create_subprocess_exec(
-                *trivy_cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                env=skopeo_env,
-            )
-            trivy_stdout, trivy_stderr = await trivy_proc.communicate()
+            trivy_stdout, _, _ = await trivy_raw_scan(str(oci_dir), severities)
 
             vuln_result = parse_trivy_output(trivy_stdout, severities)
             jobs_list[job_id]["vuln_result"] = vuln_result

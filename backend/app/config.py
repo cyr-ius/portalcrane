@@ -20,6 +20,13 @@ logger = logging.getLogger(__name__)
 DATA_DIR = os.getenv("DATA_DIR", "/var/lib/portalcrane")
 STAGING_DIR = f"{DATA_DIR}/cache/staging"
 
+# Default directory for ui
+FRONTEND_DIR = Path("/app/ui").resolve()
+INDEX_HTML = FRONTEND_DIR / "index.html"
+
+# Container Trivy URL
+TRIVY_SERVER_URL: str = "http://localhost:4954"
+
 # Container registry URL (used for skopeo copy operations)
 REGISTRY_URL: str = "http://localhost:5000"
 REGISTRY_HOST: str = urlparse(REGISTRY_URL).netloc

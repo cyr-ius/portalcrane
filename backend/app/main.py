@@ -18,7 +18,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from .config import DATA_DIR, STAGING_DIR, get_settings
+from .config import DATA_DIR, STAGING_DIR, get_settings, FRONTEND_DIR, INDEX_HTML
 from .routers import (
     about,
     auth,
@@ -43,11 +43,7 @@ from .services.proxy_service import (
     resolve_proxy_settings,
     resolve_syslog_settings,
 )
-from .services.trivy_service import update_trivy_db
-
-_TRIVY_DB_REFRESH_INTERVAL = 86400
-_FRONTEND_DIR = Path("/app/frontend/dist/portalcrane/browser").resolve()
-_INDEX_HTML = _FRONTEND_DIR / "index.html"
+from .services.trivy_service import db_updater_loop
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -56,37 +52,6 @@ logging.basicConfig(
     level=settings.log_level,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
-
-
-# ── Trivy DB background task ──────────────────────────────────────────────────
-
-
-async def _trivy_db_updater_loop() -> None:
-    """Background task: download the Trivy vulnerability database at startup,
-    then refresh it every 24 hours.
-
-    Runs inside the uvicorn process so it inherits os.environ directly —
-    including any proxy override applied by apply_proxy_to_os_environ().
-    """
-    while True:
-        logger.info("Trivy DB updater: starting database download...")
-        try:
-            result = await update_trivy_db()
-            if result["success"]:
-                logger.info("Trivy DB updater: database updated successfully.")
-            else:
-                logger.warning(
-                    "Trivy DB updater: download failed — %s",
-                    result.get("output", "unknown error"),
-                )
-        except Exception as exc:
-            logger.error("Trivy DB updater: unexpected error — %s", exc)
-
-        logger.info(
-            "Trivy DB updater: next refresh in %dh.",
-            _TRIVY_DB_REFRESH_INTERVAL // 3600,
-        )
-        await asyncio.sleep(_TRIVY_DB_REFRESH_INTERVAL)
 
 
 # ── Lifespan ──────────────────────────────────────────────────────────────────
@@ -101,7 +66,7 @@ async def lifespan(app: FastAPI):
     apply_proxy_to_os_environ(proxy_cfg)
     apply_syslog_config(resolve_syslog_settings())
     ensure_root_folder_exists()
-    db_task = asyncio.create_task(_trivy_db_updater_loop())
+    db_task = asyncio.create_task(db_updater_loop())
     yield
     db_task.cancel()
     try:
@@ -168,26 +133,26 @@ async def health_check():
 
 # ── Angular SPA fallback ──────────────────────────────────────────────────────
 
-if _FRONTEND_DIR.exists():
+if FRONTEND_DIR.exists():
     app.mount(
         "/assets",
-        StaticFiles(directory=str(_FRONTEND_DIR / "assets")),
+        StaticFiles(directory=str(FRONTEND_DIR / "assets")),
         name="assets",
     )
     app.mount(
         "/static",
-        StaticFiles(directory=str(_FRONTEND_DIR)),
+        StaticFiles(directory=str(FRONTEND_DIR)),
         name="static",
     )
 
     @app.get("/{full_path:path}", include_in_schema=False)
     async def serve_spa(full_path: str) -> FileResponse:
         """Catch-all: serve index.html so Angular's router can handle navigation."""
-        candidate = (_FRONTEND_DIR / full_path).resolve()
+        candidate = (FRONTEND_DIR / full_path).resolve()
         try:
-            candidate.relative_to(_FRONTEND_DIR)
+            candidate.relative_to(FRONTEND_DIR)
         except ValueError:
             raise HTTPException(status_code=404, detail="Not found")
         if candidate.is_file():
             return FileResponse(candidate)
-        return FileResponse(_INDEX_HTML)
+        return FileResponse(INDEX_HTML)

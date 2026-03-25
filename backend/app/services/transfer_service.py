@@ -30,10 +30,8 @@ from ..config import REGISTRY_HOST, REGISTRY_URL, Settings, staging_root
 from ..services.providers import resolve_provider_from_registry
 from ..services.registries_service import get_registry_by_id
 from ..services.trivy_service import (
-    TRIVY_BINARY,
-    TRIVY_CACHE_DIR,
-    TRIVY_SERVER_URL,
     parse_trivy_output,
+    trivy_raw_scan,
     resolve_vuln_config,
 )
 
@@ -269,30 +267,7 @@ async def _run_transfer_pipeline(
         if do_vuln:
             _update(TransferStatus.SCANNING, "Running Trivy vulnerability scan...", 50)
 
-            trivy_cmd = [
-                TRIVY_BINARY,
-                "image",
-                "--format",
-                "json",
-                "--exit-code",
-                "0",
-                "--cache-dir",
-                TRIVY_CACHE_DIR,
-                "--input",
-                str(oci_dir),
-            ]
-            if TRIVY_SERVER_URL:
-                trivy_cmd += ["--server", TRIVY_SERVER_URL]
-            if severities:
-                trivy_cmd += ["--severity", ",".join(severities)]
-
-            trivy_proc = await asyncio.create_subprocess_exec(
-                *trivy_cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                env=skopeo_env,
-            )
-            trivy_stdout, _ = await trivy_proc.communicate()
+            trivy_stdout, _, _ = await trivy_raw_scan(str(oci_dir), severities)
 
             vuln_result = parse_trivy_output(trivy_stdout, severities)
             _transfer_jobs[job_id]["vuln_result"] = vuln_result

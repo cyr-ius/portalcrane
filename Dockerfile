@@ -77,7 +77,7 @@ RUN --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
 COPY backend/ ./
 
 # Copy built frontend
-COPY --from=frontend-builder /build/frontend/dist/portalcrane/browser ./frontend/dist/portalcrane/browser
+COPY --from=frontend-builder /build/frontend/dist/portalcrane/browser ./ui
 
 # Pass application version from build ARG to runtime ENV for about endpoint
 ARG VERSION
