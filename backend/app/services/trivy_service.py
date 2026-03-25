@@ -258,6 +258,15 @@ async def trivy_raw_scan(
 
     sev_str = ",".join(s.upper() for s in severity)
 
+    image_ref = image
+    # Staging / transfer pipelines scan an OCI layout directory produced by
+    # skopeo ("oci:<path>:latest"). If only the raw path is provided, Trivy
+    # interprets it as an image name and fails to resolve it.
+    if "://" not in image and not image.startswith("oci:"):
+        path_candidate = Path(image)
+        if path_candidate.exists() and path_candidate.is_dir():
+            image_ref = f"oci:{path_candidate}:latest"
+
     cmd = [
         _TRIVY_BINARY,
         "image",
@@ -272,7 +281,7 @@ async def trivy_raw_scan(
     ]
     if ignore_unfixed:
         cmd.append("--ignore-unfixed")
-    cmd.append(image)
+    cmd.append(image_ref)
 
     proc = await asyncio.create_subprocess_exec(
         *cmd,
