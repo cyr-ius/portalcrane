@@ -11,11 +11,7 @@
     }
   },
   "postCreateCommand": "git config --global --add safe.directory ${containerWorkspaceFolder}",
-  // "features": {
-  //   "ghcr.io/devcontainers/features/github-cli:1": {}
-  // },
-  "appPort": [8080],
-
+  "appPort": [8000],
   "customizations": {
     "vscode": {
       "extensions": [
