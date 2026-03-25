@@ -10,7 +10,7 @@ log:
 
 storage:
   filesystem:
-    rootdirectory: /var/lib/portalcrane/registry
+    rootdirectory: ${DATA_DIR}/registry
   delete:
     enabled: true
   maintenance:

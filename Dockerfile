@@ -31,38 +31,47 @@ ARG TRIVY_VERSION=0.69.3
 
 # Install system dependencies (Docker CLI for staging pipeline)
 RUN apk add --no-cache \
+    envsubst \
     supervisor \
     skopeo \
     curl \
     ca-certificates
 
+WORKDIR /usr/src
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+# Copy Supervisor configuration template file
+COPY ./docker/supervisord.conf.tpl supervisord.conf.tpl
+
 # Download and install registry binary
 RUN curl -L https://github.com/distribution/distribution/releases/download/v${REGISTRY_VERSION}/registry_${REGISTRY_VERSION}_linux_amd64.tar.gz \
-    | tar xz -C /usr/local/bin registry
+    | tar xz -C /usr/local/bin registry && \
+    mkdir -p /etc/registry
+
+# Copy configuration template file
+COPY ./docker/registry-config.yml.tpl registry-config.yml.tpl
 
 # Download and install Trivy binary
 RUN curl -L https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz \
     | tar xz -C /usr/local/bin trivy
 
 # Install Python dependencies
-ENV UV_SYSTEM_PYTHON=true \
-    UV_NO_CACHE=true
-
-RUN pip install --no-cache-dir uv && \
-    pip install --no-cache-dir envsubst
-
-# Create Trivy cache directory
-RUN mkdir -p /var/cache/trivy
-
-# Create staging directory
-RUN mkdir -p /tmp/staging
+ENV UV_SYSTEM_PYTHON=true
+ENV UV_NO_CACHE=true
+ENV UV_COMPILE_BYTECODE=1
+ENV UV_LINK_MODE=copy
 
 # Set working directory for application
 WORKDIR /app
 
-# Install dependencies
-COPY backend/requirements.txt ./
-RUN uv pip install --no-cache-dir -r requirements.txt
+ENV VIRTUAL_ENV="/app/.venv"
+ENV PATH="$VIRTUAL_ENV/bin:$PATH"
+
+# Install Python dependencies from requirements
+RUN --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    --mount=type=bind,source=uv.lock,target=uv.lock \
+    uv sync --frozen --no-dev
 
 # Copy Python backend
 COPY backend/ ./
@@ -76,18 +85,14 @@ ENV APP_VERSION=${VERSION}
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
-    CMD curl -f http://localhost:8080/api/health || exit 1
-
-# Copy Supervisor configuration and registry config template
-COPY ./dockerfiles/supervisord.conf /etc/supervisor/supervisord.conf
-COPY ./dockerfiles/registry-config.yml.template /etc/registry/config.yml.template
+    CMD curl -f http://localhost:8000/api/health || exit 1
 
 # Entrypoint generates registry config from env vars then starts supervisord
-COPY ./dockerfiles/docker-entrypoint.sh /docker-entrypoint.sh
-RUN chmod +x /docker-entrypoint.sh
+COPY ./docker/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
 # For staging pipeline (if needed)
 EXPOSE 8000
 
 # Start application
-CMD ["/docker-entrypoint.sh"]
+ENTRYPOINT ["/entrypoint.sh"]

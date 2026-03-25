@@ -7,13 +7,10 @@ if [ "${SECRET_KEY:-change-this-secret-key-in-production}" = "change-this-secret
     echo "[entrypoint] WARNING: SECRET_KEY is not set. Using insecure default." >&2
 fi
 
-# ── Ensure required directories exist ─────────────────────────────────────────
-mkdir -p /var/lib/portalcrane/registry
-mkdir -p /var/lib/portalcrane/cache/trivy
-mkdir -p /var/lib/portalcrane/cache/staging
-mkdir -p /var/log
-
 # ── Generate registry config from template ────────────────────────────────────
+DATA_DIR=${DATA_DIR:-"/var/lib/portalcrane"}
+export DATA_DIR
+
 REGISTRY_HTTP_SECRET=${SECRET_KEY}
 export REGISTRY_HTTP_SECRET
 
@@ -23,21 +20,24 @@ export REGISTRY_LOG_LEVEL
 LOG_LEVEL=${LOG_LEVEL:-INFO}
 export LOG_LEVEL
 
+# ── Ensure required directories exist ──────────────────────────────────────────
+mkdir -p ${DATA_DIR}/registry ${DATA_DIR}/cache/trivy ${DATA_DIR}/cache/staging
+
+# ── Generate configuration files ───────────────────────────────────────────────
+echo "[entrypoint] Generating /etc/supervisord/supervisord.conf..."
+mkdir -p /etc/supervisor
+envsubst < /usr/src/supervisord.conf.tpl > /etc/supervisor/supervisord.conf
+
 echo "[entrypoint] Generating /etc/registry/config.yml..."
 mkdir -p /etc/registry
-envsubst < /etc/registry/config.yml.template > /etc/registry/config.yml
+envsubst < /usr/src/registry-config.yml.tpl > /etc/registry/config.yml
 
-# ── Validate registry config before handing off to supervisord ────────────────
+# ── Validate registry config before handing off to supervisord ─────────────────
 echo "[entrypoint] Validating registry config..."
 if ! /usr/local/bin/registry serve /etc/registry/config.yml --help > /dev/null 2>&1; then
     echo "[entrypoint] Registry binary test:"
     /usr/local/bin/registry --version || true
 fi
-
-# Dry-run: attempt to parse config (registry prints error and exits 1 on bad config)
-echo "[entrypoint] Generated config:"
-cat /etc/registry/config.yml
-echo "---"
 
 # ── Start supervisord ─────────────────────────────────────────────────────────
 echo "[entrypoint] Starting supervisord..."
