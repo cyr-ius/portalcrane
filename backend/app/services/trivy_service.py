@@ -129,7 +129,7 @@ async def update_trivy_db() -> dict:
         "image",
         "--download-db-only",
         "--cache-dir",
-        _TRIVY_CACHE_DIR,
+        str(_TRIVY_CACHE_DIR),
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
@@ -247,9 +247,19 @@ async def trivy_raw_scan(
     severity: list[str] | None = None,
     ignore_unfixed: bool = False,
 ) -> tuple[bytes, bytes, int]:
-    """Trivy scan.
+    """Run a Trivy vulnerability scan and return (stdout, stderr, returncode).
 
-    Return stdout , stderr , returncode
+    Scan mode selection:
+      - Local OCI layout directory (produced by skopeo copy): uses the
+        filesystem scanner via "--input <path>" which avoids the container
+        runtime lookup entirely.  Trivy detects OCI layouts automatically
+        when pointed at a directory containing an "index.json" file.
+      - Regular docker:// image reference (used by the manual scan endpoint):
+        uses the image scanner with "--server" for remote DB access.
+
+    The previous approach of building "oci:<path>:latest" was incorrect —
+    Trivy does not support that URI scheme and falls back to trying Docker /
+    containerd / podman runtimes, which are not available in this container.
     """
     skopeo_env = {**os.environ, **settings.env_proxy}
 
@@ -258,32 +268,68 @@ async def trivy_raw_scan(
 
     sev_str = ",".join(s.upper() for s in severity)
 
-    image_ref = image
-    # Staging / transfer pipelines scan an OCI layout directory produced by
-    # skopeo ("oci:<path>:latest"). If only the raw path is provided, Trivy
-    # interprets it as an image name and fails to resolve it.
-    if "://" not in image and not image.startswith("oci:"):
-        path_candidate = Path(image)
-        if path_candidate.exists() and path_candidate.is_dir():
-            image_ref = f"oci:{path_candidate}:latest"
+    # Determine whether the target is a local OCI layout directory.
+    # skopeo produces directories with an "index.json" at their root;
+    # Trivy's filesystem scanner handles them natively via --input.
+    path_candidate = Path(image)
+    is_oci_dir = path_candidate.is_dir() and (path_candidate / "index.json").exists()
 
-    cmd = [
-        _TRIVY_BINARY,
-        "image",
-        "--server",
-        TRIVY_SERVER_URL,
-        "--cache-dir",
-        _TRIVY_CACHE_DIR,
-        "--format",
-        "json",
-        "--scanners",
-        "vuln",
-        "--severity",
-        sev_str,
-    ]
+    # Also handle the legacy "oci:<path>:tag" format that may be passed by
+    # internal callers — strip the scheme and tag so we get a plain path.
+    if not is_oci_dir and image.startswith("oci:"):
+        # Strip leading "oci:" prefix and trailing ":tag" if present
+        stripped = image[4:]  # remove "oci:"
+        if ":" in stripped:
+            stripped = stripped.rsplit(":", 1)[0]
+        path_candidate = Path(stripped)
+        is_oci_dir = (
+            path_candidate.is_dir() and (path_candidate / "index.json").exists()
+        )
+        if is_oci_dir:
+            image = stripped  # use the plain path for --input
+
+    if is_oci_dir:
+        # OCI layout directory: use filesystem scanner with --input.
+        # This mode does not require a running container runtime.
+        cmd = [
+            _TRIVY_BINARY,
+            "image",
+            "--server",
+            TRIVY_SERVER_URL,
+            "--cache-dir",
+            str(_TRIVY_CACHE_DIR),
+            "--format",
+            "json",
+            "--scanners",
+            "vuln",
+            "--severity",
+            sev_str,
+            "--input",
+            str(path_candidate),
+        ]
+    else:
+        # Regular image reference (docker:// or registry image name).
+        cmd = [
+            _TRIVY_BINARY,
+            "image",
+            "--server",
+            TRIVY_SERVER_URL,
+            "--cache-dir",
+            str(_TRIVY_CACHE_DIR),
+            "--format",
+            "json",
+            "--scanners",
+            "vuln",
+            "--severity",
+            sev_str,
+            image,
+        ]
+
     if ignore_unfixed:
-        cmd.append("--ignore-unfixed")
-    cmd.append(image_ref)
+        # Insert --ignore-unfixed before the final positional argument
+        cmd.insert(-1, "--ignore-unfixed")
+
+    logger.debug("trivy command: %s", " ".join(cmd))
 
     proc = await asyncio.create_subprocess_exec(
         *cmd,
