@@ -267,7 +267,14 @@ async def _run_transfer_pipeline(
         if do_vuln:
             _update(TransferStatus.SCANNING, "Running Trivy vulnerability scan...", 50)
 
-            trivy_stdout, _, _ = await trivy_raw_scan(str(oci_dir), severities)
+            trivy_stdout, trivy_stderr, trivy_returncode = await trivy_raw_scan(
+                str(oci_dir), severities
+            )
+            if trivy_returncode != 0:
+                raise RuntimeError(
+                    "trivy scan failed: "
+                    f"{trivy_stderr.decode(errors='replace')[:500]}"
+                )
 
             vuln_result = parse_trivy_output(trivy_stdout, severities)
             _transfer_jobs[job_id]["vuln_result"] = vuln_result
