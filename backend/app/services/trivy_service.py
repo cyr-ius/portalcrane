@@ -276,6 +276,8 @@ async def trivy_raw_scan(
         _TRIVY_CACHE_DIR,
         "--format",
         "json",
+        "--scanners",
+        "vuln",
         "--severity",
         sev_str,
     ]
