@@ -291,6 +291,13 @@ async def trivy_raw_scan(
     )
     stdout, stderr = await proc.communicate()
 
+    logger.debug(
+        "trivy scan returncode=%s stdout=%r stderr=%r",
+        proc.returncode,
+        stdout.decode()[:500],
+        stderr.decode()[:500],
+    )
+
     return stdout, stderr, proc.returncode
 
 
