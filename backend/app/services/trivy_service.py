@@ -283,15 +283,33 @@ async def trivy_raw_scan(
         cmd.append("--ignore-unfixed")
     cmd.append(image_ref)
 
-    proc = await asyncio.create_subprocess_exec(
-        *cmd,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-        env=skopeo_env,
-    )
-    stdout, stderr = await proc.communicate()
+    async def _run_scan(scan_cmd: list[str]) -> tuple[bytes, bytes, int]:
+        proc = await asyncio.create_subprocess_exec(
+            *scan_cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            env=skopeo_env,
+        )
+        stdout, stderr = await proc.communicate()
+        return stdout, stderr, proc.returncode
 
-    return stdout, stderr, proc.returncode
+    stdout, stderr, returncode = await _run_scan(cmd)
+
+    # In Trivy client/server mode, secret scanning may fail on some OCI scans.
+    # Retry with vuln-only scanners so staging/transfer can proceed with CVE checks.
+    if returncode != 0:
+        stderr_text = stderr.decode(errors="replace")
+        if "secret scanning" in stderr_text.lower():
+            retry_cmd = [*cmd[:-1], "--scanners", "vuln", cmd[-1]]
+            logger.warning(
+                "Trivy scan failed with secret scanning enabled; retrying with "
+                "--scanners vuln only."
+            )
+            retry_stdout, retry_stderr, retry_returncode = await _run_scan(retry_cmd)
+            if retry_returncode == 0:
+                return retry_stdout, retry_stderr, retry_returncode
+
+    return stdout, stderr, returncode
 
 
 # ── Trivy DB background task ──────────────────────────────────────────────────

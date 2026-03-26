@@ -214,7 +214,14 @@ async def run_pull_pipeline(
             jobs_list[job_id]["status"] = JobStatus.VULN_SCANNING
             jobs_list[job_id]["message"] = "Running Trivy vulnerability scan..."
 
-            trivy_stdout, _, _ = await trivy_raw_scan(str(oci_dir), severities)
+            trivy_stdout, trivy_stderr, trivy_returncode = await trivy_raw_scan(
+                str(oci_dir), severities
+            )
+            if trivy_returncode != 0:
+                raise RuntimeError(
+                    "trivy scan failed: "
+                    f"{trivy_stderr.decode(errors='replace')[:500]}"
+                )
 
             vuln_result = parse_trivy_output(trivy_stdout, severities)
             jobs_list[job_id]["vuln_result"] = vuln_result
