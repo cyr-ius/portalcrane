@@ -219,8 +219,7 @@ async def run_pull_pipeline(
             )
             if trivy_returncode != 0:
                 raise RuntimeError(
-                    "trivy scan failed: "
-                    f"{trivy_stderr.decode(errors='replace')[:500]}"
+                    f"trivy scan failed: {trivy_stderr.decode(errors='replace')[:500]}"
                 )
 
             vuln_result = parse_trivy_output(trivy_stdout, severities)
