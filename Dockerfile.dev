@@ -22,6 +22,8 @@ WORKDIR /usr/src
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
+ENV DATA_DIR=/home/vscode/.local/portalcrane
+
 # Download and install registry binary
 RUN curl -L https://github.com/distribution/distribution/releases/download/v${REGISTRY_VERSION}/registry_${REGISTRY_VERSION}_linux_amd64.tar.gz \
     | tar xz -C /usr/local/bin registry
@@ -51,8 +53,8 @@ WORKDIR /workspaces
 
 # Install Python dependencies from requirements
 RUN --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
-    --mount=type=bind,source=uv.lock,target=uv.lock \
-    uv sync --frozen
+    uv pip install -r pyproject.toml && \
+    uv pip install --group dev -r pyproject.toml
 
 # Set the default shell to bash instead of sh
 ENV SHELL=/bin/bash

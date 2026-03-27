@@ -10,7 +10,7 @@
       "TRIVY_VERSION": "0.69.3"
     }
   },
-  "postCreateCommand": "git config --global --add safe.directory ${containerWorkspaceFolder}",
+  "postCreateCommand": "git config --global --add safe.directory ${containerWorkspaceFolder} && pre-commit install",
   "appPort": [8000],
   "customizations": {
     "vscode": {
