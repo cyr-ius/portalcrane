@@ -25,9 +25,9 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 # Download and install registry binary
 RUN curl -L https://github.com/distribution/distribution/releases/download/v${REGISTRY_VERSION}/registry_${REGISTRY_VERSION}_linux_amd64.tar.gz \
     | tar xz -C /usr/local/bin registry
-RUN --mount=type=bind,source=./dockerfiles/registry-config.yml.template,target=/tmp/registry-config.yml.template \
+RUN --mount=type=bind,source=./docker/registry-config.yml.tpl,target=/tmp/registry-config.yml.tpl \
     mkdir -p /etc/registry && \
-    envsubst < /tmp/registry-config.yml.template > /etc/registry/config.yml
+    envsubst < /tmp/registry-config.yml.tpl > /etc/registry/config.yml
 
 
 # Download and install Trivy binary
