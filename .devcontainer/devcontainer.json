@@ -1,36 +1,58 @@
-// For format details, see https://aka.ms/devcontainer.json. For config options, see the
-// README at: https://github.com/devcontainers/templates/tree/main/src/docker-existing-dockerfile
 {
   "name": "Portalcrane Dev",
   "build": {
-    "context": "..",
-    "dockerfile": "../Dockerfile.dev",
+    "context": ".",
+    "dockerfile": "Dockerfile",
     "args": {
       "REGISTRY_VERSION": "3.0.0",
       "TRIVY_VERSION": "0.69.3"
     }
   },
-  "postCreateCommand": "git config --global --add safe.directory ${containerWorkspaceFolder} && pre-commit install",
-  "appPort": [8000],
   "customizations": {
     "vscode": {
       "extensions": [
-        "charliermarsh.ruff",
-        "angular.ng-template",
         "ms-python.python",
         "ms-python.vscode-pylance",
-        "esbenp.prettier-vscode"
+        "charliermarsh.ruff",
+        "angular.ng-template",
+        "ms-vscode.vscode-typescript-next",
+        "esbenp.prettier-vscode",
+        "dbaeumer.vscode-eslint",
+        "ms-azuretools.vscode-docker",
+        "ms-vscode-remote.remote-containers",
+        "streetsidesoftware.code-spell-checker",
+        "streetsidesoftware.code-spell-checker-french",
+        "openai.chatgpt",
+        "humao.rest-client",
+        "editorconfig.editorconfig"
       ],
       "settings": {
-        "python.terminal.activateEnvironment": true,
+        // ── Python ──────────────────────────────────────────────────────
+        "python.defaultInterpreterPath": "${containerWorkspaceFolder}/backend/.venv/bin/python",
+        "python.pythonPath": "${containerWorkspaceFolder}/backend/.venv/bin/python",
+        "python.terminal.activateEnvInCurrentTerminal": true,
         "[python]": {
-          "editor.defaultFormatter": "charliermarsh.ruff"
+          "editor.defaultFormatter": "charliermarsh.ruff",
+          "editor.formatOnSave": true,
+          "editor.formatOnPaste": false,
+          "editor.formatOnType": true,
+          "editor.codeActionsOnSave": {
+            "source.fixAll": "explicit",
+            "source.organizeImports": "explicit"
+          }
+        },
+        "ruff.enable": true,
+        "ruff.organizeImports": true,
+        "[typescript]": {
+          "editor.defaultFormatter": "esbenp.prettier-vscode",
+          "editor.formatOnSave": true
         },
         "[json]": {
           "editor.defaultFormatter": "esbenp.prettier-vscode"
         },
-        "[jsonc]": {
-          "editor.defaultFormatter": "esbenp.prettier-vscode"
+        "[html]": {
+          "editor.defaultFormatter": "esbenp.prettier-vscode",
+          "editor.formatOnSave": true
         },
         "[yaml]": {
           "editor.defaultFormatter": "esbenp.prettier-vscode"
@@ -40,9 +62,21 @@
             "fileMatch": ["homeassistant/components/*/manifest.json"],
             "url": "${containerWorkspaceFolder}/script/json_schemas/manifest_schema.json"
           }
-        ]
+        ],
+        // ── Général ──────────────────────────────────────────────────────
+        "editor.tabSize": 2,
+        "editor.insertSpaces": true,
+        "files.eol": "\n",
+        "files.insertFinalNewline": true,
+        "files.trimTrailingWhitespace": true
       }
     }
+  },
+  "postCreateCommand": "bash ${containerWorkspaceFolder}/.devcontainer/scripts/post-create.sh ${containerWorkspaceFolder}",
+  "appPort": [8000],
+  "portsAttributes": {
+    "4200": { "label": "Angular Frontend", "onAutoForward": "notify" },
+    "8000": { "label": "FastAPI Backend", "onAutoForward": "notify" }
   },
   "containerEnv": {
     "NG_FORCE_TTY": "false"

@@ -47,6 +47,7 @@ services:
       # - NO_PROXY=localhost,127.0.0.1
 
       # ── Logging ───────────────────────────────────────────────────────────
+      - SWAGGER_ENABLE=${SWAGGER_ENABLE:-false}
       - LOG_LEVEL=${LOG_LEVEL:-DEBUG}
 
     volumes:
@@ -58,5 +59,35 @@ services:
       timeout: 10s
       retries: 3
 
+
+  # registry:
+  #   image: registry:3
+  #   container_name: portalcrane-registry
+  #   ports:
+  #     - "5000:5000"
+  #   environment:
+  #     - REGISTRY_STORAGE_DELETE_ENABLED=true
+  #     - REGISTRY_HTTP_SECRET=${REGISTRY_HTTP_SECRET:-registry-secret}
+  #     - OTEL_TRACES_EXPORTER=none
+  #     - OTEL_METRICS_EXPORTER=none
+  #     - OTEL_LOGS_EXPORTER=none
+  #   volumes:
+  #     - registry_data:/var/lib/registry
+  #   restart: unless-stopped
+  #   healthcheck:
+  #     test:
+  #       [
+  #         "CMD",
+  #         "wget",
+  #         "--quiet",
+  #         "--tries=1",
+  #         "--spider",
+  #         "http://localhost:5000/v2/",
+  #       ]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+
 volumes:
+  # registry_data:
   portalcrane_data:

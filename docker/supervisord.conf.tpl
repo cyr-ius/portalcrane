@@ -37,7 +37,7 @@ stderr_logfile_maxbytes=0
 
 ; Portalcrane FastAPI backend
 [program:portalcrane]
-command=uvicorn app.main:app --host 0.0.0.0  --port 8000 --workers 2
+command=uvicorn backend.app.main:app --host 0.0.0.0  --port 8000
 directory=/app
 autostart=true
 autorestart=true

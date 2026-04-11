@@ -79,6 +79,9 @@ class Settings(BaseSettings):
     # Audit retention
     audit_max_events: int = 100
 
+    # Swagger UI
+    SWAGGER_ENABLE: bool = False
+
     # ── Internal helpers ─────────────────────────────────────────────────────────
 
     class Config:
@@ -144,3 +147,6 @@ def get_settings() -> Settings:
 def staging_root() -> Path:
     """Return the resolved absolute path to the staging root directory."""
     return Path(STAGING_DIR).resolve()
+
+
+app_settings = get_settings()

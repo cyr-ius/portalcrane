@@ -1,12 +1,26 @@
 ---
 repos:
+  # ── General ──────────────────────────────────────────────────────────────
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+        exclude: "^(backend/|node_modules/|.devcontainer/)"
+      - id: check-merge-conflict
+      - id: detect-private-key
+      - id: mixed-line-ending
+        args: [--fix=lf]
+  # ── Python: Ruff (formatter + linter + import sort) ──────────────────────────────────
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.14.14
     hooks:
-      - id: ruff-check
-        args:
-          - --fix
+      - id: ruff
+        args: [--fix]
       - id: ruff-format
+  # ── Codespell: Common typos and misspellings ───────────────────────────────────────
   - repo: https://github.com/codespell-project/codespell
     rev: v2.4.1
     hooks:
@@ -16,25 +30,8 @@ repos:
           - --skip="./.*,*.csv,*.json"
           - --quiet-level=2
         exclude_types: [csv, json]
-        exclude: (.claude)
-  - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v6.0.0
-    hooks:
-      - id: check-json
-        exclude: (.vscode|.devcontainer)
-      - id: check-yaml
-        args: [--unsafe]
-      - id: check-toml
-      - id: check-added-large-files
-      - id: end-of-file-fixer
-      - id: trailing-whitespace
-      - id: mixed-line-ending
-
-  - repo: https://github.com/adrienverge/yamllint.git
-    rev: v1.38.0
-    hooks:
-      - id: yamllint
-        exclude: (.github|.vscode|.devcontainer|docker-compose.yml)
+        exclude: .devcontainer|.claude|.github|.vscode|node_modules|dist|build|i18n|locales
+  # ── TypeScript / Angular: Prettier ───────────────────────────────────────
   - repo: https://github.com/rbubley/mirrors-prettier
     rev: v3.6.2
     hooks:
@@ -42,7 +39,8 @@ repos:
         additional_dependencies:
           - prettier@3.6.2
           - prettier-plugin-sort-json@4.2.0
-        types: [html, json, markdown, yaml]
+        types_or: [javascript, html, css, scss, json, yaml, markdown]
+  # ── Python typing update (optional, manual) ───────────────────────────────────────
   - repo: https://github.com/cdce8p/python-typing-update
     rev: v0.8.1
     hooks:

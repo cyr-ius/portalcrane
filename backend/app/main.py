@@ -15,10 +15,12 @@ from pathlib import Path
 from time import perf_counter
 
 from fastapi import FastAPI, HTTPException
+from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
 
-from .config import DATA_DIR, STAGING_DIR, get_settings, FRONTEND_DIR, INDEX_HTML
+from .config import DATA_DIR, STAGING_DIR, app_settings
 from .routers import (
     about,
     auth,
@@ -45,24 +47,90 @@ from .services.proxy_service import (
 )
 from .services.trivy_service import db_updater_loop
 
-logger = logging.getLogger(__name__)
-settings = get_settings()
+JSDELIVR = "https://cdn.jsdelivr.net"
 
+logger = logging.getLogger(__name__)
 logging.basicConfig(
-    level=settings.log_level,
+    level=app_settings.log_level,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
 
+# Resolve once at module load — avoids repeated filesystem calls per request.
+project_root = Path(__file__).resolve().parents[2]
+frontend_dist = (project_root / "frontend").resolve()
+frontend_index = frontend_dist / "index.html"
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Add security headers to every HTTP response."""
+
+    # Build CSP once at class level — one directive per list entry, auditable.
+    _CSP_DIRECTIVES: list[str] = [
+        "default-src 'self'",
+        f"script-src 'self' 'unsafe-inline' {JSDELIVR}",  # Angular requires unsafe-inline
+        f"style-src 'self' 'unsafe-inline' {JSDELIVR}",  # Bootstrap inline styles
+        "img-src 'self' data: https:",  # logos, QR codes base64
+        "font-src 'self' data:",  # Bootstrap Icons embedded font
+        f"connect-src 'self' {app_settings.oidc_issuer}",  # API calls + Azure endpoints
+        "worker-src 'self'",  # Angular Service Worker (PWA)
+        "frame-ancestors 'none'",  # replaces X-Frame-Options
+    ]
+    _CSP: str = "; ".join(_CSP_DIRECTIVES) + ";"
+
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Permissions-Policy"] = (
+            "camera=(), microphone=(), geolocation=(), payment=()"
+        )
+        response.headers["Strict-Transport-Security"] = (
+            "max-age=31536000; includeSubDomains"
+        )
+        response.headers["Content-Security-Policy"] = self._CSP
+        return response
+
+
+def _resolve_safe_path(full_path: str) -> Path | None:
+    """Resolve a URL path to a filesystem path safely."""
+    # Reject empty paths and dot-only segments immediately.
+    stripped = full_path.strip()
+    if not stripped or stripped in (".", ".."):
+        return None
+
+    # Resolve to absolute path — collapses all '..' and symlinks.
+    candidate = (frontend_dist / stripped).resolve()
+
+    # The candidate must be strictly inside frontend_dist (not equal to it).
+    # is_relative_to() returns True even when candidate == frontend_dist,
+    # so we add an explicit equality check to block directory root access.
+    if candidate == frontend_dist:
+        return None
+
+    if not candidate.is_relative_to(frontend_dist):
+        logger.warning(
+            "Path traversal attempt blocked: raw=%r resolved=%s",
+            full_path,
+            candidate,
+        )
+        return None
+
+    # Only serve regular files, never directories or special files.
+    if not candidate.is_file():
+        return None
+
+    return candidate
+
 
 # ── Lifespan ──────────────────────────────────────────────────────────────────
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application startup and shutdown handler."""
     Path(DATA_DIR).mkdir(parents=True, exist_ok=True)
     Path(STAGING_DIR).mkdir(parents=True, exist_ok=True)
-    proxy_cfg = resolve_proxy_settings(settings)
+    proxy_cfg = resolve_proxy_settings(app_settings)
     apply_proxy_to_os_environ(proxy_cfg)
     apply_syslog_config(resolve_syslog_settings())
     ensure_root_folder_exists()
@@ -76,15 +144,16 @@ async def lifespan(app: FastAPI):
     logger.info("Trivy DB updater task stopped.")
 
 
-# ── FastAPI app ───────────────────────────────────────────────────────────────
-
-
 app = FastAPI(
     title="Portalcrane API",
     description="Docker Registry Management API",
     version="1.0.0",
     lifespan=lifespan,
+    docs_url=None,
+    redoc_url=None,
+    openapi_url="/api/openapi.json" if app_settings.SWAGGER_ENABLE else None,
 )
+app.add_middleware(SecurityHeadersMiddleware)
 
 
 @app.middleware("http")
@@ -97,7 +166,7 @@ async def audit_web_ui_actions(request, call_next):
     await log_web_ui_action(
         request=request,
         status_code=response.status_code,
-        settings=settings,
+        settings=app_settings,
         elapsed_s=elapsed,
     )
     return response
@@ -122,7 +191,15 @@ app.include_router(transfer.router, prefix="/api/transfer", tags=["Transfer"])
 app.include_router(trivy.router, prefix="/api/trivy", tags=["Trivy"])
 
 
-# ── Health check ──────────────────────────────────────────────────────────────
+@app.get("/api/docs", include_in_schema=False)
+async def swagger_ui():
+    if not app_settings.SWAGGER_ENABLE:
+        raise HTTPException(status_code=404, detail="Not Found")
+    return get_swagger_ui_html(
+        openapi_url="/api/openapi.json",
+        title="Employee Verified ID API",
+        swagger_favicon_url="/favicon.ico",
+    )
 
 
 @app.get("/api/health")
@@ -133,26 +210,24 @@ async def health_check():
 
 # ── Angular SPA fallback ──────────────────────────────────────────────────────
 
-if FRONTEND_DIR.exists():
-    app.mount(
-        "/assets",
-        StaticFiles(directory=str(FRONTEND_DIR / "assets")),
-        name="assets",
-    )
-    app.mount(
-        "/static",
-        StaticFiles(directory=str(FRONTEND_DIR)),
-        name="static",
-    )
 
-    @app.get("/{full_path:path}", include_in_schema=False)
-    async def serve_spa(full_path: str) -> FileResponse:
-        """Catch-all: serve index.html so Angular's router can handle navigation."""
-        candidate = (FRONTEND_DIR / full_path).resolve()
-        try:
-            candidate.relative_to(FRONTEND_DIR)
-        except ValueError:
-            raise HTTPException(status_code=404, detail="Not found")
-        if candidate.is_file():
-            return FileResponse(candidate)
-        return FileResponse(INDEX_HTML)
+@app.get("/{full_path:path}", include_in_schema=False)
+async def serve_spa(full_path: str) -> FileResponse:
+    """
+    Serve Angular static files with path traversal protection.
+
+    Requests for existing static assets (JS, CSS, images) are served directly.
+    All other paths fall back to index.html to support client-side SPA routing.
+    Unknown or unsafe paths also fall back to index.html rather than 404-ing,
+    letting the Angular router handle the error page.
+    """
+    if not frontend_index.is_file():
+        logger.error("SPA index.html not found at %s", frontend_index)
+        raise HTTPException(status_code=503, detail="Frontend not available.")
+
+    safe = _resolve_safe_path(full_path)
+    if safe is not None:
+        return FileResponse(safe)
+
+    # SPA fallback: Angular router handles unknown client-side routes.
+    return FileResponse(frontend_index)

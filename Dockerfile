@@ -5,12 +5,11 @@ WORKDIR /build/frontend
 
 # Install dependencies
 COPY frontend/package.json ./
-RUN npm install --legacy-peer-deps
+RUN npm install
 
 # Copy source and build
 COPY frontend/ ./
-RUN npm run build:prod
-
+RUN npm run build
 
 # ─── Stage 2: Final container ─────────────────────────────────────────────
 FROM python:3.14-alpine
@@ -37,12 +36,23 @@ RUN apk add --no-cache \
     curl \
     ca-certificates
 
-WORKDIR /usr/src
-
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
+ENV UV_NO_CACHE=true
+ENV UV_COMPILE_BYTECODE=1
+ENV UV_LINK_MODE=copy
+ENV UV_PROJECT_ENVIRONMENT=/app/.venv
+ENV PYTHONUNBUFFERED=1
+ENV PATH="$UV_PROJECT_ENVIRONMENT/bin:$PATH"
+
+WORKDIR /app
+
+RUN --mount=type=bind,source=backend/pyproject.toml,target=pyproject.toml \
+    --mount=type=bind,source=backend/uv.lock,target=uv.lock \
+    uv sync --frozen --no-dev
+
 # Copy Supervisor configuration template file
-COPY ./docker/supervisord.conf.tpl supervisord.conf.tpl
+COPY ./docker/supervisord.conf.tpl /usr/src/supervisord.conf.tpl
 
 # Download and install registry binary
 RUN curl -L https://github.com/distribution/distribution/releases/download/v${REGISTRY_VERSION}/registry_${REGISTRY_VERSION}_linux_amd64.tar.gz \
@@ -50,34 +60,22 @@ RUN curl -L https://github.com/distribution/distribution/releases/download/v${RE
     mkdir -p /etc/registry
 
 # Copy configuration template file
-COPY ./docker/registry-config.yml.tpl registry-config.yml.tpl
+COPY ./docker/registry-config.yml.tpl /usr/src/registry-config.yml.tpl
 
 # Download and install Trivy binary
 RUN curl -L https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz \
     | tar xz -C /usr/local/bin trivy
 
-# Install Python dependencies
-ENV UV_SYSTEM_PYTHON=true
-ENV UV_NO_CACHE=true
-ENV UV_COMPILE_BYTECODE=1
-ENV UV_LINK_MODE=copy
-
-# Set working directory for application
-WORKDIR /app
-
-ENV VIRTUAL_ENV="/app/.venv"
-ENV PATH="$VIRTUAL_ENV/bin:$PATH"
-
 # Install Python dependencies from requirements
-RUN --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
-    --mount=type=bind,source=uv.lock,target=uv.lock \
+RUN --mount=type=bind,source=backend/pyproject.toml,target=pyproject.toml \
+    --mount=type=bind,source=backend/uv.lock,target=uv.lock \
     uv sync --frozen --no-dev
 
-# Copy Python backend
-COPY backend/ ./
-
 # Copy built frontend
-COPY --from=frontend-builder /build/frontend/dist/portalcrane/browser ./ui
+COPY --from=frontend-builder /build/frontend/dist/portalcrane/browser ./frontend
+
+# Copy Python backend
+COPY backend/ ./backend
 
 # Pass application version from build ARG to runtime ENV for about endpoint
 ARG VERSION
@@ -93,6 +91,9 @@ RUN chmod +x /entrypoint.sh
 
 # For staging pipeline (if needed)
 EXPOSE 8000
+
+# Volumes for registry data and config (if you want to persist or customize config)
+VOLUME [ "/var/lib/portalcrane" ]
 
 # Start application
 ENTRYPOINT ["/entrypoint.sh"]

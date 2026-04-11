@@ -25,28 +25,33 @@
             "tsConfig": "tsconfig.app.json",
             "assets": [
               {
-                "glob": "**/*",
-                "input": "src/assets",
-                "output": "assets"
+                "glob": "favicon.ico",
+                "input": "src/",
+                "output": "/"
               },
               {
                 "glob": "**/*.woff2",
                 "input": "node_modules/bootstrap-icons/font/fonts",
                 "output": "fonts"
+              },
+              {
+                "glob": "**/*",
+                "input": "public"
               }
             ],
             "styles": [
+              "node_modules/swagger-ui-dist/swagger-ui.css",
               "src/styles.css"
             ],
-            "scripts": []
+            "scripts": ["node_modules/swagger-ui-dist/swagger-ui-bundle.js"]
           },
           "configurations": {
             "production": {
               "budgets": [
                 {
                   "type": "initial",
-                  "maximumWarning": "500kB",
-                  "maximumError": "1MB"
+                  "maximumWarning": "2MB",
+                  "maximumError": "3MB"
                 }
               ],
               "outputHashing": "all"
