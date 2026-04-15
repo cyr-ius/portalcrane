@@ -11,7 +11,7 @@ dependencies = [
     "passlib[bcrypt]==1.7.4",
     "pydantic-settings==2.13.1",
     "python-jose[cryptography]==3.5.0",
-    "python-multipart==0.0.22",
+    "python-multipart==0.0.26",
 ]
 
 [tool.setuptools]
