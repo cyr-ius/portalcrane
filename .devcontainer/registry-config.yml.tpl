@@ -10,7 +10,7 @@ log:
 
 storage:
   filesystem:
-    rootdirectory: /home/vscode/data/registry
+    rootdirectory: /workspaces/portalcrane/.data_env/registry
   delete:
     enabled: true
   maintenance:
