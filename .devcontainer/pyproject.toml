@@ -15,11 +15,11 @@ dependencies = [
     "python-multipart"
 ]
 
-[project.optional-dependencies]
+[dependency-groups]
 dev = [
-    "ruff",
-    "mypy",
-    "pre-commit",
+    "mypy>=1.19.1",
+    "prek>=0.3.9",
+    "ruff>=0.15.8",
 ]
 
 [tool.setuptools]

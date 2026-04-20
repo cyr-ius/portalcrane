@@ -5,9 +5,13 @@
     "dockerfile": "Dockerfile",
     "args": {
       "REGISTRY_VERSION": "3.0.0",
-      "TRIVY_VERSION": "0.69.3"
+      "TRIVY_VERSION": "0.69.3",
+      "WORKSPACE": "${containerWorkspaceFolder}"
     }
   },
+  "mounts": [
+    "source=${env:HOME}/.claude,target=/home/vscode/.claude,type=bind,consistency=cached"
+  ],
   "customizations": {
     "vscode": {
       "extensions": [
@@ -22,7 +26,7 @@
         "ms-vscode-remote.remote-containers",
         "streetsidesoftware.code-spell-checker",
         "streetsidesoftware.code-spell-checker-french",
-        "openai.chatgpt",
+        "anthropic.claude-code",
         "humao.rest-client",
         "editorconfig.editorconfig"
       ],
@@ -72,15 +76,16 @@
       }
     }
   },
-  "postCreateCommand": "bash ${containerWorkspaceFolder}/.devcontainer/scripts/post-create.sh ${containerWorkspaceFolder}",
   "appPort": [8000],
   "portsAttributes": {
     "4200": { "label": "Angular Frontend", "onAutoForward": "notify" },
     "8000": { "label": "FastAPI Backend", "onAutoForward": "notify" }
   },
   "containerEnv": {
+    "DATA_DIR": "${containerWorkspaceFolder}/.data_env", // (db, configuration files, etc...)
     "NG_FORCE_TTY": "false"
-  }
+  },
+  "postCreateCommand": "bash .devcontainer/scripts/post-create.sh ${containerWorkspaceFolder}"
 
   // Uncomment to connect as an existing user other than the container default. More info: https://aka.ms/dev-containers-non-root.
   //"remoteUser": "devcontainer"

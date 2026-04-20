@@ -19,5 +19,30 @@ packages = ["backend"]
 
 [dependency-groups]
 dev = [
-    "pre-commit>=4.5.1",
+    "mypy>=1.19.1",
+    "prek>=0.3.9",
+    "ruff>=0.15.8",
 ]
+
+# ── Ruff (linter PEP8) ──────────────────────────────────────────────────────
+[tool.ruff]
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+ignore = ["E501"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+
+# ── Ruff — format ────────────────────────────────────────────────────────────
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
+
+# ── Mypy (type checking) ─────────────────────────────────────────────────────
+[tool.mypy]
+python_version = "3.14"
+strict = true
+ignore_missing_imports = true
