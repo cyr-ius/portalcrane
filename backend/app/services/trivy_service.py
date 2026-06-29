@@ -7,14 +7,15 @@ Override priority (highest → lowest):
   2. Environment variables     (Settings.vuln_*)
 """
 
-import os
-import logging
 import asyncio
 import json
+import logging
+import os
 import re
+from datetime import UTC, datetime
 from pathlib import Path
-from datetime import datetime, timezone
-from ..config import DATA_DIR, Settings, TRIVY_SERVER_URL, get_settings
+
+from ..config import DATA_DIR, TRIVY_SERVER_URL, Settings, get_settings
 
 _TRIVY_CACHE_DIR = Path(f"{DATA_DIR}/cache/trivy")
 _TRIVY_DB_METADATA = Path(f"{_TRIVY_CACHE_DIR}/db/metadata.json")
@@ -96,7 +97,7 @@ def resolve_vuln_config(settings: Settings) -> dict:
 async def get_trivy_db_info() -> dict:
     """Return Trivy vulnerability database metadata and freshness status."""
     import json as _json
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     info: dict = {
         "last_update": None,
@@ -115,7 +116,7 @@ async def get_trivy_db_info() -> dict:
                 next_dt = last_dt + timedelta(hours=24)
                 info["next_update"] = next_dt.isoformat()
                 info["up_to_date"] = (
-                    datetime.now(timezone.utc) - last_dt
+                    datetime.now(UTC) - last_dt
                 ).total_seconds() < 86400
     except Exception as exc:
         info["error"] = str(exc)
@@ -144,7 +145,7 @@ def parse_trivy_output(raw: bytes, severities: list[str]) -> dict:
     """Parse Trivy JSON output and return a structured vuln_result dict."""
     try:
         data = json.loads(raw.decode())
-    except (json.JSONDecodeError, UnicodeDecodeError):
+    except json.JSONDecodeError, UnicodeDecodeError:
         return {
             "enabled": True,
             "blocked": False,
@@ -224,7 +225,7 @@ async def scan_image(
         return {
             "success": False,
             "image": image,
-            "scanned_at": datetime.now(timezone.utc).isoformat(),
+            "scanned_at": datetime.now(UTC).isoformat(),
             "summary": {},
             "total": 0,
             "vulnerabilities": [],
@@ -235,7 +236,7 @@ async def scan_image(
     return {
         "success": True,
         "image": image,
-        "scanned_at": datetime.now(timezone.utc).isoformat(),
+        "scanned_at": datetime.now(UTC).isoformat(),
         "summary": parsed["counts"],
         "total": parsed["total"],
         "vulnerabilities": parsed["vulnerabilities"],

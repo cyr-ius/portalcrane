@@ -21,6 +21,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 
 from .config import DATA_DIR, STAGING_DIR, app_settings
+from .core.bootstrap import ensure_admin_credentials, ensure_secret_key
 from .routers import (
     about,
     auth,
@@ -130,6 +131,8 @@ async def lifespan(app: FastAPI):
     """Application startup and shutdown handler."""
     Path(DATA_DIR).mkdir(parents=True, exist_ok=True)
     Path(STAGING_DIR).mkdir(parents=True, exist_ok=True)
+    ensure_secret_key(app_settings)
+    ensure_admin_credentials(app_settings)
     proxy_cfg = resolve_proxy_settings(app_settings)
     apply_proxy_to_os_environ(proxy_cfg)
     apply_syslog_config(resolve_syslog_settings())

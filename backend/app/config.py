@@ -9,7 +9,6 @@ from functools import lru_cache
 from pathlib import Path
 from urllib.parse import urlparse
 
-from pydantic import model_validator
 from pydantic_settings import BaseSettings
 
 logger = logging.getLogger(__name__)
@@ -45,12 +44,23 @@ class Settings(BaseSettings):
     registry_proxy_auth_enabled: bool = True
 
     # Admin credentials (local auth)
+    # The admin password is always managed by the application: a secure one-time
+    # password is auto-generated on first launch and printed in the logs, then
+    # its bcrypt hash is persisted under DATA_DIR. See core/bootstrap.py.
+    # admin_password_hash is resolved at startup and is not read from the
+    # environment.
     admin_username: str = "admin"
-    admin_password: str = "changeme"
+    admin_password_hash: str = ""
 
     # JWT configuration
+    # secret_key is auto-generated and persisted under DATA_DIR on first launch
+    # when left at the default. See core/bootstrap.py.
     secret_key: str = "change-this-secret-key-in-production"
     access_token_expire_minutes: int = 480  # 8 hours
+
+    # Name of the HttpOnly cookie carrying the session JWT for browser sessions.
+    # The token is never exposed to JavaScript, which neutralises XSS token theft.
+    auth_cookie_name: str = "pc_token"
 
     # OIDC configuration
     oidc_enabled: bool = False
@@ -127,15 +137,6 @@ class Settings(BaseSettings):
         return [
             s.strip().upper() for s in self.vuln_scan_severities.split(",") if s.strip()
         ]
-
-    @model_validator(mode="after")
-    def check_secret_key(self) -> "Settings":
-        if (
-            not self.secret_key
-            or self.secret_key == "change-this-secret-key-in-production"
-        ):
-            raise ValueError("SECRET_KEY environment variable must be set")
-        return self
 
 
 @lru_cache

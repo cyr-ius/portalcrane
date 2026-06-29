@@ -7,17 +7,19 @@ All access control is now handled exclusively by folder rules in registry_proxy.
 """
 
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from pydantic import BaseModel
 
 from ..config import DATA_DIR, Settings, get_settings
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/token")
+# auto_error=False so a missing Authorization header does not raise 401 on its
+# own — the token may instead be carried by the HttpOnly auth cookie.
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/token", auto_error=False)
 
 ALGORITHM = "HS256"
 _USERS_FILE = Path(f"{DATA_DIR}/local_users.json")
@@ -80,23 +82,32 @@ def is_admin_user(username: str, settings: Settings) -> bool:
 def create_access_token(data: dict, settings: Settings) -> str:
     """Sign and return a JWT access token containing *data* as claims."""
     to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + timedelta(
-        minutes=settings.access_token_expire_minutes
-    )
+    expire = datetime.now(UTC) + timedelta(minutes=settings.access_token_expire_minutes)
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, settings.secret_key, algorithm=ALGORITHM)
 
 
 async def get_current_user(
-    token: str = Depends(oauth2_scheme),
+    request: Request,
+    token: str | None = Depends(oauth2_scheme),
     settings: Settings = Depends(get_settings),
 ) -> UserInfo:
-    """FastAPI dependency: validate the Bearer token and return the UserInfo."""
+    """FastAPI dependency: validate the session JWT and return the UserInfo.
+
+    The token is accepted either from the ``Authorization: Bearer`` header
+    (API clients, Swagger) or from the HttpOnly auth cookie (browser sessions
+    set at login). The cookie keeps the token out of reach of JavaScript.
+    """
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
+
+    # Prefer the Bearer header; fall back to the HttpOnly cookie.
+    token = token or request.cookies.get(settings.auth_cookie_name)
+    if not token:
+        raise credentials_exception
     try:
         payload = jwt.decode(token, settings.secret_key, algorithms=[ALGORITHM])
         username: str | None = payload.get("sub")

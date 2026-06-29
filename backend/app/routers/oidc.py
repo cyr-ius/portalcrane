@@ -15,12 +15,13 @@ OIDC user provisioning strategy (just-in-time):
 """
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel
 
 from ..config import Settings, get_settings
+from ..core.cookies import set_auth_cookie
 from ..core.jwt import (
     Token,
     UserInfo,
@@ -84,7 +85,7 @@ def _provision_oidc_user(username: str) -> None:
             "username": username,
             "auth_source": AUTH_SOURCE_OIDC,
             "is_admin": False,
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": datetime.now(UTC).isoformat(),
         }
         users.append(entry)
         _save_users(users)
@@ -110,6 +111,8 @@ async def get_oidc_public_config(settings: Settings = Depends(get_settings)):
 @router.post("/callback", response_model=Token)
 async def oidc_callback(
     code: str,
+    request: Request,
+    response: Response,
     settings: Settings = Depends(get_settings),
 ):
     """Exchange an OIDC authorization code for a Portalcrane JWT.
@@ -118,7 +121,7 @@ async def oidc_callback(
     1. Exchange the authorization code for a username via the token endpoint.
     2. Provision (or verify) the user in local_users.json (just-in-time).
        Raises 403 when the account has been revoked by an admin.
-    3. Issue a local Portalcrane JWT for the authenticated user.
+    3. Issue a local Portalcrane JWT and store it in the HttpOnly auth cookie.
     """
     try:
         username = await exchange_code_for_username(code, settings)
@@ -132,6 +135,7 @@ async def oidc_callback(
     _provision_oidc_user(username)
 
     access_token = create_access_token({"sub": username}, settings)
+    set_auth_cookie(response, request, access_token)
     return Token(
         access_token=access_token,
         token_type="bearer",

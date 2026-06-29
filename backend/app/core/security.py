@@ -58,16 +58,18 @@ def verify_password(plain: str, hashed: str) -> bool:
 
 
 def verify_user(username: str, password: str, settings: Settings) -> bool:
-    """Verify credentials against the env-based admin, then the local users file.
+    """Verify credentials against the built-in admin, then the local users file.
 
     OIDC-provisioned users have no password_hash; verify_password returns False
     for them, so they can only authenticate via PAT (registry proxy) or SSO.
 
     Used by both the login endpoint and the registry proxy Basic Auth handler.
     """
-    # Primary: env-based admin (plain comparison — credentials come from env vars)
-    if username == settings.admin_username and password == settings.admin_password:
-        return True
+    # Primary: built-in admin — verified against the bootstrapped bcrypt hash.
+    # The hash comes from ADMIN_PASSWORD (if set) or the auto-generated
+    # first-launch password (see core/bootstrap.py).
+    if username == settings.admin_username:
+        return verify_password(password, settings.admin_password_hash)
     # Secondary: local users stored as bcrypt hashes
     for user in _load_users():
         if user["username"] == username:

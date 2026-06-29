@@ -13,14 +13,15 @@ JWT helpers and FastAPI dependencies are in core/jwt.py.
 
 import json
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, field_validator
 
 from ..config import DATA_DIR, Settings, get_settings
+from ..core.cookies import clear_auth_cookie, set_auth_cookie
 from ..core.jwt import (
     Token,
     UserInfo,
@@ -189,6 +190,8 @@ def _user_to_public(u: dict) -> LocalUserPublic:
 
 @router.post("/token", response_model=Token)
 async def login_for_access_token(
+    request: Request,
+    response: Response,
     form_data: OAuth2PasswordRequestForm = Depends(),
     settings: Settings = Depends(get_settings),
 ):
@@ -200,6 +203,7 @@ async def login_for_access_token(
             headers={"WWW-Authenticate": "Bearer"},
         )
     access_token = create_access_token({"sub": form_data.username}, settings)
+    set_auth_cookie(response, request, access_token)
     return Token(
         access_token=access_token,
         token_type="bearer",
@@ -210,20 +214,37 @@ async def login_for_access_token(
 @router.post("/login", response_model=Token)
 async def login(
     payload: LoginRequest,
+    request: Request,
+    response: Response,
     settings: Settings = Depends(get_settings),
 ):
-    """JSON login endpoint used by the Angular frontend."""
+    """JSON login endpoint used by the Angular frontend.
+
+    On success the session JWT is stored in an HttpOnly cookie (browser session)
+    in addition to being returned in the body (API clients).
+    """
     if not verify_user(payload.username, payload.password, settings):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
         )
     access_token = create_access_token({"sub": payload.username}, settings)
+    set_auth_cookie(response, request, access_token)
     return Token(
         access_token=access_token,
         token_type="bearer",
         expires_in=settings.access_token_expire_minutes * 60,
     )
+
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+async def logout(response: Response) -> None:
+    """Clear the HttpOnly auth cookie (browser logout).
+
+    Idempotent and unauthenticated: it only deletes the session cookie. OIDC
+    end-session (provider logout) is handled separately by the frontend.
+    """
+    clear_auth_cookie(response)
 
 
 @router.get("/me", response_model=UserInfo)
@@ -282,7 +303,7 @@ async def create_local_user(
         "password_hash": hash_password(payload.password),
         "is_admin": payload.is_admin,
         "auth_source": AUTH_SOURCE_LOCAL,
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
     }
     users.append(entry)
     _save_users(users)
