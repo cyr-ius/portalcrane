@@ -202,18 +202,46 @@ reverse proxy instead.
 
 ### OIDC (optional)
 
-| Variable                        | Description              | Default                |
-| ------------------------------- | ------------------------ | ---------------------- |
-| `OIDC_ENABLED`                  | Enable OIDC login        | `false`                |
-| `OIDC_ISSUER`                   | OIDC issuer URL          | —                      |
-| `OIDC_CLIENT_ID`                | OIDC client ID           | —                      |
-| `OIDC_CLIENT_SECRET`            | OIDC client secret       | —                      |
-| `OIDC_REDIRECT_URI`             | OIDC redirect URI        | —                      |
-| `OIDC_POST_LOGOUT_REDIRECT_URI` | Post-logout redirect URI | —                      |
-| `OIDC_RESPONSE_TYPE`            | OIDC response type       | `code`                 |
-| `OIDC_SCOPE`                    | OIDC scopes              | `openid profile email` |
+| Variable                        | Description                                    | Default                |
+| ------------------------------- | ---------------------------------------------- | ---------------------- |
+| `OIDC_ENABLED`                  | Enable OIDC login                              | `false`                |
+| `OIDC_ISSUER`                   | OIDC issuer URL                                | —                      |
+| `OIDC_CLIENT_ID`                | OIDC client ID                                 | —                      |
+| `OIDC_CLIENT_SECRET`            | OIDC client secret                             | —                      |
+| `OIDC_REDIRECT_URI`             | OIDC redirect URI                              | —                      |
+| `OIDC_POST_LOGOUT_REDIRECT_URI` | Post-logout redirect URI                       | —                      |
+| `OIDC_RESPONSE_TYPE`            | OIDC response type                             | `code`                 |
+| `OIDC_SCOPE`                    | OIDC scopes                                    | `openid profile email` |
+| `OIDC_ONLY`                     | Disable all local login (OIDC-only mode)       | `false`                |
+| `OIDC_ADMIN_USERS`              | Comma-separated usernames/emails granted admin | —                      |
+| `OIDC_ADMIN_GROUP_CLAIM`        | OIDC claim carrying the user's groups/roles    | —                      |
+| `OIDC_ADMIN_GROUP`              | Group value that grants admin                  | —                      |
 
-These values ​​can be overridden by the UI.
+These values ​​can be overridden by the UI (**Settings → OIDC**).
+
+#### OIDC-only mode & admin bootstrap
+
+By default, OIDC login is offered **alongside** the local admin/user login. Set
+`OIDC_ONLY=true` to **disable every local password login — including the built-in
+env-admin** — and authenticate solely through your provider.
+
+Because there is no break-glass, OIDC-only mode requires at least one admin path
+so you don't lock yourself out. Admin rights are re-evaluated on **every** SSO
+login (live promote/demote), via either mechanism:
+
+- **Username allowlist** — `OIDC_ADMIN_USERS=alice,bob@example.com`.
+- **Group-claim mapping** — `OIDC_ADMIN_GROUP_CLAIM=groups` and
+  `OIDC_ADMIN_GROUP=registry-admins` (make sure the scope exposes that claim).
+
+The UI refuses to enable OIDC-only until one of these is configured.
+
+#### Anti-usurpation protection
+
+OIDC identities are kept strictly separate from local accounts to prevent
+privilege escalation: an SSO login is **rejected (403)** when the resolved
+username matches the built-in env-admin or any existing local (password-based)
+account. This stops a provider that returns `preferred_username=admin` — or any
+name colliding with a local user — from inheriting that account's rights.
 
 ### Vulnerability Scanning (Trivy)
 
