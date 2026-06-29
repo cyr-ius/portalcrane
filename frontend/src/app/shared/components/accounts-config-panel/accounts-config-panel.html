@@ -6,7 +6,7 @@
         <i class="bi bi-people text-primary me-2"></i>Local Accounts
       </h6>
       <div class="text-muted small mt-1">
-      Create users and grant administrative rights.
+        Create users and grant administrative rights.
       </div>
     </div>
     <button
@@ -25,9 +25,7 @@
       <i class="bi bi-exclamation-triangle-fill"></i>
       {{ error() }}
     </div>
-    }
-
-    @if (loading()) {
+    } @if (loading()) {
     <div class="text-center py-5 text-muted">
       <span class="spinner-border spinner-border-sm me-2"></span>Loading users…
     </div>
@@ -188,12 +186,14 @@
                   <i class="bi bi-person-fill"></i>
                   }
                 </div>
-                <span class="fw-semibold font-monospace small">{{ user.username }}</span>
+                <span class="fw-semibold font-monospace small"
+                  >{{ user.username }}</span
+                >
                 @if (user.id === 'env-admin') {
                 <span
                   class="badge bg-secondary-subtle text-secondary"
                   style="font-size: 0.65rem"
-                  title="Defined via ADMIN_USERNAME / ADMIN_PASSWORD environment variables"
+                  title="Built-in admin account. The password is auto-generated on first launch and shown once in the server logs."
                   >ENV</span
                 >
                 }
@@ -392,9 +392,9 @@
     <div class="alert alert-info d-flex gap-2 mt-3 py-2 small">
       <i class="bi bi-lightbulb-fill flex-shrink-0 mt-1"></i>
       <div>
-        The <strong>ENV</strong> account is defined via
-        <code>ADMIN_USERNAME</code> / <code>ADMIN_PASSWORD</code> and cannot be
-        modified here.
+        The built-in <strong>admin</strong> account (badge <strong>ENV</strong>)
+        has a password that is auto-generated on first launch and shown once in
+        the server logs — it cannot be modified here.
         <strong>OIDC</strong> accounts are provisioned automatically on first
         SSO login — deleting one revokes future access.
       </div>

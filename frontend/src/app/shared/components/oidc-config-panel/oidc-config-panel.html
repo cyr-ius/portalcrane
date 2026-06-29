@@ -238,6 +238,15 @@
           [formField]="oidcForm.admin_group"
         />
       </div>
+      <div class="col-12">
+        <div class="form-text">
+          Group defined in your OIDC provider: when an SSO user carries this
+          value in the <strong>Admin group claim</strong>, they are granted the
+          <strong>admin</strong> role. Portalcrane has only two roles — admin
+          and user — so this maps a provider group to the admin role; it does
+          not create groups in Portalcrane.
+        </div>
+      </div>
 
       <!-- OIDC-only mode -->
       <div class="col-12">
