@@ -94,7 +94,13 @@ async def create_registry_endpoint(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only admins can create global registries",
         )
-    owner = request.owner if request.owner else current_user.username
+
+    # Owner resolution (mirrors update_registry_endpoint):
+    #   "global"        → keep "global" (admin only, enforced above)
+    #   "personal" / *  → always resolve to the current user's username
+    # This prevents a non-admin from attributing a registry to another user
+    # by sending an arbitrary owner value.
+    owner = "global" if request.owner == "global" else current_user.username
 
     created = await create_registry(
         name=request.name,

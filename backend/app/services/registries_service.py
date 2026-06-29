@@ -22,6 +22,7 @@ import uuid
 from pathlib import Path
 
 from ..config import DATA_DIR, REGISTRY_HOST
+from ..core.crypto import decrypt, encrypt
 from .providers import resolve_provider, resolve_provider_from_registry
 
 logger = logging.getLogger(__name__)
@@ -66,20 +67,42 @@ def _get_local_registry_entry() -> dict:
 
 
 def _load_registries() -> list[dict]:
-    """Load registry list from disk. Returns empty list if file is missing."""
+    """Load registry list from disk, decrypting stored passwords in place.
+
+    Returns an empty list if the file is missing. Legacy plaintext passwords
+    (written before encryption was introduced) are passed through unchanged by
+    decrypt() and re-encrypted on the next save.
+    """
     try:
         if REGISTRIES_FILE.exists():
-            return json.loads(REGISTRIES_FILE.read_text())
+            registries = json.loads(REGISTRIES_FILE.read_text())
+            for r in registries:
+                if r.get("password"):
+                    r["password"] = decrypt(r["password"])
+            return registries
     except Exception as exc:
         logger.warning("Failed to load external registries: %s", exc)
     return []
 
 
 def _save_registries(registries: list[dict]) -> None:
-    """Persist registry list to disk, creating directories as needed."""
+    """Persist registry list to disk with passwords encrypted at rest.
+
+    Passwords are encrypted (Fernet, key derived from SECRET_KEY) before being
+    written; the in-memory list is left untouched so callers keep working with
+    the cleartext value. The file is forced to owner-only (0o600) permissions,
+    mirroring admin_password.hash / secret_key.
+    """
     try:
         REGISTRIES_FILE.parent.mkdir(parents=True, exist_ok=True)
-        REGISTRIES_FILE.write_text(json.dumps(registries, indent=2))
+        to_store = []
+        for r in registries:
+            item = dict(r)
+            if item.get("password"):
+                item["password"] = encrypt(item["password"])
+            to_store.append(item)
+        REGISTRIES_FILE.write_text(json.dumps(to_store, indent=2))
+        REGISTRIES_FILE.chmod(0o600)
     except Exception as exc:
         logger.error("Failed to save external registries: %s", exc)
 
