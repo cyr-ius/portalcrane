@@ -1,5 +1,3 @@
-version: "3.9"
-
 # ─── Portalcrane Development Stack ─────────────────────────────────────────
 # Includes: Portalcrane app, Docker Registry
 # Usage: docker compose up -d
