@@ -136,21 +136,28 @@ def require_admin(current_user: UserInfo = Depends(get_current_user)) -> UserInf
 
 def require_pull_access(current_user: UserInfo = Depends(get_current_user)) -> UserInfo:
     """
-    Ensures the user is authenticated.
-    NOTE: Pull access control is intentionally NOT enforced here.
-    All folder-based pull/push permissions are handled exclusively
-    by the registry proxy in registry_proxy.py (_authorize_registry_proxy).
-    This dependency exists only to require a valid JWT token.
+    Ensures the user is authenticated; does NOT itself check pull permissions.
+
+    Authorization is enforced by each route handler according to its target:
+      - Docker pull/push through the registry proxy → _authorize_registry_proxy
+        (registry_proxy.py) applies folder-based permissions.
+      - REST image routes (routers/repositories.py) apply folder-based
+        permissions explicitly via _ensure_folder_permission, plus registry
+        ownership via resolve_owned_registry.
+      - Sync/export/import routes enforce registry ownership via
+        _ensure_registry_access.
+
+    This dependency only guarantees a valid JWT token.
     """
     return current_user
 
 
 def require_push_access(current_user: UserInfo = Depends(get_current_user)) -> UserInfo:
     """
-    Ensures the user is authenticated.
-    NOTE: Push access control is intentionally NOT enforced here.
-    All folder-based pull/push permissions are handled exclusively
-    by the registry proxy in registry_proxy.py (_authorize_registry_proxy).
-    This dependency exists only to require a valid JWT token.
+    Ensures the user is authenticated; does NOT itself check push permissions.
+
+    Authorization is enforced by each route handler according to its target;
+    see require_pull_access for the breakdown. This dependency only guarantees
+    a valid JWT token.
     """
     return current_user

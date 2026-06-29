@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+from collections.abc import Callable
 from typing import Any
 
 import httpx
@@ -263,7 +264,11 @@ class GithubProvider(BaseRegistryProvider):
         return [repo for repo, tags in zip(repositories, tags_results) if tags]
 
     async def browse_repositories(
-        self, search: str | None, page: int, page_size: int = 20
+        self,
+        search: str | None,
+        page: int,
+        page_size: int = 20,
+        repo_filter: Callable[[str], bool] | None = None,
     ) -> dict:
         """
         List container packages for a GitHub user or organisation via the
@@ -309,6 +314,10 @@ class GithubProvider(BaseRegistryProvider):
         # Apply search filter
         if search:
             repositories = [r for r in repositories if search.lower() in r.lower()]
+
+        # Apply per-user access filter (e.g. folder permissions) before paging
+        if repo_filter is not None:
+            repositories = [r for r in repositories if repo_filter(r)]
 
         # ── Build paginated response ───────────────────────────────────────────
         total = len(repositories)

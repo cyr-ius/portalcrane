@@ -6,7 +6,8 @@ import os
 import re
 import shutil
 import uuid
-from datetime import datetime, timezone
+from collections.abc import Callable
+from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
@@ -63,6 +64,7 @@ async def browse_images(
     search: str | None = None,
     page: int = 1,
     page_size: int = 20,
+    repo_filter: Callable[[str], bool] | None = None,
 ) -> dict:
     """List repositories available in an external registry.
 
@@ -71,6 +73,10 @@ async def browse_images(
       - Docker Hub        -> external_dockerhub.browse_dockerhub_repositories
       - __local__         -> external_v2 on REGISTRY_HOST (local embedded registry)
       - All other V2      -> external_v2.browse_v2_repositories
+
+    When *repo_filter* is provided, only repositories whose name satisfies the
+    predicate are kept (applied before pagination, so total / total_pages stay
+    consistent). Used to enforce per-user folder access.
 
     Returns a paginated dict compatible with the local PaginatedImages shape:
       { items, total, page, page_size, total_pages, error? }
@@ -81,7 +87,7 @@ async def browse_images(
 
     provider = resolve_provider_from_registry(registry)
     return await provider.browse_repositories(
-        search=search, page=page, page_size=page_size
+        search=search, page=page, page_size=page_size, repo_filter=repo_filter
     )
 
 
@@ -367,7 +373,7 @@ async def run_export_job(
         "dest_registry_name": registry.get("name", ""),
         "dest_folder": dest_folder,
         "status": "running",
-        "started_at": datetime.now(timezone.utc).isoformat(),
+        "started_at": datetime.now(UTC).isoformat(),
         "images_total": 0,
         "images_done": 0,
         "errors": [],
@@ -453,13 +459,13 @@ async def _run_export_job_task(
 
         _sync_jobs[job_id]["status"] = "done" if not errors else "done_with_errors"
         _sync_jobs[job_id]["errors"] = errors
-        _sync_jobs[job_id]["finished_at"] = datetime.now(timezone.utc).isoformat()
+        _sync_jobs[job_id]["finished_at"] = datetime.now(UTC).isoformat()
 
     except Exception as exc:
         logger.error("sync export job %s failed: %s", job_id, exc)
         _sync_jobs[job_id]["status"] = "failed"
         _sync_jobs[job_id]["errors"] = [str(exc)]
-        _sync_jobs[job_id]["finished_at"] = datetime.now(timezone.utc).isoformat()
+        _sync_jobs[job_id]["finished_at"] = datetime.now(UTC).isoformat()
 
 
 async def run_import_job(
@@ -486,7 +492,7 @@ async def run_import_job(
         "source_registry_name": registry.get("name", ""),
         "dest_folder": dest_folder,
         "status": "running",
-        "started_at": datetime.now(timezone.utc).isoformat(),
+        "started_at": datetime.now(UTC).isoformat(),
         "images_total": 0,
         "images_done": 0,
         "errors": [],
@@ -569,10 +575,10 @@ async def _run_import_job_task(
 
         _sync_jobs[job_id]["status"] = "done" if not errors else "done_with_errors"
         _sync_jobs[job_id]["errors"] = errors
-        _sync_jobs[job_id]["finished_at"] = datetime.now(timezone.utc).isoformat()
+        _sync_jobs[job_id]["finished_at"] = datetime.now(UTC).isoformat()
 
     except Exception as exc:
         logger.error("sync import job %s failed: %s", job_id, exc)
         _sync_jobs[job_id]["status"] = "failed"
         _sync_jobs[job_id]["errors"] = [str(exc)]
-        _sync_jobs[job_id]["finished_at"] = datetime.now(timezone.utc).isoformat()
+        _sync_jobs[job_id]["finished_at"] = datetime.now(UTC).isoformat()

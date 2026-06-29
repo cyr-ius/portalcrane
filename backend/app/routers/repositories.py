@@ -82,15 +82,26 @@ async def list_images(
     search: str | None = Query(None, description="Filter repositories by name"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=5, le=200),
+    current_user: UserInfo = Depends(get_current_user),
     _: dict = Depends(resolve_owned_registry),
 ):
     """List repositories available in an external registry via /v2/_catalog."""
+    # Non-admins only see repositories they have folder-level pull access to.
+    # The predicate is applied before pagination inside the provider so the
+    # total / total_pages counters stay consistent with the visible items.
+    repo_filter = None
+    if not current_user.is_admin:
+        repo_filter = lambda name: (  # noqa: E731
+            check_folder_access(current_user.username, name, is_pull=True) is True
+        )
+
     try:
         result = await browse_images(
             registry_id=registry_id,
             search=search,
             page=page,
             page_size=page_size,
+            repo_filter=repo_filter,
         )
     except _REGISTRY_ERRORS as exc:
         logger.warning("list_images: registry unreachable id=%s: %s", registry_id, exc)
@@ -105,9 +116,13 @@ async def list_images(
 async def delete_image(
     registry_id: str,
     repository: str = Query(..., description="Repository name, e.g. myorg/myimage"),
+    current_user: UserInfo = Depends(get_current_user),
     _: dict = Depends(resolve_owned_registry),
 ):
     """Delete all tags of a repository in an external registry."""
+    _ensure_folder_permission(
+        current_user=current_user, image_path=repository, is_pull=False
+    )
     try:
         result = await remove_image(registry_id=registry_id, repository=repository)
     except _REGISTRY_ERRORS as exc:
@@ -129,9 +144,13 @@ async def get_tag_detail(
     registry_id: str,
     repository: str = Query(..., description="Repository name, e.g. myorg/myimage"),
     tag: str = Query(..., description="Tag name, e.g. latest"),
+    current_user: UserInfo = Depends(get_current_user),
     _: dict = Depends(resolve_owned_registry),
 ):
     """Return detailed metadata for a specific tag in an external V2 registry."""
+    _ensure_folder_permission(
+        current_user=current_user, image_path=repository, is_pull=True
+    )
     try:
         detail = await metadata_by_tag(
             registry_id=registry_id, repository=repository, tag=tag
@@ -156,9 +175,13 @@ async def get_tag_detail(
 async def get_tags(
     registry_id: str,
     repository: str = Query(..., description="Repository name, e.g. myorg/myimage"),
+    current_user: UserInfo = Depends(get_current_user),
     _: dict = Depends(resolve_owned_registry),
 ):
     """List tags for a specific repository in an external registry."""
+    _ensure_folder_permission(
+        current_user=current_user, image_path=repository, is_pull=True
+    )
     try:
         return await browse_tags(registry_id=registry_id, repository=repository)
     except _REGISTRY_ERRORS as exc:
@@ -174,9 +197,13 @@ async def delete_tag(
     registry_id: str,
     repository: str = Query(..., description="Repository name, e.g. myorg/myimage"),
     tag: str = Query(..., description="Tag name to delete"),
+    current_user: UserInfo = Depends(get_current_user),
     _: dict = Depends(resolve_owned_registry),
 ):
     """Delete a single tag from an external V2 registry."""
+    _ensure_folder_permission(
+        current_user=current_user, image_path=repository, is_pull=False
+    )
     try:
         result = await remove_tag(
             registry_id=registry_id, repository=repository, tag=tag
@@ -200,9 +227,13 @@ async def add_tag(
     registry_id: str,
     repository: str = Query(..., description="Repository name, e.g. myorg/myimage"),
     request: AddExternalTagRequest = Body(...),
+    current_user: UserInfo = Depends(get_current_user),
     _: dict = Depends(resolve_owned_registry),
 ):
     """Create a new tag by copying a manifest in an external V2 registry."""
+    _ensure_folder_permission(
+        current_user=current_user, image_path=repository, is_pull=False
+    )
     try:
         result = await append_tag(
             registry_id=registry_id,

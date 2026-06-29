@@ -14,6 +14,7 @@ Provider hierarchy:
 import asyncio
 import logging
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from typing import Any
 
 from httpx import HTTPStatusError
@@ -194,7 +195,11 @@ class BaseRegistryProvider(ABC):
         ...
 
     async def browse_repositories(
-        self, search: str | None, page: int = 1, page_size: int = 20
+        self,
+        search: str | None,
+        page: int = 1,
+        page_size: int = 20,
+        repo_filter: Callable[[str], bool] | None = None,
     ) -> dict[str, Any]:
         """List repositories/images available in this registry.
 
@@ -211,10 +216,13 @@ class BaseRegistryProvider(ABC):
             }
 
         Args:
-            search:    Optional substring filter on repository name.
-            page:      1-based page number.
-            page_size: Number of items per page.
-            **kwargs:  Provider-specific parameters (e.g. namespace for DockerHub).
+            search:      Optional substring filter on repository name.
+            page:        1-based page number.
+            page_size:   Number of items per page.
+            repo_filter: Optional predicate applied to each repository name
+                         before pagination; only names returning True are kept.
+                         Used to enforce per-user folder access so total /
+                         total_pages stay consistent with the visible items.
 
         Returns:
             dict[str, Any]: Paginated repository list.
@@ -247,6 +255,10 @@ class BaseRegistryProvider(ABC):
         # Apply search filter
         if search:
             repositories = [r for r in repositories if search.lower() in r.lower()]
+
+        # Apply per-user access filter (e.g. folder permissions) before paging
+        if repo_filter is not None:
+            repositories = [r for r in repositories if repo_filter(r)]
 
         # ── Build paginated response ───────────────────────────────────────────
         total = len(repositories)
