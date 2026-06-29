@@ -82,14 +82,24 @@ Portalcrane's internal registry allows you to organize images into directories. 
 docker run -d \
   --name portalcrane \
   -p 8080:8080 \
-  -e ADMIN_USERNAME=admin \
-  -e ADMIN_PASSWORD=yourpassword \
-  -e SECRET_KEY=your-secret-key \
   -v /portalcrane_data:/var/lib/portalcrane \
   cyrius44/portalcrane:latest
 ```
 
-Open **http://localhost:8080** and log in with your admin credentials.
+No credentials need to be provided. On first launch a secure admin password and
+a JWT `SECRET_KEY` are auto-generated and persisted in the data volume. The
+admin password is **printed once in the container logs** — the default user is
+`admin`:
+
+```bash
+docker logs portalcrane | grep -A5 "initial admin account"
+```
+
+Open **http://localhost:8080** and log in with `admin` and that password.
+
+> **Note:** mounting a persistent volume on `/var/lib/portalcrane` is required —
+> the generated password and secret key are stored there. Without it, both are
+> regenerated on every restart.
 
 ### Docker Compose
 
@@ -100,10 +110,9 @@ services:
     container_name: portalcrane
     ports:
       - "8080:8080"
-    environment:
-      - ADMIN_USERNAME=admin
-      - ADMIN_PASSWORD=changeme
-      - SECRET_KEY=your-secret-key
+    # No credentials required: the admin password and SECRET_KEY are
+    # auto-generated on first launch and persisted in the data volume.
+    # The admin password is printed once in the logs (default user: admin).
     volumes:
       - portalcrane_data:/var/lib/portalcrane
     restart: unless-stopped
@@ -127,7 +136,6 @@ docker logout
 For full access without authentication, set the REGISTRY_PROXY_AUTH_ENABLED variable to `false`.
 If you are using the dev stack and want direct registry access, use `<host>:5000`.
 
-
 ### Docker Compose (dev stack, from this repo)
 
 This stack builds the local image and also starts a dedicated registry on port `5000`.
@@ -150,19 +158,41 @@ docker compose up -d
 
 ## Security Notes
 
-- `SECRET_KEY` must be set to a non-default value or the app will refuse to start.
-- Always change `ADMIN_PASSWORD` on first launch.
-- If you expose the UI publicly, enable HTTPS at the reverse proxy level.
+- The admin password is generated and printed in the logs on first launch
+  (default user: `admin`). It is persisted under `DATA_DIR` and reused across
+  restarts. Retrieve it from the logs for the first login — it cannot be set
+  through the environment. To rotate it, delete `DATA_DIR/admin_password.hash`
+  and restart.
+- `SECRET_KEY` is auto-generated and persisted under `DATA_DIR` on first launch.
+  Set it explicitly only to share a fixed secret across multiple instances.
+- Mount a persistent volume on `DATA_DIR` (`/var/lib/portalcrane`) so the
+  generated password and secret key survive restarts.
+- If you expose the UI publicly, enable HTTPS — either at the reverse proxy level
+  or natively by setting `PRIVATE_KEY` / `PUBLIC_KEY` (see TLS / SSL below).
 
 ## Environment Variables
 
 ### Authentication
 
-| Variable         | Description                                   | Default                                |
-| ---------------- | --------------------------------------------- | -------------------------------------- |
-| `ADMIN_USERNAME` | Built-in admin username                       | `admin`                                |
-| `ADMIN_PASSWORD` | Built-in admin password                       | `changeme`                             |
-| `SECRET_KEY`     | JWT signing secret — **change in production** | `change-this-secret-key-in-production` |
+| Variable         | Description                                              | Default       |
+| ---------------- | -------------------------------------------------------- | ------------- |
+| `ADMIN_USERNAME` | Built-in admin username                                  | `admin`       |
+| `SECRET_KEY`     | JWT signing secret — auto-generated & persisted if unset | _(generated)_ |
+
+> The admin password is not an environment variable: it is auto-generated on
+> first launch and printed in the logs (see [Security Notes](#security-notes)).
+
+### TLS / SSL (optional)
+
+Both variables must point to PEM files mounted inside the container. When set,
+the FastAPI backend (uvicorn) serves HTTPS directly using `--ssl-keyfile` /
+`--ssl-certfile`. Leave them unset to serve plain HTTP and terminate TLS at a
+reverse proxy instead.
+
+| Variable      | Description                                         | Default |
+| ------------- | --------------------------------------------------- | ------- |
+| `PRIVATE_KEY` | Path to the TLS private key file (`--ssl-keyfile`)  | —       |
+| `PUBLIC_KEY`  | Path to the TLS certificate file (`--ssl-certfile`) | —       |
 
 ### Registry
 
@@ -213,9 +243,9 @@ These values ​​can be overridden by the UI.
 
 ### Storage (debug)
 
-| Variable   | Description                                     | Default              |
-| ---------- | ----------------------------------------------- | -------------------- |
-| `DATA_DIR` | Base data directory inside the container        | `/var/lib/portalcrane` |
+| Variable   | Description                              | Default                |
+| ---------- | ---------------------------------------- | ---------------------- |
+| `DATA_DIR` | Base data directory inside the container | `/var/lib/portalcrane` |
 
 ---
 
@@ -236,7 +266,7 @@ It also exposes quick actions (browse images, pull from Docker Hub) and maintena
 
 Portalcrane supports two types of accounts:
 
-- **Environment admin** — the built-in account defined via `ADMIN_USERNAME` / `ADMIN_PASSWORD`. It cannot be deleted or modified through the UI.
+- **Built-in admin** — the `admin` account whose password is auto-generated and printed in the logs on first launch. It cannot be deleted or modified through the UI.
 - **Local users** — created via the **Settings → Accounts** panel. Each user can be assigned:
   - Admin role (full access)
   - Pull permission (read images from the registry)
