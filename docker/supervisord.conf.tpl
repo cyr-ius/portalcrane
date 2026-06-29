@@ -37,7 +37,7 @@ stderr_logfile_maxbytes=0
 
 ; Portalcrane FastAPI backend
 [program:portalcrane]
-command=uvicorn backend.app.main:app --host 0.0.0.0  --port 8000
+command=uvicorn backend.app.main:app --host 0.0.0.0  --port 8000 --ssl-keyfile=${PRIVATE_KEY} --ssl-certfile=${PUBLIC_KEY}
 directory=/app
 autostart=true
 autorestart=true

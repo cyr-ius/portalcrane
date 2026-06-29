@@ -20,6 +20,12 @@ export REGISTRY_LOG_LEVEL
 LOG_LEVEL=${LOG_LEVEL:-INFO}
 export LOG_LEVEL
 
+PRIVATE_KEY=${PRIVATE_KEY}
+export PRIVATE_KEY
+
+PUBLIC_KEY=${PUBLIC_KEY}
+export PUBLIC_KEY
+
 # ── Ensure required directories exist ──────────────────────────────────────────
 mkdir -p ${DATA_DIR}/registry ${DATA_DIR}/cache/trivy ${DATA_DIR}/cache/staging
 
