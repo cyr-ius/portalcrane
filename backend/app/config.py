@@ -75,6 +75,21 @@ class Settings(BaseSettings):
     oidc_response_type: str = "code"
     oidc_scope: str = "openid profile email"
 
+    # OIDC-only mode: when True, local username/password login (including the
+    # built-in env-admin) is disabled and authentication is delegated entirely
+    # to the OIDC provider. At least one admin path (oidc_admin_users or the
+    # group-claim mapping below) must be configured to avoid a lockout.
+    oidc_only: bool = False
+
+    # Admin bootstrap for OIDC users. Two complementary mechanisms:
+    #   - oidc_admin_users: comma-separated usernames/emails granted admin.
+    #   - group-claim mapping: when an OIDC user carries oidc_admin_group in the
+    #     claim named oidc_admin_group_claim (e.g. "groups"), they get admin.
+    # Admin status is re-evaluated on every SSO login (live promote/demote).
+    oidc_admin_users: str = ""
+    oidc_admin_group_claim: str = ""
+    oidc_admin_group: str = ""
+
     # HTTP Proxy
     http_proxy: str = ""
     https_proxy: str = ""

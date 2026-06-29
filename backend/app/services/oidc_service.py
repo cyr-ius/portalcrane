@@ -21,7 +21,12 @@ _OIDC_CONFIG_FILE = Path(f"{DATA_DIR}/oidc_config.json")
 
 
 class OidcPublicConfig(BaseModel):
-    """OIDC configuration exposed to the public login page (no secret)."""
+    """OIDC configuration exposed to the public login page (no secret).
+
+    oidc_only is published so the login page can hide the local credential
+    form entirely. The admin mappings (admin_users / admin_group*) are NEVER
+    exposed here — they live only in OidcAdminSettings (admin-gated).
+    """
 
     enabled: bool
     client_id: str
@@ -32,6 +37,7 @@ class OidcPublicConfig(BaseModel):
     end_session_endpoint: str = ""
     response_type: str = "code"
     scope: str = "openid profile email"
+    oidc_only: bool = False
 
 
 class OidcAdminSettings(BaseModel):
@@ -45,6 +51,22 @@ class OidcAdminSettings(BaseModel):
     post_logout_redirect_uri: str = ""
     response_type: str = "code"
     scope: str = "openid profile email"
+    # OIDC-only mode and admin bootstrap (see config.Settings for semantics).
+    oidc_only: bool = False
+    admin_users: str = ""
+    admin_group_claim: str = ""
+    admin_group: str = ""
+
+
+class OidcIdentity(BaseModel):
+    """Identity resolved from an OIDC authorization-code exchange.
+
+    groups carries the values of the configured admin group claim (when any),
+    used to decide whether the user should be granted admin rights.
+    """
+
+    username: str
+    groups: list[str] = []
 
 
 # ─── Persistence helpers ──────────────────────────────────────────────────────
@@ -64,6 +86,35 @@ def save_oidc_config(data: dict) -> None:
     """Persist OIDC configuration to disk."""
     _OIDC_CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
     _OIDC_CONFIG_FILE.write_text(json.dumps(data, indent=2))
+
+
+# ─── Admin mapping helpers ────────────────────────────────────────────────────
+
+
+def _split_csv(value: str) -> list[str]:
+    """Split a comma-separated string into a list of trimmed, non-empty items."""
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
+def is_oidc_admin(identity: OidcIdentity, merged: OidcAdminSettings) -> bool:
+    """Return True when *identity* should be granted admin rights.
+
+    Two complementary mechanisms (either grants admin):
+      - the username is listed in admin_users (case-insensitive match);
+      - admin_group is present in identity.groups (only when both the claim name
+        and the expected group value are configured).
+    """
+    username = identity.username.casefold()
+    admin_users = {u.casefold() for u in _split_csv(merged.admin_users)}
+    if username in admin_users:
+        return True
+
+    if merged.admin_group_claim and merged.admin_group:
+        groups = {g.casefold() for g in identity.groups}
+        if merged.admin_group.casefold() in groups:
+            return True
+
+    return False
 
 
 # ─── Config merge helper ──────────────────────────────────────────────────────
@@ -87,6 +138,12 @@ def resolve_oidc_settings(settings: Settings) -> OidcAdminSettings:
         ),
         response_type=persisted.get("response_type", settings.oidc_response_type),
         scope=persisted.get("scope", settings.oidc_scope),
+        oidc_only=persisted.get("oidc_only", settings.oidc_only),
+        admin_users=persisted.get("admin_users", settings.oidc_admin_users),
+        admin_group_claim=persisted.get(
+            "admin_group_claim", settings.oidc_admin_group_claim
+        ),
+        admin_group=persisted.get("admin_group", settings.oidc_admin_group),
     )
 
 
@@ -145,17 +202,47 @@ async def build_public_config(settings: Settings) -> OidcPublicConfig:
         end_session_endpoint=discovery.get("end_session_endpoint", ""),
         response_type=merged.response_type,
         scope=merged.scope,
+        oidc_only=merged.oidc_only,
     )
 
 
 # ─── Authorization-code exchange ─────────────────────────────────────────────
 
 
-async def exchange_code_for_username(
+def _extract_username(source: dict) -> str:
+    """Pick the best username candidate from a userinfo/claims mapping."""
+    return (
+        source.get("preferred_username")
+        or source.get("name")
+        or source.get("email")
+        or ""
+    )
+
+
+def _extract_groups(source: dict, claim: str) -> list[str]:
+    """Read the configured group claim and normalise it to a list of strings.
+
+    Providers expose groups/roles either as a JSON array or as a single string;
+    both shapes are normalised here. Returns an empty list when no claim name is
+    configured or the value is absent.
+    """
+    if not claim:
+        return []
+    value = source.get(claim)
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, (list, tuple, set)):
+        return [str(v) for v in value]
+    return [str(value)]
+
+
+async def exchange_code_for_identity(
     code: str,
     settings: Settings,
-) -> str:
-    """Exchange an authorization code for a username via the token endpoint.
+) -> OidcIdentity:
+    """Exchange an authorization code for an OIDC identity (username + groups).
 
     Steps:
     1. Fetch the discovery document to get token_endpoint and userinfo_endpoint.
@@ -163,7 +250,10 @@ async def exchange_code_for_username(
     3. Call userinfo_endpoint with the returned access_token.
     4. Fall back to id_token claims when userinfo is unavailable.
 
-    Raises RuntimeError on any failure so the calling route can wrap it in an
+    The username and the configured admin group claim are merged from both the
+    userinfo response and the id_token claims (userinfo wins for the username).
+
+    Raises on any HTTP failure so the calling route can wrap it in an
     appropriate HTTPException.
     """
     merged = resolve_oidc_settings(settings)
@@ -196,8 +286,10 @@ async def exchange_code_for_username(
         id_token: str = token_data.get("id_token", "")
         access_token_oidc: str = token_data.get("access_token", "")
 
-        # Step 3 — userinfo endpoint (preferred)
         username = ""
+        groups: list[str] = []
+
+        # Step 3 — userinfo endpoint (preferred)
         if userinfo_endpoint and access_token_oidc:
             userinfo_resp = await client.get(
                 userinfo_endpoint,
@@ -206,21 +298,15 @@ async def exchange_code_for_username(
             )
             userinfo_resp.raise_for_status()
             userinfo = userinfo_resp.json()
-            username = (
-                userinfo.get("preferred_username")
-                or userinfo.get("name")
-                or userinfo.get("email")
-                or ""
-            )
+            username = _extract_username(userinfo)
+            groups = _extract_groups(userinfo, merged.admin_group_claim)
 
-        # Step 4 — fall back to id_token claims
-        if not username and id_token:
+        # Step 4 — fall back to id_token claims (for username and/or groups)
+        if id_token and (not username or not groups):
             claims = jose_jwt.get_unverified_claims(id_token)
-            username = (
-                claims.get("preferred_username")
-                or claims.get("name")
-                or claims.get("email")
-                or claims.get("sub", "oidc-user")
-            )
+            if not username:
+                username = _extract_username(claims) or claims.get("sub", "oidc-user")
+            if not groups:
+                groups = _extract_groups(claims, merged.admin_group_claim)
 
-    return username or "oidc-user"
+    return OidcIdentity(username=username or "oidc-user", groups=groups)

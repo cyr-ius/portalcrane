@@ -28,12 +28,20 @@ from ..core.jwt import (
     create_access_token,
     require_admin,
 )
-from ..routers.auth import AUTH_SOURCE_OIDC, _load_users, _save_users, is_oidc_revoked
+from ..routers.auth import (
+    AUTH_SOURCE_LOCAL,
+    AUTH_SOURCE_OIDC,
+    _load_users,
+    _save_users,
+    is_oidc_revoked,
+)
 from ..services.oidc_service import (
     OidcAdminSettings,
+    OidcIdentity,
     OidcPublicConfig,
     build_public_config,
-    exchange_code_for_username,
+    exchange_code_for_identity,
+    is_oidc_admin,
     resolve_oidc_settings,
     save_oidc_config,
 )
@@ -57,16 +65,22 @@ class OidcConfig(BaseModel):
 # ── Just-in-time provisioning ─────────────────────────────────────────────────
 
 
-def _provision_oidc_user(username: str) -> None:
+def _provision_oidc_user(identity: OidcIdentity, settings: Settings) -> None:
     """Create or refresh an OIDC user entry in local_users.json.
 
-    - If the username is in the revocation list (is_oidc_revoked) the call
-      raises 403 — the admin explicitly deleted this account.
-    - If the user already exists (auth_source='oidc') the record is left
-      unchanged (no password_hash, is_admin preserved).
-    - If the username does not exist a new record is created with
-      auth_source='oidc' and no password_hash.
+    Order of checks (anti-usurpation first):
+    - If the username is in the revocation list (is_oidc_revoked) → 403
+      (the admin explicitly deleted this account).
+    - If the username collides with the built-in env-admin → 403. Otherwise an
+      OIDC provider returning preferred_username="admin" would inherit admin.
+    - If the username collides with an existing *local* account → 403. An OIDC
+      identity must never bind onto a password-based account.
+    - Admin rights are (re)computed from the OIDC config (oidc_admin_users /
+      group claim) on every login, so promote/demote take effect live.
+    - First login → a new record is created (auth_source='oidc', no password).
     """
+    username = identity.username
+
     if is_oidc_revoked(username):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -75,8 +89,30 @@ def _provision_oidc_user(username: str) -> None:
             ),
         )
 
+    # Anti-usurpation: never let an OIDC identity resolve to the env-admin.
+    if username == settings.admin_username:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "This OIDC username collides with the local admin account and "
+                "cannot be used. Please contact your administrator."
+            ),
+        )
+
     users = _load_users()
     existing = next((u for u in users if u["username"] == username), None)
+
+    # Anti-usurpation: never let an OIDC identity bind onto a local account.
+    if existing is not None and existing.get("auth_source") == AUTH_SOURCE_LOCAL:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "This OIDC username collides with an existing local account and "
+                "cannot be used. Please contact your administrator."
+            ),
+        )
+
+    is_admin = is_oidc_admin(identity, resolve_oidc_settings(settings))
 
     if existing is None:
         # First SSO login — create the record
@@ -84,10 +120,14 @@ def _provision_oidc_user(username: str) -> None:
             "id": str(uuid.uuid4()),
             "username": username,
             "auth_source": AUTH_SOURCE_OIDC,
-            "is_admin": False,
+            "is_admin": is_admin,
             "created_at": datetime.now(UTC).isoformat(),
         }
         users.append(entry)
+        _save_users(users)
+    elif existing.get("is_admin", False) != is_admin:
+        # Subsequent login — refresh admin status (live promote/demote).
+        existing["is_admin"] = is_admin
         _save_users(users)
 
 
@@ -118,23 +158,26 @@ async def oidc_callback(
     """Exchange an OIDC authorization code for a Portalcrane JWT.
 
     Flow:
-    1. Exchange the authorization code for a username via the token endpoint.
+    1. Exchange the authorization code for an identity (username + groups).
     2. Provision (or verify) the user in local_users.json (just-in-time).
-       Raises 403 when the account has been revoked by an admin.
+       Raises 403 when the account has been revoked, collides with a local
+       account, or matches the env-admin username (anti-usurpation).
     3. Issue a local Portalcrane JWT and store it in the HttpOnly auth cookie.
     """
     try:
-        username = await exchange_code_for_username(code, settings)
+        identity = await exchange_code_for_identity(code, settings)
+    except HTTPException:
+        raise
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"OIDC callback failed: {exc}",
         )
 
-    # Provision or check revocation — may raise 403
-    _provision_oidc_user(username)
+    # Provision, check revocation and anti-usurpation collisions — may raise 403
+    _provision_oidc_user(identity, settings)
 
-    access_token = create_access_token({"sub": username}, settings)
+    access_token = create_access_token({"sub": identity.username}, settings)
     set_auth_cookie(response, request, access_token)
     return Token(
         access_token=access_token,
@@ -168,6 +211,30 @@ async def update_oidc_settings(
     """Persist OIDC configuration overrides (admin only).
 
     Saved values take precedence over environment variables on next request.
+
+    Anti-lockout guard: OIDC-only mode disables every local login (including the
+    env-admin), so it can only be enabled when OIDC is itself enabled AND at
+    least one admin path is configured (admin_users or the group-claim mapping).
+    Otherwise no one could ever obtain admin rights again.
     """
+    if payload.oidc_only:
+        if not payload.enabled:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="OIDC-only mode requires OIDC to be enabled.",
+            )
+        has_admin_users = bool(payload.admin_users.strip())
+        has_admin_group = bool(
+            payload.admin_group_claim.strip() and payload.admin_group.strip()
+        )
+        if not (has_admin_users or has_admin_group):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "OIDC-only mode requires at least one admin path: set "
+                    "admin_users or both admin_group_claim and admin_group."
+                ),
+            )
+
     save_oidc_config(payload.model_dump())
     return resolve_oidc_settings(settings)

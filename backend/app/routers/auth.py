@@ -30,6 +30,7 @@ from ..core.jwt import (
     require_admin,
 )
 from ..core.security import hash_password, verify_user
+from ..services.oidc_service import resolve_oidc_settings
 from ..services.registries_service import delete_registries_for_owner
 from .folders import remove_permissions_for_username
 from .personal_tokens import revoke_tokens_for_username
@@ -188,6 +189,19 @@ def _user_to_public(u: dict) -> LocalUserPublic:
 # ─── Endpoints ────────────────────────────────────────────────────────────────
 
 
+def _ensure_local_auth_enabled(settings: Settings) -> None:
+    """Reject local credential login when OIDC-only mode is active.
+
+    In OIDC-only mode every password-based login (including the env-admin) is
+    disabled and authentication is delegated entirely to the OIDC provider.
+    """
+    if resolve_oidc_settings(settings).oidc_only:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Local authentication is disabled (OIDC-only mode).",
+        )
+
+
 @router.post("/token", response_model=Token)
 async def login_for_access_token(
     request: Request,
@@ -196,6 +210,7 @@ async def login_for_access_token(
     settings: Settings = Depends(get_settings),
 ):
     """OAuth2 password-flow token endpoint used by the Swagger UI."""
+    _ensure_local_auth_enabled(settings)
     if not verify_user(form_data.username, form_data.password, settings):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -223,6 +238,7 @@ async def login(
     On success the session JWT is stored in an HttpOnly cookie (browser session)
     in addition to being returned in the body (API clients).
     """
+    _ensure_local_auth_enabled(settings)
     if not verify_user(payload.username, payload.password, settings):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
