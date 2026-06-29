@@ -306,7 +306,7 @@ All persistent data is stored in **/var/lib/portalcrane** inside the container. 
 -v /portalcrane_data:/var/lib/portalcrane
 ```
 
-Stored data includes: local users, OIDC configuration, folder permissions, external registries, audit logs, and the registry image data itself.
+Stored data includes: the generated admin password hash (`admin_password.hash`), the JWT signing secret (`secret_key`), local users, OIDC configuration, folder permissions, external registries, audit logs, and the registry image data itself.
 
 ---
 
