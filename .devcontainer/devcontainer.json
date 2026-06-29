@@ -5,12 +5,12 @@
     "dockerfile": "Dockerfile",
     "args": {
       "REGISTRY_VERSION": "3.0.0",
-      "TRIVY_VERSION": "0.69.3",
-      "WORKSPACE": "${containerWorkspaceFolder}"
+      "TRIVY_VERSION": "0.69.3"
     }
   },
   "mounts": [
-    "source=${env:HOME}/.claude,target=/home/vscode/.claude,type=bind,consistency=cached"
+    "source=${env:HOME}/.claude,target=/home/vscode/.claude,type=bind,consistency=cached",
+    "target=${containerWorkspaceFolder}/.data_env,type=volume,consistency=cached"
   ],
   "customizations": {
     "vscode": {
@@ -19,21 +19,18 @@
         "ms-python.vscode-pylance",
         "charliermarsh.ruff",
         "angular.ng-template",
-        "ms-vscode.vscode-typescript-next",
         "esbenp.prettier-vscode",
         "dbaeumer.vscode-eslint",
         "ms-azuretools.vscode-docker",
-        "ms-vscode-remote.remote-containers",
         "streetsidesoftware.code-spell-checker",
-        "streetsidesoftware.code-spell-checker-french",
+        "editorconfig.editorconfig",
         "anthropic.claude-code",
-        "humao.rest-client",
-        "editorconfig.editorconfig"
+        "humao.rest-client"
       ],
       "settings": {
         // ── Python ──────────────────────────────────────────────────────
-        "python.defaultInterpreterPath": "${containerWorkspaceFolder}/backend/.venv/bin/python",
-        "python.pythonPath": "${containerWorkspaceFolder}/backend/.venv/bin/python",
+        "python.defaultInterpreterPath": "${workspaceFolder}/backend/.venv/bin/python",
+        "python.pythonPath": "${workspaceFolder}/backend/.venv/bin/python",
         "python.terminal.activateEnvInCurrentTerminal": true,
         "[python]": {
           "editor.defaultFormatter": "charliermarsh.ruff",
@@ -61,32 +58,35 @@
         "[yaml]": {
           "editor.defaultFormatter": "esbenp.prettier-vscode"
         },
-        "json.schemas": [
-          {
-            "fileMatch": ["homeassistant/components/*/manifest.json"],
-            "url": "${containerWorkspaceFolder}/script/json_schemas/manifest_schema.json"
-          }
-        ],
         // ── Général ──────────────────────────────────────────────────────
         "editor.tabSize": 2,
         "editor.insertSpaces": true,
         "files.eol": "\n",
         "files.insertFinalNewline": true,
-        "files.trimTrailingWhitespace": true
+        "files.trimTrailingWhitespace": true,
+        "prettier.printWidth": 120
       }
     }
   },
-  "appPort": [8000],
+  "appPort": ["0.0.0.0:4200:4200", "0.0.0.0:8000:8000"],
   "portsAttributes": {
-    "4200": { "label": "Angular Frontend", "onAutoForward": "notify" },
-    "8000": { "label": "FastAPI Backend", "onAutoForward": "notify" }
+    "4200": {
+      "label": "Angular Frontend",
+      "onAutoForward": "notify",
+      "host": "0.0.0.0"
+    },
+    "8000": {
+      "label": "FastAPI Backend",
+      "onAutoForward": "notify",
+      "host": "0.0.0.0"
+    }
   },
   "containerEnv": {
     "DATA_DIR": "${containerWorkspaceFolder}/.data_env", // (db, configuration files, etc...)
     "NG_FORCE_TTY": "false"
   },
-  "postCreateCommand": "bash .devcontainer/scripts/post-create.sh ${containerWorkspaceFolder}"
+  "postCreateCommand": "bash .devcontainer/scripts/post-create.sh ${containerWorkspaceFolder}",
 
   // Uncomment to connect as an existing user other than the container default. More info: https://aka.ms/dev-containers-non-root.
-  //"remoteUser": "devcontainer"
+  "remoteUser": "vscode"
 }
