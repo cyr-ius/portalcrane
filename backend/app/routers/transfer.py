@@ -48,21 +48,44 @@ async def start_transfer(
     When multiple images are provided, one job is created per image.
     Scan policy is shared across all jobs in the same request.
     """
-    # Validate destination folder access for non-admin users
-    if not current_user.is_admin and request.dest_registry_id is None:
-        # Destination is local registry — check folder permissions
-        folder = request.dest_folder or ""
-        for img_ref in request.images:
-            dest_name = img_ref.repository.split("/")[-1]
-            dest_path = f"{folder}/{dest_name}" if folder else dest_name
-            access = check_folder_access(
-                current_user.username, dest_path, is_pull=False
-            )
-            if access is not True:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail=f"Push permission denied for folder '{folder}'",
+    # Validate folder access for non-admin users.
+    #
+    # The transfer pipeline talks to the local embedded registry directly
+    # (localhost:5000), bypassing the registry auth proxy. We must therefore
+    # enforce folder permissions here for both ends when they resolve to the
+    # local registry:
+    #   - pull permission on the source repository  (source_registry_id is None)
+    #   - push permission on the destination folder  (dest_registry_id is None)
+    if not current_user.is_admin:
+        if request.source_registry_id is None:
+            # Source is the local registry — check pull permission on each
+            # source repository (full path, namespace included).
+            for img_ref in request.images:
+                access = check_folder_access(
+                    current_user.username, img_ref.repository, is_pull=True
                 )
+                if access is not True:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail=(
+                            f"Pull permission denied for source '{img_ref.repository}'"
+                        ),
+                    )
+
+        if request.dest_registry_id is None:
+            # Destination is local registry — check folder permissions
+            folder = request.dest_folder or ""
+            for img_ref in request.images:
+                dest_name = img_ref.repository.split("/")[-1]
+                dest_path = f"{folder}/{dest_name}" if folder else dest_name
+                access = check_folder_access(
+                    current_user.username, dest_path, is_pull=False
+                )
+                if access is not True:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail=f"Push permission denied for folder '{folder}'",
+                    )
 
     job_ids = await start_transfer_jobs(
         request=request,
