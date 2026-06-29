@@ -44,16 +44,6 @@ ARG TRIVY_VERSION=0.69.3
 RUN curl -L https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz \
     | tar xz -C /usr/local/bin trivy
 
-# ── Workspace ───────────────────────────────────────────────────────────────
-ARG WORKSPACE=/workspaces
-WORKDIR /${WORKSPACE}
-
-# ── Volume pour le registre local ─────────────────────────────────────────────
-VOLUME ["${WORKSPACE}/.data_env"]
-
-RUN mkdir -p ${WORKSPACE}/.data_env \
-    && chown vscode:vscode ${WORKSPACE}/.data_env
-
 # ── Créer un utilisateur non-root pour le développement ─────────────────────
 USER vscode
 
