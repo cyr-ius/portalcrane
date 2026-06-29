@@ -9,6 +9,7 @@ from functools import lru_cache
 from pathlib import Path
 from urllib.parse import urlparse
 
+from pydantic import PrivateAttr
 from pydantic_settings import BaseSettings
 
 logger = logging.getLogger(__name__)
@@ -47,10 +48,12 @@ class Settings(BaseSettings):
     # The admin password is always managed by the application: a secure one-time
     # password is auto-generated on first launch and printed in the logs, then
     # its bcrypt hash is persisted under DATA_DIR. See core/bootstrap.py.
-    # admin_password_hash is resolved at startup and is not read from the
-    # environment.
     admin_username: str = "admin"
-    admin_password_hash: str = ""
+
+    # Resolved bcrypt hash of the admin password. A private attribute on purpose:
+    # it is set at startup by core/bootstrap.py and must NOT be loadable from the
+    # environment. Read it through the admin_password_hash property below.
+    _admin_password_hash: str = PrivateAttr(default="")
 
     # JWT configuration
     # secret_key is auto-generated and persisted under DATA_DIR on first launch
@@ -97,6 +100,19 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = False
+
+    @property
+    def admin_password_hash(self) -> str:
+        """Bcrypt hash of the admin password, resolved at startup.
+
+        Read-only public accessor. The value is set by core/bootstrap.py via
+        set_admin_password_hash(); it is never read from the environment.
+        """
+        return self._admin_password_hash
+
+    def set_admin_password_hash(self, hashed: str) -> None:
+        """Set the resolved admin password hash (called once at startup)."""
+        self._admin_password_hash = hashed
 
     @property
     def httpx_proxy(self) -> str | None:

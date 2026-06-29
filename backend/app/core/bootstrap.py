@@ -134,7 +134,7 @@ def ensure_admin_credentials(settings: Settings) -> None:
         if _ADMIN_HASH_FILE.exists():
             stored = _ADMIN_HASH_FILE.read_text().strip()
             if stored:
-                settings.admin_password_hash = stored
+                settings.set_admin_password_hash(stored)
                 logger.info("Admin password loaded from %s.", _ADMIN_HASH_FILE)
                 return
     except OSError as exc:
@@ -143,7 +143,7 @@ def ensure_admin_credentials(settings: Settings) -> None:
     # 2. First launch — generate a one-time password, persist its hash, log it.
     password = _generate_password()
     hashed = hash_password(password)
-    settings.admin_password_hash = hashed
+    settings.set_admin_password_hash(hashed)
 
     if not _write_secret_file(_ADMIN_HASH_FILE, hashed):
         logger.error(
