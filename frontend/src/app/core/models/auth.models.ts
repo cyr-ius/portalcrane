@@ -38,6 +38,8 @@ export interface OidcPublicConfig {
   end_session_endpoint: string;
   response_type: string;
   scope: string;
+  /** When true, local credential login is disabled (OIDC-only mode). */
+  oidc_only: boolean;
 }
 
 /**
@@ -53,4 +55,12 @@ export interface OidcAdminSettings {
   post_logout_redirect_uri: string;
   response_type: string;
   scope: string;
+  /** Disable every local login (env-admin included) and rely solely on OIDC. */
+  oidc_only: boolean;
+  /** Comma-separated usernames/emails granted admin on SSO login. */
+  admin_users: string;
+  /** Name of the OIDC claim carrying the user's groups/roles. */
+  admin_group_claim: string;
+  /** Group/role value that grants admin when present in admin_group_claim. */
+  admin_group: string;
 }

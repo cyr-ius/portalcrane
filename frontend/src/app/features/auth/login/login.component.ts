@@ -5,7 +5,7 @@
  */
 
 import { SlicePipe } from "@angular/common";
-import { Component, inject, OnInit, signal } from "@angular/core";
+import { Component, computed, inject, OnInit, signal } from "@angular/core";
 import { form, FormField, required, submit } from "@angular/forms/signals";
 import { Router } from "@angular/router";
 
@@ -42,6 +42,15 @@ export class LoginComponent implements OnInit {
   // ── OIDC ──────────────────────────────────────────────────────────────────
 
   readonly oidcConfig = signal<OidcPublicConfig | null>(null);
+
+  /**
+   * Whether the local credential form may be shown. It is hidden only when
+   * OIDC is enabled AND OIDC-only mode is active (no local login allowed).
+   */
+  readonly localLoginEnabled = computed(() => {
+    const config = this.oidcConfig();
+    return !(config?.enabled && config?.oidc_only);
+  });
 
   ngOnInit(): void {
     // Load the OIDC public config to show/hide the SSO button

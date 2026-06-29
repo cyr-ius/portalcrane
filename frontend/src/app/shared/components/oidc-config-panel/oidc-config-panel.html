@@ -2,26 +2,26 @@
 
 <!-- ── Global feedback ───────────────────────────────────────────────────── -->
 @if (error()) {
-  <div class="alert alert-danger py-2 small mb-3">{{ error() }}</div>
-}
-@if (saved()) {
-  <div class="alert alert-success py-2 small mb-3">
-    <i class="bi bi-check-circle me-1"></i>Configuration saved successfully.
-  </div>
-}
-
-@if (loading()) {
-  <div class="text-center py-5 text-muted">
-    <span class="spinner-border spinner-border-sm me-2"></span>Loading oidc settings…
-  </div>
+<div class="alert alert-danger py-2 small mb-3">{{ error() }}</div>
+} @if (saved()) {
+<div class="alert alert-success py-2 small mb-3">
+  <i class="bi bi-check-circle me-1"></i>Configuration saved successfully.
+</div>
+} @if (loading()) {
+<div class="text-center py-5 text-muted">
+  <span class="spinner-border spinner-border-sm me-2"></span>Loading oidc
+  settings…
+</div>
 } @else {
 
-  <!-- ══════════════════════════════════════════════════════════════════════ -->
-  <!-- CARD 1 — OIDC                                                          -->
-  <!-- ══════════════════════════════════════════════════════════════════════ -->
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<!-- CARD 1 — OIDC                                                          -->
+<!-- ══════════════════════════════════════════════════════════════════════ -->
 
 <div class="card border-0 mb-3">
-  <div class="card-header border-0 d-flex align-items-center justify-content-between">
+  <div
+    class="card-header border-0 d-flex align-items-center justify-content-between"
+  >
     <div>
       <h6 class="fw-semibold mb-0">
         <i class="bi bi-shield-lock text-primary me-2"></i>OIDC Configuration
@@ -29,39 +29,39 @@
       <div class="text-muted small mt-1">
         <i class="bi bi-info-circle me-1"></i>
         Users will be able to log in via your OIDC provider on the login page.
-        The env-based admin login remains available as a fallback.
+        The env-based admin login remains available as a fallback — unless
+        OIDC-only mode is enabled below, which disables every local login.
       </div>
     </div>
 
-      <!-- Active state badge -->
-      @if (oidcForm.enabled().value()) {
-        <span
-          class="badge bg-warning-subtle text-warning d-flex align-items-center gap-1 ms-auto"
-        >
-          <i class="bi bi-pencil-fill" style="font-size: 0.6rem"></i>
-          Custom
-        </span>
-      } @else {
-        <span
-          class="badge bg-secondary-subtle text-secondary d-flex align-items-center gap-1 ms-auto"
-        >
-          <i class="bi bi-server" style="font-size: 0.6rem"></i>
-          From env
-        </span>
-      }
+    <!-- Active state badge -->
+    @if (oidcForm.enabled().value()) {
+    <span
+      class="badge bg-warning-subtle text-warning d-flex align-items-center gap-1 ms-auto"
+    >
+      <i class="bi bi-pencil-fill" style="font-size: 0.6rem"></i>
+      Custom
+    </span>
+    } @else {
+    <span
+      class="badge bg-secondary-subtle text-secondary d-flex align-items-center gap-1 ms-auto"
+    >
+      <i class="bi bi-server" style="font-size: 0.6rem"></i>
+      From env
+    </span>
+    }
 
-      <!-- Enabled toggle -->
-      <div class="form-check form-switch mb-0 ms-2 me-2">
-        <input
-          class="form-check-input"
-          type="checkbox"
-          id="oidcEnabled"
-          [formField]="oidcForm.enabled"
-          (change)="onEnabledToggle($event)"
-        />
-        <label class="form-check-label small" for="oidcEnabled">
-        </label>
-      </div>
+    <!-- Enabled toggle -->
+    <div class="form-check form-switch mb-0 ms-2 me-2">
+      <input
+        class="form-check-input"
+        type="checkbox"
+        id="oidcEnabled"
+        [formField]="oidcForm.enabled"
+        (change)="onEnabledToggle($event)"
+      />
+      <label class="form-check-label small" for="oidcEnabled"> </label>
+    </div>
   </div>
 
   <div class="card-body">
@@ -191,6 +191,83 @@
           [formField]="oidcForm.scope"
         />
       </div>
+
+      <!-- ── Admin bootstrap & OIDC-only ─────────────────────────────────── -->
+      <div class="col-12">
+        <hr class="my-2" />
+        <h6 class="fw-semibold small mb-0">
+          <i class="bi bi-person-gear text-primary me-1"></i>Access control
+        </h6>
+      </div>
+
+      <!-- Admin users (whitelist) -->
+      <div class="col-md-6">
+        <label class="form-label fw-semibold small">Admin users</label>
+        <div class="input-group">
+          <span class="input-group-text"
+            ><i class="bi bi-people-fill"></i
+          ></span>
+          <input
+            type="text"
+            class="form-control font-monospace"
+            placeholder="alice, bob@example.com"
+            [formField]="oidcForm.admin_users"
+          />
+        </div>
+        <div class="form-text">
+          Comma-separated usernames/emails granted admin on SSO login.
+        </div>
+      </div>
+
+      <!-- Admin group claim + value -->
+      <div class="col-md-3">
+        <label class="form-label fw-semibold small">Admin group claim</label>
+        <input
+          type="text"
+          class="form-control font-monospace"
+          placeholder="groups"
+          [formField]="oidcForm.admin_group_claim"
+        />
+      </div>
+      <div class="col-md-3">
+        <label class="form-label fw-semibold small">Admin group</label>
+        <input
+          type="text"
+          class="form-control font-monospace"
+          placeholder="registry-admins"
+          [formField]="oidcForm.admin_group"
+        />
+      </div>
+
+      <!-- OIDC-only mode -->
+      <div class="col-12">
+        <div class="form-check form-switch">
+          <input
+            class="form-check-input"
+            type="checkbox"
+            id="oidcOnly"
+            [formField]="oidcForm.oidc_only"
+          />
+          <label class="form-check-label small fw-semibold" for="oidcOnly">
+            OIDC-only mode (disable local login)
+          </label>
+        </div>
+        <div class="form-text">
+          Disables every local password login, including the built-in env-admin.
+          Requires at least one admin path above.
+        </div>
+        @if (oidcOnlyMissingAdmin()) {
+        <div class="alert alert-warning d-flex gap-2 mt-2 py-2 small mb-0">
+          <i class="bi bi-exclamation-triangle-fill flex-shrink-0 mt-1"></i>
+          <div>
+            OIDC-only mode needs an admin path: set
+            <strong>Admin users</strong> or both
+            <strong>Admin group claim</strong> and <strong>Admin group</strong>.
+            Saving will be rejected otherwise to prevent a lockout.
+          </div>
+        </div>
+        }
+      </div>
     </div>
 
     <!-- Actions -->
@@ -198,7 +275,11 @@
       <button
         class="btn btn-primary btn-sm"
         (click)="save()"
-        [disabled]="!oidcForm.enabled().value() || !oidcForm().valid()"
+        [disabled]="
+          !oidcForm.enabled().value() ||
+          !oidcForm().valid() ||
+          oidcOnlyMissingAdmin()
+        "
       >
         @if (oidcForm().submitting()) {
         <span class="spinner-border spinner-border-sm me-1"></span>

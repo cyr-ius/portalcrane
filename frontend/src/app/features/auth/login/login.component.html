@@ -56,78 +56,84 @@
             Sign in with {{ oidcConfig()?.issuer | slice: 8 : 40 }}...
           </button>
         </div>
-        <div class="divider d-flex align-items-center my-3">
-          <span class="divider-line"></span>
-          <span class="text-muted small px-2">or admin login</span>
-          <span class="divider-line"></span>
-        </div>
+        @if (localLoginEnabled()) {
+          <div class="divider d-flex align-items-center my-3">
+            <span class="divider-line"></span>
+            <span class="text-muted small px-2">or admin login</span>
+            <span class="divider-line"></span>
+          </div>
+        }
       }
 
       <!-- Local Login Form -->
-      <form (submit)="onSubmit($event)">
-        <div class="mb-3">
-          <label class="form-label fw-semibold small">Username</label>
-          <div class="input-group">
-            <span class="input-group-text"
-              ><i class="bi bi-person-fill"></i
-            ></span>
-            <input
-              type="text"
-              class="form-control"
-              placeholder="admin"
-              autocomplete="username"
-              [formField]="loginForm.username"
-            />
+      @if (localLoginEnabled()) {
+        <form (submit)="onSubmit($event)">
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">Username</label>
+            <div class="input-group">
+              <span class="input-group-text"
+                ><i class="bi bi-person-fill"></i
+              ></span>
+              <input
+                type="text"
+                class="form-control"
+                placeholder="admin"
+                autocomplete="username"
+                [formField]="loginForm.username"
+              />
+            </div>
           </div>
-        </div>
 
-        <div class="mb-3">
-          <label class="form-label fw-semibold small">Password</label>
-          <div class="input-group">
-            <span class="input-group-text"
-              ><i class="bi bi-lock-fill"></i
-            ></span>
-            <input
-              [type]="showPassword() ? 'text' : 'password'"
-              class="form-control"
-              [formField]="loginForm.password"
-              placeholder="••••••••"
-              autocomplete="current-password"
-            />
-            <button
-              type="button"
-              class="btn btn-outline-secondary"
-              (click)="showPassword.set(!showPassword())"
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">Password</label>
+            <div class="input-group">
+              <span class="input-group-text"
+                ><i class="bi bi-lock-fill"></i
+              ></span>
+              <input
+                [type]="showPassword() ? 'text' : 'password'"
+                class="form-control"
+                [formField]="loginForm.password"
+                placeholder="••••••••"
+                autocomplete="current-password"
+              />
+              <button
+                type="button"
+                class="btn btn-outline-secondary"
+                (click)="showPassword.set(!showPassword())"
+              >
+                <i
+                  [class]="showPassword() ? 'bi bi-eye-slash' : 'bi bi-eye'"
+                ></i>
+              </button>
+            </div>
+          </div>
+
+          @if (error()) {
+            <div
+              class="alert alert-danger d-flex align-items-center gap-2 py-2"
+              role="alert"
             >
-              <i [class]="showPassword() ? 'bi bi-eye-slash' : 'bi bi-eye'"></i>
-            </button>
-          </div>
-        </div>
-
-        @if (error()) {
-          <div
-            class="alert alert-danger d-flex align-items-center gap-2 py-2"
-            role="alert"
-          >
-            <i class="bi bi-exclamation-triangle-fill"></i>
-            <small>{{ error() }}</small>
-          </div>
-        }
-
-        <button
-          type="submit"
-          class="btn btn-primary w-100 d-flex align-items-center justify-content-center gap-2"
-          [disabled]="loading() || loginForm().invalid()"
-        >
-          @if (loading()) {
-            <span class="spinner-border spinner-border-sm"></span>
-            Signing in...
-          } @else {
-            <i class="bi bi-box-arrow-in-right"></i>
-            Sign In
+              <i class="bi bi-exclamation-triangle-fill"></i>
+              <small>{{ error() }}</small>
+            </div>
           }
-        </button>
-      </form>
+
+          <button
+            type="submit"
+            class="btn btn-primary w-100 d-flex align-items-center justify-content-center gap-2"
+            [disabled]="loading() || loginForm().invalid()"
+          >
+            @if (loading()) {
+              <span class="spinner-border spinner-border-sm"></span>
+              Signing in...
+            } @else {
+              <i class="bi bi-box-arrow-in-right"></i>
+              Sign In
+            }
+          </button>
+        </form>
+      }
     </div>
 
     <div class="card-footer text-center text-muted small py-2 border-0">
