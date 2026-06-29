@@ -22,13 +22,11 @@ ENV UV_LINK_MODE=copy \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-# ── Angular CLI 21 + outils globaux ────────────────────────────────────────
+# ── Angular CLI 22 + outils globaux ────────────────────────────────────────
 ENV NG_CLI_ANALYTICS=ci \
     NG_FORCE_TTY=false
 
-RUN npm install -g \
-    @angular/cli@21 \
-    prettier@3
+RUN npm install -g @angular/cli@22
 
 # Download and install registry binary
 ARG REGISTRY_VERSION=3.0.0
