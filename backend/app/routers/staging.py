@@ -6,7 +6,7 @@ Pipeline: skopeo copy (source registry → OCI layout) → Trivy CVE scan (optio
 import logging
 import shutil
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
@@ -26,8 +26,8 @@ from ..services.job_service import (
     safe_job_path,
 )
 from ..services.providers import build_target_path, resolve_provider_from_registry
+from ..services.registries_service import get_registry_for_user
 from ..services.repositories_service import skopeo_copy_oci_image
-from .registries import get_registry_by_id
 
 router = APIRouter()
 
@@ -61,7 +61,7 @@ def _build_external_target_image(image: str, username: str) -> str:
 
 def _resolve_pull_source(
     request: PullRequest,
-    _: UserInfo,
+    current_user: UserInfo,
 ) -> tuple[str, list[str], str | None]:
     """
     Resolve the skopeo source reference, credentials flags and display host
@@ -82,7 +82,13 @@ def _resolve_pull_source(
 
     # ── 1. Saved external registry ────────────────────────────────────────────
     if request.source_registry_id:
-        registry = get_registry_by_id(request.source_registry_id)
+        # Ownership-aware resolution: a non-admin may only use global / system
+        # registries or their own, never another user's stored credentials.
+        registry = get_registry_for_user(
+            request.source_registry_id,
+            current_user.username,
+            current_user.is_admin,
+        )
         if not registry:
             raise ValueError(f"Source registry not found: {request.source_registry_id}")
 
@@ -198,7 +204,7 @@ async def pull_image(
         "vuln_severities_override": request.vuln_severities_override,
         "owner": current_user.username,
         "source_registry_host": display_host,
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
     }
     background_tasks.add_task(
         run_pull_pipeline,
@@ -251,7 +257,11 @@ async def push_image(
 
     if request.external_registry_host or request.external_registry_id:
         if request.external_registry_id:
-            registry = get_registry_by_id(request.external_registry_id)
+            registry = get_registry_for_user(
+                request.external_registry_id,
+                current_user.username,
+                current_user.is_admin,
+            )
             if not registry:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,

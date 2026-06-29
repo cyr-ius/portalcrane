@@ -20,7 +20,7 @@ from ..core.jwt import (
     require_push_access,
 )
 from ..services.job_service import normalize_sync_job
-from ..services.registries_service import get_registry_by_id
+from ..services.registries_service import get_registry_by_id, get_registry_for_user
 from ..services.repositories_service import (
     append_tag,
     browse_images,
@@ -37,6 +37,7 @@ from ..services.repositories_service import (
     validate_folder_path,
 )
 from .folders import check_folder_access
+from .registries import resolve_owned_registry
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -81,13 +82,9 @@ async def list_images(
     search: str | None = Query(None, description="Filter repositories by name"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=5, le=200),
-    _: UserInfo = Depends(require_pull_access),
+    _: dict = Depends(resolve_owned_registry),
 ):
     """List repositories available in an external registry via /v2/_catalog."""
-    registry = get_registry_by_id(registry_id)
-    if not registry:
-        raise HTTPException(status_code=404, detail="Registry not found")
-
     try:
         result = await browse_images(
             registry_id=registry_id,
@@ -108,13 +105,9 @@ async def list_images(
 async def delete_image(
     registry_id: str,
     repository: str = Query(..., description="Repository name, e.g. myorg/myimage"),
-    _: UserInfo = Depends(require_push_access),
+    _: dict = Depends(resolve_owned_registry),
 ):
     """Delete all tags of a repository in an external registry."""
-    registry = get_registry_by_id(registry_id)
-    if not registry:
-        raise HTTPException(status_code=404, detail="Registry not found")
-
     try:
         result = await remove_image(registry_id=registry_id, repository=repository)
     except _REGISTRY_ERRORS as exc:
@@ -136,13 +129,9 @@ async def get_tag_detail(
     registry_id: str,
     repository: str = Query(..., description="Repository name, e.g. myorg/myimage"),
     tag: str = Query(..., description="Tag name, e.g. latest"),
-    _: UserInfo = Depends(require_pull_access),
+    _: dict = Depends(resolve_owned_registry),
 ):
     """Return detailed metadata for a specific tag in an external V2 registry."""
-    registry = get_registry_by_id(registry_id)
-    if not registry:
-        raise HTTPException(status_code=404, detail="Registry not found")
-
     try:
         detail = await metadata_by_tag(
             registry_id=registry_id, repository=repository, tag=tag
@@ -167,13 +156,9 @@ async def get_tag_detail(
 async def get_tags(
     registry_id: str,
     repository: str = Query(..., description="Repository name, e.g. myorg/myimage"),
-    _: UserInfo = Depends(require_pull_access),
+    _: dict = Depends(resolve_owned_registry),
 ):
     """List tags for a specific repository in an external registry."""
-    registry = get_registry_by_id(registry_id)
-    if not registry:
-        raise HTTPException(status_code=404, detail="Registry not found")
-
     try:
         return await browse_tags(registry_id=registry_id, repository=repository)
     except _REGISTRY_ERRORS as exc:
@@ -189,13 +174,9 @@ async def delete_tag(
     registry_id: str,
     repository: str = Query(..., description="Repository name, e.g. myorg/myimage"),
     tag: str = Query(..., description="Tag name to delete"),
-    _: UserInfo = Depends(require_push_access),
+    _: dict = Depends(resolve_owned_registry),
 ):
     """Delete a single tag from an external V2 registry."""
-    registry = get_registry_by_id(registry_id)
-    if not registry:
-        raise HTTPException(status_code=404, detail="Registry not found")
-
     try:
         result = await remove_tag(
             registry_id=registry_id, repository=repository, tag=tag
@@ -219,13 +200,9 @@ async def add_tag(
     registry_id: str,
     repository: str = Query(..., description="Repository name, e.g. myorg/myimage"),
     request: AddExternalTagRequest = Body(...),
-    _: UserInfo = Depends(require_push_access),
+    _: dict = Depends(resolve_owned_registry),
 ):
     """Create a new tag by copying a manifest in an external V2 registry."""
-    registry = get_registry_by_id(registry_id)
-    if not registry:
-        raise HTTPException(status_code=404, detail="Registry not found")
-
     try:
         result = await append_tag(
             registry_id=registry_id,
@@ -348,10 +325,11 @@ async def list_sync_jobs_endpoint(
 @router.post("/export")
 async def start_sync(
     request: SyncRequest,
-    _: UserInfo = Depends(require_push_access),
+    current_user: UserInfo = Depends(require_push_access),
     settings: Settings = Depends(get_settings),
 ):
     """Trigger a sync job (local -> external). Returns job_id immediately."""
+    _ensure_registry_access(current_user, request.dest_registry_id)
     try:
         folder = validate_folder_path(request.dest_folder or "")
     except ValueError as exc:
@@ -377,10 +355,11 @@ async def start_sync(
 @router.post("/import")
 async def start_import(
     request: ImportRequest,
-    _: UserInfo = Depends(require_push_access),
+    current_user: UserInfo = Depends(require_push_access),
     settings: Settings = Depends(get_settings),
 ):
     """Trigger an import job (external -> local). Returns job_id immediately."""
+    _ensure_registry_access(current_user, request.source_registry_id)
     try:
         folder = validate_folder_path(request.dest_folder or "")
     except ValueError as exc:
@@ -398,6 +377,20 @@ async def start_import(
         raise HTTPException(status_code=404, detail=str(exc))
 
     return {"job_id": job_id, "status": "running"}
+
+
+def _ensure_registry_access(current_user: UserInfo, registry_id: str) -> None:
+    """Enforce registry ownership for a body-supplied registry_id.
+
+    Raises 404 when the registry does not exist or belongs to another user,
+    so a non-admin cannot use another user's stored credentials (e.g. to push
+    to or pull from their saved external registry).
+    """
+    registry = get_registry_for_user(
+        registry_id, current_user.username, current_user.is_admin
+    )
+    if not registry:
+        raise HTTPException(status_code=404, detail="Registry not found")
 
 
 def _ensure_folder_permission(

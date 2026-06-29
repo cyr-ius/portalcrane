@@ -21,6 +21,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from ..config import Settings, get_settings
 from ..core.jwt import UserInfo, get_current_user, require_push_access
 from ..routers.folders import check_folder_access
+from ..services.registries_service import get_registry_for_user
 from ..services.transfer_service import (
     TransferRequest,
     delete_transfer_job,
@@ -48,6 +49,19 @@ async def start_transfer(
     When multiple images are provided, one job is created per image.
     Scan policy is shared across all jobs in the same request.
     """
+    # Enforce registry ownership for any saved external registry referenced by
+    # this request. Without this a non-admin could pass another user's
+    # registry_id and have the pipeline authenticate with their stored
+    # credentials (browse, pull, and push as that user).
+    for registry_id in (request.source_registry_id, request.dest_registry_id):
+        if registry_id is not None and not get_registry_for_user(
+            registry_id, current_user.username, current_user.is_admin
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Registry not found",
+            )
+
     # Validate folder access for non-admin users.
     #
     # The transfer pipeline talks to the local embedded registry directly

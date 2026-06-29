@@ -8,8 +8,6 @@ from pydantic import BaseModel
 from ..core.jwt import (
     UserInfo,
     get_current_user,
-    require_pull_access,
-    require_push_access,
 )
 from ..services.registries_service import (
     check_catalog_browsable,
@@ -17,6 +15,7 @@ from ..services.registries_service import (
     delete_registry,
     get_registries,
     get_registry_by_id,
+    get_registry_for_user,
     ping_catalog,
     test,
     update_registry,
@@ -24,6 +23,26 @@ from ..services.registries_service import (
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+async def resolve_owned_registry(
+    registry_id: str,
+    current_user: UserInfo = Depends(get_current_user),
+) -> dict:
+    """FastAPI dependency: resolve a path ``registry_id`` enforcing ownership.
+
+    Non-admin users may only access global / system registries or registries
+    they own. When the registry exists but belongs to another user a 404 is
+    returned (rather than 403) so the existence of other users' registries —
+    and their stored credentials — is never leaked.
+    """
+    registry = get_registry_for_user(
+        registry_id, current_user.username, current_user.is_admin
+    )
+    if not registry:
+        raise HTTPException(status_code=404, detail="Registry not found")
+    return registry
+
 
 # ── Pydantic models ───────────────────────────────────────────────────────────
 
@@ -226,13 +245,9 @@ async def test_connection(
 @router.post("/{registry_id}/test")
 async def test_saved_connection(
     registry_id: str,
-    _: UserInfo = Depends(get_current_user),
+    registry: dict = Depends(resolve_owned_registry),
 ):
     """Test connectivity to a saved registry using stored credentials."""
-    registry = get_registry_by_id(registry_id)
-    if not registry:
-        raise HTTPException(status_code=404, detail="Registry not found")
-
     checks = await test(
         host=registry["host"],
         username=registry.get("username", ""),
@@ -250,14 +265,9 @@ async def test_saved_connection(
 
 @router.get("/{registry_id}/catalog-check")
 async def catalog_check(
-    registry_id: str,
-    _: UserInfo = Depends(require_pull_access),
+    registry: dict = Depends(resolve_owned_registry),
 ):
     """Check catalog for a specific repository in an external registry."""
-    registry = get_registry_by_id(registry_id)
-    if not registry:
-        raise HTTPException(status_code=404, detail="Registry not found")
-
     check = await check_catalog_browsable(
         host=registry["host"],
         username=registry.get("username", ""),
@@ -272,13 +282,9 @@ async def catalog_check(
 @router.get("/{registry_id}/ping")
 async def ping(
     registry_id: str,
-    _: UserInfo = Depends(require_push_access),
+    registry: dict = Depends(resolve_owned_registry),
 ):
     """Check local registry connectivity."""
-    registry = get_registry_by_id(registry_id)
-    if not registry:
-        raise HTTPException(status_code=404, detail="Registry not found")
-
     is_up = await ping_catalog(registry_id=registry_id)
     return {
         "status": "ok" if is_up else "unreachable",

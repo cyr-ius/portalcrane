@@ -186,6 +186,39 @@ def get_registry_by_id(registry_id: str) -> dict | None:
     return None
 
 
+def user_can_access_registry(
+    registry: dict, username: str | None, is_admin: bool
+) -> bool:
+    """Return True when *username* is allowed to use *registry*.
+
+    Access is granted when the user is an admin, or when the registry is
+    global / system-owned, or when the user is the registry owner. This is
+    the single source of truth for registry ownership, mirroring the inline
+    checks already performed by the update / delete registry endpoints.
+    """
+    if is_admin:
+        return True
+    return registry.get("owner", "global") in ("global", username)
+
+
+def get_registry_for_user(
+    registry_id: str, username: str | None, is_admin: bool
+) -> dict | None:
+    """Resolve a registry by ID enforcing ownership for non-admins.
+
+    Returns the registry (with real credentials, for internal use) only when
+    the user is allowed to use it. Returns None both when the registry does
+    not exist and when it belongs to another user, so callers surface a 404
+    without leaking the existence of other users' registries or credentials.
+    """
+    registry = get_registry_by_id(registry_id)
+    if registry is None:
+        return None
+    if not user_can_access_registry(registry, username, is_admin):
+        return None
+    return registry
+
+
 def delete_registry(registry_id: str) -> bool:
     """Delete a registry entry. Returns True if deleted, False if not found.
 
