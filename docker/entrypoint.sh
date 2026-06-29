@@ -2,14 +2,25 @@
 # ─── Portalcrane container entrypoint ─────────────────────────────────────────
 set -e
 
-# ── Warn if SECRET_KEY was not changed ────────────────────────────────────────
-if [ "${SECRET_KEY:-change-this-secret-key-in-production}" = "change-this-secret-key-in-production" ]; then
-    echo "[entrypoint] WARNING: SECRET_KEY is not set. Using insecure default." >&2
-fi
-
-# ── Generate registry config from template ────────────────────────────────────
+# ── Data directory ────────────────────────────────────────────────────────────
 DATA_DIR=${DATA_DIR:-"/var/lib/portalcrane"}
 export DATA_DIR
+mkdir -p "${DATA_DIR}"
+
+# ── Resolve SECRET_KEY (auto-generate & persist on first launch) ───────────────
+# Shared with the backend (JWT signing) and the embedded registry. When unset or
+# left at the default, generate a random secret once and persist it under
+# DATA_DIR so JWTs and registry signatures survive restarts.
+SECRET_KEY_FILE="${DATA_DIR}/secret_key"
+if [ -z "${SECRET_KEY}" ] || [ "${SECRET_KEY}" = "change-this-secret-key-in-production" ]; then
+    if [ ! -s "${SECRET_KEY_FILE}" ]; then
+        head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n' > "${SECRET_KEY_FILE}"
+        chmod 600 "${SECRET_KEY_FILE}"
+        echo "[entrypoint] Generated a new SECRET_KEY in ${SECRET_KEY_FILE}"
+    fi
+    SECRET_KEY=$(cat "${SECRET_KEY_FILE}")
+fi
+export SECRET_KEY
 
 REGISTRY_HTTP_SECRET=${SECRET_KEY}
 export REGISTRY_HTTP_SECRET
