@@ -13,12 +13,12 @@
     (click)="$event.stopPropagation()"
   >
     <div class="modal-content border-0 shadow-lg">
-
       <!-- ── Header ──────────────────────────────────────────────────────── -->
       <div class="modal-header border-0 pb-0">
         <div>
           <h5 class="modal-title fw-semibold">
-            <i class="bi bi-arrow-left-right me-2 text-primary"></i>Transfer Images
+            <i class="bi bi-arrow-left-right me-2 text-primary"></i>Transfer
+            Images
           </h5>
           <p class="text-muted small mb-0">
             Copy images between registries — scan policy from
@@ -30,7 +30,6 @@
 
       <!-- ── Body ───────────────────────────────────────────────────────── -->
       <div class="modal-body pt-3">
-
         <!-- ── Job results (shown once transfer has started) ───────────── -->
         @if (activeJobs().length > 0) {
           <div class="mb-3">
@@ -44,13 +43,14 @@
             <div class="d-flex flex-column gap-2">
               @for (job of activeJobs(); track job.job_id) {
                 <div class="border rounded p-3">
-
                   <!-- Job header -->
                   <div
                     class="d-flex align-items-center justify-content-between gap-2 mb-2"
                   >
                     <div class="min-w-0">
-                      <div class="fw-semibold small font-monospace text-truncate">
+                      <div
+                        class="fw-semibold small font-monospace text-truncate"
+                      >
                         {{ job.repository }}:{{ job.tag }}
                         <i class="bi bi-arrow-right mx-1 text-muted"></i>
                         {{ job.dest_repository }}:{{ job.dest_tag }}
@@ -95,7 +95,9 @@
                   <!-- CVE table shown when the scan blocked the transfer -->
                   @if (job.status === "scan_vulnerable" && job.vuln_result) {
                     <div class="mt-2 pt-2 border-top">
-                      <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
+                      <div
+                        class="d-flex align-items-center gap-2 flex-wrap mb-2"
+                      >
                         <span class="small fw-semibold text-danger">
                           <i class="bi bi-shield-x me-1"></i>Vulnerabilities
                           detected — transfer blocked
@@ -129,24 +131,36 @@
                               </tr>
                             </thead>
                             <tbody>
-                              @for (vuln of getVulnerabilities(job); track vuln.id) {
+                              @for (
+                                vuln of getVulnerabilities(job);
+                                track vuln.id
+                              ) {
                                 <tr>
                                   <td>
                                     <a
-                                      [href]="'https://nvd.nist.gov/vuln/detail/' + vuln.id"
+                                      [href]="
+                                        'https://nvd.nist.gov/vuln/detail/' +
+                                        vuln.id
+                                      "
                                       target="_blank"
                                       rel="noopener noreferrer"
                                       class="text-decoration-none font-monospace"
                                       style="font-size: 0.72rem"
-                                    >{{ vuln.id }}</a>
+                                      >{{ vuln.id }}</a
+                                    >
                                   </td>
                                   <td>
                                     <span
-                                      [class]="severityBadgeClass(vuln.severity)"
+                                      [class]="
+                                        severityBadgeClass(vuln.severity)
+                                      "
                                       style="font-size: 0.65rem"
-                                    >{{ vuln.severity }}</span>
+                                      >{{ vuln.severity }}</span
+                                    >
                                   </td>
-                                  <td class="font-monospace">{{ vuln.package }}</td>
+                                  <td class="font-monospace">
+                                    {{ vuln.package }}
+                                  </td>
                                   <td>{{ vuln.installed_version }}</td>
                                   <td>{{ vuln.fixed_version ?? "—" }}</td>
                                   <td>{{ vuln.cvss_score ?? "—" }}</td>
@@ -158,7 +172,6 @@
                       }
                     </div>
                   }
-
                 </div>
               }
             </div>
@@ -172,10 +185,11 @@
         <!-- ── Transfer configuration form ────────────────────────────── -->
         @if (activeJobs().length === 0) {
           <div class="row g-3">
-
             <!-- ── Left column: image + tag selection ──────────────────── -->
             <div class="col-12 col-md-5">
-              <div class="d-flex align-items-center justify-content-between mb-2">
+              <div
+                class="d-flex align-items-center justify-content-between mb-2"
+              >
                 <h6 class="fw-semibold mb-0">
                   <i class="bi bi-layers me-1"></i>Select Images
                 </h6>
@@ -184,12 +198,16 @@
                     class="btn btn-sm btn-outline-secondary"
                     (click)="selectAll()"
                     type="button"
-                  >All</button>
+                  >
+                    All
+                  </button>
                   <button
                     class="btn btn-sm btn-outline-secondary"
                     (click)="clearAll()"
                     type="button"
-                  >None</button>
+                  >
+                    None
+                  </button>
                 </div>
               </div>
 
@@ -199,7 +217,6 @@
                 style="max-height: 420px; overflow-y: auto"
               >
                 @for (img of allImages(); track img.name; let i = $index) {
-
                   <!-- Image row — checkbox selects / deselects all its tags -->
                   <div
                     class="px-3 py-2 border-bottom bg-body-tertiary d-flex align-items-center gap-2"
@@ -262,7 +279,6 @@
                       </label>
                     </div>
                   }
-
                 }
               </div>
 
@@ -275,7 +291,6 @@
 
             <!-- ── Right column: destination configuration ──────────────── -->
             <div class="col-12 col-md-7">
-
               <!-- Scan policy banner (read-only, inherited from server) -->
               <div
                 class="d-flex align-items-center gap-2 rounded p-2 mb-3 small"
@@ -378,7 +393,7 @@
                       type="text"
                       class="form-control form-control-sm font-monospace"
                       [placeholder]="
-                        selectedImageRefs()[0]?.repository ?? 'image-name'
+                        selectedImageRefs().at(0)?.repository ?? 'image-name'
                       "
                       [value]="destNameOverride()"
                       (input)="destNameOverride.set($any($event.target).value)"
@@ -392,7 +407,7 @@
                     <input
                       type="text"
                       class="form-control form-control-sm font-monospace"
-                      [placeholder]="selectedImageRefs()[0]?.tag ?? 'latest'"
+                      [placeholder]="selectedImageRefs().at(0)?.tag ?? 'latest'"
                       [value]="destTagOverride()"
                       (input)="destTagOverride.set($any($event.target).value)"
                     />
@@ -415,11 +430,9 @@
                   {{ transferError() }}
                 </div>
               }
-
             </div>
           </div>
         }
-
       </div>
 
       <!-- ── Footer ─────────────────────────────────────────────────────── -->
@@ -447,7 +460,6 @@
           </button>
         }
       </div>
-
     </div>
   </div>
 </div>
