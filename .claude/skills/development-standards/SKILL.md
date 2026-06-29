@@ -1,15 +1,17 @@
 ---
 name: development-standards
-description: Normes de code Portalcrane (Angular 21 + FastAPI). À utiliser quand on écrit/refactore du code frontend Angular ou backend FastAPI de ce dépôt, ou avant un commit. Charge les détails depuis references/ uniquement au besoin.
+description: Normes de code Portalcrane (Angular 22 + FastAPI). À utiliser quand on écrit/refactore du code frontend Angular ou backend FastAPI de ce dépôt, ou avant un commit. Charge les détails depuis references/ uniquement au besoin.
 ---
 
 # 🎓 Portalcrane — Normes de développement
 
-Index des règles non négociables. **Les détails et exemples complets sont dans `references/` — n'y aller que si la tâche concerne la partie correspondante.**
+Index des **règles propres à ce dépôt**. Les détails sont dans `references/` — n'y aller que si la tâche concerne la partie correspondante.
+
+> **Best practices génériques des frameworks** : utiliser les skills dédiés plutôt que dupliquer ici — `angular-developer` (Angular), `fastapi` (FastAPI), `sqlmodel` (couche base de données / ORM). Ce skill ne couvre que ce qui est spécifique à Portalcrane.
 
 | Couche      | Techno                      | Version                                          |
 | ----------- | --------------------------- | ------------------------------------------------ |
-| Frontend    | Angular                     | 21 (Signals, Signal Forms, Zoneless, Standalone) |
+| Frontend    | Angular                     | 22 (Signals, Signal Forms, Zoneless, Standalone) |
 | Backend     | FastAPI                     | 0.135.1 (async, Pydantic v2)                     |
 | UI          | Bootstrap / Bootstrap Icons | 5.3.8 / 1.13.1                                   |
 | Runtimes    | Python / Node.js            | 3.14 / 18+                                       |
@@ -17,7 +19,7 @@ Index des règles non négociables. **Les détails et exemples complets sont dan
 
 ## Règles essentielles
 
-### Angular 21 → détails : [references/angular.md](references/angular.md)
+### Angular 22 → détails : [references/angular.md](references/angular.md)
 
 - Composants **standalone**, fichiers `.ts` / `.html` / `.css` **séparés** (pas d'inline massif).
 - Control flow `@if` / `@for (… track …)` / `@switch` — **jamais** `*ngIf` / `*ngFor` / `*ngSwitch`.
