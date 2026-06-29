@@ -8,7 +8,6 @@ import { SlicePipe } from "@angular/common";
 import { Component, inject, OnInit, signal } from "@angular/core";
 import { form, FormField, required, submit } from "@angular/forms/signals";
 import { Router } from "@angular/router";
-import { firstValueFrom } from "rxjs";
 
 import { OidcPublicConfig } from "../../../core/models/auth.models";
 import { AuthService } from "../../../core/services/auth.service";
@@ -61,7 +60,7 @@ export class LoginComponent implements OnInit {
     submit(this.loginForm, async (f) => {
       const { username, password } = f().value();
       try {
-        await firstValueFrom(this.auth.login(username!, password!));
+        await this.auth.login(username!, password!);
         this.router.navigate(["/"]);
         f().reset({ ...this.login });
       } catch (err: unknown) {

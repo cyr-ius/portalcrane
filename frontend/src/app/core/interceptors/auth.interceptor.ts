@@ -1,7 +1,10 @@
 /**
  * Portalcrane - Auth Interceptor
  *
- * Attaches the Bearer token to every /api/ request and handles:
+ * The session JWT travels in an HttpOnly cookie set by the backend at login,
+ * so this interceptor only ensures the cookie is sent with API calls
+ * (withCredentials) — it never reads or attaches the token in JavaScript.
+ * It also handles:
  *   - 401 responses: clears the session and shows the session-expired modal
  *   - 0, 502, 503, 504 errors: marks the backend as unavailable
  *
@@ -25,18 +28,18 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const auth = inject(AuthService);
   const sessionExpired = inject(SessionExpiredService);
   const backendAvailability = inject(BackendAvailabilityService);
-  const token = auth.getToken();
 
-  // Attach Authorization header to all API requests when a token is available
-  const authReq =
-    token && req.url.includes("/api/")
-      ? req.clone({ setHeaders: { Authorization: `Bearer ${token}` } })
-      : req;
+  // The auth travels in an HttpOnly cookie; ensure it is sent with API calls.
+  const authReq = req.url.includes("/api/")
+    ? req.clone({ withCredentials: true })
+    : req;
 
   return next(authReq).pipe(
     catchError((error: HttpErrorResponse) => {
-      // Handle expired or invalid token — skip the login endpoint itself
-      if (error.status === 401 && !req.url.includes("/auth/login")) {
+      // Handle expired or invalid token — skip the auth endpoints themselves.
+      // A 401 on /api/auth/* is expected when simply not logged in (e.g. the
+      // startup /me probe or /login) and must not surface as "session expired".
+      if (error.status === 401 && !req.url.includes("/api/auth/")) {
         auth.clearSession();
         sessionExpired.show();
       }

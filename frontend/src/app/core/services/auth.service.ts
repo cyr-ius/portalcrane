@@ -1,9 +1,13 @@
 /**
  * Portalcrane - AuthService
- * Manages the local authentication session:
+ * Manages the authentication session:
  *   - login() / logout() with local credentials
- *   - JWT token storage (localStorage)
  *   - reactive user and authentication state (signals)
+ *
+ * The session JWT lives in an HttpOnly cookie set by the backend and is never
+ * accessible to JavaScript (no localStorage), which neutralises XSS token theft.
+ * Auth state is therefore derived from the loaded user, restored on startup via
+ * bootstrap() (a /me probe that relies on the cookie).
  *
  * OIDC-specific logic (config fetch, redirect, callback) lives in OidcService.
  *
@@ -18,9 +22,9 @@
 import { HttpClient } from "@angular/common/http";
 import { computed, inject, Injectable, signal } from "@angular/core";
 import { Router } from "@angular/router";
-import { tap } from "rxjs";
+import { firstValueFrom } from "rxjs";
 
-import { LoginResponse, UserInfo } from "../models/auth.models";
+import { UserInfo } from "../models/auth.models";
 import { JobService } from "./job.service";
 import { OidcService } from "./oidc.service";
 import { TransferService } from "./transfer.service";
@@ -33,57 +37,65 @@ export class AuthService {
   private readonly jobService = inject(JobService);
   private readonly transferService = inject(TransferService);
 
-  private readonly TOKEN_KEY = "pc_token";
-  private readonly USER_KEY = "pc_user";
-
   // ── Reactive state ────────────────────────────────────────────────────────
 
-  private readonly _token = signal<string | null>(
-    typeof window !== "undefined"
-      ? localStorage.getItem(this.TOKEN_KEY)
-      : null,
-  );
+  // The session JWT lives in an HttpOnly cookie; auth state is derived from the
+  // loaded user. No token is ever held in JavaScript.
+  private readonly _user = signal<UserInfo | null>(null);
 
-  private readonly _user = signal<UserInfo | null>(
-    JSON.parse(localStorage.getItem(this.USER_KEY) ?? "null"),
-  );
-
-  /** True when a valid token is present in memory. */
-  readonly isAuthenticated = computed(() => !!this._token());
+  /** True when an authenticated user has been loaded. */
+  readonly isAuthenticated = computed(() => !!this._user());
 
   /** Currently authenticated user (null before first load). */
   readonly currentUser = this._user.asReadonly();
 
+  // ── Session bootstrap ──────────────────────────────────────────────────────
+
+  /**
+   * Restore the session on startup from the HttpOnly cookie, if present.
+   * Called by an app initializer before the auth guard runs so that a page
+   * reload keeps the user authenticated. Never throws.
+   */
+  async bootstrap(): Promise<void> {
+    try {
+      this._user.set(
+        await firstValueFrom(this.http.get<UserInfo>("/api/auth/me")),
+      );
+    } catch {
+      this._user.set(null);
+    }
+  }
+
   // ── Local authentication ──────────────────────────────────────────────────
 
-  /** Authenticate with username and password, store the token, load user info. */
-  login(username: string, password: string) {
-    return this.http
-      .post<LoginResponse>("/api/auth/login", { username, password })
-      .pipe(
-        tap((response) => {
-          this.storeToken(response.access_token);
-          this.loadUserInfo();
-        }),
-      );
+  /** Authenticate with username and password (backend sets the auth cookie). */
+  async login(username: string, password: string): Promise<void> {
+    await firstValueFrom(
+      this.http.post("/api/auth/login", { username, password }),
+    );
+    await this.loadUserInfo();
   }
 
   /** Fetch /api/auth/me and refresh the user signal. */
-  loadUserInfo(): void {
-    this.http.get<UserInfo>("/api/auth/me").subscribe({
-      next: (user) => {
-        this._user.set(user);
-        localStorage.setItem(this.USER_KEY, JSON.stringify(user));
-      },
-    });
+  async loadUserInfo(): Promise<void> {
+    this._user.set(
+      await firstValueFrom(this.http.get<UserInfo>("/api/auth/me")),
+    );
   }
 
   /**
-   * Clear the local session then redirect to the login page.
+   * Clear the session (server cookie + local state) then redirect to login.
    * When OIDC is active and an end-session endpoint is configured the browser
    * is redirected to the provider's logout URL instead.
    */
-  logout(): void {
+  async logout(): Promise<void> {
+    // Clear the HttpOnly cookie server-side; ignore network errors since
+    // wiping local state is enough to log the user out of the UI.
+    try {
+      await firstValueFrom(this.http.post("/api/auth/logout", {}));
+    } catch {
+      // Ignore — local cleanup below is sufficient.
+    }
     this.clearSession();
 
     this.oidcService.getPublicConfig().subscribe({
@@ -106,7 +118,7 @@ export class AuthService {
   }
 
   /**
-   * Remove token and user from memory and localStorage.
+   * Clear the in-memory user state.
    *
    * Also resets all singleton services that hold user-scoped state so that
    * a subsequent login (same browser tab, different user) starts with a clean
@@ -117,27 +129,10 @@ export class AuthService {
    *   - authInterceptor  — on any 401 response (session expired / invalid token)
    */
   clearSession(): void {
-    this._token.set(null);
     this._user.set(null);
-    localStorage.removeItem(this.TOKEN_KEY);
-    localStorage.removeItem(this.USER_KEY);
 
     // Reset singleton service caches that contain user-scoped data.
     this.jobService.clearState();
     this.transferService.clearState();
-  }
-
-  /** Return the current JWT token string (or null when not authenticated). */
-  getToken(): string | null {
-    return this._token();
-  }
-
-  /**
-   * Store a JWT access token in memory and localStorage.
-   * Called by OidcCallbackComponent after a successful code exchange.
-   */
-  storeToken(token: string): void {
-    this._token.set(token);
-    localStorage.setItem(this.TOKEN_KEY, token);
   }
 }

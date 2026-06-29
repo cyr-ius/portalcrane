@@ -1,8 +1,9 @@
 /**
  * Portalcrane - OidcCallbackComponent
  * Handles the browser redirect from the OIDC provider.
- * Validates the state parameter, exchanges the code via OidcService,
- * stores the token via AuthService, then navigates to the home page.
+ * Validates the state parameter, exchanges the code via OidcService (the backend
+ * sets the HttpOnly auth cookie on that response), loads the user profile, then
+ * navigates to the home page. The token is never stored in JavaScript.
  */
 
 import { Component, inject, OnInit, signal } from "@angular/core";
@@ -54,12 +55,11 @@ export class OidcCallbackComponent implements OnInit {
 
     sessionStorage.removeItem(OIDC_STATE_KEY);
 
-    // Exchange the code for a local JWT
+    // Exchange the code for a session — the backend sets the HttpOnly cookie.
     this.oidc.exchangeCode(code, state).subscribe({
-      next: (response) => {
-        // Store the token and load the user profile
-        this.auth.storeToken(response.access_token);
-        this.auth.loadUserInfo();
+      next: async () => {
+        // Load the user profile (relies on the freshly set cookie) then enter.
+        await this.auth.loadUserInfo();
         this.router.navigate(["/"]);
       },
       error: (err) => {
