@@ -57,7 +57,7 @@ Portalcrane's internal registry allows you to organize images into directories. 
 
 | Layer                      | Technology                                                          |
 | -------------------------- | ------------------------------------------------------------------- |
-| **Frontend**               | Angular 21 — Signals, Signal Forms, Zoneless, standalone components |
+| **Frontend**               | Angular 22 — Signals, Signal Forms, Zoneless, standalone components |
 | **Styling**                | Bootstrap 5 + Bootstrap Icons                                       |
 | **Backend**                | FastAPI + Python 3.14 (fully async)                                 |
 | **Validation**             | Pydantic v2                                                         |
@@ -81,7 +81,7 @@ Portalcrane's internal registry allows you to organize images into directories. 
 ```bash
 docker run -d \
   --name portalcrane \
-  -p 8080:8080 \
+  -p 8000:8000 \
   -v /portalcrane_data:/var/lib/portalcrane \
   cyrius44/portalcrane:latest
 ```
@@ -109,10 +109,7 @@ services:
     image: cyrius44/portalcrane:latest
     container_name: portalcrane
     ports:
-      - "8080:8080"
-    # No credentials required: the admin password and SECRET_KEY are
-    # auto-generated on first launch and persisted in the data volume.
-    # The admin password is printed once in the logs (default user: admin).
+      - "8000:8000"
     volumes:
       - portalcrane_data:/var/lib/portalcrane
     restart: unless-stopped
@@ -123,11 +120,11 @@ volumes:
 
 ### Usage
 
-Access the web interface (`http(s)://<ip or name>:8080`) to control, pull or push your images
+Access the web interface (`http(s)://<ip or name>:8000`) to control, pull or push your images
 or directly with Docker commands via the registry proxy.
 
 ```bash
-docker login <host>:8080
+docker login <host>:8000
 docker pull <image>:<tag>
 docker push <image>:<tag>
 docker logout
@@ -149,7 +146,7 @@ docker compose up -d
 
 ## Ports
 
-- `8080` — Portalcrane UI + API + registry proxy
+- `8000` — Portalcrane UI + API + registry proxy
 - `5000` — Docker registry (dev stack only)
 
 ## Healthcheck
