@@ -35,11 +35,31 @@ export class OidcService {
     return this.http.get<OidcPublicConfig>("/api/oidc/config");
   }
 
-  /** Build the authorization URL and redirect the browser to the OIDC provider. */
-  redirectToProvider(config: OidcPublicConfig): void {
-    if (!config.authorization_endpoint) return;
+  /**
+   * Generate a CSRF state for the OIDC flow.
+   *
+   * crypto.randomUUID() is only guaranteed in secure contexts; deployments that
+   * expose Portalcrane over plain HTTP on a non-local hostname must still be
+   * able to start an OIDC redirect. getRandomValues() remains available in
+   * those browsers and provides enough entropy for this nonce.
+   */
+  private generateState(): string {
+    if (globalThis.crypto?.randomUUID) {
+      return globalThis.crypto.randomUUID();
+    }
 
-    const state = crypto.randomUUID();
+    const bytes = new Uint8Array(16);
+    globalThis.crypto.getRandomValues(bytes);
+    return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join(
+      "",
+    );
+  }
+
+  /** Build the authorization URL and redirect the browser to the OIDC provider. */
+  redirectToProvider(config: OidcPublicConfig): boolean {
+    if (!config.authorization_endpoint) return false;
+
+    const state = this.generateState();
     sessionStorage.setItem(OIDC_STATE_KEY, state);
 
     const params = new URLSearchParams({
@@ -51,6 +71,7 @@ export class OidcService {
     });
 
     window.location.href = `${config.authorization_endpoint}?${params}`;
+    return true;
   }
 
   /** Exchange an authorization code for a local Portalcrane JWT. */

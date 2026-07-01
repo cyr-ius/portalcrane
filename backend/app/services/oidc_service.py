@@ -6,6 +6,7 @@ authorization-code exchange, and username extraction.
 
 import json
 from pathlib import Path
+from typing import Any, cast
 
 import httpx
 from jose import jwt as jose_jwt
@@ -72,17 +73,17 @@ class OidcIdentity(BaseModel):
 # ─── Persistence helpers ──────────────────────────────────────────────────────
 
 
-def load_oidc_config() -> dict:
+def load_oidc_config() -> dict[str, Any]:
     """Load the persisted OIDC config from disk. Returns {} when absent."""
     try:
         if _OIDC_CONFIG_FILE.exists():
-            return json.loads(_OIDC_CONFIG_FILE.read_text())
+            return cast(dict[str, Any], json.loads(_OIDC_CONFIG_FILE.read_text()))
     except Exception:
         pass
     return {}
 
 
-def save_oidc_config(data: dict) -> None:
+def save_oidc_config(data: dict[str, Any]) -> None:
     """Persist OIDC configuration to disk."""
     _OIDC_CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
     _OIDC_CONFIG_FILE.write_text(json.dumps(data, indent=2))
@@ -150,20 +151,24 @@ def resolve_oidc_settings(settings: Settings) -> OidcAdminSettings:
 # ─── Discovery document ───────────────────────────────────────────────────────
 
 
-async def fetch_oidc_discovery(issuer: str, proxy: str | None) -> dict:
+async def fetch_oidc_discovery(issuer: str, proxy: str | None) -> dict[str, Any]:
     """Fetch and return the OIDC discovery document for *issuer*.
 
     Returns an empty dict when the request fails so callers can degrade
     gracefully (e.g. return empty endpoint strings) instead of raising.
     """
+    normalized_issuer = issuer.rstrip("/")
+    if not normalized_issuer:
+        return {}
+
     try:
         async with httpx.AsyncClient(proxy=proxy) as client:
             response = await client.get(
-                f"{issuer}/.well-known/openid-configuration",
+                f"{normalized_issuer}/.well-known/openid-configuration",
                 timeout=DEFAULT_TIMEOUT,
             )
             if response.status_code == 200:
-                return response.json()
+                return cast(dict[str, Any], response.json())
     except Exception:
         pass
     return {}
@@ -209,7 +214,7 @@ async def build_public_config(settings: Settings) -> OidcPublicConfig:
 # ─── Authorization-code exchange ─────────────────────────────────────────────
 
 
-def _extract_username(source: dict) -> str:
+def _extract_username(source: dict[str, Any]) -> str:
     """Pick the best username candidate from a userinfo/claims mapping."""
     return (
         source.get("preferred_username")
@@ -219,7 +224,7 @@ def _extract_username(source: dict) -> str:
     )
 
 
-def _extract_groups(source: dict, claim: str) -> list[str]:
+def _extract_groups(source: dict[str, Any], claim: str) -> list[str]:
     """Read the configured group claim and normalise it to a list of strings.
 
     Providers expose groups/roles either as a JSON array or as a single string;
@@ -260,8 +265,9 @@ async def exchange_code_for_identity(
 
     async with httpx.AsyncClient(proxy=settings.httpx_proxy) as client:
         # Step 1 — discovery
+        normalized_issuer = merged.issuer.rstrip("/")
         discovery_resp = await client.get(
-            f"{merged.issuer}/.well-known/openid-configuration",
+            f"{normalized_issuer}/.well-known/openid-configuration",
             timeout=DEFAULT_TIMEOUT,
         )
         discovery_resp.raise_for_status()
