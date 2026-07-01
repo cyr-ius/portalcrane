@@ -49,6 +49,7 @@
       @if (oidcConfig()?.enabled) {
         <div class="mb-3">
           <button
+            type="button"
             class="btn btn-outline-primary w-100 d-flex align-items-center justify-content-center gap-2"
             (click)="loginWithOidc()"
           >
@@ -56,6 +57,18 @@
             Sign in with {{ oidcConfig()?.issuer | slice: 8 : 40 }}...
           </button>
         </div>
+        @if (oidcAuthorizationUnavailable()) {
+          <div
+            class="alert alert-warning d-flex align-items-center gap-2 py-2"
+            role="alert"
+          >
+            <i class="bi bi-exclamation-triangle-fill"></i>
+            <small>
+              OIDC is enabled, but the provider authorization endpoint could
+              not be discovered. Check the issuer URL in settings.
+            </small>
+          </div>
+        }
         @if (localLoginEnabled()) {
           <div class="divider d-flex align-items-center my-3">
             <span class="divider-line"></span>
@@ -63,6 +76,16 @@
             <span class="divider-line"></span>
           </div>
         }
+      }
+
+      @if (error()) {
+        <div
+          class="alert alert-danger d-flex align-items-center gap-2 py-2"
+          role="alert"
+        >
+          <i class="bi bi-exclamation-triangle-fill"></i>
+          <small>{{ error() }}</small>
+        </div>
       }
 
       <!-- Local Login Form -->
@@ -108,16 +131,6 @@
               </button>
             </div>
           </div>
-
-          @if (error()) {
-            <div
-              class="alert alert-danger d-flex align-items-center gap-2 py-2"
-              role="alert"
-            >
-              <i class="bi bi-exclamation-triangle-fill"></i>
-              <small>{{ error() }}</small>
-            </div>
-          }
 
           <button
             type="submit"

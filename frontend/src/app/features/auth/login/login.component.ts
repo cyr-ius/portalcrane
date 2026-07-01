@@ -52,6 +52,15 @@ export class LoginComponent implements OnInit {
     return !(config?.enabled && config?.oidc_only);
   });
 
+  /**
+   * True when OIDC is enabled but the backend could not resolve the provider
+   * authorization endpoint from its discovery document.
+   */
+  readonly oidcAuthorizationUnavailable = computed(() => {
+    const config = this.oidcConfig();
+    return Boolean(config?.enabled && !config.authorization_endpoint);
+  });
+
   ngOnInit(): void {
     // Load the OIDC public config to show/hide the SSO button
     this.oidc.getPublicConfig().subscribe({
@@ -83,9 +92,17 @@ export class LoginComponent implements OnInit {
 
   /** Delegate the OIDC authorization redirect to OidcService. */
   loginWithOidc(): void {
+    this.error.set("");
     const config = this.oidcConfig();
-    if (config) {
-      this.oidc.redirectToProvider(config);
+    if (!config) {
+      return;
+    }
+
+    const redirected = this.oidc.redirectToProvider(config);
+    if (!redirected) {
+      this.error.set(
+        "OIDC is enabled but the authorization endpoint is unavailable. Check the issuer URL and provider discovery document.",
+      );
     }
   }
 }
