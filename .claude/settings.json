@@ -41,7 +41,9 @@
       "Bash(grep -nE \"imports:|message:|\\\\.set\\\\\\(['\\\\\"][A-Z]|instant\\\\\\(|['\\\\\"][A-Z][a-z].{8,}['\\\\\"]\" src/app/shared/components/external-registries-config-panel/external-registries-config-panel.component.ts)",
       "Bash(grep -nE \"imports:|\\\\.set\\\\\\(['\\\\\"][A-Z]|instant\\\\\\(|['\\\\\"][A-Z][a-z].{8,}['\\\\\"]\" src/app/shared/components/vuln-config-panel/vuln-config-panel.component.ts)",
       "Bash(grep -nE \"imports:|\\\\.set\\\\\\(['\\\\\"][A-Z]|instant\\\\\\(|['\\\\\"][A-Z][a-z].{10,}['\\\\\"]\" src/app/shared/components/oidc-config-panel/oidc-config-panel.ts)",
-      "Bash(grep -nE \"error\\\\.set|testResult\\\\.set|saved\\\\.set|\\\\\"[A-Za-z ]{5,}\\\\\"\" src/app/shared/components/network-config-panel/network-config-panel.component.ts)"
+      "Bash(grep -nE \"error\\\\.set|testResult\\\\.set|saved\\\\.set|\\\\\"[A-Za-z ]{5,}\\\\\"\" src/app/shared/components/network-config-panel/network-config-panel.component.ts)",
+      "Bash(env)",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('app/config.py'\\).read\\(\\)\\); print\\('config.py OK'\\)\")"
     ]
   }
 }

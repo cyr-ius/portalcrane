@@ -220,6 +220,14 @@ reverse proxy instead.
 
 These values ​​can be overridden by the UI (**Settings → OIDC**).
 
+#### Custom CA bundle (private PKI)
+
+When your OIDC provider is fronted by a private CA (self-signed or internal PKI),
+supply the CA chain (intermediate + root, concatenated in a single PEM file) via
+the standard `SSL_CERT_FILE` or `REQUESTS_CA_BUNDLE` environment variable pointing
+at a mounted file. Outbound OIDC calls then trust that chain instead of the
+default certifi bundle. Leave both unset to keep the default verification.
+
 #### OIDC-only mode & admin bootstrap
 
 By default, OIDC login is offered **alongside** the local admin/user login. Set

@@ -228,6 +228,15 @@ HTTP simple et terminer TLS au niveau d'un reverse proxy.
 
 Ces valeurs peuvent être surchargées par l'interface (**Paramètres → OIDC**).
 
+#### Bundle CA personnalisé (PKI privée)
+
+Lorsque votre fournisseur OIDC est protégé par une CA privée (auto-signée ou PKI
+interne), fournissez la chaîne CA (intermédiaire + racine, concaténés dans un
+seul fichier PEM) via la variable d'environnement standard `SSL_CERT_FILE` ou
+`REQUESTS_CA_BUNDLE` pointant vers un fichier monté. Les appels OIDC sortants font
+alors confiance à cette chaîne au lieu du bundle certifi par défaut. Laissez les
+deux vides pour conserver la vérification par défaut.
+
 #### Mode OIDC seul & amorçage admin
 
 Par défaut, la connexion OIDC est proposée **en parallèle** de la connexion locale

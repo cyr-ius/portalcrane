@@ -227,6 +227,15 @@ y terminar TLS en un reverse proxy.
 
 Estos valores pueden sobrescribirse desde la interfaz (**Ajustes → OIDC**).
 
+#### Paquete de CA personalizado (PKI privada)
+
+Cuando su proveedor OIDC está protegido por una CA privada (autofirmada o PKI
+interna), proporcione la cadena de CA (intermedia + raíz, concatenadas en un solo
+archivo PEM) mediante la variable de entorno estándar `SSL_CERT_FILE` o
+`REQUESTS_CA_BUNDLE` apuntando a un archivo montado. Las llamadas OIDC salientes
+confían entonces en esa cadena en lugar del paquete certifi predeterminado. Deje
+ambas sin definir para conservar la verificación predeterminada.
+
 #### Modo solo OIDC y arranque del admin
 
 Por defecto, el inicio de sesión OIDC se ofrece **junto** al inicio de sesión local
