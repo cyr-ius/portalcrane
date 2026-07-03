@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c \"import ast; ast.parse\\(open\\('app/services/oidc_service.py'\\).read\\(\\)\\); ast.parse\\(open\\('app/routers/oidc.py'\\).read\\(\\)\\); ast.parse\\(open\\('app/config.py'\\).read\\(\\)\\); print\\('OK syntaxe'\\)\")",
+      "Bash(python -c 'from app.services import oidc_service as o; from app.services.oidc_service import OidcIdentity, OidcAdminSettings, has_user_restriction, is_oidc_user_allowed, is_oidc_admin *)"
+    ]
+  }
+}

@@ -41,7 +41,9 @@ from ..services.oidc_service import (
     OidcPublicConfig,
     build_public_config,
     exchange_code_for_identity,
+    has_user_restriction,
     is_oidc_admin,
+    is_oidc_user_allowed,
     resolve_oidc_settings,
     save_oidc_config,
 )
@@ -75,8 +77,11 @@ def _provision_oidc_user(identity: OidcIdentity, settings: Settings) -> None:
       OIDC provider returning preferred_username="admin" would inherit admin.
     - If the username collides with an existing *local* account → 403. An OIDC
       identity must never bind onto a password-based account.
-    - Admin rights are (re)computed from the OIDC config (oidc_admin_users /
-      group claim) on every login, so promote/demote take effect live.
+    - Admin rights are (re)computed from the OIDC config (admin group claim) on
+      every login, so promote/demote take effect live.
+    - When a regular-user mapping is configured (user group claim), OIDC access
+      becomes an allowlist: a user matching neither the admin nor the user
+      mapping is denied (403) instead of being provisioned.
     - First login → a new record is created (auth_source='oidc', no password).
     """
     username = identity.username
@@ -112,7 +117,23 @@ def _provision_oidc_user(identity: OidcIdentity, settings: Settings) -> None:
             ),
         )
 
-    is_admin = is_oidc_admin(identity, resolve_oidc_settings(settings))
+    merged = resolve_oidc_settings(settings)
+    is_admin = is_oidc_admin(identity, merged)
+
+    # Access allowlist: when a regular-user mapping is configured, only admins
+    # or users matching that mapping may log in.
+    if (
+        not is_admin
+        and has_user_restriction(merged)
+        and not is_oidc_user_allowed(identity, merged)
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "Your account is not authorized to access Portalcrane. "
+                "Please contact your administrator."
+            ),
+        )
 
     if existing is None:
         # First SSO login — create the record
@@ -213,9 +234,9 @@ async def update_oidc_settings(
     Saved values take precedence over environment variables on next request.
 
     Anti-lockout guard: OIDC-only mode disables every local login (including the
-    env-admin), so it can only be enabled when OIDC is itself enabled AND at
-    least one admin path is configured (admin_users or the group-claim mapping).
-    Otherwise no one could ever obtain admin rights again.
+    env-admin), so it can only be enabled when OIDC is itself enabled AND the
+    admin group-claim mapping is configured. Otherwise no one could ever obtain
+    admin rights again.
     """
     if payload.oidc_only:
         if not payload.enabled:
@@ -223,16 +244,15 @@ async def update_oidc_settings(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="OIDC-only mode requires OIDC to be enabled.",
             )
-        has_admin_users = bool(payload.admin_users.strip())
         has_admin_group = bool(
             payload.admin_group_claim.strip() and payload.admin_group.strip()
         )
-        if not (has_admin_users or has_admin_group):
+        if not has_admin_group:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=(
-                    "OIDC-only mode requires at least one admin path: set "
-                    "admin_users or both admin_group_claim and admin_group."
+                    "OIDC-only mode requires the admin group mapping: set both "
+                    "admin_group_claim and admin_group."
                 ),
             )
 

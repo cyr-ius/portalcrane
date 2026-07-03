@@ -5,6 +5,7 @@ authorization-code exchange, and username extraction.
 """
 
 import json
+import logging
 from pathlib import Path
 from typing import Any, cast
 
@@ -13,6 +14,8 @@ from jose import jwt as jose_jwt
 from pydantic import BaseModel
 
 from ..config import DATA_DIR, DEFAULT_TIMEOUT, Settings
+
+logger = logging.getLogger(__name__)
 
 # Persistent OIDC configuration file (overrides env vars at runtime)
 _OIDC_CONFIG_FILE = Path(f"{DATA_DIR}/oidc_config.json")
@@ -25,8 +28,8 @@ class OidcPublicConfig(BaseModel):
     """OIDC configuration exposed to the public login page (no secret).
 
     oidc_only is published so the login page can hide the local credential
-    form entirely. The admin mappings (admin_users / admin_group*) are NEVER
-    exposed here — they live only in OidcAdminSettings (admin-gated).
+    form entirely. The admin mappings (admin_group*) are NEVER exposed here —
+    they live only in OidcAdminSettings (admin-gated).
     """
 
     enabled: bool
@@ -54,9 +57,12 @@ class OidcAdminSettings(BaseModel):
     scope: str = "openid profile email"
     # OIDC-only mode and admin bootstrap (see config.Settings for semantics).
     oidc_only: bool = False
-    admin_users: str = ""
     admin_group_claim: str = ""
     admin_group: str = ""
+    # Regular-user mapping. When set, OIDC access becomes an allowlist (see
+    # config.Settings and is_oidc_user_allowed for semantics).
+    user_group_claim: str = ""
+    user_group: str = ""
 
 
 class OidcIdentity(BaseModel):
@@ -92,30 +98,46 @@ def save_oidc_config(data: dict[str, Any]) -> None:
 # ─── Admin mapping helpers ────────────────────────────────────────────────────
 
 
-def _split_csv(value: str) -> list[str]:
-    """Split a comma-separated string into a list of trimmed, non-empty items."""
-    return [item.strip() for item in value.split(",") if item.strip()]
+def _matches_mapping(identity: OidcIdentity, group_claim: str, group: str) -> bool:
+    """Return True when *identity* matches a group mapping.
+
+    A match is granted when *group* is present in identity.groups (only when
+    both the claim name and the expected group value are configured).
+    """
+    if group_claim and group:
+        groups = {g.casefold() for g in identity.groups}
+        if group.casefold() in groups:
+            return True
+
+    return False
 
 
 def is_oidc_admin(identity: OidcIdentity, merged: OidcAdminSettings) -> bool:
     """Return True when *identity* should be granted admin rights.
 
-    Two complementary mechanisms (either grants admin):
-      - the username is listed in admin_users (case-insensitive match);
-      - admin_group is present in identity.groups (only when both the claim name
-        and the expected group value are configured).
+    Admin is granted when admin_group is present in identity.groups (only when
+    both the claim name and the expected group value are configured).
     """
-    username = identity.username.casefold()
-    admin_users = {u.casefold() for u in _split_csv(merged.admin_users)}
-    if username in admin_users:
-        return True
+    return _matches_mapping(identity, merged.admin_group_claim, merged.admin_group)
 
-    if merged.admin_group_claim and merged.admin_group:
-        groups = {g.casefold() for g in identity.groups}
-        if merged.admin_group.casefold() in groups:
-            return True
 
-    return False
+def has_user_restriction(merged: OidcAdminSettings) -> bool:
+    """Return True when a regular-user mapping is configured.
+
+    When True, OIDC access is restricted to an allowlist: only users matching an
+    admin mapping OR the regular-user mapping are allowed in (see
+    is_oidc_user_allowed). When False, every authenticated OIDC user is admitted.
+    """
+    return bool(merged.user_group_claim and merged.user_group)
+
+
+def is_oidc_user_allowed(identity: OidcIdentity, merged: OidcAdminSettings) -> bool:
+    """Return True when *identity* matches the regular-user mapping.
+
+    Mirrors is_oidc_admin but against user_group. Only meaningful when
+    has_user_restriction is True.
+    """
+    return _matches_mapping(identity, merged.user_group_claim, merged.user_group)
 
 
 # ─── Config merge helper ──────────────────────────────────────────────────────
@@ -140,11 +162,14 @@ def resolve_oidc_settings(settings: Settings) -> OidcAdminSettings:
         response_type=persisted.get("response_type", settings.oidc_response_type),
         scope=persisted.get("scope", settings.oidc_scope),
         oidc_only=persisted.get("oidc_only", settings.oidc_only),
-        admin_users=persisted.get("admin_users", settings.oidc_admin_users),
         admin_group_claim=persisted.get(
             "admin_group_claim", settings.oidc_admin_group_claim
         ),
         admin_group=persisted.get("admin_group", settings.oidc_admin_group),
+        user_group_claim=persisted.get(
+            "user_group_claim", settings.oidc_user_group_claim
+        ),
+        user_group=persisted.get("user_group", settings.oidc_user_group),
     )
 
 
@@ -243,6 +268,26 @@ def _extract_groups(source: dict[str, Any], claim: str) -> list[str]:
     return [str(value)]
 
 
+def _collect_groups(source: dict[str, Any], merged: OidcAdminSettings) -> list[str]:
+    """Collect group values from every configured group claim (admin + user).
+
+    Admin and regular-user mappings may point at different claims (e.g. "groups"
+    and "roles"); the values of all configured claims are merged into a single
+    de-duplicated list used by both is_oidc_admin and is_oidc_user_allowed.
+    """
+    claims: list[str] = []
+    for claim in (merged.admin_group_claim, merged.user_group_claim):
+        if claim and claim not in claims:
+            claims.append(claim)
+
+    result: list[str] = []
+    for claim in claims:
+        for group in _extract_groups(source, claim):
+            if group not in result:
+                result.append(group)
+    return result
+
+
 async def exchange_code_for_identity(
     code: str,
     settings: Settings,
@@ -305,7 +350,7 @@ async def exchange_code_for_identity(
             userinfo_resp.raise_for_status()
             userinfo = userinfo_resp.json()
             username = _extract_username(userinfo)
-            groups = _extract_groups(userinfo, merged.admin_group_claim)
+            groups = _collect_groups(userinfo, merged)
 
         # Step 4 — fall back to id_token claims (for username and/or groups)
         if id_token and (not username or not groups):
@@ -313,6 +358,11 @@ async def exchange_code_for_identity(
             if not username:
                 username = _extract_username(claims) or claims.get("sub", "oidc-user")
             if not groups:
-                groups = _extract_groups(claims, merged.admin_group_claim)
+                groups = _collect_groups(claims, merged)
 
+    logger.debug(
+        "OIDC identity resolved: username=%s groups=%s",
+        username or "oidc-user",
+        groups,
+    )
     return OidcIdentity(username=username or "oidc-user", groups=groups)

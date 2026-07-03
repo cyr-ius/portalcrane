@@ -57,10 +57,12 @@ export interface OidcAdminSettings {
   scope: string;
   /** Disable every local login (env-admin included) and rely solely on OIDC. */
   oidc_only: boolean;
-  /** Comma-separated usernames/emails granted admin on SSO login. */
-  admin_users: string;
   /** Name of the OIDC claim carrying the user's groups/roles. */
   admin_group_claim: string;
   /** Group/role value that grants admin when present in admin_group_claim. */
   admin_group: string;
+  /** Name of the OIDC claim carrying the user's groups/roles (regular users). */
+  user_group_claim: string;
+  /** Group/role value that grants regular-user access when present in user_group_claim. */
+  user_group: string;
 }

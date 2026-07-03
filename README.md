@@ -199,20 +199,21 @@ reverse proxy instead.
 
 ### OIDC (optional)
 
-| Variable                        | Description                                    | Default                |
-| ------------------------------- | ---------------------------------------------- | ---------------------- |
-| `OIDC_ENABLED`                  | Enable OIDC login                              | `false`                |
-| `OIDC_ISSUER`                   | OIDC issuer URL                                | —                      |
-| `OIDC_CLIENT_ID`                | OIDC client ID                                 | —                      |
-| `OIDC_CLIENT_SECRET`            | OIDC client secret                             | —                      |
-| `OIDC_REDIRECT_URI`             | OIDC redirect URI                              | —                      |
-| `OIDC_POST_LOGOUT_REDIRECT_URI` | Post-logout redirect URI                       | —                      |
-| `OIDC_RESPONSE_TYPE`            | OIDC response type                             | `code`                 |
-| `OIDC_SCOPE`                    | OIDC scopes                                    | `openid profile email` |
-| `OIDC_ONLY`                     | Disable all local login (OIDC-only mode)       | `false`                |
-| `OIDC_ADMIN_USERS`              | Comma-separated usernames/emails granted admin | —                      |
-| `OIDC_ADMIN_GROUP_CLAIM`        | OIDC claim carrying the user's groups/roles    | —                      |
-| `OIDC_ADMIN_GROUP`              | Group value that grants admin                  | —                      |
+| Variable                        | Description                                 | Default                |
+| ------------------------------- | ------------------------------------------- | ---------------------- |
+| `OIDC_ENABLED`                  | Enable OIDC login                           | `false`                |
+| `OIDC_ISSUER`                   | OIDC issuer URL                             | —                      |
+| `OIDC_CLIENT_ID`                | OIDC client ID                              | —                      |
+| `OIDC_CLIENT_SECRET`            | OIDC client secret                          | —                      |
+| `OIDC_REDIRECT_URI`             | OIDC redirect URI                           | —                      |
+| `OIDC_POST_LOGOUT_REDIRECT_URI` | Post-logout redirect URI                    | —                      |
+| `OIDC_RESPONSE_TYPE`            | OIDC response type                          | `code`                 |
+| `OIDC_SCOPE`                    | OIDC scopes                                 | `openid profile email` |
+| `OIDC_ONLY`                     | Disable all local login (OIDC-only mode)    | `false`                |
+| `OIDC_ADMIN_GROUP_CLAIM`        | OIDC claim carrying the user's groups/roles | —                      |
+| `OIDC_ADMIN_GROUP`              | Group value that grants admin               | —                      |
+| `OIDC_USER_GROUP_CLAIM`         | OIDC claim carrying the user's groups/roles | —                      |
+| `OIDC_USER_GROUP`               | Group value that grants regular-user access | —                      |
 
 These values ​​can be overridden by the UI (**Settings → OIDC**).
 
@@ -222,15 +223,28 @@ By default, OIDC login is offered **alongside** the local admin/user login. Set
 `OIDC_ONLY=true` to **disable every local password login — including the built-in
 env-admin** — and authenticate solely through your provider.
 
-Because there is no break-glass, OIDC-only mode requires at least one admin path
+Because there is no break-glass, OIDC-only mode requires the admin group mapping
 so you don't lock yourself out. Admin rights are re-evaluated on **every** SSO
-login (live promote/demote), via either mechanism:
+login (live promote/demote), via the group-claim mapping:
 
-- **Username allowlist** — `OIDC_ADMIN_USERS=alice,bob@example.com`.
 - **Group-claim mapping** — `OIDC_ADMIN_GROUP_CLAIM=groups` and
   `OIDC_ADMIN_GROUP=registry-admins` (make sure the scope exposes that claim).
 
-The UI refuses to enable OIDC-only until one of these is configured.
+The UI refuses to enable OIDC-only until this is configured.
+
+#### Restricting access to specific users (allowlist)
+
+By default, **every** authenticated SSO user is provisioned as a regular user.
+To restrict access, map regular users the same way as admins — via a group-claim
+mapping:
+
+- **Group-claim mapping** — `OIDC_USER_GROUP_CLAIM=groups` and
+  `OIDC_USER_GROUP=registry-users`.
+
+As soon as this is set, OIDC access becomes an allowlist: only admins and users
+matching the mapping may log in — everyone else is denied (`403`). Admin and
+user group claims may point at different claims; both are read on login. Access
+is re-evaluated on **every** SSO login.
 
 #### Anti-usurpation protection
 

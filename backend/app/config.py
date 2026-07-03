@@ -77,18 +77,26 @@ class Settings(BaseSettings):
 
     # OIDC-only mode: when True, local username/password login (including the
     # built-in env-admin) is disabled and authentication is delegated entirely
-    # to the OIDC provider. At least one admin path (oidc_admin_users or the
-    # group-claim mapping below) must be configured to avoid a lockout.
+    # to the OIDC provider. The admin group-claim mapping below must be
+    # configured to avoid a lockout.
     oidc_only: bool = False
 
-    # Admin bootstrap for OIDC users. Two complementary mechanisms:
-    #   - oidc_admin_users: comma-separated usernames/emails granted admin.
-    #   - group-claim mapping: when an OIDC user carries oidc_admin_group in the
-    #     claim named oidc_admin_group_claim (e.g. "groups"), they get admin.
-    # Admin status is re-evaluated on every SSO login (live promote/demote).
-    oidc_admin_users: str = ""
+    # Admin bootstrap for OIDC users via group-claim mapping: when an OIDC user
+    # carries oidc_admin_group in the claim named oidc_admin_group_claim (e.g.
+    # "groups"), they get admin. Admin status is re-evaluated on every SSO login
+    # (live promote/demote).
     oidc_admin_group_claim: str = ""
     oidc_admin_group: str = ""
+
+    # Regular-user mapping for OIDC via group-claim mapping. When configured,
+    # OIDC access becomes an allowlist: only users matching the admin OR the
+    # regular-user group mapping are allowed in; everyone else is denied (403).
+    # Left empty, every authenticated OIDC user keeps being provisioned as a
+    # regular user.
+    #   - group-claim mapping: allow access when oidc_user_group is present in the
+    #     claim named oidc_user_group_claim (e.g. "groups").
+    oidc_user_group_claim: str = ""
+    oidc_user_group: str = ""
 
     # HTTP Proxy
     http_proxy: str = ""

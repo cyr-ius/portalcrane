@@ -34,23 +34,23 @@ export class OidcConfigPanel implements OnInit {
     response_type: "code",
     scope: "openid profile email",
     oidc_only: false,
-    admin_users: "",
     admin_group_claim: "",
     admin_group: "",
+    user_group_claim: "",
+    user_group: "",
   });
 
   /**
-   * True when OIDC-only mode is requested but no admin path is configured.
-   * Mirrors the backend anti-lockout guard so the user is warned before the
-   * save call is rejected with a 400.
+   * True when OIDC-only mode is requested but no admin group mapping is
+   * configured. Mirrors the backend anti-lockout guard so the user is warned
+   * before the save call is rejected with a 400.
    */
   readonly oidcOnlyMissingAdmin = computed(() => {
     const m = this.oidcModel();
     if (!m.oidc_only) return false;
-    const hasAdminUsers = m.admin_users.trim().length > 0;
     const hasAdminGroup =
       m.admin_group_claim.trim().length > 0 && m.admin_group.trim().length > 0;
-    return !(hasAdminUsers || hasAdminGroup);
+    return !hasAdminGroup;
   });
 
   oidcForm = form(this.oidcModel, (p) => {

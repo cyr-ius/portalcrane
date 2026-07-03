@@ -200,27 +200,15 @@
         </h6>
       </div>
 
-      <!-- Admin users (whitelist) -->
-      <div class="col-md-6">
-        <label class="form-label fw-semibold small">Admin users</label>
-        <div class="input-group">
-          <span class="input-group-text"
-            ><i class="bi bi-people-fill"></i
-          ></span>
-          <input
-            type="text"
-            class="form-control font-monospace"
-            placeholder="alice, bob@example.com"
-            [formField]="oidcForm.admin_users"
-          />
-        </div>
-        <div class="form-text">
-          Comma-separated usernames/emails granted admin on SSO login.
-        </div>
+      <!-- Admins subsection -->
+      <div class="col-12">
+        <span class="badge bg-primary-subtle text-primary">
+          <i class="bi bi-shield-fill-check me-1"></i>Admins
+        </span>
       </div>
 
       <!-- Admin group claim + value -->
-      <div class="col-md-3">
+      <div class="col-md-6">
         <label class="form-label fw-semibold small">Admin group claim</label>
         <input
           type="text"
@@ -229,7 +217,7 @@
           [formField]="oidcForm.admin_group_claim"
         />
       </div>
-      <div class="col-md-3">
+      <div class="col-md-6">
         <label class="form-label fw-semibold small">Admin group</label>
         <input
           type="text"
@@ -248,6 +236,49 @@
         </div>
       </div>
 
+      <!-- Regular users subsection -->
+      <div class="col-12">
+        <hr class="my-2" />
+        <span class="badge bg-info-subtle text-info">
+          <i class="bi bi-person-check-fill me-1"></i>Regular users
+        </span>
+        <div class="form-text mt-1 mb-0">
+          Optional. Leave everything below empty to let
+          <strong>every</strong> authenticated SSO user in as a regular user. As
+          soon as the fields below are filled, OIDC access becomes an
+          <strong>allowlist</strong>: only admins and users matching this
+          mapping may log in — everyone else is denied.
+        </div>
+      </div>
+
+      <!-- User group claim + value -->
+      <div class="col-md-6">
+        <label class="form-label fw-semibold small">User group claim</label>
+        <input
+          type="text"
+          class="form-control font-monospace"
+          placeholder="groups"
+          [formField]="oidcForm.user_group_claim"
+        />
+      </div>
+      <div class="col-md-6">
+        <label class="form-label fw-semibold small">User group</label>
+        <input
+          type="text"
+          class="form-control font-monospace"
+          placeholder="registry-users"
+          [formField]="oidcForm.user_group"
+        />
+      </div>
+      <div class="col-12">
+        <div class="form-text">
+          Group defined in your OIDC provider: when an SSO user carries this
+          value in the <strong>User group claim</strong>, they are granted the
+          <strong>user</strong> role. This does not grant admin — use the
+          <strong>Admins</strong> fields above for that.
+        </div>
+      </div>
+
       <!-- OIDC-only mode -->
       <div class="col-12">
         <div class="form-check form-switch">
@@ -263,14 +294,13 @@
         </div>
         <div class="form-text">
           Disables every local password login, including the built-in env-admin.
-          Requires at least one admin path above.
+          Requires the admin group mapping above.
         </div>
         @if (oidcOnlyMissingAdmin()) {
         <div class="alert alert-warning d-flex gap-2 mt-2 py-2 small mb-0">
           <i class="bi bi-exclamation-triangle-fill flex-shrink-0 mt-1"></i>
           <div>
-            OIDC-only mode needs an admin path: set
-            <strong>Admin users</strong> or both
+            OIDC-only mode needs the admin group mapping: set both
             <strong>Admin group claim</strong> and <strong>Admin group</strong>.
             Saving will be rejected otherwise to prevent a lockout.
           </div>
