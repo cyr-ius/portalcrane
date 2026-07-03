@@ -106,6 +106,12 @@ class Settings(BaseSettings):
     https_proxy: str = ""
     no_proxy: str = "localhost,127.0.0.1"
 
+    # Custom CA bundle (PEM) used to verify TLS for outbound OIDC calls.
+    # Point this at a mounted file containing the private CA chain
+    # (intermediate + root, concatenated). Falls back to the standard
+    # SSL_CERT_FILE / REQUESTS_CA_BUNDLE env vars when left empty.
+    oidc_ca_bundle: str = ""
+
     # Vulnerability scanning configuration
     # Master kill-switch: when TRIVY_ENABLED=false the embedded Trivy server is
     # not started by supervisord (see docker/entrypoint.sh). Mirror that here so
@@ -156,6 +162,24 @@ class Settings(BaseSettings):
         Returns None when no proxy is configured.
         """
         return self.https_proxy or self.http_proxy or None
+
+    @property
+    def httpx_verify(self) -> str | bool:
+        """Return the `verify` argument for outbound httpx clients (OIDC).
+
+        When a custom CA bundle is configured (OIDC_CA_BUNDLE, or the standard
+        SSL_CERT_FILE / REQUESTS_CA_BUNDLE env vars) and the file exists, its
+        path is returned so httpx trusts a private CA chain (intermediate +
+        root). Otherwise returns True to keep the default certifi verification.
+        """
+        candidate = (
+            self.oidc_ca_bundle
+            or os.environ.get("SSL_CERT_FILE", "")
+            or os.environ.get("REQUESTS_CA_BUNDLE", "")
+        )
+        if candidate and Path(candidate).is_file():
+            return candidate
+        return True
 
     @property
     def env_proxy(self) -> dict:

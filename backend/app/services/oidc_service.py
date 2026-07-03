@@ -203,7 +203,9 @@ def resolve_oidc_settings(settings: Settings) -> OidcAdminSettings:
 # ─── Discovery document ───────────────────────────────────────────────────────
 
 
-async def fetch_oidc_discovery(issuer: str, proxy: str | None) -> dict[str, Any]:
+async def fetch_oidc_discovery(
+    issuer: str, proxy: str | None, verify: str | bool = True
+) -> dict[str, Any]:
     """Fetch and return the OIDC discovery document for *issuer*.
 
     Returns an empty dict when the request fails so callers can degrade
@@ -214,7 +216,7 @@ async def fetch_oidc_discovery(issuer: str, proxy: str | None) -> dict[str, Any]
         return {}
 
     try:
-        async with httpx.AsyncClient(proxy=proxy) as client:
+        async with httpx.AsyncClient(proxy=proxy, verify=verify) as client:
             response = await client.get(
                 f"{normalized_issuer}/.well-known/openid-configuration",
                 timeout=DEFAULT_TIMEOUT,
@@ -247,7 +249,9 @@ async def build_public_config(settings: Settings) -> OidcPublicConfig:
             post_logout_redirect_uri="",
         )
 
-    discovery = await fetch_oidc_discovery(merged.issuer, settings.httpx_proxy)
+    discovery = await fetch_oidc_discovery(
+        merged.issuer, settings.httpx_proxy, settings.httpx_verify
+    )
 
     return OidcPublicConfig(
         enabled=True,
@@ -312,7 +316,7 @@ async def test_oidc_connection(
     critical_ok = True
     discovery: dict[str, Any] = {}
 
-    async with httpx.AsyncClient(proxy=proxy) as client:
+    async with httpx.AsyncClient(proxy=proxy, verify=settings.httpx_verify) as client:
         # Step 1 — discovery document
         discovery_url = f"{issuer}/.well-known/openid-configuration"
         try:
@@ -560,7 +564,9 @@ async def exchange_code_for_identity(
     """
     merged = resolve_oidc_settings(settings)
 
-    async with httpx.AsyncClient(proxy=settings.httpx_proxy) as client:
+    async with httpx.AsyncClient(
+        proxy=settings.httpx_proxy, verify=settings.httpx_verify
+    ) as client:
         # Step 1 — discovery
         normalized_issuer = merged.issuer.rstrip("/")
         discovery_resp = await client.get(
