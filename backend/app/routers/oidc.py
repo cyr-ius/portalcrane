@@ -81,9 +81,9 @@ def _provision_oidc_user(identity: OidcIdentity, settings: Settings) -> None:
       identity must never bind onto a password-based account.
     - Admin rights are (re)computed from the OIDC config (admin group claim) on
       every login, so promote/demote take effect live.
-    - When a regular-user mapping is configured (user group claim), OIDC access
-      becomes an allowlist: a user matching neither the admin nor the user
-      mapping is denied (403) instead of being provisioned.
+    - When restrict_to_groups is enabled, OIDC access becomes an allowlist: a
+      user matching neither the admin nor the user mapping is denied (403)
+      instead of being provisioned.
     - First login → a new record is created (auth_source='oidc', no password).
     """
     username = identity.username
@@ -122,8 +122,8 @@ def _provision_oidc_user(identity: OidcIdentity, settings: Settings) -> None:
     merged = resolve_oidc_settings(settings)
     is_admin = is_oidc_admin(identity, merged)
 
-    # Access allowlist: when a regular-user mapping is configured, only admins
-    # or users matching that mapping may log in.
+    # Access allowlist: when restrict_to_groups is enabled, only admins or users
+    # matching the regular-user mapping may log in.
     if (
         not is_admin
         and has_user_restriction(merged)

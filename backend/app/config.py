@@ -88,15 +88,18 @@ class Settings(BaseSettings):
     oidc_admin_group_claim: str = ""
     oidc_admin_group: str = ""
 
-    # Regular-user mapping for OIDC via group-claim mapping. When configured,
-    # OIDC access becomes an allowlist: only users matching the admin OR the
-    # regular-user group mapping are allowed in; everyone else is denied (403).
-    # Left empty, every authenticated OIDC user keeps being provisioned as a
-    # regular user.
-    #   - group-claim mapping: allow access when oidc_user_group is present in the
-    #     claim named oidc_user_group_claim (e.g. "groups").
+    # Regular-user mapping for OIDC via group-claim mapping. Allow regular-user
+    # access when oidc_user_group is present in the claim named
+    # oidc_user_group_claim (e.g. "groups").
     oidc_user_group_claim: str = ""
     oidc_user_group: str = ""
+
+    # Restrict OIDC access to mapped groups. When True, OIDC access becomes an
+    # allowlist: only users matching the admin OR the regular-user group mapping
+    # are allowed in; everyone else is denied (403) and never provisioned. When
+    # False (default), every authenticated OIDC user is provisioned as a regular
+    # user regardless of their groups.
+    oidc_restrict_to_groups: bool = False
 
     # HTTP Proxy
     http_proxy: str = ""

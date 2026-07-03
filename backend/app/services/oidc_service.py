@@ -59,10 +59,13 @@ class OidcAdminSettings(BaseModel):
     oidc_only: bool = False
     admin_group_claim: str = ""
     admin_group: str = ""
-    # Regular-user mapping. When set, OIDC access becomes an allowlist (see
-    # config.Settings and is_oidc_user_allowed for semantics).
+    # Regular-user mapping (see is_oidc_user_allowed for semantics).
     user_group_claim: str = ""
     user_group: str = ""
+    # When True, OIDC access is restricted to an allowlist: only users matching
+    # the admin OR the regular-user mapping are allowed in; everyone else is
+    # denied and never provisioned (see has_user_restriction).
+    restrict_to_groups: bool = False
 
 
 class OidcIdentity(BaseModel):
@@ -142,13 +145,14 @@ def is_oidc_admin(identity: OidcIdentity, merged: OidcAdminSettings) -> bool:
 
 
 def has_user_restriction(merged: OidcAdminSettings) -> bool:
-    """Return True when a regular-user mapping is configured.
+    """Return True when OIDC access is restricted to mapped groups.
 
-    When True, OIDC access is restricted to an allowlist: only users matching an
-    admin mapping OR the regular-user mapping are allowed in (see
-    is_oidc_user_allowed). When False, every authenticated OIDC user is admitted.
+    Driven by the explicit restrict_to_groups toggle. When True, OIDC access is
+    an allowlist: only users matching an admin mapping OR the regular-user
+    mapping are allowed in (see is_oidc_user_allowed); everyone else is denied
+    and never provisioned. When False, every authenticated OIDC user is admitted.
     """
-    return bool(merged.user_group_claim and merged.user_group)
+    return merged.restrict_to_groups
 
 
 def is_oidc_user_allowed(identity: OidcIdentity, merged: OidcAdminSettings) -> bool:
@@ -190,6 +194,9 @@ def resolve_oidc_settings(settings: Settings) -> OidcAdminSettings:
             "user_group_claim", settings.oidc_user_group_claim
         ),
         user_group=persisted.get("user_group", settings.oidc_user_group),
+        restrict_to_groups=persisted.get(
+            "restrict_to_groups", settings.oidc_restrict_to_groups
+        ),
     )
 
 

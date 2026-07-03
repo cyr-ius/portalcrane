@@ -43,6 +43,7 @@ export class OidcConfigPanel implements OnInit {
     admin_group: "",
     user_group_claim: "",
     user_group: "",
+    restrict_to_groups: false,
   });
 
   /**

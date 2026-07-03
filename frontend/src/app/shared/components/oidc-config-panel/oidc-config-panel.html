@@ -243,11 +243,10 @@
           <i class="bi bi-person-check-fill me-1"></i>Regular users
         </span>
         <div class="form-text mt-1 mb-0">
-          Optional. Leave everything below empty to let
-          <strong>every</strong> authenticated SSO user in as a regular user. As
-          soon as the fields below are filled, OIDC access becomes an
-          <strong>allowlist</strong>: only admins and users matching this
-          mapping may log in — everyone else is denied.
+          Optional. When an SSO user carries the value below in the given claim,
+          they are granted the <strong>user</strong> role. Enable
+          <strong>Restrict access to mapped groups</strong> below to turn OIDC
+          access into an <strong>allowlist</strong>.
         </div>
       </div>
 
@@ -276,6 +275,31 @@
           value in the <strong>User group claim</strong>, they are granted the
           <strong>user</strong> role. This does not grant admin — use the
           <strong>Admins</strong> fields above for that.
+        </div>
+      </div>
+
+      <!-- Restrict access to mapped groups -->
+      <div class="col-12">
+        <div class="form-check form-switch">
+          <input
+            class="form-check-input"
+            type="checkbox"
+            id="oidcRestrictToGroups"
+            [formField]="oidcForm.restrict_to_groups"
+          />
+          <label
+            class="form-check-label small fw-semibold"
+            for="oidcRestrictToGroups"
+          >
+            Restrict access to mapped groups
+          </label>
+        </div>
+        <div class="form-text">
+          When enabled, OIDC access becomes an <strong>allowlist</strong>: only
+          admins and users matching the mappings above may log in. Any SSO user
+          belonging to neither the admin nor the user group is
+          <strong>denied</strong> and their account is
+          <strong>not created</strong>.
         </div>
       </div>
 

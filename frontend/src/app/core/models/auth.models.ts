@@ -65,6 +65,8 @@ export interface OidcAdminSettings {
   user_group_claim: string;
   /** Group/role value that grants regular-user access when present in user_group_claim. */
   user_group: string;
+  /** Restrict access to mapped groups: deny (and never create) users matching neither the admin nor the user group. */
+  restrict_to_groups: boolean;
 }
 
 /** Single diagnostic step returned by POST /api/oidc/test. */

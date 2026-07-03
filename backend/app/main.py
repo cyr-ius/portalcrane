@@ -17,6 +17,7 @@ from time import perf_counter
 from fastapi import FastAPI, HTTPException
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 
@@ -48,8 +49,6 @@ from .services.proxy_service import (
 )
 from .services.trivy_service import db_updater_loop
 
-JSDELIVR = "https://cdn.jsdelivr.net"
-
 logger = logging.getLogger(__name__)
 logging.basicConfig(
     level=app_settings.log_level,
@@ -68,8 +67,8 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     # Build CSP once at class level — one directive per list entry, auditable.
     _CSP_DIRECTIVES: list[str] = [
         "default-src 'self'",
-        f"script-src 'self' 'unsafe-inline' {JSDELIVR}",  # Angular requires unsafe-inline
-        f"style-src 'self' 'unsafe-inline' {JSDELIVR}",  # Bootstrap inline styles
+        "script-src 'self' 'unsafe-inline'",  # Angular + Swagger UI (self-hosted)
+        "style-src 'self' 'unsafe-inline'",  # Bootstrap + Swagger UI (self-hosted)
         "img-src 'self' data: https:",  # logos, QR codes base64
         "font-src 'self' data:",  # Bootstrap Icons embedded font
         f"connect-src 'self' {app_settings.oidc_issuer}",  # API calls + Azure endpoints
@@ -194,13 +193,20 @@ app.include_router(transfer.router, prefix="/api/transfer", tags=["Transfer"])
 app.include_router(trivy.router, prefix="/api/trivy", tags=["Trivy"])
 
 
+# ── Self-hosted static assets (Swagger UI, no Internet dependency) ─────────────
+static_dir = Path(__file__).resolve().parent / "static"
+app.mount("/api/static", StaticFiles(directory=static_dir), name="static")
+
+
 @app.get("/api/docs", include_in_schema=False)
 async def swagger_ui():
     if not app_settings.SWAGGER_ENABLE:
         raise HTTPException(status_code=404, detail="Not Found")
     return get_swagger_ui_html(
         openapi_url="/api/openapi.json",
-        title="Employee Verified ID API",
+        title="Portalcrane API",
+        swagger_js_url="/api/static/swagger/swagger-ui-bundle.js",
+        swagger_css_url="/api/static/swagger/swagger-ui.css",
         swagger_favicon_url="/favicon.ico",
     )
 

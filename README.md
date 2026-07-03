@@ -199,21 +199,22 @@ reverse proxy instead.
 
 ### OIDC (optional)
 
-| Variable                        | Description                                 | Default                |
-| ------------------------------- | ------------------------------------------- | ---------------------- |
-| `OIDC_ENABLED`                  | Enable OIDC login                           | `false`                |
-| `OIDC_ISSUER`                   | OIDC issuer URL                             | —                      |
-| `OIDC_CLIENT_ID`                | OIDC client ID                              | —                      |
-| `OIDC_CLIENT_SECRET`            | OIDC client secret                          | —                      |
-| `OIDC_REDIRECT_URI`             | OIDC redirect URI                           | —                      |
-| `OIDC_POST_LOGOUT_REDIRECT_URI` | Post-logout redirect URI                    | —                      |
-| `OIDC_RESPONSE_TYPE`            | OIDC response type                          | `code`                 |
-| `OIDC_SCOPE`                    | OIDC scopes                                 | `openid profile email` |
-| `OIDC_ONLY`                     | Disable all local login (OIDC-only mode)    | `false`                |
-| `OIDC_ADMIN_GROUP_CLAIM`        | OIDC claim carrying the user's groups/roles | —                      |
-| `OIDC_ADMIN_GROUP`              | Group value that grants admin               | —                      |
-| `OIDC_USER_GROUP_CLAIM`         | OIDC claim carrying the user's groups/roles | —                      |
-| `OIDC_USER_GROUP`               | Group value that grants regular-user access | —                      |
+| Variable                        | Description                                  | Default                |
+| ------------------------------- | -------------------------------------------- | ---------------------- |
+| `OIDC_ENABLED`                  | Enable OIDC login                            | `false`                |
+| `OIDC_ISSUER`                   | OIDC issuer URL                              | —                      |
+| `OIDC_CLIENT_ID`                | OIDC client ID                               | —                      |
+| `OIDC_CLIENT_SECRET`            | OIDC client secret                           | —                      |
+| `OIDC_REDIRECT_URI`             | OIDC redirect URI                            | —                      |
+| `OIDC_POST_LOGOUT_REDIRECT_URI` | Post-logout redirect URI                     | —                      |
+| `OIDC_RESPONSE_TYPE`            | OIDC response type                           | `code`                 |
+| `OIDC_SCOPE`                    | OIDC scopes                                  | `openid profile email` |
+| `OIDC_ONLY`                     | Disable all local login (OIDC-only mode)     | `false`                |
+| `OIDC_ADMIN_GROUP_CLAIM`        | OIDC claim carrying the user's groups/roles  | —                      |
+| `OIDC_ADMIN_GROUP`              | Group value that grants admin                | —                      |
+| `OIDC_USER_GROUP_CLAIM`         | OIDC claim carrying the user's groups/roles  | —                      |
+| `OIDC_USER_GROUP`               | Group value that grants regular-user access  | —                      |
+| `OIDC_RESTRICT_TO_GROUPS`       | Restrict access to mapped groups (allowlist) | `false`                |
 
 These values ​​can be overridden by the UI (**Settings → OIDC**).
 
@@ -241,10 +242,12 @@ mapping:
 - **Group-claim mapping** — `OIDC_USER_GROUP_CLAIM=groups` and
   `OIDC_USER_GROUP=registry-users`.
 
-As soon as this is set, OIDC access becomes an allowlist: only admins and users
-matching the mapping may log in — everyone else is denied (`403`). Admin and
-user group claims may point at different claims; both are read on login. Access
-is re-evaluated on **every** SSO login.
+Then set `OIDC_RESTRICT_TO_GROUPS=true` (or tick **Restrict access to mapped
+groups** in the UI) to turn OIDC access into an allowlist: only admins and users
+matching the mappings may log in. Any SSO user belonging to **neither** the admin
+nor the user group is **denied** (`403`) and their account is **not created**.
+Admin and user group claims may point at different claims; both are read on
+login. Access is re-evaluated on **every** SSO login.
 
 #### Anti-usurpation protection
 
