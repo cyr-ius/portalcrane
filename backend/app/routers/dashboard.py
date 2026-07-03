@@ -21,6 +21,7 @@ from ..helpers import bytes_to_human
 from ..routers.auth import _load_users
 from ..services.providers import local_provider
 from ..services.providers.external_v2 import V2Provider
+from ..services.trivy_service import get_trivy_db_info, get_trivy_version
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -44,6 +45,8 @@ class DashboardStats(BaseModel):
     registry_status: str
     total_users: int
     total_admins: int
+    trivy_version: str | None = None
+    trivy_db_last_update: str | None = None
 
 
 # ── Registry stats helpers ────────────────────────────────────────────────────
@@ -181,6 +184,10 @@ async def get_dashboard_stats(
     total_users = 1 + len(local_users)
     total_admins = 1 + sum(1 for u in local_users if u.get("is_admin", False))
 
+    # Trivy binary version + vulnerability DB freshness
+    trivy_version = await get_trivy_version()
+    trivy_db = await get_trivy_db_info()
+
     total_size = stats["total_size_bytes"]
     largest = stats["largest_image"]
 
@@ -201,4 +208,6 @@ async def get_dashboard_stats(
         registry_status=registry_status,
         total_users=total_users,
         total_admins=total_admins,
+        trivy_version=trivy_version,
+        trivy_db_last_update=trivy_db.get("last_update"),
     )

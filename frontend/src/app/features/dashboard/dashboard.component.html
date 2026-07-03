@@ -27,10 +27,7 @@
         (click)="refresh()"
         [disabled]="refreshing()"
       >
-        <i
-          class="bi bi-arrow-clockwise me-1"
-          [class.spin]="refreshing()"
-        ></i>
+        <i class="bi bi-arrow-clockwise me-1" [class.spin]="refreshing()"></i>
       </button>
     </div>
 
@@ -121,154 +118,186 @@
       </div>
     </div>
 
-    <!-- Health metrics row — data already loaded by ngOnInit, no extra requests -->
-    @if (authService.currentUser()?.is_admin) {
-    <div class="row g-3 mb-4">
-      <!-- Users & Admins card -->
-      <div class="col-sm-6 col-lg-4">
+    <!-- ── Trivy vulnerability scanner card ── -->
+    <div class="row g-3 mb-4" [class.stat-cards-refreshing]="refreshing()">
+      <div class="col-sm-6 col-lg-3">
         <div class="stat-card card border-0 h-100">
           <div class="card-body">
             <div class="d-flex align-items-center justify-content-between mb-2">
-              <span class="text-muted small">Users</span>
-              <div class="stat-icon bg-info-subtle text-info">
-                <i class="bi bi-people"></i>
+              <span class="text-muted small">Trivy Scanner</span>
+              <div class="stat-icon bg-primary-subtle text-primary">
+                <i class="bi bi-shield-check"></i>
               </div>
             </div>
-            <!-- Total users count -->
-            <div class="stat-value">{{ s.total_users }}</div>
-            <!-- Admin count — turns red when admins > 5 -->
-            <div class="small mt-1">
-              <i
-                class="bi bi-shield-fill me-1"
-                [class.text-danger]="s.total_admins > 5"
-                [class.text-muted]="s.total_admins <= 5"
-              >
-              </i>
-              <span
-                [class.text-danger]="s.total_admins > 5"
-                [class.fw-bold]="s.total_admins > 5"
-                [class.text-muted]="s.total_admins <= 5"
-              >
-                {{ s.total_admins }} admin{{ s.total_admins > 1 ? "s" : "" }}
-              </span>
+            <div class="stat-value">
+              {{ s.trivy_version ? "v" + s.trivy_version : "N/A" }}
             </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- ── Ghost Repositories health card ── -->
-      <div class="col-sm-6 col-lg-4">
-        <div
-          class="stat-card card border-0 h-100"
-          style="border-left: 3px solid transparent !important"
-          [style.border-left-color]="
-            ghostCount() > 0 ? 'var(--bs-warning)' : 'var(--bs-success)'
-          "
-        >
-          <div class="card-body">
-            <div class="d-flex align-items-center justify-content-between mb-2">
-              <span class="text-muted small">Ghost Repositories</span>
-              <!-- Icon color reflects health: grey while loading, green if clean, amber if issues -->
-              <div
-                [class]="
-                  !ghostsChecked()
-                    ? 'stat-icon bg-secondary-subtle text-secondary'
-                    : ghostCount() > 0
-                      ? 'stat-icon bg-warning-subtle text-warning'
-                      : 'stat-icon bg-success-subtle text-success'
-                "
-              >
-                <i class="bi bi-shadows"></i>
-              </div>
-            </div>
-
-            <!-- Spinner while the check is in flight, then the count -->
-            @if (!ghostsChecked()) {
-              <div class="stat-value text-muted">
-                <span class="spinner-border spinner-border-sm"></span>
-              </div>
-            } @else {
-              <div
-                [class]="
-                  ghostCount() > 0
-                    ? 'stat-value text-warning'
-                    : 'stat-value text-success'
-                "
-              >
-                {{ ghostCount() }}
-              </div>
-            }
-
             <div class="text-muted small">
-              @if (!ghostsChecked()) {
-                Checking…
-              } @else if (ghostCount() > 0) {
-                Repos without tags — purge needed
+              @if (s.trivy_db_last_update) {
+                DB updated {{ s.trivy_db_last_update | date: "mediumDate" }}
               } @else {
-                All repositories healthy
-              }
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- ── Orphan OCI health card ── -->
-      <div class="col-sm-6 col-lg-4">
-        <div
-          class="stat-card card border-0 h-100"
-          style="border-left: 3px solid transparent !important"
-          [style.border-left-color]="
-            orphanOciCount() > 0 ? 'var(--bs-warning)' : 'var(--bs-success)'
-          "
-        >
-          <div class="card-body">
-            <div class="d-flex align-items-center justify-content-between mb-2">
-              <span class="text-muted small">Orphan OCI Directories</span>
-              <div
-                [class]="
-                  !orphanOciChecked()
-                    ? 'stat-icon bg-secondary-subtle text-secondary'
-                    : orphanOciCount() > 0
-                      ? 'stat-icon bg-warning-subtle text-warning'
-                      : 'stat-icon bg-success-subtle text-success'
-                "
-              >
-                <i class="bi bi-folder-x"></i>
-              </div>
-            </div>
-
-            @if (!orphanOciChecked()) {
-              <div class="stat-value text-muted">
-                <span class="spinner-border spinner-border-sm"></span>
-              </div>
-            } @else {
-              <div
-                [class]="
-                  orphanOciCount() > 0
-                    ? 'stat-value text-warning'
-                    : 'stat-value text-success'
-                "
-              >
-                {{ orphanOciCount() }}
-              </div>
-            }
-
-            <div class="text-muted small">
-              @if (!orphanOciChecked()) {
-                Checking…
-              } @else if (orphanOciCount() > 0) {
-                Leftover OCI directories —
-                @if (orphanOciSize()) {
-                  {{ orphanOciSize() }} wasted
-                }
-              } @else {
-                Staging directory clean
+                DB never updated
               }
             </div>
           </div>
         </div>
       </div>
     </div>
+
+    <!-- Health metrics row — data already loaded by ngOnInit, no extra requests -->
+    @if (authService.currentUser()?.is_admin) {
+      <div class="row g-3 mb-4">
+        <!-- Users & Admins card -->
+        <div class="col-sm-6 col-lg-4">
+          <div class="stat-card card border-0 h-100">
+            <div class="card-body">
+              <div
+                class="d-flex align-items-center justify-content-between mb-2"
+              >
+                <span class="text-muted small">Users</span>
+                <div class="stat-icon bg-info-subtle text-info">
+                  <i class="bi bi-people"></i>
+                </div>
+              </div>
+              <!-- Total users count -->
+              <div class="stat-value">{{ s.total_users }}</div>
+              <!-- Admin count — turns red when admins > 5 -->
+              <div class="small mt-1">
+                <i
+                  class="bi bi-shield-fill me-1"
+                  [class.text-danger]="s.total_admins > 5"
+                  [class.text-muted]="s.total_admins <= 5"
+                >
+                </i>
+                <span
+                  [class.text-danger]="s.total_admins > 5"
+                  [class.fw-bold]="s.total_admins > 5"
+                  [class.text-muted]="s.total_admins <= 5"
+                >
+                  {{ s.total_admins }} admin{{ s.total_admins > 1 ? "s" : "" }}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Ghost Repositories health card ── -->
+        <div class="col-sm-6 col-lg-4">
+          <div
+            class="stat-card card border-0 h-100"
+            style="border-left: 3px solid transparent !important"
+            [style.border-left-color]="
+              ghostCount() > 0 ? 'var(--bs-warning)' : 'var(--bs-success)'
+            "
+          >
+            <div class="card-body">
+              <div
+                class="d-flex align-items-center justify-content-between mb-2"
+              >
+                <span class="text-muted small">Ghost Repositories</span>
+                <!-- Icon color reflects health: grey while loading, green if clean, amber if issues -->
+                <div
+                  [class]="
+                    !ghostsChecked()
+                      ? 'stat-icon bg-secondary-subtle text-secondary'
+                      : ghostCount() > 0
+                        ? 'stat-icon bg-warning-subtle text-warning'
+                        : 'stat-icon bg-success-subtle text-success'
+                  "
+                >
+                  <i class="bi bi-shadows"></i>
+                </div>
+              </div>
+
+              <!-- Spinner while the check is in flight, then the count -->
+              @if (!ghostsChecked()) {
+                <div class="stat-value text-muted">
+                  <span class="spinner-border spinner-border-sm"></span>
+                </div>
+              } @else {
+                <div
+                  [class]="
+                    ghostCount() > 0
+                      ? 'stat-value text-warning'
+                      : 'stat-value text-success'
+                  "
+                >
+                  {{ ghostCount() }}
+                </div>
+              }
+
+              <div class="text-muted small">
+                @if (!ghostsChecked()) {
+                  Checking…
+                } @else if (ghostCount() > 0) {
+                  Repos without tags — purge needed
+                } @else {
+                  All repositories healthy
+                }
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Orphan OCI health card ── -->
+        <div class="col-sm-6 col-lg-4">
+          <div
+            class="stat-card card border-0 h-100"
+            style="border-left: 3px solid transparent !important"
+            [style.border-left-color]="
+              orphanOciCount() > 0 ? 'var(--bs-warning)' : 'var(--bs-success)'
+            "
+          >
+            <div class="card-body">
+              <div
+                class="d-flex align-items-center justify-content-between mb-2"
+              >
+                <span class="text-muted small">Orphan OCI Directories</span>
+                <div
+                  [class]="
+                    !orphanOciChecked()
+                      ? 'stat-icon bg-secondary-subtle text-secondary'
+                      : orphanOciCount() > 0
+                        ? 'stat-icon bg-warning-subtle text-warning'
+                        : 'stat-icon bg-success-subtle text-success'
+                  "
+                >
+                  <i class="bi bi-folder-x"></i>
+                </div>
+              </div>
+
+              @if (!orphanOciChecked()) {
+                <div class="stat-value text-muted">
+                  <span class="spinner-border spinner-border-sm"></span>
+                </div>
+              } @else {
+                <div
+                  [class]="
+                    orphanOciCount() > 0
+                      ? 'stat-value text-warning'
+                      : 'stat-value text-success'
+                  "
+                >
+                  {{ orphanOciCount() }}
+                </div>
+              }
+
+              <div class="text-muted small">
+                @if (!orphanOciChecked()) {
+                  Checking…
+                } @else if (orphanOciCount() > 0) {
+                  Leftover OCI directories —
+                  @if (orphanOciSize()) {
+                    {{ orphanOciSize() }} wasted
+                  }
+                } @else {
+                  Staging directory clean
+                }
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     }
 
     <!-- Registry info & Quick Actions -->
@@ -354,220 +383,230 @@
 
     <!-- Maintenance section — admin only -->
     @if (authService.currentUser()?.is_admin) {
-    <div class="row g-3 mt-1">
-      <div class="col-12">
-        <div class="card border-0">
-          <div class="card-header border-0 pb-0">
-            <h6 class="fw-semibold mb-0">
-              <i class="bi bi-tools me-2 text-warning"></i>Maintenance Actions
-            </h6>
-          </div>
-          <div class="card-body d-flex flex-column gap-2">
-            <!-- ── Garbage Collect ── -->
-            <div class="gc-panel rounded p-3 mt-1">
-              <div
-                class="d-flex align-items-center justify-content-between mb-2"
-              >
-                <div>
-                  <div
-                    class="fw-semibold small d-flex align-items-center gap-2"
-                  >
-                    <i class="bi bi-trash3-fill text-warning"></i>
-                    Garbage Collection
-                  </div>
-                  <div class="text-muted" style="font-size: 0.72rem">
-                    Reclaim disk space from deleted layers
-                  </div>
-                </div>
-
-                <button
-                  class="btn btn-sm btn-outline-secondary ms-auto me-2"
-                  (click)="startGC(true)"
-                  [disabled]="gcStatus()?.status === 'running'"
-                >
-                  @if (gcDryStatus() && gcStatus()?.status === "running") {
-                    <span class="spinner-border spinner-border-sm me-1"></span>
-                    Dry running...
-                  } @else {
-                    <i class="bi bi-eye me-1"></i>
-                  }
-                  Dry run
-                </button>
-                <button
-                  class="btn btn-sm btn-warning"
-                  (click)="startGC(false)"
-                  [disabled]="gcStatus()?.status === 'running'"
-                >
-                  @if (!gcDryStatus() && gcStatus()?.status === "running") {
-                    <span class="spinner-border spinner-border-sm me-1"></span>
-                    Running...
-                  } @else {
-                    <i class="bi bi-recycle me-1"></i>
-                    Run GC
-                  }
-                </button>
-              </div>
-
-              @if (gcStatus() && gcStatus()!.status !== "idle") {
-                <!-- GC status badge -->
-                <div class="d-flex align-items-center gap-2 mb-2">
-                  <span [class]="getGCBadgeClass(gcStatus()!.status)">
-                    {{ gcStatus()!.status }}
-                  </span>
-                  @if (
-                    gcStatus()!.status === "done" && gcStatus()!.freed_bytes > 0
-                  ) {
-                    <span class="text-success small fw-semibold">
-                      <i class="bi bi-arrow-down-circle-fill me-1"></i>
-                      {{ gcStatus()!.freed_human }} freed
-                    </span>
-                  }
-                  @if (
-                    gcStatus()!.status === "done" &&
-                    gcStatus()!.freed_bytes === 0
-                  ) {
-                    <span class="text-muted small">Nothing to reclaim</span>
-                  }
-                </div>
-
-                <!-- GC output log -->
-                @if (gcStatus()!.error) {
-                  <pre class="gc-output mb-0">{{ gcStatus()!.error }}</pre>
-                }
-                @if (gcStatus()!.output) {
-                  <pre class="gc-output mb-0">{{ gcStatus()!.output }}</pre>
-                }
-
-                <!-- GC timestamps -->
-                @if (gcStatus()!.finished_at) {
-                  <div class="text-muted mt-1" style="font-size: 0.68rem">
-                    Finished: {{ gcStatus()!.finished_at | date: "medium" }}
-                  </div>
-                }
-              }
+      <div class="row g-3 mt-1">
+        <div class="col-12">
+          <div class="card border-0">
+            <div class="card-header border-0 pb-0">
+              <h6 class="fw-semibold mb-0">
+                <i class="bi bi-tools me-2 text-warning"></i>Maintenance Actions
+              </h6>
             </div>
-
-            <!-- ── Ghost repositories cleanup ── -->
-            <div class="gc-panel rounded p-3">
-              <div class="d-flex align-items-center justify-content-between">
-                <div>
-                  <div
-                    class="fw-semibold small d-flex align-items-center gap-2"
-                  >
-                    <i class="bi bi-shadows text-secondary"></i>
-                    Ghost Repositories
-                    @if (ghostCount() > 0) {
-                      <span class="badge bg-warning-subtle text-warning">{{
-                        ghostCount()
-                      }}</span>
-                    }
-                  </div>
-                  <div class="text-muted" style="font-size: 0.72rem">
-                    Repositories with no tags left after deletion
-                  </div>
-                </div>
-                <button
-                  class="btn btn-sm btn-outline-secondary"
-                  (click)="purgeGhostRepos()"
-                  [disabled]="purgingGhosts() || ghostCount() === 0"
+            <div class="card-body d-flex flex-column gap-2">
+              <!-- ── Garbage Collect ── -->
+              <div class="gc-panel rounded p-3 mt-1">
+                <div
+                  class="d-flex align-items-center justify-content-between mb-2"
                 >
-                  @if (purgingGhosts()) {
-                    <span class="spinner-border spinner-border-sm me-1"></span>
-                  } @else {
-                    <i class="bi bi-eraser me-1"></i>
-                  }
-                  Purge
-                </button>
-              </div>
-              @if (ghostRepos().length > 0) {
-                <div class="d-flex flex-wrap gap-1 mt-2">
-                  @for (repo of ghostRepos(); track repo) {
-                    <span
-                      class="badge bg-secondary-subtle text-secondary font-monospace"
-                      style="font-size: 0.68rem"
+                  <div>
+                    <div
+                      class="fw-semibold small d-flex align-items-center gap-2"
                     >
-                      <i class="bi bi-ghost me-1"></i>{{ repo }}
-                    </span>
-                  }
-                </div>
-              } @else if (ghostsChecked()) {
-                <div class="text-success small mt-1">
-                  <i class="bi bi-check-circle me-1"></i>No ghost repositories
-                </div>
-              }
-            </div>
+                      <i class="bi bi-trash3-fill text-warning"></i>
+                      Garbage Collection
+                    </div>
+                    <div class="text-muted" style="font-size: 0.72rem">
+                      Reclaim disk space from deleted layers
+                    </div>
+                  </div>
 
-            <!-- ── Orphan OCI layouts cleanup ── -->
-            <div class="gc-panel rounded p-3">
-              <div class="d-flex align-items-center justify-content-between">
-                <div>
-                  <div
-                    class="fw-semibold small d-flex align-items-center gap-2"
-                  >
-                    <i class="bi bi-folder-x text-warning"></i>
-                    Orphan OCI Directories in Staging
-                    @if (orphanOciCount() > 0) {
-                      <span class="badge bg-warning-subtle text-warning">{{
-                        orphanOciCount()
-                      }}</span>
-                    }
-                  </div>
-                  <div class="text-muted" style="font-size: 0.72rem">
-                    Leftover OCI layout directories in /tmp/staging with no
-                    active job
-                  </div>
-                </div>
-                <div class="d-flex gap-1">
                   <button
-                    class="btn btn-sm btn-outline-secondary"
-                    (click)="checkOrphanOci()"
-                    [disabled]="orphanOciRefreshing()"
-                    title="Refresh"
+                    class="btn btn-sm btn-outline-secondary ms-auto me-2"
+                    (click)="startGC(true)"
+                    [disabled]="gcStatus()?.status === 'running'"
                   >
-                    <i
-                      class="bi bi-arrow-clockwise"
-                      [class.spin]="orphanOciRefreshing()"
-                    ></i>
+                    @if (gcDryStatus() && gcStatus()?.status === "running") {
+                      <span
+                        class="spinner-border spinner-border-sm me-1"
+                      ></span>
+                      Dry running...
+                    } @else {
+                      <i class="bi bi-eye me-1"></i>
+                    }
+                    Dry run
                   </button>
                   <button
-                    class="btn btn-sm btn-outline-warning"
-                    (click)="purgeOrphanOci()"
-                    [disabled]="purgingOrphanOci() || orphanOciCount() === 0"
+                    class="btn btn-sm btn-warning"
+                    (click)="startGC(false)"
+                    [disabled]="gcStatus()?.status === 'running'"
                   >
-                    @if (purgingOrphanOci()) {
+                    @if (!gcDryStatus() && gcStatus()?.status === "running") {
+                      <span
+                        class="spinner-border spinner-border-sm me-1"
+                      ></span>
+                      Running...
+                    } @else {
+                      <i class="bi bi-recycle me-1"></i>
+                      Run GC
+                    }
+                  </button>
+                </div>
+
+                @if (gcStatus() && gcStatus()!.status !== "idle") {
+                  <!-- GC status badge -->
+                  <div class="d-flex align-items-center gap-2 mb-2">
+                    <span [class]="getGCBadgeClass(gcStatus()!.status)">
+                      {{ gcStatus()!.status }}
+                    </span>
+                    @if (
+                      gcStatus()!.status === "done" &&
+                      gcStatus()!.freed_bytes > 0
+                    ) {
+                      <span class="text-success small fw-semibold">
+                        <i class="bi bi-arrow-down-circle-fill me-1"></i>
+                        {{ gcStatus()!.freed_human }} freed
+                      </span>
+                    }
+                    @if (
+                      gcStatus()!.status === "done" &&
+                      gcStatus()!.freed_bytes === 0
+                    ) {
+                      <span class="text-muted small">Nothing to reclaim</span>
+                    }
+                  </div>
+
+                  <!-- GC output log -->
+                  @if (gcStatus()!.error) {
+                    <pre class="gc-output mb-0">{{ gcStatus()!.error }}</pre>
+                  }
+                  @if (gcStatus()!.output) {
+                    <pre class="gc-output mb-0">{{ gcStatus()!.output }}</pre>
+                  }
+
+                  <!-- GC timestamps -->
+                  @if (gcStatus()!.finished_at) {
+                    <div class="text-muted mt-1" style="font-size: 0.68rem">
+                      Finished: {{ gcStatus()!.finished_at | date: "medium" }}
+                    </div>
+                  }
+                }
+              </div>
+
+              <!-- ── Ghost repositories cleanup ── -->
+              <div class="gc-panel rounded p-3">
+                <div class="d-flex align-items-center justify-content-between">
+                  <div>
+                    <div
+                      class="fw-semibold small d-flex align-items-center gap-2"
+                    >
+                      <i class="bi bi-shadows text-secondary"></i>
+                      Ghost Repositories
+                      @if (ghostCount() > 0) {
+                        <span class="badge bg-warning-subtle text-warning">{{
+                          ghostCount()
+                        }}</span>
+                      }
+                    </div>
+                    <div class="text-muted" style="font-size: 0.72rem">
+                      Repositories with no tags left after deletion
+                    </div>
+                  </div>
+                  <button
+                    class="btn btn-sm btn-outline-secondary"
+                    (click)="purgeGhostRepos()"
+                    [disabled]="purgingGhosts() || ghostCount() === 0"
+                  >
+                    @if (purgingGhosts()) {
                       <span
                         class="spinner-border spinner-border-sm me-1"
                       ></span>
                     } @else {
-                      <i class="bi bi-eraser me-1" [class.spin]="purgingOrphanOci()"></i>
+                      <i class="bi bi-eraser me-1"></i>
                     }
                     Purge
                   </button>
                 </div>
+                @if (ghostRepos().length > 0) {
+                  <div class="d-flex flex-wrap gap-1 mt-2">
+                    @for (repo of ghostRepos(); track repo) {
+                      <span
+                        class="badge bg-secondary-subtle text-secondary font-monospace"
+                        style="font-size: 0.68rem"
+                      >
+                        <i class="bi bi-ghost me-1"></i>{{ repo }}
+                      </span>
+                    }
+                  </div>
+                } @else if (ghostsChecked()) {
+                  <div class="text-success small mt-1">
+                    <i class="bi bi-check-circle me-1"></i>No ghost repositories
+                  </div>
+                }
               </div>
-              @if (orphanOciDirs().length > 0) {
-                <div class="d-flex flex-wrap gap-1 mt-2">
-                  @for (f of orphanOciDirs(); track f) {
-                    <span
-                      class="badge bg-warning-subtle text-warning font-monospace"
-                      style="font-size: 0.68rem"
+
+              <!-- ── Orphan OCI layouts cleanup ── -->
+              <div class="gc-panel rounded p-3">
+                <div class="d-flex align-items-center justify-content-between">
+                  <div>
+                    <div
+                      class="fw-semibold small d-flex align-items-center gap-2"
                     >
-                      <i class="bi bi-folder-x me-1"></i>{{ f | slice: 0 : 20
-                      }}{{ f.length > 20 ? "…" : "" }}
-                    </span>
-                  }
+                      <i class="bi bi-folder-x text-warning"></i>
+                      Orphan OCI Directories in Staging
+                      @if (orphanOciCount() > 0) {
+                        <span class="badge bg-warning-subtle text-warning">{{
+                          orphanOciCount()
+                        }}</span>
+                      }
+                    </div>
+                    <div class="text-muted" style="font-size: 0.72rem">
+                      Leftover OCI layout directories in /tmp/staging with no
+                      active job
+                    </div>
+                  </div>
+                  <div class="d-flex gap-1">
+                    <button
+                      class="btn btn-sm btn-outline-secondary"
+                      (click)="checkOrphanOci()"
+                      [disabled]="orphanOciRefreshing()"
+                      title="Refresh"
+                    >
+                      <i
+                        class="bi bi-arrow-clockwise"
+                        [class.spin]="orphanOciRefreshing()"
+                      ></i>
+                    </button>
+                    <button
+                      class="btn btn-sm btn-outline-warning"
+                      (click)="purgeOrphanOci()"
+                      [disabled]="purgingOrphanOci() || orphanOciCount() === 0"
+                    >
+                      @if (purgingOrphanOci()) {
+                        <span
+                          class="spinner-border spinner-border-sm me-1"
+                        ></span>
+                      } @else {
+                        <i
+                          class="bi bi-eraser me-1"
+                          [class.spin]="purgingOrphanOci()"
+                        ></i>
+                      }
+                      Purge
+                    </button>
+                  </div>
                 </div>
-              } @else if (orphanOciChecked()) {
-                <div class="text-success small mt-1">
-                  <i class="bi bi-check-circle me-1"></i>No orphan OCI
-                  directories
-                </div>
-              }
+                @if (orphanOciDirs().length > 0) {
+                  <div class="d-flex flex-wrap gap-1 mt-2">
+                    @for (f of orphanOciDirs(); track f) {
+                      <span
+                        class="badge bg-warning-subtle text-warning font-monospace"
+                        style="font-size: 0.68rem"
+                      >
+                        <i class="bi bi-folder-x me-1"></i>{{ f | slice: 0 : 20
+                        }}{{ f.length > 20 ? "…" : "" }}
+                      </span>
+                    }
+                  </div>
+                } @else if (orphanOciChecked()) {
+                  <div class="text-success small mt-1">
+                    <i class="bi bi-check-circle me-1"></i>No orphan OCI
+                    directories
+                  </div>
+                }
+              </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
     }
   </div>
 }

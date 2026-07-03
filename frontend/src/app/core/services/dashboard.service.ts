@@ -19,6 +19,8 @@ export interface DashboardStats {
   registry_status: string;
   total_users: number;
   total_admins: number;
+  trivy_version: string | null;
+  trivy_db_last_update: string | null;
 }
 
 @Injectable({ providedIn: "root" })

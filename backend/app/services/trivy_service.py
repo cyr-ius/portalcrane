@@ -94,6 +94,30 @@ def resolve_vuln_config(settings: Settings) -> dict:
 # ── Trivy DB helpers ──────────────────────────────────────────────────────────
 
 
+async def get_trivy_version() -> str | None:
+    """Return the installed Trivy binary version (e.g. "0.72.3").
+
+    Runs `trivy --version` and parses the "Version: X.Y.Z" line. Returns None
+    when the binary is missing or the call fails, so callers can degrade
+    gracefully.
+    """
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            _TRIVY_BINARY,
+            "--version",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, _ = await proc.communicate()
+        if proc.returncode != 0:
+            return None
+        match = re.search(r"Version:\s*([^\s]+)", stdout.decode())
+        return match.group(1) if match else None
+    except Exception as exc:  # binary missing or unexpected failure
+        logger.warning("Unable to read Trivy version: %s", exc)
+        return None
+
+
 async def get_trivy_db_info() -> dict:
     """Return Trivy vulnerability database metadata and freshness status."""
     import json as _json
