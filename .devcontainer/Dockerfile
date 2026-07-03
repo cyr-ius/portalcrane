@@ -38,7 +38,7 @@ RUN curl -L https://github.com/distribution/distribution/releases/download/v${RE
 COPY registry-config.yml.tpl /etc/registry/config.yml
 
 # Download and install Trivy binary
-ARG TRIVY_VERSION=0.69.3
+ARG TRIVY_VERSION=0.72.0
 RUN curl -L https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz \
     | tar xz -C /usr/local/bin trivy
 
