@@ -37,6 +37,20 @@ export PRIVATE_KEY
 PUBLIC_KEY=${PUBLIC_KEY}
 export PUBLIC_KEY
 
+# ── Trivy toggle ────────────────────────────────────────────────────────────────
+# Set TRIVY_ENABLED=false to disarm the embedded Trivy server (no autostart).
+# Any value other than "false" (case-insensitive) keeps Trivy enabled.
+TRIVY_ENABLED=${TRIVY_ENABLED:-true}
+export TRIVY_ENABLED
+case "$(echo "${TRIVY_ENABLED}" | tr '[:upper:]' '[:lower:]')" in
+    false|0|no|off) TRIVY_AUTOSTART=false ;;
+    *)              TRIVY_AUTOSTART=true ;;
+esac
+export TRIVY_AUTOSTART
+if [ "${TRIVY_AUTOSTART}" = "false" ]; then
+    echo "[entrypoint] Trivy server disabled (TRIVY_ENABLED=${TRIVY_ENABLED})"
+fi
+
 # ── Ensure required directories exist ──────────────────────────────────────────
 mkdir -p ${DATA_DIR}/registry ${DATA_DIR}/cache/trivy ${DATA_DIR}/cache/staging
 

@@ -20,7 +20,7 @@ import logging
 import os
 import shutil
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from pathlib import Path
 
@@ -31,8 +31,8 @@ from ..services.providers import resolve_provider_from_registry
 from ..services.registries_service import get_registry_by_id
 from ..services.trivy_service import (
     parse_trivy_output,
-    trivy_raw_scan,
     resolve_vuln_config,
+    trivy_raw_scan,
 )
 
 logger = logging.getLogger(__name__)
@@ -214,6 +214,10 @@ async def _run_transfer_pipeline(
         if vuln_scan_enabled_override is not None
         else vuln_cfg["vuln_scan_enabled"]
     )
+    # Master kill-switch: never scan when the Trivy server is disabled, even if a
+    # per-transfer override explicitly requested it.
+    if not settings.trivy_enabled:
+        do_vuln = False
     severities: list[str] = (
         [s.strip().upper() for s in vuln_severities_override.split(",") if s.strip()]
         if vuln_severities_override is not None
@@ -421,7 +425,7 @@ async def start_transfer_jobs(
             "vuln_result": None,
             "error": None,
             "owner": owner,
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": datetime.now(UTC).isoformat(),
         }
 
         asyncio.create_task(

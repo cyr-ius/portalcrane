@@ -136,14 +136,19 @@ async def lifespan(app: FastAPI):
     apply_proxy_to_os_environ(proxy_cfg)
     apply_syslog_config(resolve_syslog_settings())
     ensure_root_folder_exists()
-    db_task = asyncio.create_task(db_updater_loop())
+    # Only run the Trivy DB updater when Trivy is enabled; otherwise the embedded
+    # server is not started (see docker/entrypoint.sh) and DB downloads are moot.
+    db_task = (
+        asyncio.create_task(db_updater_loop()) if app_settings.trivy_enabled else None
+    )
     yield
-    db_task.cancel()
-    try:
-        await db_task
-    except asyncio.CancelledError:
-        pass
-    logger.info("Trivy DB updater task stopped.")
+    if db_task is not None:
+        db_task.cancel()
+        try:
+            await db_task
+        except asyncio.CancelledError:
+            pass
+        logger.info("Trivy DB updater task stopped.")
 
 
 app = FastAPI(

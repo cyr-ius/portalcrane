@@ -65,9 +65,22 @@ def resolve_vuln_config(settings: Settings) -> dict:
     The returned dict always includes a 'vuln_scan_override' flag so
     the frontend knows whether a custom override is active.
     """
+    # Master kill-switch wins over everything: when Trivy is disabled at the
+    # container level, scanning is impossible regardless of any override.
+    if not settings.trivy_enabled:
+        return {
+            "trivy_enabled": False,
+            "vuln_scan_override": False,
+            "vuln_scan_enabled": False,
+            "vuln_scan_severities": settings.vuln_scan_severities,
+            "vuln_ignore_unfixed": settings.vuln_ignore_unfixed,
+            "vuln_scan_timeout": settings.vuln_scan_timeout,
+        }
+
     override = load_vuln_override()
     if override:
         return {
+            "trivy_enabled": True,
             "vuln_scan_override": True,
             "vuln_scan_enabled": override.get(
                 "vuln_scan_enabled", settings.vuln_scan_enabled
@@ -83,6 +96,7 @@ def resolve_vuln_config(settings: Settings) -> dict:
             ),
         }
     return {
+        "trivy_enabled": True,
         "vuln_scan_override": False,
         "vuln_scan_enabled": settings.vuln_scan_enabled,
         "vuln_scan_severities": settings.vuln_scan_severities,
@@ -213,6 +227,9 @@ def parse_trivy_output(raw: bytes, severities: list[str]) -> dict:
 
 def effective_vuln(settings: Settings, override: bool | None) -> bool:
     """Return the effective vulnerability-scan flag for a given job."""
+    # A disabled Trivy server can never scan, whatever the per-job override asks.
+    if not settings.trivy_enabled:
+        return False
     if override is not None:
         return override
     return settings.vuln_scan_enabled

@@ -107,6 +107,10 @@ class Settings(BaseSettings):
     no_proxy: str = "localhost,127.0.0.1"
 
     # Vulnerability scanning configuration
+    # Master kill-switch: when TRIVY_ENABLED=false the embedded Trivy server is
+    # not started by supervisord (see docker/entrypoint.sh). Mirror that here so
+    # the backend degrades gracefully instead of hammering an absent server.
+    trivy_enabled: bool = True
     vuln_scan_enabled: bool = True
     vuln_scan_severities: str = "CRITICAL,HIGH"
     vuln_ignore_unfixed: bool = False

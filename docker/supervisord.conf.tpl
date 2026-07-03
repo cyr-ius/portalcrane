@@ -26,10 +26,11 @@ stderr_logfile_maxbytes=0
 environment=OTEL_TRACES_EXPORTER="none",OTEL_METRICS_EXPORTER="none",OTEL_LOGS_EXPORTER="none"
 
 ; Trivy server — persistent HTTP API on localhost:4954
+; Disabled by setting TRIVY_ENABLED=false on the container (autostart resolved by entrypoint).
 [program:trivy-server]
 command=/usr/local/bin/trivy server --listen 127.0.0.1:4954 --cache-dir ${DATA_DIR}/cache/trivy
-autostart=true
-autorestart=true
+autostart=${TRIVY_AUTOSTART}
+autorestart=${TRIVY_AUTOSTART}
 stdout_logfile=/dev/stdout
 stdout_logfile_maxbytes=0
 stderr_logfile=/dev/stderr

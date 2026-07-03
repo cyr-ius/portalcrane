@@ -10,10 +10,11 @@ Endpoints:
   DELETE /api/trivy/override       — Remove admin override, revert to env vars (admin only)
 """
 
-from fastapi import APIRouter, HTTPException, Query, Depends
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from ..config import Settings, get_settings
+from ..core.jwt import UserInfo, get_current_user, require_admin
 from ..services.trivy_service import (
     clear_vuln_override,
     get_trivy_db_info,
@@ -23,7 +24,6 @@ from ..services.trivy_service import (
     scan_image,
     update_trivy_db,
 )
-from ..core.jwt import UserInfo, require_admin, get_current_user
 
 router = APIRouter()
 
@@ -39,6 +39,7 @@ class VulnConfig(BaseModel):
     vuln_scan_override = False → values come straight from env vars.
     """
 
+    trivy_enabled: bool
     vuln_scan_override: bool
     vuln_scan_enabled: bool
     vuln_scan_severities: str
@@ -59,14 +60,24 @@ class VulnOverridePayload(BaseModel):
 
 
 @router.get("/db")
-async def trivy_db_status(_: UserInfo = Depends(require_admin)):
+async def trivy_db_status(
+    settings: Settings = Depends(get_settings),
+    _: UserInfo = Depends(require_admin),
+):
     """Returns Trivy vulnerability database info and freshness status."""
+    if not settings.trivy_enabled:
+        return {"trivy_enabled": False}
     return await get_trivy_db_info()
 
 
 @router.post("/db/update")
-async def force_trivy_update(_: UserInfo = Depends(require_admin)):
+async def force_trivy_update(
+    settings: Settings = Depends(get_settings),
+    _: UserInfo = Depends(require_admin),
+):
     """Forces an immediate Trivy DB update."""
+    if not settings.trivy_enabled:
+        raise HTTPException(status_code=503, detail="Trivy is disabled")
     result = await update_trivy_db()
     if not result["success"]:
         raise HTTPException(status_code=500, detail=result["output"])
@@ -81,12 +92,16 @@ async def scan(
     image: str = Query(..., description="Full image ref with explicit tag or digest"),
     severity: list[str] = Query(default=["HIGH", "CRITICAL"]),
     ignore_unfixed: bool = Query(default=False),
+    settings: Settings = Depends(get_settings),
     _: UserInfo = Depends(get_current_user),
 ):
     """
     Scans a specific image from the local registry with Trivy.
     Returns grouped vulnerabilities with CVSS scores.
     """
+    if not settings.trivy_enabled:
+        raise HTTPException(status_code=503, detail="Trivy is disabled")
+
     if not has_explicit_tag_or_digest(image):
         raise HTTPException(
             status_code=400,
