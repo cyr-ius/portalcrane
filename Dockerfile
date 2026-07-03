@@ -26,7 +26,7 @@ ARG REGISTRY_VERSION=3.0.0
 
 # Trivy version — update this ARG to upgrade
 # Check release https://github.com/aquasecurity/trivy/releases
-ARG TRIVY_VERSION=0.72.3
+ARG TRIVY_VERSION=0.72.0
 
 # Install system dependencies (Docker CLI for staging pipeline)
 RUN apk add --no-cache \
