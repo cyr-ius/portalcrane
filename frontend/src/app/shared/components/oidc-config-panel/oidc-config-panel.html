@@ -325,8 +325,51 @@
         Saving… }
         <i class="bi bi-floppy-fill me-1"></i>Save OIDC Settings
       </button>
+
+      <button
+        type="button"
+        class="btn btn-outline-primary btn-sm"
+        (click)="testConnection()"
+        [disabled]="!oidcForm().valid() || testing()"
+        title="Contact the OIDC provider and check that the required information can be retrieved"
+      >
+        @if (testing()) {
+        <span class="spinner-border spinner-border-sm me-1"></span>
+        Testing… } @else {
+        <i class="bi bi-plug-fill me-1"></i>Test connection }
+      </button>
     </div>
-    }
+
+    <!-- ── Test connection results ─────────────────────────────────────────── -->
+    @if (testResult(); as result) {
+    <div
+      class="alert d-flex flex-column gap-2 mt-3 py-2 small mb-0"
+      [class.alert-success]="result.success"
+      [class.alert-danger]="!result.success"
+    >
+      <div class="fw-semibold">
+        @if (result.success) {
+        <i class="bi bi-check-circle-fill me-1"></i>Connection to the OIDC
+        provider succeeded. } @else {
+        <i class="bi bi-x-octagon-fill me-1"></i>Connection test failed — see
+        the details below. }
+      </div>
+      <ul class="list-unstyled mb-0">
+        @for (step of result.steps; track step.name) {
+        <li class="d-flex gap-2 align-items-start">
+          <i
+            class="bi flex-shrink-0 mt-1"
+            [class.bi-check-circle-fill]="step.ok"
+            [class.text-success]="step.ok"
+            [class.bi-x-circle-fill]="!step.ok"
+            [class.text-danger]="!step.ok"
+          ></i>
+          <span> <strong>{{ step.name }}</strong> — {{ step.detail }} </span>
+        </li>
+        }
+      </ul>
+    </div>
+    } }
 
     <!-- Info note -->
     <div class="alert alert-info d-flex gap-2 mt-3 py-2 small">

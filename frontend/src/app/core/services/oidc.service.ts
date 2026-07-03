@@ -22,6 +22,7 @@ import {
   LoginResponse,
   OidcAdminSettings,
   OidcPublicConfig,
+  OidcTestResult,
 } from "../models/auth.models";
 
 @Injectable({ providedIn: "root" })
@@ -101,5 +102,14 @@ export class OidcService {
    */
   saveAdminSettings(payload: OidcAdminSettings) {
     return this.http.put<OidcAdminSettings>("/api/oidc/settings", payload);
+  }
+
+  /**
+   * Run a live connectivity test against the OIDC provider with the given
+   * (possibly unsaved) settings. Admin-only — the backend enforces
+   * require_admin. An empty client_secret falls back to the stored value.
+   */
+  testConnection(payload: OidcAdminSettings) {
+    return this.http.post<OidcTestResult>("/api/oidc/test", payload);
   }
 }

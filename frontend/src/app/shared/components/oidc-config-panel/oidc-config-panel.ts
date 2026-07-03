@@ -8,7 +8,10 @@ import { Component, computed, inject, OnInit, signal } from "@angular/core";
 import { form, FormField, required, submit } from "@angular/forms/signals";
 import { firstValueFrom } from "rxjs";
 
-import { OidcAdminSettings } from "../../../core/models/auth.models";
+import {
+  OidcAdminSettings,
+  OidcTestResult,
+} from "../../../core/models/auth.models";
 import { OidcService } from "../../../core/services/oidc.service";
 
 @Component({
@@ -24,6 +27,8 @@ export class OidcConfigPanel implements OnInit {
   readonly saved = signal(false);
   readonly error = signal<string | null>(null);
   readonly showSecret = signal(false);
+  readonly testing = signal(false);
+  readonly testResult = signal<OidcTestResult | null>(null);
   readonly oidcModel = signal<OidcAdminSettings>({
     enabled: false,
     issuer: "",
@@ -107,5 +112,27 @@ export class OidcConfigPanel implements OnInit {
     const checked = (event.target as HTMLInputElement).checked;
     this.oidcModel.update((m) => ({ ...m, enabled: checked }));
     queueMicrotask(() => this.save());
+  }
+
+  /**
+   * Run a live connectivity test against the OIDC provider using the current
+   * (possibly unsaved) form values, without persisting anything.
+   */
+  testConnection(): void {
+    this.error.set(null);
+    this.testResult.set(null);
+    this.testing.set(true);
+
+    const payload = this.oidcForm().value() as OidcAdminSettings;
+    this.oidc.testConnection(payload).subscribe({
+      next: (result) => {
+        this.testResult.set(result);
+        this.testing.set(false);
+      },
+      error: (err) => {
+        this.error.set(err?.error?.detail ?? "OIDC connection test failed");
+        this.testing.set(false);
+      },
+    });
   }
 }

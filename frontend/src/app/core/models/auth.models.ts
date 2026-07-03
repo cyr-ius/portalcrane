@@ -66,3 +66,16 @@ export interface OidcAdminSettings {
   /** Group/role value that grants regular-user access when present in user_group_claim. */
   user_group: string;
 }
+
+/** Single diagnostic step returned by POST /api/oidc/test. */
+export interface OidcTestStep {
+  name: string;
+  ok: boolean;
+  detail: string;
+}
+
+/** Result of the OIDC connectivity test (POST /api/oidc/test). */
+export interface OidcTestResult {
+  success: boolean;
+  steps: OidcTestStep[];
+}

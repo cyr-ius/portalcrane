@@ -39,6 +39,7 @@ from ..services.oidc_service import (
     OidcAdminSettings,
     OidcIdentity,
     OidcPublicConfig,
+    OidcTestResult,
     build_public_config,
     exchange_code_for_identity,
     has_user_restriction,
@@ -46,6 +47,7 @@ from ..services.oidc_service import (
     is_oidc_user_allowed,
     resolve_oidc_settings,
     save_oidc_config,
+    test_oidc_connection,
 )
 
 router = APIRouter()
@@ -258,3 +260,20 @@ async def update_oidc_settings(
 
     save_oidc_config(payload.model_dump())
     return resolve_oidc_settings(settings)
+
+
+@router.post("/test", response_model=OidcTestResult)
+async def test_oidc_settings(
+    payload: OidcAdminSettings,
+    settings: Settings = Depends(get_settings),
+    _: UserInfo = Depends(require_admin),
+):
+    """Run a live connectivity test against the OIDC provider (admin only).
+
+    Validates that the provider is reachable, publishes the required endpoints,
+    exposes a coherent issuer and signing keys, and that the client credentials
+    are accepted. Uses the submitted (possibly unsaved) form values so an admin
+    can validate the configuration before persisting it. An empty client_secret
+    falls back to the stored value.
+    """
+    return await test_oidc_connection(payload, settings)

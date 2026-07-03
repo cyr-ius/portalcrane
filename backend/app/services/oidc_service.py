@@ -76,6 +76,26 @@ class OidcIdentity(BaseModel):
     groups: list[str] = []
 
 
+class OidcTestStep(BaseModel):
+    """Single diagnostic step of the OIDC connectivity test."""
+
+    name: str
+    ok: bool
+    detail: str
+
+
+class OidcTestResult(BaseModel):
+    """Aggregated result of the OIDC connectivity test.
+
+    success is True only when every *critical* step succeeded (discovery
+    reachable, required endpoints present, issuer coherent and client
+    credentials not explicitly rejected).
+    """
+
+    success: bool
+    steps: list[OidcTestStep] = []
+
+
 # ─── Persistence helpers ──────────────────────────────────────────────────────
 
 
@@ -234,6 +254,231 @@ async def build_public_config(settings: Settings) -> OidcPublicConfig:
         scope=merged.scope,
         oidc_only=merged.oidc_only,
     )
+
+
+# ─── Connectivity test ────────────────────────────────────────────────────────
+
+
+async def test_oidc_connection(
+    config: OidcAdminSettings, settings: Settings
+) -> OidcTestResult:
+    """Run a live connectivity check against the configured OIDC provider.
+
+    Validates, in order:
+      1. the discovery document is reachable;
+      2. the required endpoints (authorization/token/userinfo/jwks) are present;
+      3. the discovery issuer matches the configured one;
+      4. the signing keys (JWKS) can be fetched;
+      5. the client_id/secret are not rejected by the token endpoint.
+
+    The test uses the values passed in *config* (typically the unsaved form
+    values) so an admin can validate settings before persisting them. When the
+    submitted client_secret is empty, the persisted/env value is used instead
+    (mirroring the "leave empty to keep current value" behaviour of the form).
+
+    success is True only when the critical steps (1-3 and, when testable,
+    step 5) succeed. The client-credentials step is best-effort: a provider may
+    legitimately reject the client_credentials grant for an authorization-code
+    client, which is reported without failing the whole test.
+    """
+    steps: list[OidcTestStep] = []
+    proxy = settings.httpx_proxy
+
+    issuer = config.issuer.rstrip("/")
+    if not issuer:
+        return OidcTestResult(
+            success=False,
+            steps=[
+                OidcTestStep(
+                    name="Issuer URL",
+                    ok=False,
+                    detail="No issuer URL configured.",
+                )
+            ],
+        )
+
+    # Fall back to the stored secret when the form left it empty.
+    client_secret = (
+        config.client_secret or resolve_oidc_settings(settings).client_secret
+    )
+
+    critical_ok = True
+    discovery: dict[str, Any] = {}
+
+    async with httpx.AsyncClient(proxy=proxy) as client:
+        # Step 1 — discovery document
+        discovery_url = f"{issuer}/.well-known/openid-configuration"
+        try:
+            resp = await client.get(discovery_url, timeout=DEFAULT_TIMEOUT)
+            resp.raise_for_status()
+            discovery = resp.json()
+            steps.append(
+                OidcTestStep(
+                    name="Discovery document",
+                    ok=True,
+                    detail=f"Reached {discovery_url}",
+                )
+            )
+        except Exception as exc:
+            steps.append(
+                OidcTestStep(
+                    name="Discovery document",
+                    ok=False,
+                    detail=f"Failed to fetch {discovery_url}: {exc}",
+                )
+            )
+            # Without discovery no further step is possible.
+            return OidcTestResult(success=False, steps=steps)
+
+        # Step 2 — required endpoints
+        required = [
+            "authorization_endpoint",
+            "token_endpoint",
+            "userinfo_endpoint",
+            "jwks_uri",
+        ]
+        missing = [name for name in required if not discovery.get(name)]
+        if missing:
+            critical_ok = False
+            steps.append(
+                OidcTestStep(
+                    name="Required endpoints",
+                    ok=False,
+                    detail=f"Missing from discovery: {', '.join(missing)}.",
+                )
+            )
+        else:
+            steps.append(
+                OidcTestStep(
+                    name="Required endpoints",
+                    ok=True,
+                    detail=(
+                        "authorization, token, userinfo and jwks endpoints are "
+                        "published."
+                    ),
+                )
+            )
+
+        # Step 3 — issuer coherence
+        disc_issuer = str(discovery.get("issuer", "")).rstrip("/")
+        if disc_issuer and disc_issuer != issuer:
+            critical_ok = False
+            steps.append(
+                OidcTestStep(
+                    name="Issuer match",
+                    ok=False,
+                    detail=(
+                        f"Discovery issuer '{disc_issuer}' differs from the "
+                        f"configured '{issuer}'."
+                    ),
+                )
+            )
+        else:
+            steps.append(
+                OidcTestStep(
+                    name="Issuer match",
+                    ok=True,
+                    detail=f"Issuer '{disc_issuer or issuer}' is coherent.",
+                )
+            )
+
+        # Step 4 — signing keys (JWKS) — informational, not critical
+        jwks_uri = discovery.get("jwks_uri", "")
+        if jwks_uri:
+            try:
+                jwks_resp = await client.get(jwks_uri, timeout=DEFAULT_TIMEOUT)
+                jwks_resp.raise_for_status()
+                keys = jwks_resp.json().get("keys", [])
+                steps.append(
+                    OidcTestStep(
+                        name="Signing keys (JWKS)",
+                        ok=bool(keys),
+                        detail=(
+                            f"{len(keys)} signing key(s) published."
+                            if keys
+                            else "JWKS reachable but contains no keys."
+                        ),
+                    )
+                )
+            except Exception as exc:
+                steps.append(
+                    OidcTestStep(
+                        name="Signing keys (JWKS)",
+                        ok=False,
+                        detail=f"Failed to fetch JWKS: {exc}",
+                    )
+                )
+
+        # Step 5 — client credentials (best-effort)
+        token_endpoint = discovery.get("token_endpoint", "")
+        if token_endpoint and config.client_id and client_secret:
+            try:
+                cred_resp = await client.post(
+                    token_endpoint,
+                    data={"grant_type": "client_credentials", "scope": config.scope},
+                    auth=(config.client_id, client_secret),
+                    timeout=DEFAULT_TIMEOUT,
+                )
+                error = ""
+                try:
+                    error = str(cred_resp.json().get("error", ""))
+                except Exception:
+                    pass
+
+                if cred_resp.status_code == 200:
+                    steps.append(
+                        OidcTestStep(
+                            name="Client credentials",
+                            ok=True,
+                            detail="client_id/secret accepted by the token endpoint.",
+                        )
+                    )
+                elif error == "invalid_client":
+                    critical_ok = False
+                    steps.append(
+                        OidcTestStep(
+                            name="Client credentials",
+                            ok=False,
+                            detail=(
+                                "Invalid client_id or client_secret "
+                                "(rejected by the token endpoint)."
+                            ),
+                        )
+                    )
+                else:
+                    # unsupported_grant_type / unauthorized_client / etc.: the
+                    # credentials are recognised but this grant is not enabled —
+                    # expected for authorization-code-only clients.
+                    steps.append(
+                        OidcTestStep(
+                            name="Client credentials",
+                            ok=True,
+                            detail=(
+                                "Credentials recognised; the client_credentials "
+                                "grant is not enabled for this client "
+                                f"(error='{error or cred_resp.status_code}'). "
+                                "This is expected for a code-flow client."
+                            ),
+                        )
+                    )
+            except Exception as exc:
+                steps.append(
+                    OidcTestStep(
+                        name="Client credentials",
+                        ok=False,
+                        detail=f"Token endpoint request failed: {exc}",
+                    )
+                )
+        else:
+            steps.append(
+                OidcTestStep(
+                    name="Client credentials",
+                    ok=True,
+                    detail="Skipped (client_id or client_secret not provided).",
+                )
+            )
+
+    return OidcTestResult(success=critical_ok, steps=steps)
 
 
 # ─── Authorization-code exchange ─────────────────────────────────────────────
