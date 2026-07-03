@@ -1,6 +1,6 @@
 # ─── FastAPI + Angular Development Image ─────────────────────────────────────────────
 
-FROM mcr.microsoft.com/devcontainers/base:alpine
+FROM mcr.microsoft.com/devcontainers/base:alpine3.23
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
