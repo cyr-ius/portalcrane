@@ -4,7 +4,8 @@
 <div class="card border-0 mb-3">
   <div class="card-header border-0">
     <h6 class="fw-semibold mb-0">
-      <i class="bi bi-info-circle text-primary me-2"></i>About
+      <i class="bi bi-info-circle text-primary me-2"></i>{{ "ABOUT.TITLE" |
+      translate }}
     </h6>
   </div>
   <div class="card-body">
@@ -13,19 +14,13 @@
       <div>
         <div class="fw-bold fs-5">Portalcrane</div>
         <div class="text-muted small">
-          Docker Registry Manager {{ aboutService.info()?.current_version ??
-          "v1.0.0" }}
+          {{ "AUTH.TAGLINE" | translate }} {{
+          aboutService.info()?.current_version ?? "v1.0.0" }}
         </div>
       </div>
     </div>
-    <p class="text-muted small mb-2">
-      Built with Angular 21 (Zoneless + Signals) + FastAPI. Manages CNCF
-      Distribution (Docker Registry).
-    </p>
-    <p class="text-muted small mb-3">
-      Features: Browse images, manage tags, staging pipeline with optional
-      ClamAV scanning, optional Trivy CVE scanning, OIDC support.
-    </p>
+    <p class="text-muted small mb-2">{{ "ABOUT.BUILT_WITH" | translate }}</p>
+    <p class="text-muted small mb-3">{{ "ABOUT.FEATURES" | translate }}</p>
 
     <a
       href="/api/docs"
@@ -34,7 +29,7 @@
       class="btn btn-sm btn-outline-warning d-inline-flex align-items-center gap-2 me-3"
     >
       <i class="bi bi-info-square"></i>
-      Open API documentation
+      {{ "ABOUT.OPEN_API_DOCS" | translate }}
       <i class="bi bi-box-arrow-up-right" style="font-size: 0.7rem"></i>
     </a>
 
@@ -46,7 +41,7 @@
       class="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-2"
     >
       <i class="bi bi-github"></i>
-      Open an issue on GitHub
+      {{ "ABOUT.OPEN_ISSUE" | translate }}
       <i class="bi bi-box-arrow-up-right" style="font-size: 0.7rem"></i>
     </a>
   </div>
@@ -58,7 +53,8 @@
 <div class="card border-0 mb-3">
   <div class="card-header border-0">
     <h6 class="fw-semibold mb-0">
-      <i class="bi bi-git text-primary me-2"></i>Release Information
+      <i class="bi bi-git text-primary me-2"></i>{{ "ABOUT.RELEASE_INFO" |
+      translate }}
     </h6>
   </div>
   <div class="card-body">
@@ -66,9 +62,9 @@
     @if (aboutService.loading()) {
     <div class="d-flex align-items-center gap-2 text-muted small">
       <div class="spinner-border spinner-border-sm" role="status">
-        <span class="visually-hidden">Loading…</span>
+        <span class="visually-hidden">{{ "COMMON.LOADING" | translate }}</span>
       </div>
-      Checking for updates…
+      {{ "ABOUT.CHECKING_UPDATES" | translate }}
     </div>
     }
 
@@ -76,7 +72,7 @@
     @if (aboutService.error()) {
     <div class="alert alert-warning py-2 small mb-3">
       <i class="bi bi-exclamation-triangle me-1"></i>
-      Could not load application information: {{ aboutService.error() }}
+      {{ "ABOUT.ERR_LOAD" | translate }}: {{ aboutService.error() }}
     </div>
     }
 
@@ -86,7 +82,7 @@
     <div class="row g-2 mb-3 align-items-start">
       <!-- Current version -->
       <div class="col-12 col-sm-6">
-        <div class="about-label">Current version</div>
+        <div class="about-label">{{ "ABOUT.CURRENT_VERSION" | translate }}</div>
         <span class="badge bg-secondary font-monospace">
           v{{ info.current_version }}
         </span>
@@ -94,12 +90,13 @@
 
       <!-- Latest GitHub release -->
       <div class="col-12 col-sm-6">
-        <div class="about-label">Latest release on GitHub</div>
+        <div class="about-label">{{ "ABOUT.LATEST_RELEASE" | translate }}</div>
 
         @if (info.github_error) {
         <!-- GitHub API could not be reached -->
         <span class="badge bg-warning text-dark" [title]="info.github_error">
-          <i class="bi bi-exclamation-triangle me-1"></i>Unavailable
+          <i class="bi bi-exclamation-triangle me-1"></i>{{ "ABOUT.UNAVAILABLE"
+          | translate }}
         </span>
         } @else if (info.latest_version) {
         <span
@@ -115,7 +112,7 @@
           target="_blank"
           rel="noopener"
         >
-          View release notes
+          {{ "ABOUT.VIEW_RELEASE_NOTES" | translate }}
           <i class="bi bi-box-arrow-up-right ms-1"></i>
         </a>
         } }
@@ -129,14 +126,14 @@
       class="alert alert-success py-2 small d-flex align-items-center gap-2 mb-3"
     >
       <i class="bi bi-check-circle-fill fs-5 flex-shrink-0"></i>
-      You are running the latest version.
+      {{ "ABOUT.UP_TO_DATE" | translate }}
     </div>
     }
 
     <!-- Author and AI credits -->
     <div class="row g-2">
       <div class="col-12 col-sm-6">
-        <div class="about-label">Author</div>
+        <div class="about-label">{{ "ABOUT.AUTHOR" | translate }}</div>
         <a
           [href]="info.github_url"
           target="_blank"
@@ -149,7 +146,7 @@
       </div>
 
       <div class="col-12 col-sm-6">
-        <div class="about-label">Code generated with</div>
+        <div class="about-label">{{ "ABOUT.GENERATED_WITH" | translate }}</div>
         <span class="d-inline-flex align-items-center gap-1">
           <i class="bi bi-robot fs-5 text-primary"></i>
           <span class="fw-semibold">{{ info.ai_generator }}</span>

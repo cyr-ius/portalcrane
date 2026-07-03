@@ -1,433 +1,367 @@
 <div class="job-card rounded-3 p-3">
-
-    <!-- Job header: image name + status badge + delete button -->
-    <div
-    class="d-flex align-items-start justify-content-between gap-2 mb-2"
-    >
+  <!-- Job header: image name + status badge + delete button -->
+  <div class="d-flex align-items-start justify-content-between gap-2 mb-2">
     <div class="min-w-0">
-        <div
-        class="fw-semibold text-truncate font-monospace small"
-        >
+      <div class="fw-semibold text-truncate font-monospace small">
         {{ sourceRegistryIcon(job()!.source_registry_host) }}
         {{ job()!.image }}:{{ job()!.tag }}
-        </div>
-        <!-- Source registry badge -->
-        @if (job()!.source_registry_host) {
+      </div>
+      <!-- Source registry badge -->
+      @if (job()!.source_registry_host) {
         <div class="text-muted" style="font-size: 0.7rem">
-            <i class="bi bi-cloud me-1"></i
-            >{{ job()!.source_registry_host }}
+          <i class="bi bi-cloud me-1"></i>{{ job()!.source_registry_host }}
         </div>
-        }
+      }
     </div>
     <div class="d-flex align-items-center gap-1 flex-shrink-0">
-        <span [class]="getStatusBadgeClass(job()!.status)">{{
+      <span [class]="getStatusBadgeClass(job()!.status)">{{
         job()!.status
-        }}</span>
-        <!-- cross icon -->
-        <button
+      }}</span>
+      <!-- cross icon -->
+      <button
         class="btn btn-sm btn-outline-danger p-0"
         style="width: 1.6rem; height: 1.6rem; line-height: 1"
         (click)="deleteJob(job()!.job_id)"
-        title="Delete job"
+        [title]="'STAGING.DELETE_JOB' | translate"
         type="button"
-        >
+      >
         <i class="bi bi-x"></i>
-        </button>
+      </button>
     </div>
-    </div>
+  </div>
 
-    <!-- Progress bar -->
-    <div class="progress mb-2" style="height: 4px">
+  <!-- Progress bar -->
+  <div class="progress mb-2" style="height: 4px">
     <div
-        class="progress-bar"
-        [class.bg-danger]="
-        job()!.status === 'failed' ||
-        job()!.status === 'scan_vulnerable'
-        "
-        [class.bg-success]="
+      class="progress-bar"
+      [class.bg-danger]="
+        job()!.status === 'failed' || job()!.status === 'scan_vulnerable'
+      "
+      [class.bg-success]="
         job()!.status === 'done' || job()!.status === 'scan_clean'
-        "
-        [class.progress-bar-animated]="
-        ACTIVE_STATUSES.has(job()!.status)
-        "
-        [class.progress-bar-striped]="
-        ACTIVE_STATUSES.has(job()!.status)
-        "
-        [style.width.%]="displayProgress(job()!)"
+      "
+      [class.progress-bar-animated]="ACTIVE_STATUSES.has(job()!.status)"
+      [class.progress-bar-striped]="ACTIVE_STATUSES.has(job()!.status)"
+      [style.width.%]="displayProgress(job()!)"
     ></div>
-    </div>
+  </div>
 
-    <!-- Message -->
-    <div class="text-muted small mb-2">{{ job()!.message }}</div>
+  <!-- Message -->
+  <div class="text-muted small mb-2">{{ job()!.message }}</div>
 
-    <!-- scan_vulnerable → CVE table replaces push panel -->
-    @if (job()!.status === "scan_vulnerable" && job()!.vuln_result) {
+  <!-- scan_vulnerable → CVE table replaces push panel -->
+  @if (job()!.status === "scan_vulnerable" && job()!.vuln_result) {
     <div class="mt-2 pt-2 border-top">
-        <!-- Header: blocked notice + severity badges -->
-        <div
-        class="d-flex align-items-center gap-2 flex-wrap mb-2"
-        >
+      <!-- Header: blocked notice + severity badges -->
+      <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
         <span class="small fw-semibold text-danger">
-            <i class="bi bi-shield-x me-1"></i>Vulnerabilities
-            detected — push blocked
+          <i class="bi bi-shield-x me-1"></i
+          >{{ "STAGING.VULN_PUSH_BLOCKED" | translate }}
         </span>
-        @for (
-            sev of ["CRITICAL", "HIGH", "MEDIUM", "LOW"];
-            track sev
-        ) {
-            @if (getCveCount(job()!, sev) > 0) {
+        @for (sev of ["CRITICAL", "HIGH", "MEDIUM", "LOW"]; track sev) {
+          @if (getCveCount(job()!, sev) > 0) {
             <span
-                class="badge"
-                [class.bg-danger]="sev === 'CRITICAL'"
-                [class.bg-warning]="sev === 'HIGH'"
-                [class.text-dark]="sev === 'HIGH'"
-                [class.bg-secondary]="
-                sev === 'MEDIUM' || sev === 'LOW'
-                "
+              class="badge"
+              [class.bg-danger]="sev === 'CRITICAL'"
+              [class.bg-warning]="sev === 'HIGH'"
+              [class.text-dark]="sev === 'HIGH'"
+              [class.bg-secondary]="sev === 'MEDIUM' || sev === 'LOW'"
             >
-                {{ sev }}: {{ getCveCount(job()!, sev) }}
+              {{ sev }}: {{ getCveCount(job()!, sev) }}
             </span>
-            }
+          }
         }
-        </div>
+      </div>
 
-        <!-- CVE detail table -->
-        @if (
+      <!-- CVE detail table -->
+      @if (
         job()!.vuln_result!.vulnerabilities &&
         job()!.vuln_result!.vulnerabilities!.length > 0
-        ) {
+      ) {
         <div
-            class="table-responsive"
-            style="max-height: 260px; overflow-y: auto"
+          class="table-responsive"
+          style="max-height: 260px; overflow-y: auto"
         >
-            <table
+          <table
             class="table table-sm table-hover mb-0"
             style="font-size: 0.75rem"
-            >
+          >
             <thead class="sticky-top table-light">
-                <tr>
-                <th>CVE ID</th>
-                <th>Sev.</th>
-                <th>Package</th>
-                <th>Installed</th>
-                <th>Fixed</th>
-                <th>CVSS</th>
-                </tr>
+              <tr>
+                <th>{{ "TRANSFER.CVE_ID" | translate }}</th>
+                <th>{{ "TRANSFER.SEV" | translate }}</th>
+                <th>{{ "TRANSFER.PACKAGE" | translate }}</th>
+                <th>{{ "TRANSFER.INSTALLED" | translate }}</th>
+                <th>{{ "TRANSFER.FIXED" | translate }}</th>
+                <th>{{ "TRANSFER.CVSS" | translate }}</th>
+              </tr>
             </thead>
             <tbody>
-                @for (
+              @for (
                 vuln of job()!.vuln_result!.vulnerabilities;
                 track vuln.id
-                ) {
+              ) {
                 <tr>
-                    <td>
+                  <td>
                     <a
-                        [href]="
-                        'https://nvd.nist.gov/vuln/detail/' +
-                        vuln.id
-                        "
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        class="text-decoration-none font-monospace"
-                        style="font-size: 0.72rem"
-                        >{{ vuln.id }}</a
+                      [href]="'https://nvd.nist.gov/vuln/detail/' + vuln.id"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="text-decoration-none font-monospace"
+                      style="font-size: 0.72rem"
+                      >{{ vuln.id }}</a
                     >
-                    </td>
-                    <td>
+                  </td>
+                  <td>
                     <span
-                        class="badge"
-                        [class.bg-danger]="
-                        vuln.severity === 'CRITICAL'
-                        "
-                        [class.bg-warning]="
-                        vuln.severity === 'HIGH'
-                        "
-                        [class.text-dark]="
-                        vuln.severity === 'HIGH'
-                        "
-                        [class.bg-secondary]="
-                        vuln.severity === 'MEDIUM' ||
-                        vuln.severity === 'LOW'
-                        "
-                        style="font-size: 0.65rem"
-                        >{{ vuln.severity }}</span
+                      class="badge"
+                      [class.bg-danger]="vuln.severity === 'CRITICAL'"
+                      [class.bg-warning]="vuln.severity === 'HIGH'"
+                      [class.text-dark]="vuln.severity === 'HIGH'"
+                      [class.bg-secondary]="
+                        vuln.severity === 'MEDIUM' || vuln.severity === 'LOW'
+                      "
+                      style="font-size: 0.65rem"
+                      >{{ vuln.severity }}</span
                     >
-                    </td>
-                    <td class="font-monospace">
+                  </td>
+                  <td class="font-monospace">
                     {{ vuln.package }}
-                    </td>
-                    <td>{{ vuln.installed_version }}</td>
-                    <td>{{ vuln.fixed_version ?? "—" }}</td>
-                    <td>{{ vuln.cvss_score ?? "—" }}</td>
+                  </td>
+                  <td>{{ vuln.installed_version }}</td>
+                  <td>{{ vuln.fixed_version ?? "—" }}</td>
+                  <td>{{ vuln.cvss_score ?? "—" }}</td>
                 </tr>
-                }
+              }
             </tbody>
-            </table>
+          </table>
         </div>
-        }
+      }
     </div>
-    }
+  }
 
-    <!-- Push panel — only when scan passed or was skipped -->
-    <!-- scan_vulnerable intentionally excluded -->
-    @if (
-    job()!.status === "scan_clean" ||
-    job()!.status === "scan_skipped"
-    ) {
+  <!-- Push panel — only when scan passed or was skipped -->
+  <!-- scan_vulnerable intentionally excluded -->
+  @if (job()!.status === "scan_clean" || job()!.status === "scan_skipped") {
     <div class="mt-2 pt-2 border-top">
-        <!-- Push mode toggle -->
-        <div class="d-flex align-items-center gap-2 mb-2">
-        <span class="small text-muted">Push to:</span>
+      <!-- Push mode toggle -->
+      <div class="d-flex align-items-center gap-2 mb-2">
+        <span class="small text-muted">{{
+          "STAGING.PUSH_TO" | translate
+        }}</span>
         <div class="btn-group btn-group-sm" role="group">
-            <button
+          <button
             type="button"
             class="btn"
             [class.btn-primary]="getPushMode(job()!) === 'local'"
-            [class.btn-outline-secondary]="
-                getPushMode(job()!) !== 'local'
-            "
+            [class.btn-outline-secondary]="getPushMode(job()!) !== 'local'"
             (click)="setPushMode(job()!, 'local')"
-            >
-            <i class="bi bi-hdd me-1"></i>Local
-            </button>
-            <button
+          >
+            <i class="bi bi-hdd me-1"></i>{{ "STAGING.LOCAL" | translate }}
+          </button>
+          <button
             type="button"
             class="btn"
-            [class.btn-primary]="
-                getPushMode(job()!) === 'external'
-            "
-            [class.btn-outline-secondary]="
-                getPushMode(job()!) !== 'external'
-            "
+            [class.btn-primary]="getPushMode(job()!) === 'external'"
+            [class.btn-outline-secondary]="getPushMode(job()!) !== 'external'"
             (click)="setPushMode(job()!, 'external')"
-            >
-            <i class="bi bi-cloud-upload me-1"></i>External
-            </button>
+          >
+            <i class="bi bi-cloud-upload me-1"></i
+            >{{ "STAGING.EXTERNAL" | translate }}
+          </button>
         </div>
-        </div>
+      </div>
 
-        <!-- External registry selector -->
-        @if (getPushMode(job()!) === 'external') {
+      <!-- External registry selector -->
+      @if (getPushMode(job()!) === "external") {
         <div class="mb-2">
-            @if (externalRegistries().length > 0) {
+          @if (externalRegistries().length > 0) {
             <select
-                class="form-select form-select-sm mb-2"
-                [value]="getExtRegistryId(job()!)"
-                (change)="
-                setExtRegistryId(
-                    job()!,
-                    $any($event.target).value
-                )
-                "
+              class="form-select form-select-sm mb-2"
+              [value]="getExtRegistryId(job()!)"
+              (change)="setExtRegistryId(job()!, $any($event.target).value)"
             >
-                <option value="">— Ad-hoc (enter below) —</option>
-                @for (reg of externalRegistries(); track reg.id) {
+              <option value="">
+                {{ "STAGING.ADHOC_BELOW" | translate }}
+              </option>
+              @for (reg of externalRegistries(); track reg.id) {
                 <option [value]="reg.id">
-                    {{ reg.name }} ({{ reg.host }})
+                  {{ reg.name }} ({{ reg.host }})
                 </option>
-                }
+              }
             </select>
-            }
-            @if (!getExtRegistryId(job()!)) {
+          }
+          @if (!getExtRegistryId(job()!)) {
             <div class="row g-2">
-                <div class="col-12">
+              <div class="col-12">
                 <input
-                    type="text"
-                    class="form-control form-control-sm font-monospace"
-                    placeholder="Registry host (e.g. registry.mycompany.com)"
-                    [value]="getPushTarget(job()!, 'ext_host')"
-                    (input)="
+                  type="text"
+                  class="form-control form-control-sm font-monospace"
+                  [placeholder]="'STAGING.EXT_HOST_PLACEHOLDER' | translate"
+                  [value]="getPushTarget(job()!, 'ext_host')"
+                  (input)="
                     updatePushTarget(
-                        job()!,
-                        'ext_host',
-                        $any($event.target).value
+                      job()!,
+                      'ext_host',
+                      $any($event.target).value
                     )
-                    "
+                  "
                 />
-                </div>
-                <div class="col-6">
+              </div>
+              <div class="col-6">
                 <input
-                    type="text"
-                    class="form-control form-control-sm"
-                    placeholder="Username (optional)"
-                    [value]="getPushTarget(job()!, 'ext_user')"
-                    (input)="
+                  type="text"
+                  class="form-control form-control-sm"
+                  [placeholder]="'STAGING.USERNAME_OPTIONAL' | translate"
+                  [value]="getPushTarget(job()!, 'ext_user')"
+                  (input)="
                     updatePushTarget(
-                        job()!,
-                        'ext_user',
-                        $any($event.target).value
+                      job()!,
+                      'ext_user',
+                      $any($event.target).value
                     )
-                    "
+                  "
                 />
-                </div>
-                <div class="col-6">
+              </div>
+              <div class="col-6">
                 <input
-                    type="password"
-                    class="form-control form-control-sm"
-                    placeholder="Password (optional)"
-                    [value]="getPushTarget(job()!, 'ext_pass')"
-                    (input)="
+                  type="password"
+                  class="form-control form-control-sm"
+                  [placeholder]="'STAGING.PASSWORD_OPTIONAL' | translate"
+                  [value]="getPushTarget(job()!, 'ext_pass')"
+                  (input)="
                     updatePushTarget(
-                        job()!,
-                        'ext_pass',
-                        $any($event.target).value
+                      job()!,
+                      'ext_pass',
+                      $any($event.target).value
                     )
-                    "
+                  "
                 />
-                </div>
+              </div>
             </div>
-            }
+          }
         </div>
-        }
+      }
 
-        <!-- Folder / image name / tag fields -->
-        <div class="row g-2 mb-2 align-items-end">
+      <!-- Folder / image name / tag fields -->
+      <div class="row g-2 mb-2 align-items-end">
         <div class="col">
-            <label
-            class="form-label small text-muted"
-            style="font-size: 0.7rem"
-            >
-            Folder <span class="opacity-50">(optional)</span>
-            </label>
-            <!-- if push folders are restricted and user not admin, show
+          <label class="form-label small text-muted" style="font-size: 0.7rem">
+            {{ "STAGING.FOLDER" | translate }}
+            <span class="opacity-50">{{ "STAGING.OPTIONAL" | translate }}</span>
+          </label>
+          <!-- if push folders are restricted and user not admin, show
                 a select; otherwise fall back to free text -->
-            @if (!isAdmin() && pushFolderOptions().length === 0) {
+          @if (!isAdmin() && pushFolderOptions().length === 0) {
             <input
-                type="text"
-                class="form-control form-control-sm font-monospace"
-                placeholder="(no push permissions)"
-                disabled
+              type="text"
+              class="form-control form-control-sm font-monospace"
+              [placeholder]="'STAGING.NO_PUSH_PERMS' | translate"
+              disabled
             />
             <div class="form-text text-danger small">
-                You do not have permission to push to any folder.
+              {{ "STAGING.NO_PUSH_PERMS_MSG" | translate }}
             </div>
-            } @else if (pushFolderOptions().length > 0 && !isAdmin()) {
+          } @else if (pushFolderOptions().length > 0 && !isAdmin()) {
             <select
-                class="form-select form-select-sm"
-                [value]="getPushTarget(job()!, 'folder')"
-                (change)="
-                updatePushTarget(
-                    job()!,
-                    'folder',
-                    $any($event.target).value
-                )
-                "
+              class="form-select form-select-sm"
+              [value]="getPushTarget(job()!, 'folder')"
+              (change)="
+                updatePushTarget(job()!, 'folder', $any($event.target).value)
+              "
             >
-                <option value="">/ (root)</option>
-                @for (f of pushFolderOptions(); track f) {
+              <option value="">{{ "STAGING.ROOT" | translate }}</option>
+              @for (f of pushFolderOptions(); track f) {
                 <option [value]="f">{{ f }}</option>
-                }
+              }
             </select>
-            } @else {
+          } @else {
             <input
-                type="text"
-                class="form-control form-control-sm font-monospace"
-                placeholder="e.g. infra"
-                [value]="getPushTarget(job()!, 'folder')"
-                (input)="
-                updatePushTarget(
-                    job()!,
-                    'folder',
-                    $any($event.target).value
-                )
-                "
+              type="text"
+              class="form-control form-control-sm font-monospace"
+              [placeholder]="'STAGING.FOLDER_PLACEHOLDER' | translate"
+              [value]="getPushTarget(job()!, 'folder')"
+              (input)="
+                updatePushTarget(job()!, 'folder', $any($event.target).value)
+              "
             />
-            }
+          }
         </div>
         <div class="col">
-            <label
+          <label
             class="form-label small text-muted"
             style="font-size: 0.7rem"
-            >Image name</label
-            >
-            <input
+            >{{ "STAGING.IMAGE_NAME" | translate }}</label
+          >
+          <input
             type="text"
             class="form-control form-control-sm font-monospace"
             [placeholder]="getImageNamePlaceholder(job()!)"
             [value]="getPushTarget(job()!, 'img')"
-            (input)="
-                updatePushTarget(
-                job()!,
-                'img',
-                $any($event.target).value
-                )
-            "
-            />
+            (input)="updatePushTarget(job()!, 'img', $any($event.target).value)"
+          />
         </div>
         <div class="col-auto" style="min-width: 90px">
-            <label
+          <label
             class="form-label small text-muted"
             style="font-size: 0.7rem"
-            >Tag</label
-            >
-            <input
+            >{{ "STAGING.TAG" | translate }}</label
+          >
+          <input
             type="text"
             class="form-control form-control-sm font-monospace"
             [placeholder]="job()!.tag"
             [value]="getPushTarget(job()!, 'tag')"
-            (input)="
-                updatePushTarget(
-                job()!,
-                'tag',
-                $any($event.target).value
-                )
-            "
-            />
+            (input)="updatePushTarget(job()!, 'tag', $any($event.target).value)"
+          />
         </div>
-        </div>
+      </div>
 
-        <!-- Preview + push button -->
-        <div
+      <!-- Preview + push button -->
+      <div
         class="d-flex align-items-center gap-2 justify-content-between flex-wrap"
-        >
-        <code
-            class="small text-muted text-truncate"
-            style="max-width: 60%"
-        >
-            → {{ pushPreview(job()!) }}
+      >
+        <code class="small text-muted text-truncate" style="max-width: 60%">
+          → {{ pushPreview(job()!) }}
         </code>
         <button
-            class="btn btn-sm btn-success"
-            (click)="pushImage(job()!)"
-            [disabled]="
+          class="btn btn-sm btn-success"
+          (click)="pushImage(job()!)"
+          [disabled]="
             isPushing(job()!.job_id) ||
-            (getPushMode(job()!) === 'local' && (
-                (!isAdmin() &&
+            (getPushMode(job()!) === 'local' &&
+              ((!isAdmin() &&
                 pushFolderOptions().length > 0 &&
                 !pushFolderOptions().includes(
-                getPushTarget(job()!, 'folder') || job()!.folder || ''
+                  getPushTarget(job()!, 'folder') || job()!.folder || ''
                 )) ||
-                (!isAdmin() &&
-                pushFolderOptions().length === 0)
-            ))
-            "
-            type="button"
+                (!isAdmin() && pushFolderOptions().length === 0)))
+          "
+          type="button"
         >
-            @if (isPushing(job()!.job_id)) {
-            <span
-                class="spinner-border spinner-border-sm me-1"
-            ></span>
-            Pushing…
-            } @else {
-            <i class="bi bi-cloud-upload me-1"></i>Push
-            }
+          @if (isPushing(job()!.job_id)) {
+            <span class="spinner-border spinner-border-sm me-1"></span>
+            {{ "STAGING.PUSHING" | translate }}
+          } @else {
+            <i class="bi bi-cloud-upload me-1"></i
+            >{{ "STAGING.PUSH" | translate }}
+          }
         </button>
-        </div>
+      </div>
     </div>
-    }
+  }
 
-    <!-- Re-push button for completed jobs -->
-    @if (job()!.status === "done") {
-    <div
-        class="mt-2 pt-2 border-top d-flex justify-content-end"
-    >
-        <button
+  <!-- Re-push button for completed jobs -->
+  @if (job()!.status === "done") {
+    <div class="mt-2 pt-2 border-top d-flex justify-content-end">
+      <button
         class="btn btn-sm btn-outline-secondary"
         (click)="allowRePush(job()!)"
         type="button"
-        >
-        <i class="bi bi-arrow-repeat me-1"></i>Push again
-        </button>
+      >
+        <i class="bi bi-arrow-repeat me-1"></i
+        >{{ "STAGING.PUSH_AGAIN" | translate }}
+      </button>
     </div>
-    }
+  }
 </div>

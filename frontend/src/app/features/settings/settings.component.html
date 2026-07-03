@@ -1,7 +1,7 @@
 <!-- Portalcrane - Settings Template -->
 <div class="p-4">
-  <h2 class="fw-bold mb-1">Settings</h2>
-  <p class="text-muted small mb-4">Application preferences and configuration</p>
+  <h2 class="fw-bold mb-1">{{ "SETTINGS.TITLE" | translate }}</h2>
+  <p class="text-muted small mb-4">{{ "SETTINGS.SUBTITLE" | translate }}</p>
 
   <!-- ── Tab nav ─────────────────────────────────────────────────────────── -->
   <ul class="nav nav-tabs mb-4">
@@ -11,7 +11,7 @@
         [class.active]="activeTab() === 'vulnerabilities'"
         (click)="setTab('vulnerabilities')"
       >
-        <i class="bi bi-sliders me-1"></i>Vulnerabilities
+        <i class="bi bi-sliders me-1"></i>{{ "SETTINGS.TAB_VULN" | translate }}
       </button>
     </li>
     <li class="nav-item">
@@ -20,7 +20,8 @@
         [class.active]="activeTab() === 'accounts'"
         (click)="setTab('accounts')"
       >
-        <i class="bi bi-shield-lock me-1"></i>Accounts
+        <i class="bi bi-shield-lock me-1"></i
+        >{{ "SETTINGS.TAB_ACCOUNTS" | translate }}
       </button>
     </li>
     <li class="nav-item">
@@ -29,7 +30,8 @@
         [class.active]="activeTab() === 'folders'"
         (click)="setTab('folders')"
       >
-        <i class="bi bi-folder2-open me-1"></i>Folders
+        <i class="bi bi-folder2-open me-1"></i
+        >{{ "SETTINGS.TAB_FOLDERS" | translate }}
       </button>
     </li>
     <li class="nav-item">
@@ -38,7 +40,8 @@
         [class.active]="activeTab() === 'registries'"
         (click)="setTab('registries')"
       >
-        <i class="bi bi-globe me-1"></i>External Registries
+        <i class="bi bi-globe me-1"></i
+        >{{ "SETTINGS.TAB_REGISTRIES" | translate }}
       </button>
     </li>
     <li class="nav-item">
@@ -47,7 +50,8 @@
         [class.active]="activeTab() === 'audit'"
         (click)="setTab('audit')"
       >
-        <i class="bi bi-journal-text me-1"></i>Audit Logs
+        <i class="bi bi-journal-text me-1"></i
+        >{{ "SETTINGS.TAB_AUDIT" | translate }}
       </button>
     </li>
     <li class="nav-item">
@@ -56,7 +60,8 @@
         [class.active]="activeTab() === 'oidc'"
         (click)="setTab('oidc')"
       >
-        <i class="bi bi-shield-lock me-1"></i>OIDC
+        <i class="bi bi-shield-lock me-1"></i
+        >{{ "SETTINGS.TAB_OIDC" | translate }}
       </button>
     </li>
     <li class="nav-item">
@@ -65,7 +70,8 @@
         [class.active]="activeTab() === 'network'"
         (click)="setTab('network')"
       >
-        <i class="bi bi-hdd-network me-1"></i>Network
+        <i class="bi bi-hdd-network me-1"></i
+        >{{ "SETTINGS.TAB_NETWORK" | translate }}
       </button>
     </li>
     <li class="nav-item">
@@ -74,7 +80,8 @@
         [class.active]="activeTab() === 'about'"
         (click)="setTab('about')"
       >
-        <i class="bi bi-info-circle me-1"></i>About
+        <i class="bi bi-info-circle me-1"></i
+        >{{ "SETTINGS.TAB_ABOUT" | translate }}
       </button>
     </li>
   </ul>

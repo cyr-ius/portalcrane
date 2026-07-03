@@ -3,11 +3,10 @@
   <div class="card-header border-0 d-flex align-items-center gap-2">
     <div>
       <h6 class="fw-semibold mb-0">
-        <i class="bi bi-people text-primary me-2"></i>Local Accounts
+        <i class="bi bi-people text-primary me-2"></i>{{ "ACCOUNTS.TITLE" |
+        translate }}
       </h6>
-      <div class="text-muted small mt-1">
-        Create users and grant administrative rights.
-      </div>
+      <div class="text-muted small mt-1">{{ "ACCOUNTS.DESC" | translate }}</div>
     </div>
     <button
       class="btn btn-sm btn-outline-primary ms-auto"
@@ -15,7 +14,7 @@
       [disabled]="showCreateForm()"
     >
       <i class="bi bi-person-plus-fill"></i>
-      Add User
+      {{ "ACCOUNTS.ADD_USER" | translate }}
     </button>
   </div>
 
@@ -27,7 +26,8 @@
     </div>
     } @if (loading()) {
     <div class="text-center py-5 text-muted">
-      <span class="spinner-border spinner-border-sm me-2"></span>Loading users…
+      <span class="spinner-border spinner-border-sm me-2"></span>{{
+      "ACCOUNTS.LOADING" | translate }}
     </div>
 
     } @else {
@@ -39,7 +39,8 @@
     >
       <div class="card-body">
         <h6 class="fw-semibold mb-3">
-          <i class="bi bi-person-plus-fill me-2 text-primary"></i>New Local User
+          <i class="bi bi-person-plus-fill me-2 text-primary"></i>{{
+          "ACCOUNTS.NEW_USER" | translate }}
         </h6>
 
         @if (createError()) {
@@ -52,7 +53,8 @@
           <!-- Username -->
           <div class="col-md-5">
             <label class="form-label fw-semibold small">
-              Username <span class="text-danger">*</span>
+              {{ "AUTH.USERNAME" | translate }}
+              <span class="text-danger">*</span>
             </label>
             <div class="input-group">
               <span class="input-group-text"><i class="bi bi-person"></i></span>
@@ -69,14 +71,15 @@
           <!-- Password -->
           <div class="col-md-5">
             <label class="form-label fw-semibold small">
-              Password <span class="text-danger">*</span>
+              {{ "AUTH.PASSWORD" | translate }}
+              <span class="text-danger">*</span>
             </label>
             <div class="input-group">
               <span class="input-group-text"><i class="bi bi-lock"></i></span>
               <input
                 [type]="showNewPassword() ? 'text' : 'password'"
                 class="form-control"
-                placeholder="Min. 8 characters"
+                [placeholder]="'ACCOUNTS.MIN_8' | translate"
                 autocomplete="new-password"
                 [formField]="createForm.password"
               />
@@ -93,7 +96,8 @@
             @if (createModel().password.length > 0 &&
             createModel().password.length < 8) {
             <div class="text-danger" style="font-size: 0.75rem">
-              <i class="bi bi-x-circle me-1"></i>At least 8 characters required
+              <i class="bi bi-x-circle me-1"></i>{{ "ACCOUNTS.AT_LEAST_8" |
+              translate }}
             </div>
             }
           </div>
@@ -112,7 +116,7 @@
                 class="form-check-label small fw-semibold"
                 for="newIsAdmin"
               >
-                Admin
+                {{ "ACCOUNTS.ADMIN" | translate }}
               </label>
             </div>
           </div>
@@ -121,10 +125,7 @@
         <!-- Info: permissions via folders -->
         <div class="alert alert-info d-flex gap-2 py-2 small mt-3 mb-0">
           <i class="bi bi-folder2 flex-shrink-0 mt-1"></i>
-          <div>
-            Pull and push permissions are granted in the
-            <strong>Folders</strong> tab after creating the user.
-          </div>
+          <div>{{ "ACCOUNTS.PERMS_INFO" | translate }}</div>
         </div>
 
         <!-- Actions -->
@@ -136,16 +137,16 @@
           >
             @if (creating()) {
             <span class="spinner-border spinner-border-sm"></span>
-            Creating… } @else {
+            {{ "ACCOUNTS.CREATING" | translate }} } @else {
             <i class="bi bi-check-lg"></i>
-            Create }
+            {{ "COMMON.CREATE" | translate }} }
           </button>
           <button
             class="btn btn-outline-secondary btn-sm"
             (click)="cancelCreate()"
             [disabled]="creating()"
           >
-            Cancel
+            {{ "COMMON.CANCEL" | translate }}
           </button>
         </div>
       </div>
@@ -156,18 +157,18 @@
     @if (users().length === 0) {
     <div class="text-center text-muted py-4">
       <i class="bi bi-people display-6 d-block mb-2"></i>
-      No local users configured.
+      {{ "ACCOUNTS.EMPTY" | translate }}
     </div>
     } @else {
     <div class="table-responsive">
       <table class="table table-sm align-middle mb-0">
         <thead>
           <tr class="text-muted" style="font-size: 0.78rem">
-            <th>Username</th>
-            <th>Source</th>
-            <th>Role</th>
-            <th>Created</th>
-            <th class="text-end">Actions</th>
+            <th>{{ "AUTH.USERNAME" | translate }}</th>
+            <th>{{ "ACCOUNTS.SOURCE" | translate }}</th>
+            <th>{{ "ACCOUNTS.ROLE" | translate }}</th>
+            <th>{{ "ACCOUNTS.CREATED" | translate }}</th>
+            <th class="text-end">{{ "COMMON.ACTIONS" | translate }}</th>
           </tr>
         </thead>
         <tbody>
@@ -193,7 +194,7 @@
                 <span
                   class="badge bg-secondary-subtle text-secondary"
                   style="font-size: 0.65rem"
-                  title="Built-in admin account. The password is auto-generated on first launch and shown once in the server logs."
+                  [title]="'ACCOUNTS.ENV_BADGE_TITLE' | translate"
                   >ENV</span
                 >
                 }
@@ -206,7 +207,7 @@
               <span
                 class="badge bg-primary-subtle text-primary d-inline-flex align-items-center gap-1"
                 style="font-size: 0.7rem"
-                title="Account provisioned automatically on first SSO login. Password is managed by the identity provider."
+                [title]="'ACCOUNTS.OIDC_BADGE_TITLE' | translate"
               >
                 <i class="bi bi-shield-lock"></i>
                 OIDC
@@ -215,10 +216,10 @@
               <span
                 class="badge bg-body-secondary text-muted d-inline-flex align-items-center gap-1"
                 style="font-size: 0.7rem"
-                title="Local account with password stored in Portalcrane."
+                [title]="'ACCOUNTS.LOCAL_BADGE_TITLE' | translate"
               >
                 <i class="bi bi-person"></i>
-                Local
+                {{ "STAGING.LOCAL" | translate }}
               </span>
               }
             </td>
@@ -227,11 +228,13 @@
             <td>
               @if (user.is_admin) {
               <span class="badge bg-warning-subtle text-warning">
-                <i class="bi bi-shield-fill me-1"></i>Admin
+                <i class="bi bi-shield-fill me-1"></i>{{ "ACCOUNTS.ADMIN" |
+                translate }}
               </span>
               } @else {
               <span class="badge bg-body-secondary text-muted">
-                <i class="bi bi-person me-1"></i>User
+                <i class="bi bi-person me-1"></i>{{ "NAV.ROLE_USER" | translate
+                }}
               </span>
               }
             </td>
@@ -246,7 +249,7 @@
                 <button
                   class="btn btn-sm btn-outline-secondary"
                   (click)="openEdit(user)"
-                  title="Edit user"
+                  [title]="'ACCOUNTS.EDIT_USER' | translate"
                 >
                   <i class="bi bi-pencil"></i>
                 </button>
@@ -254,7 +257,12 @@
                   class="btn btn-sm btn-outline-danger"
                   (click)="deleteUser(user.id)"
                   [disabled]="deletingId() === user.id"
-                  [title]="isOidcUser(user) ? 'Delete and revoke SSO access' : 'Delete user'"
+                  [title]="
+                    (isOidcUser(user)
+                      ? 'ACCOUNTS.DELETE_OIDC'
+                      : 'ACCOUNTS.DELETE_USER'
+                    ) | translate
+                  "
                 >
                   @if (deletingId() === user.id) {
                   <span class="spinner-border spinner-border-sm"></span>
@@ -265,7 +273,8 @@
               </div>
               } @else {
               <span class="text-muted small">
-                <i class="bi bi-lock me-1"></i>Read-only
+                <i class="bi bi-lock me-1"></i>{{ "ACCOUNTS.READ_ONLY" |
+                translate }}
               </span>
               }
             </td>
@@ -279,14 +288,15 @@
               <div class="p-2">
                 <div class="fw-semibold small mb-2">
                   <i class="bi bi-pencil-fill me-1 text-primary"></i>
-                  Editing:
+                  {{ "ACCOUNTS.EDITING" | translate }}
                   <span class="font-monospace">{{ user.username }}</span>
                   @if (isOidcUser(user)) {
                   <span
                     class="badge bg-primary-subtle text-primary ms-2"
                     style="font-size: 0.65rem"
                   >
-                    <i class="bi bi-shield-lock me-1"></i>OIDC account
+                    <i class="bi bi-shield-lock me-1"></i>{{
+                    "ACCOUNTS.OIDC_ACCOUNT" | translate }}
                   </span>
                   }
                 </div>
@@ -301,11 +311,7 @@
                 @if (isOidcUser(user)) {
                 <div class="alert alert-info d-flex gap-2 py-2 small mb-3">
                   <i class="bi bi-info-circle-fill flex-shrink-0 mt-1"></i>
-                  <div>
-                    This account is authenticated via an external identity
-                    provider. The password is managed by the provider and cannot
-                    be changed here. You can only modify the admin role.
-                  </div>
+                  <div>{{ "ACCOUNTS.OIDC_INFO" | translate }}</div>
                 </div>
                 }
 
@@ -313,7 +319,9 @@
                   <!-- New password — hidden for OIDC accounts -->
                   @if (!isOidcUser(user)) {
                   <div class="col-md-5">
-                    <label class="form-label small mb-1">New Password</label>
+                    <label class="form-label small mb-1"
+                      >{{ "ACCOUNTS.NEW_PASSWORD" | translate }}</label
+                    >
                     <div class="input-group input-group-sm">
                       <span class="input-group-text"
                         ><i class="bi bi-lock"></i
@@ -321,7 +329,7 @@
                       <input
                         [type]="showEditPassword() ? 'text' : 'password'"
                         class="form-control"
-                        placeholder="Leave empty to keep current"
+                        [placeholder]="'ACCOUNTS.LEAVE_EMPTY' | translate"
                         autocomplete="new-password"
                         [formField]="updateForm.password"
                       />
@@ -352,7 +360,7 @@
                         class="form-check-label small"
                         [for]="'editAdmin_' + user.id"
                       >
-                        Admin rights
+                        {{ "ACCOUNTS.ADMIN_RIGHTS" | translate }}
                       </label>
                     </div>
                   </div>
@@ -368,14 +376,14 @@
                       <span class="spinner-border spinner-border-sm"></span>
                       } @else {
                       <i class="bi bi-floppy-fill"></i>
-                      } Save
+                      } {{ "COMMON.SAVE" | translate }}
                     </button>
                     <button
                       class="btn btn-outline-secondary btn-sm"
                       (click)="cancelEdit()"
                       [disabled]="saving()"
                     >
-                      Cancel
+                      {{ "COMMON.CANCEL" | translate }}
                     </button>
                   </div>
                 </div>
@@ -391,13 +399,7 @@
     <!-- ── Legend / info note ──────────────────────────────────────────────── -->
     <div class="alert alert-info d-flex gap-2 mt-3 py-2 small">
       <i class="bi bi-lightbulb-fill flex-shrink-0 mt-1"></i>
-      <div>
-        The built-in <strong>admin</strong> account (badge <strong>ENV</strong>)
-        has a password that is auto-generated on first launch and shown once in
-        the server logs — it cannot be modified here.
-        <strong>OIDC</strong> accounts are provisioned automatically on first
-        SSO login — deleting one revokes future access.
-      </div>
+      <div>{{ "ACCOUNTS.LEGEND" | translate }}</div>
     </div>
     }
   </div>

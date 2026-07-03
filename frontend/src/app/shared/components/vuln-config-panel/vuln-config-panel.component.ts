@@ -1,5 +1,6 @@
 // frontend/src/app/shared/components/vuln-config-panel/vuln-config-panel.component.ts
 import { Component, computed, inject, OnInit, signal } from "@angular/core";
+import { TranslatePipe } from "@ngx-translate/core";
 import { LOCAL_REGISTRY_SYSTEM_ID } from "../../../core/constants/registry.constants";
 import { RegistryService } from "../../../core/services/registry.service";
 import {
@@ -13,7 +14,7 @@ import {
 
 @Component({
   selector: "app-vuln-config-panel",
-  imports: [],
+  imports: [TranslatePipe],
   templateUrl: "./vuln-config-panel.component.html",
   styleUrl: "./vuln-config-panel.component.css",
 })

@@ -1,4 +1,5 @@
 import { Component, computed, inject, input, signal } from "@angular/core";
+import { TranslatePipe } from "@ngx-translate/core";
 import { AuthService } from "../../../core/services/auth.service";
 import { ExternalRegistry, ExternalRegistryService } from "../../../core/services/external-registry.service";
 import { FolderService } from "../../../core/services/folder.service";
@@ -8,7 +9,7 @@ export type PushMode = "local" | "external";
 
 @Component({
   selector: "app-job-detail",
-  imports: [],
+  imports: [TranslatePipe],
   templateUrl: "./job-detail.component.html",
   styleUrl: "./job-detail.component.css",
 })

@@ -13,24 +13,21 @@
         <div class="d-flex align-items-center gap-2">
           <i class="bi bi-clock-history fs-4 text-warning"></i>
           <h5 class="modal-title fw-semibold" id="sessionExpiredLabel">
-            Session Expired
+            {{ "SESSION.TITLE" | translate }}
           </h5>
         </div>
       </div>
 
       <!-- Body -->
       <div class="modal-body pt-2">
-        <p class="text-muted mb-0">
-          Your session has expired due to inactivity. Please log in again to
-          continue.
-        </p>
+        <p class="text-muted mb-0">{{ "SESSION.BODY" | translate }}</p>
       </div>
 
       <!-- Footer -->
       <div class="modal-footer border-top-0">
         <button type="button" class="btn btn-primary" (click)="onConfirm()">
           <i class="bi bi-box-arrow-in-right me-1"></i>
-          Go to login
+          {{ "SESSION.GO_LOGIN" | translate }}
         </button>
       </div>
     </div>

@@ -10,6 +10,7 @@
 
 import { Component, inject, OnInit, signal } from "@angular/core";
 import { form, FormField, minLength, required, submit } from "@angular/forms/signals";
+import { TranslatePipe, TranslateService } from "@ngx-translate/core";
 import { firstValueFrom } from "rxjs";
 
 import {
@@ -27,12 +28,13 @@ interface TokenFormModel {
 @Component({
   selector: "app-personal-tokens-panel",
   // FormField directive is required for [formField] bindings in the template
-  imports: [FormField],
+  imports: [FormField, TranslatePipe],
   templateUrl: "./personal-tokens-panel.component.html",
   styleUrl: "./personal-tokens-panel.component.css",
 })
 export class PersonalTokensPanelComponent implements OnInit {
   private readonly svc = inject(PersonalTokensService);
+  private readonly translate = inject(TranslateService);
 
   // ── Token list ─────────────────────────────────────────────────────────────
   readonly tokens = signal<PersonalToken[]>([]);
@@ -69,7 +71,9 @@ export class PersonalTokensPanelComponent implements OnInit {
    */
   readonly tokenForm = form(this.tokenModel, (p) => {
     required(p.name);
-    minLength(p.name, 3, { message: "Token name must be at least 3 characters" });
+    minLength(p.name, 3, {
+      message: this.translate.instant("TOKENS.ERR_NAME_MIN"),
+    });
     required(p.expiresInDays);
   });
 
@@ -89,7 +93,9 @@ export class PersonalTokensPanelComponent implements OnInit {
         this.loading.set(false);
       },
       error: (err) => {
-        this.listError.set(err?.error?.detail ?? "Failed to load tokens");
+        this.listError.set(
+          err?.error?.detail ?? this.translate.instant("TOKENS.ERR_LOAD"),
+        );
         this.loading.set(false);
       },
     });
@@ -146,7 +152,10 @@ export class PersonalTokensPanelComponent implements OnInit {
         f().reset({ ...this.tokenInit });
       } catch (err: unknown) {
         const httpErr = err as { error?: { detail?: string } };
-        this.createError.set(httpErr?.error?.detail ?? "Failed to create token");
+        this.createError.set(
+          httpErr?.error?.detail ??
+            this.translate.instant("TOKENS.ERR_CREATE"),
+        );
       } finally {
         this.creating.set(false);
       }
@@ -184,7 +193,9 @@ export class PersonalTokensPanelComponent implements OnInit {
         }
       },
       error: (err) => {
-        this.listError.set(err?.error?.detail ?? "Failed to revoke token");
+        this.listError.set(
+          err?.error?.detail ?? this.translate.instant("TOKENS.ERR_REVOKE"),
+        );
         this.revokingId.set(null);
       },
     });

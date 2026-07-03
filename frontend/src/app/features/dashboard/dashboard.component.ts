@@ -24,6 +24,7 @@ import {
 } from "@angular/core";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { RouterLink } from "@angular/router";
+import { TranslatePipe } from "@ngx-translate/core";
 import { Subject, switchMap, takeWhile, timer } from "rxjs";
 import { formatBytes } from "../../core/helpers/storage";
 import { AuthService } from "../../core/services/auth.service";
@@ -39,7 +40,7 @@ import { StagingService } from "../../core/services/staging.service";
 
 @Component({
   selector: "app-dashboard",
-  imports: [SlicePipe, DatePipe, RouterLink],
+  imports: [SlicePipe, DatePipe, RouterLink, TranslatePipe],
   templateUrl: "./dashboard.component.html",
   styleUrl: "./dashboard.component.css",
 })

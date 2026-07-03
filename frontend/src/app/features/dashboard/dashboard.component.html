@@ -17,8 +17,10 @@
   <div class="p-4">
     <div class="d-flex align-items-center justify-content-between mb-4">
       <div>
-        <h2 class="fw-bold mb-1">Dashboard</h2>
-        <p class="text-muted small mb-0">Registry overview and quick actions</p>
+        <h2 class="fw-bold mb-1">{{ "DASHBOARD.TITLE" | translate }}</h2>
+        <p class="text-muted small mb-0">
+          {{ "DASHBOARD.SUBTITLE" | translate }}
+        </p>
       </div>
 
       <!-- Refresh button: spins and is disabled while refreshing() is true -->
@@ -37,13 +39,17 @@
         <div class="stat-card card border-0 h-100">
           <div class="card-body">
             <div class="d-flex align-items-center justify-content-between mb-2">
-              <span class="text-muted small">Total Images</span>
+              <span class="text-muted small">{{
+                "DASHBOARD.TOTAL_IMAGES" | translate
+              }}</span>
               <div class="stat-icon bg-primary-subtle text-primary">
                 <i class="bi bi-layers"></i>
               </div>
             </div>
             <div class="stat-value">{{ s.total_images }}</div>
-            <div class="text-muted small">{{ s.total_tags }} tags total</div>
+            <div class="text-muted small">
+              {{ "DASHBOARD.TAGS_TOTAL" | translate: { count: s.total_tags } }}
+            </div>
           </div>
         </div>
       </div>
@@ -52,13 +58,17 @@
         <div class="stat-card card border-0 h-100">
           <div class="card-body">
             <div class="d-flex align-items-center justify-content-between mb-2">
-              <span class="text-muted small">Registry Size</span>
+              <span class="text-muted small">{{
+                "DASHBOARD.REGISTRY_SIZE" | translate
+              }}</span>
               <div class="stat-icon bg-success-subtle text-success">
                 <i class="bi bi-hdd"></i>
               </div>
             </div>
             <div class="stat-value">{{ s.total_size_human }}</div>
-            <div class="text-muted small">Total stored data</div>
+            <div class="text-muted small">
+              {{ "DASHBOARD.TOTAL_STORED" | translate }}
+            </div>
           </div>
         </div>
       </div>
@@ -67,7 +77,9 @@
         <div class="stat-card card border-0 h-100">
           <div class="card-body">
             <div class="d-flex align-items-center justify-content-between mb-2">
-              <span class="text-muted small">Disk Usage</span>
+              <span class="text-muted small">{{
+                "DASHBOARD.DISK_USAGE" | translate
+              }}</span>
               <div class="stat-icon bg-warning-subtle text-warning">
                 <i class="bi bi-pie-chart"></i>
               </div>
@@ -99,7 +111,9 @@
         <div class="stat-card card border-0 h-100">
           <div class="card-body">
             <div class="d-flex align-items-center justify-content-between mb-2">
-              <span class="text-muted small">Largest Image</span>
+              <span class="text-muted small">{{
+                "DASHBOARD.LARGEST_IMAGE" | translate
+              }}</span>
               <div class="stat-icon bg-info-subtle text-info">
                 <i class="bi bi-box-seam"></i>
               </div>
@@ -111,7 +125,7 @@
               class="text-muted small text-truncate"
               [title]="s.largest_image.name"
             >
-              {{ s.largest_image.name || "N/A" }}
+              {{ s.largest_image.name || ("COMMON.NA" | translate) }}
             </div>
           </div>
         </div>
@@ -124,19 +138,29 @@
         <div class="stat-card card border-0 h-100">
           <div class="card-body">
             <div class="d-flex align-items-center justify-content-between mb-2">
-              <span class="text-muted small">Trivy Scanner</span>
+              <span class="text-muted small">{{
+                "DASHBOARD.TRIVY_SCANNER" | translate
+              }}</span>
               <div class="stat-icon bg-primary-subtle text-primary">
                 <i class="bi bi-shield-check"></i>
               </div>
             </div>
             <div class="stat-value">
-              {{ s.trivy_version ? "v" + s.trivy_version : "N/A" }}
+              {{
+                s.trivy_version
+                  ? "v" + s.trivy_version
+                  : ("COMMON.NA" | translate)
+              }}
             </div>
             <div class="text-muted small">
               @if (s.trivy_db_last_update) {
-                DB updated {{ s.trivy_db_last_update | date: "mediumDate" }}
+                {{
+                  "DASHBOARD.DB_UPDATED"
+                    | translate
+                      : { date: s.trivy_db_last_update | date: "mediumDate" }
+                }}
               } @else {
-                DB never updated
+                {{ "DASHBOARD.DB_NEVER_UPDATED" | translate }}
               }
             </div>
           </div>
@@ -154,7 +178,9 @@
               <div
                 class="d-flex align-items-center justify-content-between mb-2"
               >
-                <span class="text-muted small">Users</span>
+                <span class="text-muted small">{{
+                  "DASHBOARD.USERS" | translate
+                }}</span>
                 <div class="stat-icon bg-info-subtle text-info">
                   <i class="bi bi-people"></i>
                 </div>
@@ -174,7 +200,12 @@
                   [class.fw-bold]="s.total_admins > 5"
                   [class.text-muted]="s.total_admins <= 5"
                 >
-                  {{ s.total_admins }} admin{{ s.total_admins > 1 ? "s" : "" }}
+                  {{
+                    (s.total_admins > 1
+                      ? "DASHBOARD.ADMINS"
+                      : "DASHBOARD.ADMIN"
+                    ) | translate: { count: s.total_admins }
+                  }}
                 </span>
               </div>
             </div>
@@ -194,7 +225,9 @@
               <div
                 class="d-flex align-items-center justify-content-between mb-2"
               >
-                <span class="text-muted small">Ghost Repositories</span>
+                <span class="text-muted small">{{
+                  "DASHBOARD.GHOST_REPOS" | translate
+                }}</span>
                 <!-- Icon color reflects health: grey while loading, green if clean, amber if issues -->
                 <div
                   [class]="
@@ -228,11 +261,11 @@
 
               <div class="text-muted small">
                 @if (!ghostsChecked()) {
-                  Checking…
+                  {{ "DASHBOARD.CHECKING" | translate }}
                 } @else if (ghostCount() > 0) {
-                  Repos without tags — purge needed
+                  {{ "DASHBOARD.GHOST_NEEDS_PURGE" | translate }}
                 } @else {
-                  All repositories healthy
+                  {{ "DASHBOARD.ALL_HEALTHY" | translate }}
                 }
               </div>
             </div>
@@ -252,7 +285,9 @@
               <div
                 class="d-flex align-items-center justify-content-between mb-2"
               >
-                <span class="text-muted small">Orphan OCI Directories</span>
+                <span class="text-muted small">{{
+                  "DASHBOARD.ORPHAN_OCI" | translate
+                }}</span>
                 <div
                   [class]="
                     !orphanOciChecked()
@@ -284,14 +319,17 @@
 
               <div class="text-muted small">
                 @if (!orphanOciChecked()) {
-                  Checking…
+                  {{ "DASHBOARD.CHECKING" | translate }}
                 } @else if (orphanOciCount() > 0) {
-                  Leftover OCI directories —
+                  {{ "DASHBOARD.ORPHAN_LEFTOVER" | translate }}
                   @if (orphanOciSize()) {
-                    {{ orphanOciSize() }} wasted
+                    {{
+                      "DASHBOARD.ORPHAN_WASTED"
+                        | translate: { size: orphanOciSize() }
+                    }}
                   }
                 } @else {
-                  Staging directory clean
+                  {{ "DASHBOARD.STAGING_CLEAN" | translate }}
                 }
               </div>
             </div>
@@ -306,13 +344,17 @@
       <div class="col-lg-6">
         <div class="card border-0">
           <div class="card-header border-0 pb-0">
-            <h6 class="fw-semibold mb-0">Registry Information</h6>
+            <h6 class="fw-semibold mb-0">
+              {{ "DASHBOARD.REGISTRY_INFO" | translate }}
+            </h6>
           </div>
           <div class="card-body">
             <table class="table table-sm table-borderless mb-0">
               <tbody>
                 <tr>
-                  <td class="text-muted small">Status</td>
+                  <td class="text-muted small">
+                    {{ "COMMON.STATUS" | translate }}
+                  </td>
                   <td>
                     <span
                       [class]="
@@ -326,19 +368,27 @@
                   </td>
                 </tr>
                 <tr>
-                  <td class="text-muted small">Total Images</td>
+                  <td class="text-muted small">
+                    {{ "DASHBOARD.TOTAL_IMAGES" | translate }}
+                  </td>
                   <td class="fw-semibold">{{ s.total_images }}</td>
                 </tr>
                 <tr>
-                  <td class="text-muted small">Total Tags</td>
+                  <td class="text-muted small">
+                    {{ "DASHBOARD.TOTAL_TAGS" | translate }}
+                  </td>
                   <td class="fw-semibold">{{ s.total_tags }}</td>
                 </tr>
                 <tr>
-                  <td class="text-muted small">Registry Size</td>
+                  <td class="text-muted small">
+                    {{ "DASHBOARD.REGISTRY_SIZE" | translate }}
+                  </td>
                   <td class="fw-semibold">{{ s.total_size_human }}</td>
                 </tr>
                 <tr>
-                  <td class="text-muted small">Disk Free</td>
+                  <td class="text-muted small">
+                    {{ "DASHBOARD.DISK_FREE" | translate }}
+                  </td>
                   <td class="fw-semibold">
                     {{ (s.disk_free_bytes / 1073741824).toFixed(1) }} GB
                   </td>
@@ -353,27 +403,31 @@
       <div class="col-lg-6">
         <div class="card border-0">
           <div class="card-header border-0 pb-0">
-            <h6 class="fw-semibold mb-0">Quick Actions</h6>
+            <h6 class="fw-semibold mb-0">
+              {{ "DASHBOARD.QUICK_ACTIONS" | translate }}
+            </h6>
           </div>
           <div class="card-body d-flex flex-column gap-2">
             <a
               routerLink="/images"
               class="btn btn-outline-primary btn-sm text-start"
             >
-              <i class="bi bi-layers me-2"></i>Browse Images
+              <i class="bi bi-layers me-2"></i
+              >{{ "DASHBOARD.BROWSE_IMAGES" | translate }}
             </a>
             <a
               routerLink="/staging"
               class="btn btn-outline-secondary btn-sm text-start"
             >
-              <i class="bi bi-cloud-download me-2"></i>Staging Pipeline
+              <i class="bi bi-cloud-download me-2"></i
+              >{{ "DASHBOARD.STAGING_PIPELINE" | translate }}
             </a>
             @if (authService.currentUser()?.is_admin) {
               <a
                 routerLink="/settings"
                 class="btn btn-outline-secondary btn-sm text-start"
               >
-                <i class="bi bi-gear me-2"></i>Settings
+                <i class="bi bi-gear me-2"></i>{{ "NAV.SETTINGS" | translate }}
               </a>
             }
           </div>
@@ -388,7 +442,8 @@
           <div class="card border-0">
             <div class="card-header border-0 pb-0">
               <h6 class="fw-semibold mb-0">
-                <i class="bi bi-tools me-2 text-warning"></i>Maintenance Actions
+                <i class="bi bi-tools me-2 text-warning"></i
+                >{{ "DASHBOARD.MAINTENANCE" | translate }}
               </h6>
             </div>
             <div class="card-body d-flex flex-column gap-2">
@@ -402,10 +457,10 @@
                       class="fw-semibold small d-flex align-items-center gap-2"
                     >
                       <i class="bi bi-trash3-fill text-warning"></i>
-                      Garbage Collection
+                      {{ "DASHBOARD.GC_TITLE" | translate }}
                     </div>
                     <div class="text-muted" style="font-size: 0.72rem">
-                      Reclaim disk space from deleted layers
+                      {{ "DASHBOARD.GC_DESC" | translate }}
                     </div>
                   </div>
 
@@ -418,11 +473,11 @@
                       <span
                         class="spinner-border spinner-border-sm me-1"
                       ></span>
-                      Dry running...
+                      {{ "DASHBOARD.GC_DRY_RUNNING" | translate }}
                     } @else {
                       <i class="bi bi-eye me-1"></i>
                     }
-                    Dry run
+                    {{ "DASHBOARD.GC_DRY_RUN" | translate }}
                   </button>
                   <button
                     class="btn btn-sm btn-warning"
@@ -433,10 +488,10 @@
                       <span
                         class="spinner-border spinner-border-sm me-1"
                       ></span>
-                      Running...
+                      {{ "DASHBOARD.GC_RUNNING" | translate }}
                     } @else {
                       <i class="bi bi-recycle me-1"></i>
-                      Run GC
+                      {{ "DASHBOARD.GC_RUN" | translate }}
                     }
                   </button>
                 </div>
@@ -453,14 +508,19 @@
                     ) {
                       <span class="text-success small fw-semibold">
                         <i class="bi bi-arrow-down-circle-fill me-1"></i>
-                        {{ gcStatus()!.freed_human }} freed
+                        {{
+                          "DASHBOARD.GC_FREED"
+                            | translate: { size: gcStatus()!.freed_human }
+                        }}
                       </span>
                     }
                     @if (
                       gcStatus()!.status === "done" &&
                       gcStatus()!.freed_bytes === 0
                     ) {
-                      <span class="text-muted small">Nothing to reclaim</span>
+                      <span class="text-muted small">{{
+                        "DASHBOARD.GC_NOTHING" | translate
+                      }}</span>
                     }
                   </div>
 
@@ -475,7 +535,11 @@
                   <!-- GC timestamps -->
                   @if (gcStatus()!.finished_at) {
                     <div class="text-muted mt-1" style="font-size: 0.68rem">
-                      Finished: {{ gcStatus()!.finished_at | date: "medium" }}
+                      {{
+                        "DASHBOARD.FINISHED"
+                          | translate
+                            : { date: gcStatus()!.finished_at | date: "medium" }
+                      }}
                     </div>
                   }
                 }
@@ -489,7 +553,7 @@
                       class="fw-semibold small d-flex align-items-center gap-2"
                     >
                       <i class="bi bi-shadows text-secondary"></i>
-                      Ghost Repositories
+                      {{ "DASHBOARD.GHOST_REPOS" | translate }}
                       @if (ghostCount() > 0) {
                         <span class="badge bg-warning-subtle text-warning">{{
                           ghostCount()
@@ -497,7 +561,7 @@
                       }
                     </div>
                     <div class="text-muted" style="font-size: 0.72rem">
-                      Repositories with no tags left after deletion
+                      {{ "DASHBOARD.GHOST_DESC" | translate }}
                     </div>
                   </div>
                   <button
@@ -512,7 +576,7 @@
                     } @else {
                       <i class="bi bi-eraser me-1"></i>
                     }
-                    Purge
+                    {{ "DASHBOARD.PURGE" | translate }}
                   </button>
                 </div>
                 @if (ghostRepos().length > 0) {
@@ -528,7 +592,8 @@
                   </div>
                 } @else if (ghostsChecked()) {
                   <div class="text-success small mt-1">
-                    <i class="bi bi-check-circle me-1"></i>No ghost repositories
+                    <i class="bi bi-check-circle me-1"></i
+                    >{{ "DASHBOARD.NO_GHOST" | translate }}
                   </div>
                 }
               </div>
@@ -541,7 +606,7 @@
                       class="fw-semibold small d-flex align-items-center gap-2"
                     >
                       <i class="bi bi-folder-x text-warning"></i>
-                      Orphan OCI Directories in Staging
+                      {{ "DASHBOARD.ORPHAN_OCI_STAGING" | translate }}
                       @if (orphanOciCount() > 0) {
                         <span class="badge bg-warning-subtle text-warning">{{
                           orphanOciCount()
@@ -549,8 +614,7 @@
                       }
                     </div>
                     <div class="text-muted" style="font-size: 0.72rem">
-                      Leftover OCI layout directories in /tmp/staging with no
-                      active job
+                      {{ "DASHBOARD.ORPHAN_OCI_DESC" | translate }}
                     </div>
                   </div>
                   <div class="d-flex gap-1">
@@ -558,7 +622,7 @@
                       class="btn btn-sm btn-outline-secondary"
                       (click)="checkOrphanOci()"
                       [disabled]="orphanOciRefreshing()"
-                      title="Refresh"
+                      [title]="'COMMON.REFRESH' | translate"
                     >
                       <i
                         class="bi bi-arrow-clockwise"
@@ -580,7 +644,7 @@
                           [class.spin]="purgingOrphanOci()"
                         ></i>
                       }
-                      Purge
+                      {{ "DASHBOARD.PURGE" | translate }}
                     </button>
                   </div>
                 </div>
@@ -598,8 +662,8 @@
                   </div>
                 } @else if (orphanOciChecked()) {
                   <div class="text-success small mt-1">
-                    <i class="bi bi-check-circle me-1"></i>No orphan OCI
-                    directories
+                    <i class="bi bi-check-circle me-1"></i
+                    >{{ "DASHBOARD.NO_ORPHAN_OCI" | translate }}
                   </div>
                 }
               </div>

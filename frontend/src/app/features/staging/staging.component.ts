@@ -12,6 +12,7 @@ import {
   signal
 } from "@angular/core";
 import { RouterLink } from "@angular/router";
+import { TranslatePipe, TranslateService } from "@ngx-translate/core";
 import { LOCAL_REGISTRY_SYSTEM_ID } from "../../core/constants/registry.constants";
 import { AuthService } from "../../core/services/auth.service";
 import {
@@ -32,7 +33,7 @@ export type PullSourceMode = "dockerhub" | "saved" | "adhoc";
 
 @Component({
   selector: "app-staging",
-  imports: [RouterLink, JobsListComponent],
+  imports: [RouterLink, JobsListComponent, TranslatePipe],
   templateUrl: "./staging.component.html",
   styleUrl: "./staging.component.css",
 })
@@ -42,6 +43,7 @@ export class StagingComponent implements OnInit {
   private authService = inject(AuthService);
   private jobSvc = inject(JobService);
   private folderSvc = inject(FolderService);
+  private translate = inject(TranslateService);
   trivySvc = inject(TrivyService);
 
   readonly externalRegistries = computed<ExternalRegistry[]>(() => this.extRegistrySvc.externalRegistries());
@@ -98,7 +100,9 @@ export class StagingComponent implements OnInit {
       allowed.length > 0 &&
       !allowed.includes(prefix)
     ) {
-      return `You only have access to folders: ${allowed.join(", ")}`;
+      return this.translate.instant("STAGING.FOLDER_WARNING", {
+        folders: allowed.join(", "),
+      });
     }
     return "";
   });

@@ -6,28 +6,30 @@
 }
 @if (saved()) {
   <div class="alert alert-success py-2 small mb-3">
-    <i class="bi bi-check-circle me-1"></i>Configuration saved successfully.
+    <i class="bi bi-check-circle me-1"></i>{{ "OIDC.SAVED_OK" | translate }}
   </div>
 }
 
 @if (loading()) {
   <div class="text-center py-5 text-muted">
-    <span class="spinner-border spinner-border-sm me-2"></span>Loading network settings…
+    <span class="spinner-border spinner-border-sm me-2"></span
+    >{{ "NETWORK.LOADING" | translate }}
   </div>
 } @else {
-
   <!-- ══════════════════════════════════════════════════════════════════════ -->
   <!-- CARD 1 — HTTP/HTTPS Proxy                                              -->
   <!-- ══════════════════════════════════════════════════════════════════════ -->
   <div class="card border-0 mb-3">
-    <div class="card-header border-0 d-flex align-items-center justify-content-between">
+    <div
+      class="card-header border-0 d-flex align-items-center justify-content-between"
+    >
       <div>
         <h6 class="fw-semibold mb-0">
-          <i class="bi bi-hdd-network text-primary me-2"></i>HTTP / HTTPS Proxy
+          <i class="bi bi-hdd-network text-primary me-2"></i
+          >{{ "NETWORK.PROXY_TITLE" | translate }}
         </h6>
         <div class="text-muted small mt-1">
-          Override the container OS proxy environment variables at runtime.
-          Affects Docker Hub API calls, OIDC discovery, and skopeo operations.
+          {{ "NETWORK.PROXY_DESC" | translate }}
         </div>
       </div>
 
@@ -37,14 +39,14 @@
           class="badge bg-warning-subtle text-warning d-flex align-items-center gap-1 ms-auto"
         >
           <i class="bi bi-pencil-fill" style="font-size: 0.6rem"></i>
-          Custom
+          {{ "TRANSFER.CUSTOM" | translate }}
         </span>
       } @else {
         <span
           class="badge bg-secondary-subtle text-secondary d-flex align-items-center gap-1 ms-auto"
         >
           <i class="bi bi-server" style="font-size: 0.6rem"></i>
-          From env
+          {{ "TRANSFER.FROM_ENV" | translate }}
         </span>
       }
 
@@ -59,7 +61,6 @@
         />
         <label class="form-check-label small" for="proxyOverrideToggle"></label>
       </div>
-
     </div>
 
     <div class="card-body">
@@ -67,19 +68,19 @@
       @if (!proxyForm().proxy_override) {
         <div class="alert alert-info py-2 small mb-3">
           <i class="bi bi-info-circle me-1"></i>
-          Using container environment variables
-          (<code>HTTP_PROXY</code>, <code>HTTPS_PROXY</code>, <code>NO_PROXY</code>).
-          Enable the override above to customize values.
+          {{ "NETWORK.PROXY_ENV_PRE" | translate }}
+          (<code>HTTP_PROXY</code>, <code>HTTPS_PROXY</code>,
+          <code>NO_PROXY</code>).
+          {{ "NETWORK.PROXY_ENV_POST" | translate }}
         </div>
       }
 
       <fieldset [disabled]="!proxyForm().proxy_override">
         <div class="row g-3">
-
           <!-- HTTP Proxy -->
           <div class="col-md-6">
             <label class="form-label small fw-semibold" for="httpProxy">
-              HTTP Proxy
+              {{ "NETWORK.HTTP_PROXY" | translate }}
             </label>
             <input
               id="httpProxy"
@@ -94,7 +95,7 @@
           <!-- HTTPS Proxy -->
           <div class="col-md-6">
             <label class="form-label small fw-semibold" for="httpsProxy">
-              HTTPS Proxy
+              {{ "NETWORK.HTTPS_PROXY" | translate }}
             </label>
             <input
               id="httpsProxy"
@@ -109,8 +110,10 @@
           <!-- No Proxy -->
           <div class="col-12">
             <label class="form-label small fw-semibold" for="noProxy">
-              No Proxy
-              <span class="text-muted fw-normal">(comma-separated hosts)</span>
+              {{ "NETWORK.NO_PROXY" | translate }}
+              <span class="text-muted fw-normal">{{
+                "NETWORK.COMMA_HOSTS" | translate
+              }}</span>
             </label>
             <input
               id="noProxy"
@@ -126,9 +129,10 @@
           <div class="col-12">
             <div class="border rounded p-3 bg-body-tertiary">
               <div class="small fw-semibold mb-2">
-                <i class="bi bi-key me-1"></i>Proxy Authentication
+                <i class="bi bi-key me-1"></i
+                >{{ "NETWORK.PROXY_AUTH" | translate }}
                 <span class="text-muted fw-normal">
-                  (credentials are embedded in the proxy URL)
+                  {{ "NETWORK.PROXY_AUTH_HINT" | translate }}
                 </span>
               </div>
               <div class="row g-2">
@@ -136,10 +140,12 @@
                   <input
                     type="text"
                     class="form-control form-control-sm"
-                    placeholder="Username"
+                    [placeholder]="'AUTH.USERNAME' | translate"
                     autocomplete="off"
                     [value]="proxyForm().proxy_username"
-                    (input)="updateProxy({ proxy_username: $any($event.target).value })"
+                    (input)="
+                      updateProxy({ proxy_username: $any($event.target).value })
+                    "
                   />
                 </div>
                 <div class="col-md-5">
@@ -147,18 +153,31 @@
                     <input
                       [type]="showProxyPassword() ? 'text' : 'password'"
                       class="form-control form-control-sm"
-                      placeholder="Password"
+                      [placeholder]="'AUTH.PASSWORD' | translate"
                       autocomplete="new-password"
                       [value]="proxyForm().proxy_password"
-                      (input)="updateProxy({ proxy_password: $any($event.target).value })"
+                      (input)="
+                        updateProxy({
+                          proxy_password: $any($event.target).value,
+                        })
+                      "
                     />
                     <button
                       class="btn btn-outline-secondary btn-sm"
                       type="button"
                       (click)="showProxyPassword.set(!showProxyPassword())"
-                      [title]="showProxyPassword() ? 'Hide password' : 'Show password'"
+                      [title]="
+                        (showProxyPassword()
+                          ? 'NETWORK.HIDE_PASSWORD'
+                          : 'NETWORK.SHOW_PASSWORD'
+                        ) | translate
+                      "
                     >
-                      <i class="bi" [class.bi-eye]="!showProxyPassword()" [class.bi-eye-slash]="showProxyPassword()"></i>
+                      <i
+                        class="bi"
+                        [class.bi-eye]="!showProxyPassword()"
+                        [class.bi-eye-slash]="showProxyPassword()"
+                      ></i>
                     </button>
                   </div>
                 </div>
@@ -178,7 +197,8 @@
           @if (saving()) {
             <span class="spinner-border spinner-border-sm me-1"></span>
           }
-          <i class="bi bi-floppy me-1"></i>Save Proxy Settings
+          <i class="bi bi-floppy me-1"></i
+          >{{ "NETWORK.SAVE_PROXY" | translate }}
         </button>
       </div>
     </div>
@@ -188,15 +208,16 @@
   <!-- CARD 2 — Syslog Forwarding                                            -->
   <!-- ══════════════════════════════════════════════════════════════════════ -->
   <div class="card border-0 mb-3">
-    <div class="card-header border-0 d-flex align-items-center justify-content-between">
+    <div
+      class="card-header border-0 d-flex align-items-center justify-content-between"
+    >
       <div>
         <h6 class="fw-semibold mb-0">
-          <i class="bi bi-broadcast text-primary me-2"></i>Syslog Forwarding
+          <i class="bi bi-broadcast text-primary me-2"></i
+          >{{ "NETWORK.SYSLOG_TITLE" | translate }}
         </h6>
         <div class="text-muted small mt-1">
-          Forward audit logs and/or Uvicorn access logs to a remote syslog server.
-          Supports UDP (RFC 3164/5424), TCP plain, and TCP+TLS (RFC 5425).
-          Authentication is available for TCP-based connections (RFC 6587).
+          {{ "NETWORK.SYSLOG_DESC" | translate }}
         </div>
       </div>
 
@@ -216,11 +237,10 @@
     <div class="card-body">
       <fieldset [disabled]="!syslogForm().enabled">
         <div class="row g-3">
-
           <!-- Server host -->
           <div class="col-md-8">
             <label class="form-label small fw-semibold" for="syslogHost">
-              Syslog Server Host
+              {{ "NETWORK.SYSLOG_HOST" | translate }}
             </label>
             <input
               id="syslogHost"
@@ -235,7 +255,7 @@
           <!-- Port -->
           <div class="col-md-4">
             <label class="form-label small fw-semibold" for="syslogPort">
-              Port
+              {{ "NETWORK.PORT" | translate }}
             </label>
             <input
               id="syslogPort"
@@ -251,7 +271,7 @@
           <!-- Protocol -->
           <div class="col-md-6">
             <label class="form-label small fw-semibold" for="syslogProtocol">
-              Transport Protocol
+              {{ "NETWORK.TRANSPORT" | translate }}
             </label>
             <select
               id="syslogProtocol"
@@ -259,16 +279,18 @@
               [value]="syslogForm().protocol"
               (change)="updateSyslog({ protocol: $any($event.target).value })"
             >
-              <option value="udp">UDP — RFC 3164 / 5424 (no auth, no TLS)</option>
-              <option value="tcp">TCP — RFC 5424 plain text</option>
-              <option value="tcp+tls">TCP + TLS — RFC 5425 encrypted</option>
+              <option value="udp">{{ "NETWORK.PROTO_UDP" | translate }}</option>
+              <option value="tcp">{{ "NETWORK.PROTO_TCP" | translate }}</option>
+              <option value="tcp+tls">
+                {{ "NETWORK.PROTO_TCP_TLS" | translate }}
+              </option>
             </select>
           </div>
 
           <!-- RFC variant -->
           <div class="col-md-6">
             <label class="form-label small fw-semibold" for="syslogRfc">
-              Message Format
+              {{ "NETWORK.MSG_FORMAT" | translate }}
             </label>
             <select
               id="syslogRfc"
@@ -276,14 +298,20 @@
               [value]="syslogForm().rfc"
               (change)="updateSyslog({ rfc: $any($event.target).value })"
             >
-              <option value="rfc5424">RFC 5424 (structured, recommended)</option>
-              <option value="rfc3164">RFC 3164 (BSD legacy format)</option>
+              <option value="rfc5424">
+                {{ "NETWORK.RFC5424" | translate }}
+              </option>
+              <option value="rfc3164">
+                {{ "NETWORK.RFC3164" | translate }}
+              </option>
             </select>
           </div>
 
           <!-- Log channels -->
           <div class="col-12">
-            <div class="small fw-semibold mb-2">Log Channels to Forward</div>
+            <div class="small fw-semibold mb-2">
+              {{ "NETWORK.LOG_CHANNELS" | translate }}
+            </div>
             <div class="d-flex gap-4">
               <div class="form-check">
                 <input
@@ -291,10 +319,13 @@
                   type="checkbox"
                   id="forwardAudit"
                   [checked]="syslogForm().forward_audit"
-                  (change)="updateSyslog({ forward_audit: $any($event.target).checked })"
+                  (change)="
+                    updateSyslog({ forward_audit: $any($event.target).checked })
+                  "
                 />
                 <label class="form-check-label small" for="forwardAudit">
-                  <i class="bi bi-journal-text me-1"></i>Audit logs
+                  <i class="bi bi-journal-text me-1"></i
+                  >{{ "NETWORK.AUDIT_LOGS" | translate }}
                 </label>
               </div>
               <div class="form-check">
@@ -303,10 +334,15 @@
                   type="checkbox"
                   id="forwardUvicorn"
                   [checked]="syslogForm().forward_uvicorn"
-                  (change)="updateSyslog({ forward_uvicorn: $any($event.target).checked })"
+                  (change)="
+                    updateSyslog({
+                      forward_uvicorn: $any($event.target).checked,
+                    })
+                  "
                 />
                 <label class="form-check-label small" for="forwardUvicorn">
-                  <i class="bi bi-terminal me-1"></i>Uvicorn access logs
+                  <i class="bi bi-terminal me-1"></i
+                  >{{ "NETWORK.UVICORN_LOGS" | translate }}
                 </label>
               </div>
             </div>
@@ -317,8 +353,11 @@
             <div class="col-12">
               <div class="border rounded p-3 bg-body-tertiary">
                 <div class="small fw-semibold mb-2">
-                  <i class="bi bi-shield-lock me-1"></i>TLS Options
-                  <span class="badge bg-info-subtle text-info ms-1">RFC 5425</span>
+                  <i class="bi bi-shield-lock me-1"></i
+                  >{{ "NETWORK.TLS_OPTIONS" | translate }}
+                  <span class="badge bg-info-subtle text-info ms-1"
+                    >RFC 5425</span
+                  >
                 </div>
                 <div class="row g-2">
                   <div class="col-12">
@@ -328,17 +367,23 @@
                         type="checkbox"
                         id="tlsVerify"
                         [checked]="syslogForm().tls_verify"
-                        (change)="updateSyslog({ tls_verify: $any($event.target).checked })"
+                        (change)="
+                          updateSyslog({
+                            tls_verify: $any($event.target).checked,
+                          })
+                        "
                       />
                       <label class="form-check-label small" for="tlsVerify">
-                        Verify server certificate
+                        {{ "NETWORK.VERIFY_CERT" | translate }}
                       </label>
                     </div>
                   </div>
                   <div class="col-12">
                     <label class="form-label small" for="tlsCaCert">
-                      CA Certificate path
-                      <span class="text-muted">(optional, inside container)</span>
+                      {{ "NETWORK.CA_CERT_PATH" | translate }}
+                      <span class="text-muted">{{
+                        "NETWORK.CA_CERT_HINT" | translate
+                      }}</span>
                     </label>
                     <input
                       id="tlsCaCert"
@@ -346,7 +391,9 @@
                       class="form-control form-control-sm font-monospace"
                       placeholder="/etc/ssl/certs/my-ca.pem"
                       [value]="syslogForm().tls_ca_cert"
-                      (input)="updateSyslog({ tls_ca_cert: $any($event.target).value })"
+                      (input)="
+                        updateSyslog({ tls_ca_cert: $any($event.target).value })
+                      "
                     />
                   </div>
                 </div>
@@ -358,10 +405,15 @@
           @if (authAvailable()) {
             <div class="col-12">
               <div class="border rounded p-3 bg-body-tertiary">
-                <div class="d-flex align-items-center justify-content-between mb-2">
+                <div
+                  class="d-flex align-items-center justify-content-between mb-2"
+                >
                   <div class="small fw-semibold">
-                    <i class="bi bi-key me-1"></i>Authentication
-                    <span class="badge bg-secondary-subtle text-secondary ms-1">RFC 6587 / RELP</span>
+                    <i class="bi bi-key me-1"></i
+                    >{{ "NETWORK.AUTHENTICATION" | translate }}
+                    <span class="badge bg-secondary-subtle text-secondary ms-1"
+                      >RFC 6587 / RELP</span
+                    >
                   </div>
                   <div class="form-check form-switch mb-0">
                     <input
@@ -369,9 +421,15 @@
                       type="checkbox"
                       id="authEnabled"
                       [checked]="syslogForm().auth_enabled"
-                      (change)="updateSyslog({ auth_enabled: $any($event.target).checked })"
+                      (change)="
+                        updateSyslog({
+                          auth_enabled: $any($event.target).checked,
+                        })
+                      "
                     />
-                    <label class="form-check-label small" for="authEnabled">Enable</label>
+                    <label class="form-check-label small" for="authEnabled">{{
+                      "NETWORK.ENABLE" | translate
+                    }}</label>
                   </div>
                 </div>
 
@@ -381,10 +439,14 @@
                       <input
                         type="text"
                         class="form-control form-control-sm"
-                        placeholder="Username"
+                        [placeholder]="'AUTH.USERNAME' | translate"
                         autocomplete="off"
                         [value]="syslogForm().auth_username"
-                        (input)="updateSyslog({ auth_username: $any($event.target).value })"
+                        (input)="
+                          updateSyslog({
+                            auth_username: $any($event.target).value,
+                          })
+                        "
                       />
                     </div>
                     <div class="col-md-5">
@@ -392,18 +454,33 @@
                         <input
                           [type]="showSyslogPassword() ? 'text' : 'password'"
                           class="form-control form-control-sm"
-                          placeholder="Password"
+                          [placeholder]="'AUTH.PASSWORD' | translate"
                           autocomplete="new-password"
                           [value]="syslogForm().auth_password"
-                          (input)="updateSyslog({ auth_password: $any($event.target).value })"
+                          (input)="
+                            updateSyslog({
+                              auth_password: $any($event.target).value,
+                            })
+                          "
                         />
                         <button
                           class="btn btn-outline-secondary btn-sm"
                           type="button"
-                          (click)="showSyslogPassword.set(!showSyslogPassword())"
-                          [title]="showSyslogPassword() ? 'Hide password' : 'Show password'"
+                          (click)="
+                            showSyslogPassword.set(!showSyslogPassword())
+                          "
+                          [title]="
+                            (showSyslogPassword()
+                              ? 'NETWORK.HIDE_PASSWORD'
+                              : 'NETWORK.SHOW_PASSWORD'
+                            ) | translate
+                          "
                         >
-                          <i class="bi" [class.bi-eye]="!showSyslogPassword()" [class.bi-eye-slash]="showSyslogPassword()"></i>
+                          <i
+                            class="bi"
+                            [class.bi-eye]="!showSyslogPassword()"
+                            [class.bi-eye-slash]="showSyslogPassword()"
+                          ></i>
                         </button>
                       </div>
                     </div>
@@ -422,7 +499,8 @@
           [class.alert-success]="testResult()!.success"
           [class.alert-danger]="!testResult()!.success"
         >
-          <i class="bi me-1"
+          <i
+            class="bi me-1"
             [class.bi-check-circle]="testResult()!.success"
             [class.bi-exclamation-triangle]="!testResult()!.success"
           ></i>
@@ -440,7 +518,8 @@
           @if (saving()) {
             <span class="spinner-border spinner-border-sm me-1"></span>
           }
-          <i class="bi bi-floppy me-1"></i>Save Syslog Settings
+          <i class="bi bi-floppy me-1"></i
+          >{{ "NETWORK.SAVE_SYSLOG" | translate }}
         </button>
 
         @if (syslogForm().enabled) {
@@ -449,7 +528,7 @@
             (click)="testSyslog()"
             [disabled]="saving() || !syslogForm().host"
           >
-            <i class="bi bi-send me-1"></i>Send Test Message
+            <i class="bi bi-send me-1"></i>{{ "NETWORK.SEND_TEST" | translate }}
           </button>
         }
       </div>

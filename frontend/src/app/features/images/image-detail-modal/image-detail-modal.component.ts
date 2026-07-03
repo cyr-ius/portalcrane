@@ -52,6 +52,7 @@ import {
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { FormsModule } from "@angular/forms";
 import { LOCAL_REGISTRY_SYSTEM_ID } from "../../../core/constants/registry.constants";
+import { TranslatePipe, TranslateService } from "@ngx-translate/core";
 import { formatBytes } from "../../../core/helpers/storage";
 import {
   ImageDetail,
@@ -61,13 +62,14 @@ import {
 
 @Component({
   selector: "app-image-detail-modal",
-  imports: [FormsModule, DatePipe],
+  imports: [FormsModule, DatePipe, TranslatePipe],
   templateUrl: "./image-detail-modal.component.html",
   styleUrl: "./image-detail-modal.component.css",
 })
 export class ImageDetailModalComponent implements OnInit {
   private readonly registrySvc = inject(RegistryService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly translate = inject(TranslateService);
 
   readonly formatBytes = formatBytes
 
@@ -117,7 +119,9 @@ export class ImageDetailModalComponent implements OnInit {
     });
   });
   readonly sourceLabel = computed(() =>
-    this.isLocal() ? "Local V2 registry — image details" : "External V2 registry — image details",
+    this.translate.instant(
+      this.isLocal() ? "IMG_DETAIL.SOURCE_LOCAL" : "IMG_DETAIL.SOURCE_EXTERNAL",
+    ),
   );
   readonly sourceIcon = computed(() =>
     this.isLocal() ? "bi bi-hdd-rack me-2 text-primary" : "bi bi-globe me-2 text-info",
@@ -161,7 +165,9 @@ export class ImageDetailModalComponent implements OnInit {
       },
       error: (err) => {
         this.detailError.set(
-          err?.error?.detail ?? err?.message ?? "Failed to load tag detail",
+          err?.error?.detail ??
+            err?.message ??
+            this.translate.instant("IMG_DETAIL.ERR_LOAD"),
         );
         this.loadingDetail.set(false);
       },
@@ -205,7 +211,9 @@ export class ImageDetailModalComponent implements OnInit {
         this.adding.set(false);
         this.addSuccess.set(false);
         this.addMessage.set(
-          err?.error?.detail ?? err?.message ?? "Failed to add tag",
+          err?.error?.detail ??
+            err?.message ??
+            this.translate.instant("IMG_DETAIL.ERR_ADD"),
         );
       },
     });
@@ -254,7 +262,9 @@ export class ImageDetailModalComponent implements OnInit {
         this.deleting.set(false);
         this.deleteSuccess.set(false);
         this.deleteMessage.set(
-          err?.error?.detail ?? err?.message ?? "Failed to delete tag",
+          err?.error?.detail ??
+            err?.message ??
+            this.translate.instant("IMG_DETAIL.ERR_DELETE"),
         );
       },
     });

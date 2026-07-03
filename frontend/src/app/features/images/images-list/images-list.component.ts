@@ -30,6 +30,7 @@ import {
 } from "@angular/core";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { FormsModule } from "@angular/forms";
+import { TranslatePipe, TranslateService } from "@ngx-translate/core";
 import { debounceTime, distinctUntilChanged, Subject } from "rxjs";
 import { LOCAL_REGISTRY_SYSTEM_ID } from "../../../core/constants/registry.constants";
 import { AuthService } from "../../../core/services/auth.service";
@@ -74,7 +75,12 @@ type SourceId = typeof LOCAL_REGISTRY_SYSTEM_ID | string;
 
 @Component({
   selector: "app-images-list",
-  imports: [FormsModule, ImageDetailModalComponent, TransferModalComponent],
+  imports: [
+    FormsModule,
+    ImageDetailModalComponent,
+    TransferModalComponent,
+    TranslatePipe,
+  ],
   templateUrl: "./images-list.component.html",
   styleUrl: "./images-list.component.css",
 })
@@ -84,6 +90,7 @@ export class ImagesListComponent implements OnInit {
   private readonly authService = inject(AuthService);
   private readonly extRegSvc = inject(ExternalRegistryService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly translate = inject(TranslateService);
   private readonly VIEW_MODE_KEY = "pc_images_view_mode";
 
   // ── Remote data ────────────────────────────────────────────────────────────
@@ -146,7 +153,8 @@ export class ImagesListComponent implements OnInit {
 
   readonly activeSourceLabel = computed(() => {
     const src = this.selectedSource();
-    if (src === LOCAL_REGISTRY_SYSTEM_ID) return "Local Registry";
+    if (src === LOCAL_REGISTRY_SYSTEM_ID)
+      return this.translate.instant("IMAGES.LOCAL_REGISTRY");
     const reg = this.externalRegistries().find((r) => r.id === src);
     return reg ? reg.name : src;
   });

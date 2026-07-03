@@ -2,13 +2,17 @@
 <!-- MIGRATION: Token creation form now uses [formField] bindings -->
 
 <div class="card border-0 mb-3">
-  <div class="card-header border-0 d-flex align-items-center justify-content-between pb-0">
+  <div
+    class="card-header border-0 d-flex align-items-center justify-content-between pb-0"
+  >
     <div>
       <h6 class="fw-semibold mb-0">
-        <i class="bi bi-key-fill me-2 text-primary"></i>Personal Access Tokens
+        <i class="bi bi-key-fill me-2 text-primary"></i
+        >{{ "TOKENS.TITLE" | translate }}
       </h6>
       <p class="text-muted small mt-1 mb-0">
-        Use as password for <code>docker login</code> — works for all account types.
+        {{ "TOKENS.SUBTITLE_PRE" | translate }} <code>docker login</code>
+        {{ "TOKENS.SUBTITLE_POST" | translate }}
       </p>
     </div>
     @if (!showCreateForm()) {
@@ -19,7 +23,6 @@
   </div>
 
   <div class="card-body pt-3">
-
     <!-- ── Error banner ─────────────────────────────────────────────────── -->
     @if (listError()) {
       <div class="alert alert-danger d-flex gap-2 py-2 small mb-3">
@@ -31,15 +34,20 @@
     <!-- ── Newly created token banner (shown once) ───────────────────────── -->
     @if (createdToken()) {
       <div class="alert alert-success mb-3 p-3">
-        <div class="d-flex align-items-start justify-content-between gap-2 mb-2">
+        <div
+          class="d-flex align-items-start justify-content-between gap-2 mb-2"
+        >
           <div class="fw-semibold small">
             <i class="bi bi-check-circle-fill me-1"></i>
-            Token "<strong>{{ createdToken()!.name }}</strong>" created — copy it now, it won't be shown again.
+            {{ "TOKENS.CREATED_PRE" | translate }}
+            "<strong>{{ createdToken()!.name }}</strong
+            >"
+            {{ "TOKENS.CREATED_POST" | translate }}
           </div>
           <button
             class="btn-close btn-close-sm flex-shrink-0"
             (click)="dismissCreated()"
-            title="Dismiss"
+            [title]="'TOKENS.DISMISS' | translate"
           ></button>
         </div>
 
@@ -55,7 +63,7 @@
           <button
             class="btn btn-outline-success"
             (click)="copyToken()"
-            [title]="copied() ? 'Copied!' : 'Copy to clipboard'"
+            [title]="(copied() ? 'TOKENS.COPIED' : 'TOKENS.COPY') | translate"
           >
             @if (copied()) {
               <i class="bi bi-check-lg"></i>
@@ -67,42 +75,51 @@
 
         <!-- Short token (16 chars) — shown once at creation time -->
         <div class="small text-success-emphasis mb-2">
-          Quick login token (16 chars):
+          {{ "TOKENS.QUICK_LOGIN" | translate }}
           <code>{{ createdToken()!.short_token }}</code>
         </div>
 
         <!-- docker login usage hints -->
         <div class="bg-dark rounded p-2" style="font-size: 0.7rem">
           <code class="text-success">
-            docker login &lt;registry-host&gt; -u &lt;username&gt; -p {{ createdToken()!.raw_token }}
+            docker login &lt;registry-host&gt; -u &lt;username&gt; -p
+            {{ createdToken()!.raw_token }}
           </code>
         </div>
         <div class="bg-dark rounded p-2 mt-2" style="font-size: 0.7rem">
           <code class="text-success">
-            docker login &lt;registry-host&gt; -u &lt;username&gt; -p {{ createdToken()!.short_token }}
+            docker login &lt;registry-host&gt; -u &lt;username&gt; -p
+            {{ createdToken()!.short_token }}
           </code>
         </div>
-
       </div>
     }
 
     <!-- ── Create form ───────────────────────────────────────────────────── -->
     @if (showCreateForm()) {
-      <div class="border border-primary-subtle rounded p-3 mb-3 bg-primary-subtle bg-opacity-10">
-        <h6 class="fw-semibold mb-3 text-primary small">New personal access token</h6>
+      <div
+        class="border border-primary-subtle rounded p-3 mb-3 bg-primary-subtle bg-opacity-10"
+      >
+        <h6 class="fw-semibold mb-3 text-primary small">
+          {{ "TOKENS.NEW_TOKEN" | translate }}
+        </h6>
 
         @if (createError()) {
-          <div class="alert alert-danger py-2 small mb-2">{{ createError() }}</div>
+          <div class="alert alert-danger py-2 small mb-2">
+            {{ createError() }}
+          </div>
         }
 
         <div class="row g-2 mb-3">
           <!-- Token name -->
           <div class="col-12">
-            <label class="form-label small fw-semibold">Name</label>
+            <label class="form-label small fw-semibold">{{
+              "COMMON.NAME" | translate
+            }}</label>
             <input
               type="text"
               class="form-control form-control-sm"
-              placeholder="My laptop, CI/CD pipeline…"
+              [placeholder]="'TOKENS.NAME_PLACEHOLDER' | translate"
               [formField]="tokenForm.name"
             />
           </div>
@@ -110,16 +127,18 @@
           <!-- Expiry selector — uses manual binding because the DOM always returns strings,
                which is incompatible with the number type expected by the Signal Form model -->
           <div class="col-12">
-            <label class="form-label small fw-semibold">Expires in</label>
+            <label class="form-label small fw-semibold">{{
+              "TOKENS.EXPIRES_IN" | translate
+            }}</label>
             <select
               class="form-select form-select-sm"
               [value]="tokenModel().expiresInDays"
               (change)="tokenModel.update(m => ({ ...m, expiresInDays: +$any($event.target).value }))"
             >
-              <option [value]="30">30 days</option>
-              <option [value]="90">90 days (default)</option>
-              <option [value]="180">180 days</option>
-              <option [value]="365">1 year</option>
+              <option [value]="30">{{ "TOKENS.DAYS_30" | translate }}</option>
+              <option [value]="90">{{ "TOKENS.DAYS_90" | translate }}</option>
+              <option [value]="180">{{ "TOKENS.DAYS_180" | translate }}</option>
+              <option [value]="365">{{ "TOKENS.DAYS_365" | translate }}</option>
             </select>
           </div>
         </div>
@@ -132,10 +151,10 @@
           >
             @if (creating()) {
               <span class="spinner-border spinner-border-sm"></span>
-              Creating…
+              {{ "TOKENS.CREATING" | translate }}
             } @else {
               <i class="bi bi-check-lg"></i>
-              Generate
+              {{ "TOKENS.GENERATE" | translate }}
             }
           </button>
           <button
@@ -143,7 +162,7 @@
             (click)="cancelCreate()"
             [disabled]="creating()"
           >
-            Cancel
+            {{ "COMMON.CANCEL" | translate }}
           </button>
         </div>
       </div>
@@ -153,7 +172,7 @@
     @if (loading()) {
       <div class="d-flex align-items-center gap-2 text-muted small py-2">
         <span class="spinner-border spinner-border-sm"></span>
-        Loading tokens…
+        {{ "TOKENS.LOADING" | translate }}
       </div>
     }
 
@@ -161,7 +180,7 @@
     @if (!loading() && tokens().length === 0 && !showCreateForm()) {
       <div class="text-center text-muted py-3">
         <i class="bi bi-key display-6 d-block mb-2 opacity-25"></i>
-        <div class="small">No personal access tokens yet.</div>
+        <div class="small">{{ "TOKENS.EMPTY" | translate }}</div>
       </div>
     }
 
@@ -174,7 +193,9 @@
             [class.opacity-50]="isExpired(token)"
           >
             <!-- Icon -->
-            <div class="token-icon d-flex align-items-center justify-content-center rounded-2 bg-body-tertiary flex-shrink-0">
+            <div
+              class="token-icon d-flex align-items-center justify-content-center rounded-2 bg-body-tertiary flex-shrink-0"
+            >
               @if (isExpired(token)) {
                 <i class="bi bi-key text-danger"></i>
               } @else {
@@ -184,21 +205,39 @@
 
             <!-- Info -->
             <div class="flex-grow-1 min-w-0">
-              <div class="fw-semibold small text-truncate">{{ token.name }}</div>
+              <div class="fw-semibold small text-truncate">
+                {{ token.name }}
+              </div>
               <div class="text-muted" style="font-size: 0.7rem">
                 @if (token.short_token_hint) {
-                  <span>Short token: <code>{{ token.short_token_hint }}</code></span>
+                  <span
+                    >{{ "TOKENS.SHORT_TOKEN" | translate }}
+                    <code>{{ token.short_token_hint }}</code></span
+                  >
                   <span class="mx-1">·</span>
                 }
                 @if (isExpired(token)) {
                   <span class="text-danger">
-                    <i class="bi bi-exclamation-triangle me-1"></i>Expired {{ formatDate(token.expires_at) }}
+                    <i class="bi bi-exclamation-triangle me-1"></i
+                    >{{
+                      "TOKENS.EXPIRED"
+                        | translate: { date: formatDate(token.expires_at) }
+                    }}
                   </span>
                 } @else {
-                  <span>Expires {{ formatDate(token.expires_at) }}</span>
+                  <span>{{
+                    "TOKENS.EXPIRES"
+                      | translate: { date: formatDate(token.expires_at) }
+                  }}</span>
                 }
                 @if (token.last_used_at) {
-                  <span class="ms-2 text-muted">· Last used {{ formatDate(token.last_used_at) }}</span>
+                  <span class="ms-2 text-muted"
+                    >·
+                    {{
+                      "TOKENS.LAST_USED"
+                        | translate: { date: formatDate(token.last_used_at) }
+                    }}</span
+                  >
                 }
               </div>
             </div>
@@ -208,7 +247,7 @@
               class="btn btn-sm btn-outline-danger flex-shrink-0"
               (click)="revokeToken(token.id)"
               [disabled]="revokingId() === token.id"
-              title="Revoke token"
+              [title]="'TOKENS.REVOKE' | translate"
             >
               @if (revokingId() === token.id) {
                 <span class="spinner-border spinner-border-sm"></span>
@@ -225,11 +264,9 @@
     <div class="alert alert-info d-flex gap-2 mt-3 py-2 small mb-0">
       <i class="bi bi-info-circle-fill flex-shrink-0 mt-1"></i>
       <div>
-        Tokens are stored securely as bcrypt hashes. The raw value is only
-        shown once at creation time. You can use either the full token or a
-        dedicated 16-character short token for <code>docker login</code>.
+        {{ "TOKENS.INFO_PRE" | translate }} <code>docker login</code
+        >{{ "TOKENS.INFO_POST" | translate }}
       </div>
     </div>
-
   </div>
 </div>

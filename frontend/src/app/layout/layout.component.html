@@ -10,7 +10,12 @@
       [class.sidebar-brand--collapsed]="sidebarCollapsed()"
     >
       <!-- Portalcrane SVG logo — redesigned for better clarity -->
-      <app-logo [size]="sidebarCollapsed() ? 36 : 64"  [style]="'transition: width 0.25s ease, height 0.25s ease; flex-shrink: 0;'"/>
+      <app-logo
+        [size]="sidebarCollapsed() ? 36 : 64"
+        [style]="
+          'transition: width 0.25s ease, height 0.25s ease; flex-shrink: 0;'
+        "
+      />
 
       <!-- Brand name — only visible when sidebar is expanded -->
       @if (!sidebarCollapsed()) {
@@ -26,11 +31,11 @@
             routerLink="/dashboard"
             routerLinkActive="active"
             class="nav-link d-flex align-items-center gap-2"
-            [title]="sidebarCollapsed() ? 'Dashboard' : ''"
+            [title]="sidebarCollapsed() ? ('NAV.DASHBOARD' | translate) : ''"
           >
             <i class="bi bi-speedometer2 nav-icon"></i>
             @if (!sidebarCollapsed()) {
-              <span>Dashboard</span>
+              <span>{{ "NAV.DASHBOARD" | translate }}</span>
             }
           </a>
         </li>
@@ -39,11 +44,11 @@
             routerLink="/images"
             routerLinkActive="active"
             class="nav-link d-flex align-items-center gap-2"
-            [title]="sidebarCollapsed() ? 'Images' : ''"
+            [title]="sidebarCollapsed() ? ('NAV.IMAGES' | translate) : ''"
           >
             <i class="bi bi-layers nav-icon"></i>
             @if (!sidebarCollapsed()) {
-              <span>Images</span>
+              <span>{{ "NAV.IMAGES" | translate }}</span>
             }
           </a>
         </li>
@@ -52,11 +57,11 @@
             routerLink="/staging"
             routerLinkActive="active"
             class="nav-link d-flex align-items-center gap-2"
-            [title]="sidebarCollapsed() ? 'Staging' : ''"
+            [title]="sidebarCollapsed() ? ('NAV.STAGING' | translate) : ''"
           >
             <i class="bi bi-cloud-arrow-down nav-icon"></i>
             @if (!sidebarCollapsed()) {
-              <span>Staging</span>
+              <span>{{ "NAV.STAGING" | translate }}</span>
             }
           </a>
         </li>
@@ -72,11 +77,11 @@
             routerLink="/settings"
             routerLinkActive="active"
             class="nav-link d-flex align-items-center gap-2"
-            [title]="sidebarCollapsed() ? 'Settings' : ''"
+            [title]="sidebarCollapsed() ? ('NAV.SETTINGS' | translate) : ''"
           >
             <i class="bi bi-gear nav-icon"></i>
             @if (!sidebarCollapsed()) {
-              <span>Settings</span>
+              <span>{{ "NAV.SETTINGS" | translate }}</span>
             }
           </a>
         </div>
@@ -114,7 +119,7 @@
                   (click)="
                     accountModalOpen.set(true); themePickerOpen.set(false)
                   "
-                  title="My account"
+                  [title]="'NAV.MY_ACCOUNT' | translate"
                 >
                   <i class="bi bi-person-circle"></i>
                 </button>
@@ -125,7 +130,7 @@
                   class="theme-option"
                   [class.active]="themeService.theme() === 'light'"
                   (click)="setTheme('light')"
-                  title="Light"
+                  [title]="'THEME.LIGHT' | translate"
                 >
                   <i class="bi bi-sun-fill"></i>
                 </button>
@@ -133,7 +138,7 @@
                   class="theme-option"
                   [class.active]="themeService.theme() === 'dark'"
                   (click)="setTheme('dark')"
-                  title="Dark"
+                  [title]="'THEME.DARK' | translate"
                 >
                   <i class="bi bi-moon-fill"></i>
                 </button>
@@ -141,17 +146,30 @@
                   class="theme-option"
                   [class.active]="themeService.theme() === 'auto'"
                   (click)="setTheme('auto')"
-                  title="Auto"
+                  [title]="'THEME.AUTO' | translate"
                 >
                   <i class="bi bi-circle-half"></i>
                 </button>
+                <!-- Divider -->
+                <div class="border-top my-1 mx-1"></div>
+                <!-- Language options -->
+                @for (l of languageService.languages; track l.value) {
+                  <button
+                    class="theme-option"
+                    [class.active]="languageService.language() === l.value"
+                    (click)="setLanguage(l.value)"
+                    [title]="l.label"
+                  >
+                    <span class="lang-flag">{{ l.flag }}</span>
+                  </button>
+                }
                 <!-- Divider -->
                 <div class="border-top my-1 mx-1"></div>
                 <!-- Logout -->
                 <button
                   class="theme-option text-danger"
                   (click)="auth.logout()"
-                  title="Logout"
+                  [title]="'NAV.LOGOUT' | translate"
                 >
                   <i class="bi bi-box-arrow-right"></i>
                 </button>
@@ -168,7 +186,7 @@
               [class.btn-primary]="themeService.theme() === 'light'"
               [class.btn-outline-secondary]="themeService.theme() !== 'light'"
               (click)="themeService.setTheme('light')"
-              title="Light"
+              [title]="'THEME.LIGHT' | translate"
             >
               <i class="bi bi-sun-fill"></i>
             </button>
@@ -177,7 +195,7 @@
               [class.btn-primary]="themeService.theme() === 'dark'"
               [class.btn-outline-secondary]="themeService.theme() !== 'dark'"
               (click)="themeService.setTheme('dark')"
-              title="Dark"
+              [title]="'THEME.DARK' | translate"
             >
               <i class="bi bi-moon-fill"></i>
             </button>
@@ -186,10 +204,27 @@
               [class.btn-primary]="themeService.theme() === 'auto'"
               [class.btn-outline-secondary]="themeService.theme() !== 'auto'"
               (click)="themeService.setTheme('auto')"
-              title="Auto"
+              [title]="'THEME.AUTO' | translate"
             >
               <i class="bi bi-circle-half"></i>
             </button>
+          </div>
+
+          <!-- Language switcher inline -->
+          <div class="d-flex gap-1 mb-2">
+            @for (l of languageService.languages; track l.value) {
+              <button
+                class="btn btn-sm px-2 flex-fill"
+                [class.btn-primary]="languageService.language() === l.value"
+                [class.btn-outline-secondary]="
+                  languageService.language() !== l.value
+                "
+                (click)="languageService.setLanguage(l.value)"
+                [title]="l.label"
+              >
+                <span class="lang-flag">{{ l.flag }}</span>
+              </button>
+            }
           </div>
 
           <div class="d-flex align-items-center gap-2">
@@ -197,7 +232,7 @@
             <div
               class="user-info-row d-flex align-items-center gap-2 flex-grow-1"
               (click)="accountModalOpen.set(true)"
-              title="My account"
+              [title]="'NAV.MY_ACCOUNT' | translate"
             >
               <div class="avatar-circle">
                 <i class="bi bi-person-fill"></i>
@@ -207,7 +242,12 @@
                   {{ auth.currentUser()?.username }}
                 </div>
                 <div class="x-small text-muted">
-                  {{ auth.currentUser()?.is_admin ? "Administrator" : "User" }}
+                  {{
+                    (auth.currentUser()?.is_admin
+                      ? "NAV.ROLE_ADMIN"
+                      : "NAV.ROLE_USER"
+                    ) | translate
+                  }}
                 </div>
               </div>
             </div>
@@ -215,7 +255,7 @@
             <button
               class="btn btn-sm btn-link text-muted p-0 logout-button"
               (click)="auth.logout()"
-              title="Logout"
+              [title]="'NAV.LOGOUT' | translate"
             >
               <i class="bi bi-box-arrow-right"></i>
             </button>
@@ -233,7 +273,10 @@
       class="sidebar-toggle"
       [class.is-collapsed]="sidebarCollapsed()"
       (click)="toggleSidebar()"
-      [title]="sidebarCollapsed() ? 'Expand sidebar' : 'Collapse sidebar'"
+      [title]="
+        (sidebarCollapsed() ? 'NAV.EXPAND_SIDEBAR' : 'NAV.COLLAPSE_SIDEBAR')
+          | translate
+      "
     >
       <i
         [class]="

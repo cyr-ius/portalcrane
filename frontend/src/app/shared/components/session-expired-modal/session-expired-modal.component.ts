@@ -1,11 +1,12 @@
 import { Component, effect, inject, OnDestroy, OnInit } from "@angular/core";
 import { Router } from "@angular/router";
+import { TranslatePipe } from "@ngx-translate/core";
 import { Modal } from "bootstrap";
 import { SessionExpiredService } from "../../../core/services/session-expired.service";
 
 @Component({
   selector: "app-session-expired-modal",
-  imports: [],
+  imports: [TranslatePipe],
   templateUrl: "./session-expired-modal.component.html",
 })
 export class SessionExpiredModalComponent implements OnInit, OnDestroy {

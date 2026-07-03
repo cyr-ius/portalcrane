@@ -12,6 +12,7 @@ import {
   OnInit,
 } from "@angular/core";
 import { Router } from "@angular/router";
+import { TranslatePipe } from "@ngx-translate/core";
 import { AuthService } from "../../core/services/auth.service";
 import { SettingsService, SettingsTab } from "../../core/services/settings.service";
 import { ThemeService } from "../../core/services/theme.service";
@@ -35,6 +36,7 @@ import { VulnConfigPanelComponent } from "../../shared/components/vuln-config-pa
     AuditConfigPanelComponent,
     ExternalRegistriesConfigPanelComponent,
     NetworkConfigPanelComponent,
+    TranslatePipe,
   ],
   templateUrl: "./settings.component.html",
   styleUrl: "./settings.component.css",

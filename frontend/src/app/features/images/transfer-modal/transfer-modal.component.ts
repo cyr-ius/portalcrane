@@ -38,6 +38,7 @@ import {
 } from "@angular/core";
 import { FormsModule } from "@angular/forms";
 import { RouterLink } from "@angular/router";
+import { TranslatePipe, TranslateService } from "@ngx-translate/core";
 import { firstValueFrom, Subscription, switchMap, timer } from "rxjs";
 import { LOCAL_REGISTRY_SYSTEM_ID } from "../../../core/constants/registry.constants";
 import { AuthService } from "../../../core/services/auth.service";
@@ -68,7 +69,7 @@ function safeId(value: string): string {
 
 @Component({
   selector: "app-transfer-modal",
-  imports: [FormsModule, RouterLink],
+  imports: [FormsModule, RouterLink, TranslatePipe],
   templateUrl: "./transfer-modal.component.html",
   styleUrl: "./transfer-modal.component.css",
 })
@@ -77,6 +78,7 @@ export class TransferModalComponent implements OnInit, AfterViewInit, OnDestroy 
   private readonly extRegSvc = inject(ExternalRegistryService);
   private readonly folderSvc = inject(FolderService);
   private readonly authSvc = inject(AuthService);
+  private readonly translate = inject(TranslateService);
   readonly trivySvc = inject(TrivyService);
 
   // ── Scan policy (read-only, inherited from server settings) ───────────────
@@ -393,7 +395,8 @@ export class TransferModalComponent implements OnInit, AfterViewInit, OnDestroy 
     } catch (err: unknown) {
       const httpErr = err as { error?: { detail?: string } };
       this.transferError.set(
-        httpErr?.error?.detail ?? "Failed to start transfer",
+        httpErr?.error?.detail ??
+          this.translate.instant("TRANSFER.ERR_START"),
       );
     } finally {
       this.transferring.set(false);

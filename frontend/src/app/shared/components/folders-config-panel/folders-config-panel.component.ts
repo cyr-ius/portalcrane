@@ -15,6 +15,7 @@
  */
 import { Component, inject, OnInit, signal } from "@angular/core";
 import { form, FormField, required, submit } from "@angular/forms/signals";
+import { TranslatePipe, TranslateService } from "@ngx-translate/core";
 import { firstValueFrom } from "rxjs";
 import { Folder, FolderService, UserSummary } from "../../../core/services/folder.service";
 
@@ -37,12 +38,13 @@ interface PermFormModel {
 @Component({
   selector: "app-folders-config-panel",
   // FormField is required for [formField] bindings in the template
-  imports: [FormField],
+  imports: [FormField, TranslatePipe],
   templateUrl: "./folders-config-panel.component.html",
   styleUrl: "./folders-config-panel.component.css",
 })
 export class FoldersConfigPanel implements OnInit {
   private readonly folderSvc = inject(FolderService);
+  private readonly translate = inject(TranslateService);
 
   // ── Folder list ────────────────────────────────────────────────────────────
   readonly folders = signal<Folder[]>([]);
@@ -123,7 +125,7 @@ export class FoldersConfigPanel implements OnInit {
         this.loading.set(false);
       },
       error: (err) => {
-        this.error.set(err?.error?.detail ?? "Failed to load folders");
+        this.error.set(err?.error?.detail ?? this.translate.instant("FOLDERS.ERR_LOAD"));
         this.loading.set(false);
       },
     });
@@ -186,7 +188,7 @@ export class FoldersConfigPanel implements OnInit {
         f().reset({ ...this.folderInit });
       } catch (err: unknown) {
         const httpErr = err as { error?: { detail?: string } };
-        this.createError.set(httpErr?.error?.detail ?? "Failed to create folder");
+        this.createError.set(httpErr?.error?.detail ?? this.translate.instant("FOLDERS.ERR_CREATE"));
       } finally {
         this.creating.set(false);
       }
@@ -281,7 +283,7 @@ export class FoldersConfigPanel implements OnInit {
         f().reset({ ...this.permInit });
       } catch (err: unknown) {
         const httpErr = err as { error?: { detail?: string } };
-        this.permError.set(httpErr?.error?.detail ?? "Failed to save permission");
+        this.permError.set(httpErr?.error?.detail ?? this.translate.instant("FOLDERS.ERR_PERM"));
       } finally {
         this.savingPerm.set(false);
       }

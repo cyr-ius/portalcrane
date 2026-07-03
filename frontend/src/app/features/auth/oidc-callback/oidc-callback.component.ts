@@ -8,6 +8,7 @@
 
 import { Component, inject, OnInit, signal } from "@angular/core";
 import { ActivatedRoute, Router } from "@angular/router";
+import { TranslatePipe, TranslateService } from "@ngx-translate/core";
 
 import { OIDC_STATE_KEY } from "../../../core/constants/oidc.constants";
 import { AuthService } from "../../../core/services/auth.service";
@@ -15,7 +16,7 @@ import { OidcService } from "../../../core/services/oidc.service";
 
 @Component({
   selector: "app-oidc-callback",
-  imports: [],
+  imports: [TranslatePipe],
   templateUrl: "./oidc-callback.component.html",
 })
 export class OidcCallbackComponent implements OnInit {
@@ -23,6 +24,7 @@ export class OidcCallbackComponent implements OnInit {
   private readonly router = inject(Router);
   private readonly auth = inject(AuthService);
   private readonly oidc = inject(OidcService);
+  private readonly translate = inject(TranslateService);
 
   readonly error = signal("");
 
@@ -42,13 +44,13 @@ export class OidcCallbackComponent implements OnInit {
 
     // Missing authorization code
     if (!code) {
-      this.error.set("No authorization code received");
+      this.error.set(this.translate.instant("AUTH.CB_NO_CODE"));
       return;
     }
 
     // CSRF state mismatch
     if (!state || !expectedState || state !== expectedState) {
-      this.error.set("Invalid OIDC state — possible CSRF attempt");
+      this.error.set(this.translate.instant("AUTH.CB_INVALID_STATE"));
       sessionStorage.removeItem(OIDC_STATE_KEY);
       return;
     }
@@ -63,7 +65,9 @@ export class OidcCallbackComponent implements OnInit {
         this.router.navigate(["/"]);
       },
       error: (err) => {
-        this.error.set(err.error?.detail ?? "OIDC callback failed");
+        this.error.set(
+          err.error?.detail ?? this.translate.instant("AUTH.CB_FAILED"),
+        );
       },
     });
   }

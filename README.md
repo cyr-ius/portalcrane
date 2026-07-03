@@ -1,5 +1,7 @@
 # 🐳 Portalcrane
 
+**English** · [Français](README.fr.md) · [Español](README.es.md)
+
 **Portalcrane** is a self-hosted Docker registry manager.
 It offers a modern and intuitive interface for browsing, searching, and managing images and tags,
 with a preparation process that includes vulnerability scanning.
@@ -259,12 +261,18 @@ name colliding with a local user — from inheriting that account's rights.
 
 ### Vulnerability Scanning (Trivy)
 
-| Variable               | Description                                   | Default         |
-| ---------------------- | --------------------------------------------- | --------------- |
-| `VULN_SCAN_ENABLED`    | Enable Trivy CVE scan in the staging pipeline | `true`          |
-| `VULN_SCAN_SEVERITIES` | Blocking severity levels (comma-separated)    | `CRITICAL,HIGH` |
-| `VULN_IGNORE_UNFIXED`  | Ignore CVEs with no available fix             | `false`         |
-| `VULN_SCAN_TIMEOUT`    | Trivy scan timeout                            | `5m`            |
+| Variable               | Description                                                      | Default         |
+| ---------------------- | ---------------------------------------------------------------- | --------------- |
+| `TRIVY_ENABLED`        | Master switch — start the embedded Trivy server and CVE scanning | `true`          |
+| `VULN_SCAN_ENABLED`    | Enable Trivy CVE scan in the staging pipeline                    | `true`          |
+| `VULN_SCAN_SEVERITIES` | Blocking severity levels (comma-separated)                       | `CRITICAL,HIGH` |
+| `VULN_IGNORE_UNFIXED`  | Ignore CVEs with no available fix                                | `false`         |
+| `VULN_SCAN_TIMEOUT`    | Trivy scan timeout                                               | `5m`            |
+
+> Set `TRIVY_ENABLED=false` (also accepts `0`, `no`, `off`) to fully disarm Trivy:
+> the embedded server is not started by supervisord, the DB updater is skipped,
+> scans are never run, and the scan endpoints return `503`. The other `VULN_*`
+> values are then ignored.
 
 These values ​​can be overridden by the UI.
 

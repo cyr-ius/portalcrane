@@ -8,6 +8,7 @@ import { SlicePipe } from "@angular/common";
 import { Component, computed, inject, OnInit, signal } from "@angular/core";
 import { form, FormField, required, submit } from "@angular/forms/signals";
 import { Router } from "@angular/router";
+import { TranslatePipe, TranslateService } from "@ngx-translate/core";
 
 import { OidcPublicConfig } from "../../../core/models/auth.models";
 import { AuthService } from "../../../core/services/auth.service";
@@ -17,7 +18,7 @@ import { AppLogo } from "../../../shared/components/app-logo/app-logo";
 
 @Component({
   selector: "app-login",
-  imports: [SlicePipe, FormField, AppLogo],
+  imports: [SlicePipe, FormField, AppLogo, TranslatePipe],
   templateUrl: "./login.component.html",
   styleUrl: "./login.component.css",
 })
@@ -25,6 +26,7 @@ export class LoginComponent implements OnInit {
   private readonly auth = inject(AuthService);
   private readonly oidc = inject(OidcService);
   private readonly router = inject(Router);
+  private readonly translate = inject(TranslateService);
   readonly themeService = inject(ThemeService);
 
   // ── Local login form ──────────────────────────────────────────────────────
@@ -83,7 +85,9 @@ export class LoginComponent implements OnInit {
         f().reset({ ...this.login });
       } catch (err: unknown) {
         const httpErr = err as { error?: { detail?: string } };
-        this.error.set(httpErr.error?.detail ?? "Authentication failed");
+        this.error.set(
+          httpErr.error?.detail ?? this.translate.instant("AUTH.LOGIN_FAILED"),
+        );
       } finally {
         this.loading.set(false);
       }
@@ -100,9 +104,7 @@ export class LoginComponent implements OnInit {
 
     const redirected = this.oidc.redirectToProvider(config);
     if (!redirected) {
-      this.error.set(
-        "OIDC is enabled but the authorization endpoint is unavailable. Check the issuer URL and provider discovery document.",
-      );
+      this.error.set(this.translate.instant("AUTH.OIDC_ENDPOINT_UNAVAILABLE"));
     }
   }
 }

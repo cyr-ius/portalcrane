@@ -12,9 +12,11 @@
  * normal application renders immediately when the backend is healthy.
  */
 import { Component } from "@angular/core";
+import { TranslatePipe } from "@ngx-translate/core";
 
 @Component({
   selector: "app-backend-unavailable",
+  imports: [TranslatePipe],
   templateUrl: "./backend-unavailable.component.html",
   styleUrl: "./backend-unavailable.component.css",
 })

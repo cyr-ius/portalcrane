@@ -15,6 +15,8 @@
     "@angular/core": "^22.0.1",
     "@angular/forms": "^22.0.1",
     "@angular/router": "^22.0.1",
+    "@ngx-translate/core": "^18.0.0",
+    "@ngx-translate/http-loader": "^18.0.0",
     "bootstrap": "^5.3.8",
     "bootstrap-icons": "^1.13.1",
     "rxjs": "~7.8.2",

@@ -9,12 +9,13 @@
  * or manage any polling subscription itself.
  */
 import { Component, inject, OnInit } from "@angular/core";
+import { TranslatePipe } from "@ngx-translate/core";
 import { JobService } from "../../../core/services/job.service";
 import { JobDetailComponent } from "../job-detail/job-detail.component";
 
 @Component({
   selector: "app-jobs-list",
-  imports: [JobDetailComponent],
+  imports: [JobDetailComponent, TranslatePipe],
   templateUrl: "./jobs-list.component.html",
   styleUrl: "./jobs-list.component.css",
 })

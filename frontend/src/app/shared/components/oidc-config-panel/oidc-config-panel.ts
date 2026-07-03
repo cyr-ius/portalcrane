@@ -6,6 +6,7 @@
 
 import { Component, computed, inject, OnInit, signal } from "@angular/core";
 import { form, FormField, required, submit } from "@angular/forms/signals";
+import { TranslatePipe, TranslateService } from "@ngx-translate/core";
 import { firstValueFrom } from "rxjs";
 
 import {
@@ -16,12 +17,13 @@ import { OidcService } from "../../../core/services/oidc.service";
 
 @Component({
   selector: "app-oidc-config-panel",
-  imports: [FormField],
+  imports: [FormField, TranslatePipe],
   templateUrl: "./oidc-config-panel.html",
   styleUrl: "./oidc-config-panel.css",
 })
 export class OidcConfigPanel implements OnInit {
   private readonly oidc = inject(OidcService);
+  private readonly translate = inject(TranslateService);
 
   readonly loading = signal(false);
   readonly saved = signal(false);
@@ -81,7 +83,7 @@ export class OidcConfigPanel implements OnInit {
       },
       error: (err) => {
         this.error.set(
-          err?.error?.detail ?? "Failed to load OIDC configuration",
+          err?.error?.detail ?? this.translate.instant("OIDC.ERR_LOAD"),
         );
         this.loading.set(false);
       },
@@ -102,7 +104,7 @@ export class OidcConfigPanel implements OnInit {
       } catch (err: unknown) {
         const httpErr = err as { error?: { detail?: string } };
         this.error.set(
-          httpErr?.error?.detail ?? "Failed to save OIDC configuration",
+          httpErr?.error?.detail ?? this.translate.instant("OIDC.ERR_SAVE"),
         );
       }
     });
@@ -131,7 +133,9 @@ export class OidcConfigPanel implements OnInit {
         this.testing.set(false);
       },
       error: (err) => {
-        this.error.set(err?.error?.detail ?? "OIDC connection test failed");
+        this.error.set(
+          err?.error?.detail ?? this.translate.instant("OIDC.ERR_TEST"),
+        );
         this.testing.set(false);
       },
     });

@@ -9,6 +9,7 @@
  */
 import { Component, inject, OnInit, output, signal } from "@angular/core";
 import { form, FormField, required, submit } from "@angular/forms/signals";
+import { TranslatePipe, TranslateService } from "@ngx-translate/core";
 import { firstValueFrom } from "rxjs";
 import {
   KNOWN_REGISTRY_PRESETS,
@@ -42,7 +43,7 @@ interface RegistryFormModel {
 @Component({
   selector: "app-account-modal",
   // FormField directive is required for [formField] bindings in the template
-  imports: [PersonalTokensPanelComponent, FormField],
+  imports: [PersonalTokensPanelComponent, FormField, TranslatePipe],
   templateUrl: "./account-modal.component.html",
   styleUrl: "./account-modal.component.css",
 })
@@ -50,6 +51,7 @@ export class AccountModalComponent implements OnInit {
   readonly close = output<void>();
   readonly authService = inject(AuthService);
   private readonly extRegSvc = inject(ExternalRegistryService);
+  private readonly translate = inject(TranslateService);
 
   readonly currentUser = this.authService.currentUser;
 
@@ -248,7 +250,7 @@ export class AccountModalComponent implements OnInit {
         this.testResult.set({
           reachable: false,
           auth_ok: false,
-          message: "Test failed.",
+          message: this.translate.instant("ACCOUNT.TEST_FAILED"),
         });
         this.testingNew.set(false);
       },

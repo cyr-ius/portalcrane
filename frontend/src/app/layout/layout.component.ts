@@ -15,8 +15,10 @@
  */
 import { Component, inject, OnDestroy, OnInit, signal } from "@angular/core";
 import { RouterLink, RouterLinkActive, RouterOutlet } from "@angular/router";
+import { TranslatePipe } from "@ngx-translate/core";
 import { readBool } from "../core/helpers/storage";
 import { AuthService } from "../core/services/auth.service";
+import { Language, LanguageService } from "../core/services/language.service";
 import { ThemeService } from "../core/services/theme.service";
 import { AccountModalComponent } from "../shared/components/account-modal/account-modal.component";
 import { AppLogo } from "../shared/components/app-logo/app-logo";
@@ -35,6 +37,7 @@ const COLLAPSE_BREAKPOINT = 992;
     SessionExpiredModalComponent,
     AccountModalComponent,
     AppLogo,
+    TranslatePipe,
   ],
   templateUrl: "./layout.component.html",
   styleUrl: "./layout.component.css",
@@ -42,6 +45,9 @@ const COLLAPSE_BREAKPOINT = 992;
 export class LayoutComponent implements OnInit, OnDestroy {
   auth = inject(AuthService);
   themeService = inject(ThemeService);
+  languageService = inject(LanguageService);
+
+  langPickerOpen = signal(false);
 
   private readonly SIDEBAR_KEY = "pc_sidebar_collapsed";
 
@@ -96,5 +102,10 @@ export class LayoutComponent implements OnInit, OnDestroy {
   setTheme(theme: "light" | "dark" | "auto"): void {
     this.themeService.setTheme(theme);
     this.themePickerOpen.set(false);
+  }
+
+  setLanguage(lang: Language): void {
+    this.languageService.setLanguage(lang);
+    this.langPickerOpen.set(false);
   }
 }

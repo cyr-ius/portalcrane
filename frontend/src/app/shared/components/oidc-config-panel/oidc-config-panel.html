@@ -5,12 +5,12 @@
 <div class="alert alert-danger py-2 small mb-3">{{ error() }}</div>
 } @if (saved()) {
 <div class="alert alert-success py-2 small mb-3">
-  <i class="bi bi-check-circle me-1"></i>Configuration saved successfully.
+  <i class="bi bi-check-circle me-1"></i>{{ "OIDC.SAVED_OK" | translate }}
 </div>
 } @if (loading()) {
 <div class="text-center py-5 text-muted">
-  <span class="spinner-border spinner-border-sm me-2"></span>Loading oidc
-  settings…
+  <span class="spinner-border spinner-border-sm me-2"></span>{{ "OIDC.LOADING" |
+  translate }}
 </div>
 } @else {
 
@@ -24,13 +24,12 @@
   >
     <div>
       <h6 class="fw-semibold mb-0">
-        <i class="bi bi-shield-lock text-primary me-2"></i>OIDC Configuration
+        <i class="bi bi-shield-lock text-primary me-2"></i>{{ "OIDC.TITLE" |
+        translate }}
       </h6>
       <div class="text-muted small mt-1">
         <i class="bi bi-info-circle me-1"></i>
-        Users will be able to log in via your OIDC provider on the login page.
-        The env-based admin login remains available as a fallback — unless
-        OIDC-only mode is enabled below, which disables every local login.
+        {{ "OIDC.INTRO" | translate }}
       </div>
     </div>
 
@@ -40,14 +39,14 @@
       class="badge bg-warning-subtle text-warning d-flex align-items-center gap-1 ms-auto"
     >
       <i class="bi bi-pencil-fill" style="font-size: 0.6rem"></i>
-      Custom
+      {{ "TRANSFER.CUSTOM" | translate }}
     </span>
     } @else {
     <span
       class="badge bg-secondary-subtle text-secondary d-flex align-items-center gap-1 ms-auto"
     >
       <i class="bi bi-server" style="font-size: 0.6rem"></i>
-      From env
+      {{ "TRANSFER.FROM_ENV" | translate }}
     </span>
     }
 
@@ -71,7 +70,7 @@
       <!-- Issuer URL -->
       <div class="col-12">
         <label class="form-label fw-semibold small">
-          Issuer URL
+          {{ "OIDC.ISSUER_URL" | translate }}
           <span class="text-danger">*</span>
         </label>
         <div class="input-group">
@@ -84,16 +83,16 @@
           />
         </div>
         <div class="form-text">
-          Base URL of your OIDC provider (Keycloak, Authentik, Dex, etc.).
-          Portalcrane will append
-          <code>/.well-known/openid-configuration</code> to discover endpoints.
+          {{ "OIDC.ISSUER_HELP_PRE" | translate }}
+          <code>/.well-known/openid-configuration</code>
+          {{ "OIDC.ISSUER_HELP_POST" | translate }}
         </div>
       </div>
 
       <!-- Client ID -->
       <div class="col-md-6">
         <label class="form-label fw-semibold small">
-          Client ID
+          {{ "OIDC.CLIENT_ID" | translate }}
           <span class="text-danger">*</span>
         </label>
         <div class="input-group">
@@ -111,7 +110,9 @@
 
       <!-- Client Secret -->
       <div class="col-md-6">
-        <label class="form-label fw-semibold small">Client Secret</label>
+        <label class="form-label fw-semibold small"
+          >{{ "OIDC.CLIENT_SECRET" | translate }}</label
+        >
         <div class="input-group">
           <span class="input-group-text"><i class="bi bi-key-fill"></i></span>
           <input
@@ -124,20 +125,21 @@
             type="button"
             class="btn btn-outline-secondary"
             (click)="showSecret.set(!showSecret())"
-            [title]="showSecret() ? 'Hide secret' : 'Show secret'"
+            [title]="
+              (showSecret() ? 'OIDC.HIDE_SECRET' : 'OIDC.SHOW_SECRET')
+                | translate
+            "
           >
             <i [class]="showSecret() ? 'bi bi-eye-slash' : 'bi bi-eye'"></i>
           </button>
         </div>
-        <div class="form-text">
-          Leave empty to keep the current stored value.
-        </div>
+        <div class="form-text">{{ "OIDC.SECRET_HELP" | translate }}</div>
       </div>
 
       <!-- Redirect URI -->
       <div class="col-12">
         <label class="form-label fw-semibold small">
-          Redirect URI
+          {{ "OIDC.REDIRECT_URI" | translate }}
           <span class="text-danger">*</span>
         </label>
         <div class="input-group">
@@ -151,15 +153,13 @@
             [formField]="oidcForm.redirect_uri"
           />
         </div>
-        <div class="form-text">
-          Must match exactly the redirect URI registered in your OIDC provider.
-        </div>
+        <div class="form-text">{{ "OIDC.REDIRECT_HELP" | translate }}</div>
       </div>
 
       <!-- Post-logout Redirect URI -->
       <div class="col-12">
         <label class="form-label fw-semibold small"
-          >Post-logout Redirect URI</label
+          >{{ "OIDC.POST_LOGOUT_URI" | translate }}</label
         >
         <div class="input-group">
           <span class="input-group-text"
@@ -176,7 +176,9 @@
 
       <!-- Response type + Scope -->
       <div class="col-md-4">
-        <label class="form-label fw-semibold small">Response Type</label>
+        <label class="form-label fw-semibold small"
+          >{{ "OIDC.RESPONSE_TYPE" | translate }}</label
+        >
         <input
           type="text"
           class="form-control font-monospace"
@@ -184,7 +186,9 @@
         />
       </div>
       <div class="col-md-8">
-        <label class="form-label fw-semibold small">Scope</label>
+        <label class="form-label fw-semibold small"
+          >{{ "OIDC.SCOPE" | translate }}</label
+        >
         <input
           type="text"
           class="form-control font-monospace"
@@ -196,20 +200,24 @@
       <div class="col-12">
         <hr class="my-2" />
         <h6 class="fw-semibold small mb-0">
-          <i class="bi bi-person-gear text-primary me-1"></i>Access control
+          <i class="bi bi-person-gear text-primary me-1"></i>{{
+          "OIDC.ACCESS_CONTROL" | translate }}
         </h6>
       </div>
 
       <!-- Admins subsection -->
       <div class="col-12">
         <span class="badge bg-primary-subtle text-primary">
-          <i class="bi bi-shield-fill-check me-1"></i>Admins
+          <i class="bi bi-shield-fill-check me-1"></i>{{ "OIDC.ADMINS" |
+          translate }}
         </span>
       </div>
 
       <!-- Admin group claim + value -->
       <div class="col-md-6">
-        <label class="form-label fw-semibold small">Admin group claim</label>
+        <label class="form-label fw-semibold small"
+          >{{ "OIDC.ADMIN_GROUP_CLAIM" | translate }}</label
+        >
         <input
           type="text"
           class="form-control font-monospace"
@@ -218,7 +226,9 @@
         />
       </div>
       <div class="col-md-6">
-        <label class="form-label fw-semibold small">Admin group</label>
+        <label class="form-label fw-semibold small"
+          >{{ "OIDC.ADMIN_GROUP" | translate }}</label
+        >
         <input
           type="text"
           class="form-control font-monospace"
@@ -227,32 +237,26 @@
         />
       </div>
       <div class="col-12">
-        <div class="form-text">
-          Group defined in your OIDC provider: when an SSO user carries this
-          value in the <strong>Admin group claim</strong>, they are granted the
-          <strong>admin</strong> role. Portalcrane has only two roles — admin
-          and user — so this maps a provider group to the admin role; it does
-          not create groups in Portalcrane.
-        </div>
+        <div class="form-text">{{ "OIDC.ADMIN_GROUP_HELP" | translate }}</div>
       </div>
 
       <!-- Regular users subsection -->
       <div class="col-12">
         <hr class="my-2" />
         <span class="badge bg-info-subtle text-info">
-          <i class="bi bi-person-check-fill me-1"></i>Regular users
+          <i class="bi bi-person-check-fill me-1"></i>{{ "OIDC.REGULAR_USERS" |
+          translate }}
         </span>
         <div class="form-text mt-1 mb-0">
-          Optional. When an SSO user carries the value below in the given claim,
-          they are granted the <strong>user</strong> role. Enable
-          <strong>Restrict access to mapped groups</strong> below to turn OIDC
-          access into an <strong>allowlist</strong>.
+          {{ "OIDC.REGULAR_USERS_HELP" | translate }}
         </div>
       </div>
 
       <!-- User group claim + value -->
       <div class="col-md-6">
-        <label class="form-label fw-semibold small">User group claim</label>
+        <label class="form-label fw-semibold small"
+          >{{ "OIDC.USER_GROUP_CLAIM" | translate }}</label
+        >
         <input
           type="text"
           class="form-control font-monospace"
@@ -261,7 +265,9 @@
         />
       </div>
       <div class="col-md-6">
-        <label class="form-label fw-semibold small">User group</label>
+        <label class="form-label fw-semibold small"
+          >{{ "OIDC.USER_GROUP" | translate }}</label
+        >
         <input
           type="text"
           class="form-control font-monospace"
@@ -270,12 +276,7 @@
         />
       </div>
       <div class="col-12">
-        <div class="form-text">
-          Group defined in your OIDC provider: when an SSO user carries this
-          value in the <strong>User group claim</strong>, they are granted the
-          <strong>user</strong> role. This does not grant admin — use the
-          <strong>Admins</strong> fields above for that.
-        </div>
+        <div class="form-text">{{ "OIDC.USER_GROUP_HELP" | translate }}</div>
       </div>
 
       <!-- Restrict access to mapped groups -->
@@ -291,15 +292,11 @@
             class="form-check-label small fw-semibold"
             for="oidcRestrictToGroups"
           >
-            Restrict access to mapped groups
+            {{ "OIDC.RESTRICT_GROUPS" | translate }}
           </label>
         </div>
         <div class="form-text">
-          When enabled, OIDC access becomes an <strong>allowlist</strong>: only
-          admins and users matching the mappings above may log in. Any SSO user
-          belonging to neither the admin nor the user group is
-          <strong>denied</strong> and their account is
-          <strong>not created</strong>.
+          {{ "OIDC.RESTRICT_GROUPS_HELP" | translate }}
         </div>
       </div>
 
@@ -313,21 +310,14 @@
             [formField]="oidcForm.oidc_only"
           />
           <label class="form-check-label small fw-semibold" for="oidcOnly">
-            OIDC-only mode (disable local login)
+            {{ "OIDC.OIDC_ONLY" | translate }}
           </label>
         </div>
-        <div class="form-text">
-          Disables every local password login, including the built-in env-admin.
-          Requires the admin group mapping above.
-        </div>
+        <div class="form-text">{{ "OIDC.OIDC_ONLY_HELP" | translate }}</div>
         @if (oidcOnlyMissingAdmin()) {
         <div class="alert alert-warning d-flex gap-2 mt-2 py-2 small mb-0">
           <i class="bi bi-exclamation-triangle-fill flex-shrink-0 mt-1"></i>
-          <div>
-            OIDC-only mode needs the admin group mapping: set both
-            <strong>Admin group claim</strong> and <strong>Admin group</strong>.
-            Saving will be rejected otherwise to prevent a lockout.
-          </div>
+          <div>{{ "OIDC.OIDC_ONLY_WARN" | translate }}</div>
         </div>
         }
       </div>
@@ -346,8 +336,9 @@
       >
         @if (oidcForm().submitting()) {
         <span class="spinner-border spinner-border-sm me-1"></span>
-        Saving… }
-        <i class="bi bi-floppy-fill me-1"></i>Save OIDC Settings
+        {{ "COMMON.SAVING" | translate }} }
+        <i class="bi bi-floppy-fill me-1"></i>{{ "OIDC.SAVE_SETTINGS" |
+        translate }}
       </button>
 
       <button
@@ -355,12 +346,13 @@
         class="btn btn-outline-primary btn-sm"
         (click)="testConnection()"
         [disabled]="!oidcForm().valid() || testing()"
-        title="Contact the OIDC provider and check that the required information can be retrieved"
+        [title]="'OIDC.TEST_TITLE' | translate"
       >
         @if (testing()) {
         <span class="spinner-border spinner-border-sm me-1"></span>
-        Testing… } @else {
-        <i class="bi bi-plug-fill me-1"></i>Test connection }
+        {{ "OIDC.TESTING" | translate }} } @else {
+        <i class="bi bi-plug-fill me-1"></i>{{ "EXTREG.TEST_CONNECTION" |
+        translate }} }
       </button>
     </div>
 
@@ -373,10 +365,9 @@
     >
       <div class="fw-semibold">
         @if (result.success) {
-        <i class="bi bi-check-circle-fill me-1"></i>Connection to the OIDC
-        provider succeeded. } @else {
-        <i class="bi bi-x-octagon-fill me-1"></i>Connection test failed — see
-        the details below. }
+        <i class="bi bi-check-circle-fill me-1"></i>{{ "OIDC.TEST_SUCCESS" |
+        translate }} } @else { <i class="bi bi-x-octagon-fill me-1"></i>{{
+        "OIDC.TEST_FAILED" | translate }} }
       </div>
       <ul class="list-unstyled mb-0">
         @for (step of result.steps; track step.name) {
@@ -399,10 +390,10 @@
     <div class="alert alert-info d-flex gap-2 mt-3 py-2 small">
       <i class="bi bi-lightbulb-fill flex-shrink-0 mt-1"></i>
       <div>
-        Settings are saved to <code>/var/lib/portalcrane/oidc_config.json</code>
-        and take effect immediately — no restart required. Environment variables
-        (<code>OIDC_*</code>) serve as default values and are overridden by the
-        values saved here.
+        {{ "OIDC.INFO_PRE" | translate }}
+        <code>/var/lib/portalcrane/oidc_config.json</code>
+        {{ "OIDC.INFO_MID" | translate }} (<code>OIDC_*</code>) {{
+        "OIDC.INFO_POST" | translate }}
       </div>
     </div>
   </div>

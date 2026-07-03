@@ -13,6 +13,7 @@
 import { Component, inject } from "@angular/core";
 import { RouterOutlet } from "@angular/router";
 import { BackendAvailabilityService } from "./core/services/backend-availability.service";
+import { LanguageService } from "./core/services/language.service";
 import { BackendUnavailableComponent } from "./features/backend-unavailable/backend-unavailable.component";
 
 @Component({
@@ -34,4 +35,10 @@ export class AppComponent {
    * covering the login page scenario.
    */
   readonly backendAvailability = inject(BackendAvailabilityService);
+
+  /**
+   * Instancié dès le démarrage pour appliquer la langue persistée (ou celle du
+   * navigateur) avant l'affichage des premiers écrans.
+   */
+  private readonly language = inject(LanguageService);
 }

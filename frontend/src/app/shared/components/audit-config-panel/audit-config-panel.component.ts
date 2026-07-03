@@ -1,14 +1,16 @@
 import { Component, inject, OnInit, signal } from "@angular/core";
+import { TranslatePipe, TranslateService } from "@ngx-translate/core";
 import { AuditEvent, SystemService } from "../../../core/services/system.service";
 
 @Component({
   selector: "app-audit-config-panel",
-  imports: [],
+  imports: [TranslatePipe],
   templateUrl: "./audit-config-panel.component.html",
   styleUrl: "./audit-config-panel.component.css",
 })
 export class AuditConfigPanelComponent implements OnInit {
   private systemService = inject(SystemService);
+  private translate = inject(TranslateService);
 
   auditLogs = signal<AuditEvent[]>([]);
   loadingAuditLogs = signal(false);
@@ -25,7 +27,7 @@ export class AuditConfigPanelComponent implements OnInit {
       const logs = await this.systemService.getAuditLogs(200);
       this.auditLogs.set(logs);
     } catch {
-      this.auditLogError.set("Unable to load audit logs.");
+      this.auditLogError.set(this.translate.instant("AUDIT.ERR_LOAD"));
     } finally {
       this.loadingAuditLogs.set(false);
     }

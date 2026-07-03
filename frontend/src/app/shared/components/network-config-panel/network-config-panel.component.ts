@@ -10,6 +10,7 @@ import {
   signal,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { TranslatePipe } from '@ngx-translate/core';
 import {
   NetworkService,
   ProxySettings,
@@ -18,7 +19,7 @@ import {
 
 @Component({
   selector: 'app-network-config-panel',
-  imports: [FormsModule],
+  imports: [FormsModule, TranslatePipe],
   templateUrl: './network-config-panel.component.html',
   styleUrl: './network-config-panel.component.css',
 })

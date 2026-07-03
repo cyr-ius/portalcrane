@@ -11,9 +11,9 @@
   <!-- ── Page header ─────────────────────────────────────────────────────── -->
   <div class="d-flex align-items-center justify-content-between mb-4">
     <div>
-      <h2 class="fw-bold mb-1">Staging Pipeline</h2>
+      <h2 class="fw-bold mb-1">{{ "STAGING.TITLE" | translate }}</h2>
       <p class="text-muted small mb-0">
-        Select source → Pull → CVE scan → Push to registry
+        {{ "STAGING.SUBTITLE" | translate }}
       </p>
     </div>
   </div>
@@ -25,7 +25,8 @@
       <div class="card border-0 mb-3">
         <div class="card-header border-0">
           <h6 class="fw-semibold mb-0">
-            <i class="bi bi-cloud me-2"></i>Pull Source
+            <i class="bi bi-cloud me-2"></i
+            >{{ "STAGING.PULL_SOURCE" | translate }}
           </h6>
         </div>
         <div class="card-body">
@@ -47,13 +48,15 @@
               [class.btn-outline-secondary]="pullSourceMode() !== 'saved'"
               (click)="setPullSourceMode('saved')"
               [disabled]="externalRegistries().length === 0"
-              title="{{
-                externalRegistries().length === 0
-                  ? 'No saved registries — add one in Settings'
-                  : 'Pull from a saved registry'
-              }}"
+              [title]="
+                (externalRegistries().length === 0
+                  ? 'STAGING.NO_SAVED_REGISTRIES'
+                  : 'STAGING.PULL_FROM_SAVED'
+                ) | translate
+              "
             >
-              <i class="bi bi-globe me-1"></i>External registries
+              <i class="bi bi-globe me-1"></i
+              >{{ "STAGING.EXTERNAL_REGISTRIES" | translate }}
             </button>
             <button
               type="button"
@@ -62,22 +65,23 @@
               [class.btn-outline-secondary]="pullSourceMode() !== 'adhoc'"
               (click)="setPullSourceMode('adhoc')"
             >
-              <i class="bi bi-pencil me-1"></i>Custom
+              <i class="bi bi-pencil me-1"></i
+              >{{ "STAGING.CUSTOM" | translate }}
             </button>
           </div>
-
 
           <!-- Search Docker Hub card -->
           @if (showDockerHubSearch()) {
             <div class="mb-3">
               <label class="form-label small fw-semibold">
-                <i class="bi bi-search me-2"></i>Search Docker Hub
+                <i class="bi bi-search me-2"></i
+                >{{ "STAGING.SEARCH_DOCKERHUB" | translate }}
               </label>
               <div class="input-group mb-2">
                 <input
                   type="text"
                   class="form-control form-control-sm"
-                  placeholder="nginx, redis, node…"
+                  [placeholder]="'STAGING.SEARCH_PLACEHOLDER' | translate"
                   [value]="searchQuery()"
                   (input)="searchQuery.set($any($event.target).value)"
                   (keyup.enter)="onSearch()"
@@ -119,7 +123,7 @@
                             <span
                               class="badge bg-primary-subtle text-primary"
                               style="font-size: 0.6rem"
-                              >Official</span
+                              >{{ "STAGING.OFFICIAL" | translate }}</span
                             >
                           }
                         </div>
@@ -150,12 +154,17 @@
                       <button
                         class="btn btn-sm flex-shrink-0"
                         [class.btn-primary]="pullImage() === result.name"
-                        [class.btn-outline-primary]="pullImage() !== result.name"
+                        [class.btn-outline-primary]="
+                          pullImage() !== result.name
+                        "
                         (click)="
                           selectImage(result.name); $event.stopPropagation()
                         "
                         type="button"
-                        title="Select {{ result.name }}"
+                        [title]="
+                          'STAGING.SELECT_ONE'
+                            | translate: { name: result.name }
+                        "
                       >
                         @if (pullImage() === result.name) {
                           <i class="bi bi-check"></i>
@@ -167,24 +176,29 @@
                   }
                 </div>
               }
-
             </div>
           }
 
           <!-- Saved registry selector -->
-          @if (pullSourceMode() === 'saved') {
+          @if (pullSourceMode() === "saved") {
             <div class="mb-3">
               <label class="form-label small fw-semibold">
-                <i class="bi bi-globe me-2"></i>Registry
+                <i class="bi bi-globe me-2"></i
+                >{{ "STAGING.REGISTRY" | translate }}
               </label>
               <select
                 class="form-select form-select-sm"
                 [value]="pullSourceRegistryId()"
                 (change)="pullSourceRegistryId.set($any($event.target).value)"
               >
-                <option value="">— Select a registry —</option>
+                <option value="">
+                  {{ "STAGING.SELECT_REGISTRY" | translate }}
+                </option>
                 @if (globalRegistries().length > 0) {
-                  <option disabled>──────── 🌐 Global registries ────────</option>
+                  <option disabled>
+                    ──────── 🌐 {{ "STAGING.GLOBAL_REGISTRIES" | translate }}
+                    ────────
+                  </option>
                   @for (reg of globalRegistries(); track reg.id) {
                     <option [value]="reg.id">
                       {{ reg.name }} ({{ reg.host }})
@@ -192,7 +206,10 @@
                   }
                 }
                 @if (personalRegistries().length > 0) {
-                  <option disabled>──────── 👤 Personal registries ────────</option>
+                  <option disabled>
+                    ──────── 👤 {{ "STAGING.PERSONAL_REGISTRIES" | translate }}
+                    ────────
+                  </option>
                   @for (reg of personalRegistries(); track reg.id) {
                     <option [value]="reg.id">
                       {{ reg.name }} ({{ reg.host }})
@@ -204,13 +221,15 @@
           }
 
           <!-- Ad-hoc registry fields -->
-          @if (pullSourceMode() === 'adhoc') {
+          @if (pullSourceMode() === "adhoc") {
             <div class="mb-3">
-              <label class="form-label small fw-semibold">Registry host</label>
+              <label class="form-label small fw-semibold">{{
+                "STAGING.REGISTRY_HOST" | translate
+              }}</label>
               <input
                 type="text"
                 class="form-control form-control-sm font-monospace mb-2"
-                placeholder="e.g. ghcr.io, quay.io, registry.example.com:5000"
+                [placeholder]="'STAGING.REGISTRY_HOST_PLACEHOLDER' | translate"
                 [value]="pullSourceHost()"
                 (input)="pullSourceHost.set($any($event.target).value)"
               />
@@ -219,7 +238,7 @@
                   <input
                     type="text"
                     class="form-control form-control-sm"
-                    placeholder="Username (optional)"
+                    [placeholder]="'STAGING.USERNAME_OPTIONAL' | translate"
                     [value]="pullSourceUser()"
                     (input)="pullSourceUser.set($any($event.target).value)"
                   />
@@ -228,7 +247,7 @@
                   <input
                     type="password"
                     class="form-control form-control-sm"
-                    placeholder="Password (optional)"
+                    [placeholder]="'STAGING.PASSWORD_OPTIONAL' | translate"
                     [value]="pullSourcePass()"
                     (input)="pullSourcePass.set($any($event.target).value)"
                   />
@@ -243,21 +262,25 @@
       <div class="card border-0 mb-3">
         <div class="card-header border-0">
           <h6 class="fw-semibold mb-0">
-            <i class="bi bi-cloud-download me-2"></i>Pull Image
+            <i class="bi bi-cloud-download me-2"></i
+            >{{ "STAGING.PULL_IMAGE" | translate }}
           </h6>
         </div>
         <div class="card-body">
           <div class="row g-2 align-items-end">
             <!-- Image name input -->
             <div class="col">
-              <label class="form-label small fw-semibold">Image</label>
+              <label class="form-label small fw-semibold">{{
+                "STAGING.IMAGE" | translate
+              }}</label>
               <input
                 type="text"
                 class="form-control"
                 [placeholder]="
-                  pullSourceMode() === 'dockerhub'
-                    ? 'e.g. nginx, library/postgres'
-                    : 'e.g. org/image or just image'
+                  (pullSourceMode() === 'dockerhub'
+                    ? 'STAGING.IMAGE_PLACEHOLDER_HUB'
+                    : 'STAGING.IMAGE_PLACEHOLDER_OTHER'
+                  ) | translate
                 "
                 [value]="pullImage()"
                 (input)="pullImage.set($any($event.target).value)"
@@ -272,7 +295,9 @@
 
             <!-- Tag selector or free-text input -->
             <div class="col-auto" style="min-width: 160px">
-              <label class="form-label small fw-semibold">Tag</label>
+              <label class="form-label small fw-semibold">{{
+                "STAGING.TAG" | translate
+              }}</label>
               @if (availableTags().length > 0) {
                 <select
                   class="form-select"
@@ -297,7 +322,9 @@
             </div>
 
             <!-- Active scan config summary (read-only, driven by Settings) -->
-            <div class="scan-summary d-flex align-items-center gap-2 justify-content-between flex-wrap mb-3">
+            <div
+              class="scan-summary d-flex align-items-center gap-2 justify-content-between flex-wrap mb-3"
+            >
               @let vulnOn =
                 trivySvc.vulnOverride()
                   ? trivySvc.vulnEnabled()
@@ -318,7 +345,8 @@
                 [class.text-secondary]="!trivySvc.vulnEnabled()"
               >
                 <i class="bi bi-bug me-1"></i>
-                Trivy {{ vulnOn ? "ON" : "OFF" }}
+                Trivy
+                {{ (vulnOn ? "STAGING.ON" : "STAGING.OFF") | translate }}
                 @if (vulnOn) {
                   <span class="ms-1 opacity-75">({{ severities }})</span>
                 }
@@ -326,14 +354,16 @@
               <a
                 routerLink="/settings"
                 class="badge bg-body-secondary text-muted text-decoration-none"
-                title="Configure scans in Settings"
+                [title]="'STAGING.CONFIGURE_SCANS' | translate"
               >
-                <i class="bi bi-gear me-1"></i>Configure
+                <i class="bi bi-gear me-1"></i
+                >{{ "STAGING.CONFIGURE" | translate }}
               </a>
               @if (pullImage()) {
-              <code  class="small text-muted text-truncate">
-                {{pullHostPreview()}}{{pullImage()}}:{{pullTag()}} → local
-              </code>
+                <code class="small text-muted text-truncate">
+                  {{ pullHostPreview() }}{{ pullImage() }}:{{ pullTag() }} →
+                  local
+                </code>
               }
               <!-- Pull button -->
               <button
@@ -350,13 +380,13 @@
               >
                 @if (pulling()) {
                   <span class="spinner-border spinner-border-sm me-1"></span>
-                  Pulling…
+                  {{ "STAGING.PULLING" | translate }}
                 } @else {
-                  <i class="bi bi-cloud-download me-1"></i>Pull
+                  <i class="bi bi-cloud-download me-1"></i
+                  >{{ "STAGING.PULL" | translate }}
                 }
               </button>
             </div>
-
           </div>
         </div>
       </div>

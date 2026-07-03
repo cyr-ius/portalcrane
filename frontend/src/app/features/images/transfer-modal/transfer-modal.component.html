@@ -17,12 +17,12 @@
       <div class="modal-header border-0 pb-0">
         <div>
           <h5 class="modal-title fw-semibold">
-            <i class="bi bi-arrow-left-right me-2 text-primary"></i>Transfer
-            Images
+            <i class="bi bi-arrow-left-right me-2 text-primary"></i
+            >{{ "TRANSFER.TITLE" | translate }}
           </h5>
           <p class="text-muted small mb-0">
-            Copy images between registries — scan policy from
-            <strong>Settings → Vulnerabilities</strong>
+            {{ "TRANSFER.SUBTITLE_PRE" | translate }}
+            <strong>{{ "TRANSFER.SUBTITLE_SETTINGS" | translate }}</strong>
           </p>
         </div>
         <button class="btn-close" (click)="close()"></button>
@@ -34,7 +34,8 @@
         @if (activeJobs().length > 0) {
           <div class="mb-3">
             <h6 class="fw-semibold mb-2">
-              <i class="bi bi-list-task me-1"></i>Transfer Jobs
+              <i class="bi bi-list-task me-1"></i
+              >{{ "TRANSFER.JOBS" | translate }}
               <span class="badge bg-secondary-subtle text-secondary ms-1">
                 {{ activeJobs().length }}
               </span>
@@ -64,7 +65,7 @@
                         class="btn btn-sm btn-outline-danger p-0"
                         style="width: 1.6rem; height: 1.6rem; line-height: 1"
                         (click)="deleteJob(job.job_id)"
-                        title="Remove job"
+                        [title]="'TRANSFER.REMOVE_JOB' | translate"
                         type="button"
                       >
                         <i class="bi bi-x"></i>
@@ -99,8 +100,8 @@
                         class="d-flex align-items-center gap-2 flex-wrap mb-2"
                       >
                         <span class="small fw-semibold text-danger">
-                          <i class="bi bi-shield-x me-1"></i>Vulnerabilities
-                          detected — transfer blocked
+                          <i class="bi bi-shield-x me-1"></i
+                          >{{ "TRANSFER.VULN_BLOCKED" | translate }}
                         </span>
                         @for (sev of SEVERITY_ORDER; track sev) {
                           @if (getCveCount(job, sev) > 0) {
@@ -122,12 +123,12 @@
                           >
                             <thead class="sticky-top table-light">
                               <tr>
-                                <th>CVE ID</th>
-                                <th>Sev.</th>
-                                <th>Package</th>
-                                <th>Installed</th>
-                                <th>Fixed</th>
-                                <th>CVSS</th>
+                                <th>{{ "TRANSFER.CVE_ID" | translate }}</th>
+                                <th>{{ "TRANSFER.SEV" | translate }}</th>
+                                <th>{{ "TRANSFER.PACKAGE" | translate }}</th>
+                                <th>{{ "TRANSFER.INSTALLED" | translate }}</th>
+                                <th>{{ "TRANSFER.FIXED" | translate }}</th>
+                                <th>{{ "TRANSFER.CVSS" | translate }}</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -191,7 +192,8 @@
                 class="d-flex align-items-center justify-content-between mb-2"
               >
                 <h6 class="fw-semibold mb-0">
-                  <i class="bi bi-layers me-1"></i>Select Images
+                  <i class="bi bi-layers me-1"></i
+                  >{{ "TRANSFER.SELECT_IMAGES" | translate }}
                 </h6>
                 <div class="d-flex gap-1">
                   <button
@@ -199,14 +201,14 @@
                     (click)="selectAll()"
                     type="button"
                   >
-                    All
+                    {{ "TRANSFER.ALL" | translate }}
                   </button>
                   <button
                     class="btn btn-sm btn-outline-secondary"
                     (click)="clearAll()"
                     type="button"
                   >
-                    None
+                    {{ "TRANSFER.NONE" | translate }}
                   </button>
                 </div>
               </div>
@@ -285,7 +287,10 @@
               <!-- Selection summary -->
               <div class="text-muted small mt-1">
                 <i class="bi bi-check2-square me-1"></i>
-                {{ selectedImageRefs().length }} image(s) selected
+                {{
+                  "TRANSFER.SELECTED_COUNT"
+                    | translate: { count: selectedImageRefs().length }
+                }}
               </div>
             </div>
 
@@ -310,11 +315,18 @@
                     [class.text-warning-emphasis]="scanOverrideActive()"
                     [class.text-muted]="!scanOverrideActive()"
                   >
-                    Scan: {{ scanEnabled() ? "enabled" : "disabled" }}
+                    {{ "TRANSFER.SCAN" | translate }}:
+                    {{
+                      (scanEnabled()
+                        ? "TRANSFER.SCAN_ENABLED"
+                        : "TRANSFER.SCAN_DISABLED"
+                      ) | translate
+                    }}
                   </span>
                   @if (scanEnabled()) {
                     <span class="text-muted ms-1">
-                      — blocking: <strong>{{ scanSeverities() }}</strong>
+                      — {{ "TRANSFER.BLOCKING" | translate }}:
+                      <strong>{{ scanSeverities() }}</strong>
                     </span>
                   }
                 </div>
@@ -326,23 +338,29 @@
                   [class.text-secondary]="!scanOverrideActive()"
                   style="font-size: 0.65rem"
                 >
-                  {{ scanOverrideActive() ? "custom" : "from env" }}
+                  {{
+                    (scanOverrideActive()
+                      ? "TRANSFER.CUSTOM"
+                      : "TRANSFER.FROM_ENV"
+                    ) | translate
+                  }}
                 </span>
                 <a
                   routerLink="/settings"
                   class="badge bg-body-secondary text-muted text-decoration-none flex-shrink-0"
                   style="font-size: 0.65rem"
-                  title="Configure in Settings → Vulnerabilities"
+                  [title]="'TRANSFER.CONFIGURE_TITLE' | translate"
                   (click)="close()"
                 >
-                  <i class="bi bi-gear me-1"></i>Configure
+                  <i class="bi bi-gear me-1"></i
+                  >{{ "TRANSFER.CONFIGURE" | translate }}
                 </a>
               </div>
 
               <!-- Destination registry selector -->
               <div class="mb-3">
                 <label class="form-label small fw-semibold">
-                  Destination Registry
+                  {{ "TRANSFER.DEST_REGISTRY" | translate }}
                 </label>
                 <select
                   class="form-select form-select-sm"
@@ -350,7 +368,7 @@
                   (ngModelChange)="destRegistryId.set($event)"
                 >
                   <option [value]="null">
-                    <i class="bi bi-hdd me-1"></i>Local Registry (embedded)
+                    {{ "TRANSFER.LOCAL_REGISTRY_EMBEDDED" | translate }}
                   </option>
                   @for (reg of externalRegistries(); track reg.id) {
                     <option [value]="reg.id">
@@ -363,13 +381,15 @@
               <!-- Destination folder -->
               <div class="mb-3">
                 <label class="form-label small fw-semibold">
-                  Destination Folder
-                  <span class="text-muted fw-normal">(optional)</span>
+                  {{ "TRANSFER.DEST_FOLDER" | translate }}
+                  <span class="text-muted fw-normal">{{
+                    "TRANSFER.OPTIONAL" | translate
+                  }}</span>
                 </label>
                 <input
                   type="text"
                   class="form-control form-control-sm font-monospace"
-                  placeholder="e.g. production or myorg"
+                  [placeholder]="'TRANSFER.DEST_FOLDER_PLACEHOLDER' | translate"
                   [value]="destFolder()"
                   (input)="destFolder.set($any($event.target).value)"
                   list="pushFolderList"
@@ -386,8 +406,10 @@
                 <div class="row g-2 mb-3">
                   <div class="col-8">
                     <label class="form-label small fw-semibold">
-                      Destination Name
-                      <span class="text-muted fw-normal">(optional)</span>
+                      {{ "TRANSFER.DEST_NAME" | translate }}
+                      <span class="text-muted fw-normal">{{
+                        "TRANSFER.OPTIONAL" | translate
+                      }}</span>
                     </label>
                     <input
                       type="text"
@@ -401,8 +423,10 @@
                   </div>
                   <div class="col-4">
                     <label class="form-label small fw-semibold">
-                      Destination Tag
-                      <span class="text-muted fw-normal">(optional)</span>
+                      {{ "TRANSFER.DEST_TAG" | translate }}
+                      <span class="text-muted fw-normal">{{
+                        "TRANSFER.OPTIONAL" | translate
+                      }}</span>
                     </label>
                     <input
                       type="text"
@@ -419,7 +443,8 @@
               @if (destPreview()) {
                 <div class="alert alert-info py-2 small mb-3">
                   <i class="bi bi-arrow-right me-1"></i>
-                  Preview: <code>{{ destPreview() }}</code>
+                  {{ "TRANSFER.PREVIEW" | translate }}:
+                  <code>{{ destPreview() }}</code>
                 </div>
               }
 
@@ -438,7 +463,7 @@
       <!-- ── Footer ─────────────────────────────────────────────────────── -->
       <div class="modal-footer border-0 pt-0">
         <button class="btn btn-secondary btn-sm" (click)="close()">
-          Close
+          {{ "COMMON.CLOSE" | translate }}
         </button>
         @if (activeJobs().length === 0) {
           <button
@@ -449,10 +474,10 @@
           >
             @if (transferring()) {
               <span class="spinner-border spinner-border-sm"></span>
-              Starting…
+              {{ "TRANSFER.STARTING" | translate }}
             } @else {
               <i class="bi bi-arrow-left-right me-1"></i>
-              Transfer
+              {{ "TRANSFER.TRANSFER" | translate }}
               @if (selectedImageRefs().length > 0) {
                 ({{ selectedImageRefs().length }})
               }

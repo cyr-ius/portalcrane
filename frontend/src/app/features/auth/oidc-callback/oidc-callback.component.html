@@ -4,10 +4,10 @@
   @if (error()) {
     <div class="alert alert-danger">
       <i class="bi bi-exclamation-triangle-fill me-2"></i>
-      Authentication failed: {{ error() }}
+      {{ "AUTH.LOGIN_FAILED" | translate }}: {{ error() }}
     </div>
   } @else {
     <div class="spinner-border text-primary" role="status"></div>
-    <p class="text-muted">Completing authentication...</p>
+    <p class="text-muted">{{ "AUTH.CALLBACK_PROCESSING" | translate }}</p>
   }
 </div>

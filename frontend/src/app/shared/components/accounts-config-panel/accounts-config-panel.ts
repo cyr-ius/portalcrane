@@ -17,18 +17,20 @@ import {
   required,
   submit,
 } from "@angular/forms/signals";
+import { TranslatePipe, TranslateService } from "@ngx-translate/core";
 import { firstValueFrom } from "rxjs";
 import { LocalUser, UpdateUser, UsersService } from "../../../core/services/users.service";
 
 
 @Component({
   selector: "app-accounts-config-panel",
-  imports: [FormField],
+  imports: [FormField, TranslatePipe],
   templateUrl: "./accounts-config-panel.html",
   styleUrl: "./accounts-config-panel.css",
 })
 export class AccountsConfigPanel implements OnInit {
   private usersSvc = inject(UsersService)
+  private translate = inject(TranslateService)
 
   // ── Users list ─────────────────────────────────────────────────────────────
   readonly users = signal<LocalUser[]>([]);
@@ -61,7 +63,7 @@ export class AccountsConfigPanel implements OnInit {
     required(p.username);
     required(p.password);
     minLength(p.password, 8, {
-      message: "Password must be at least 8 characters",
+      message: this.translate.instant("ACCOUNTS.PWD_MIN"),
     });
   });
 
@@ -73,7 +75,7 @@ export class AccountsConfigPanel implements OnInit {
   updateModelOrig = structuredClone(this.updateModel());
   updateForm = form(this.updateModel, (p) => {
     minLength(p.password, 8, {
-      message: "Password must be at least 8 characters",
+      message: this.translate.instant("ACCOUNTS.PWD_MIN"),
     });
   });
 
@@ -91,7 +93,7 @@ export class AccountsConfigPanel implements OnInit {
         this.loading.set(false);
       },
       error: (err) => {
-        this.error.set(err?.error?.detail ?? "Failed to load users");
+        this.error.set(err?.error?.detail ?? this.translate.instant("ACCOUNTS.ERR_LOAD"));
         this.loading.set(false);
       },
     });
@@ -135,7 +137,7 @@ export class AccountsConfigPanel implements OnInit {
         this.showCreateForm.set(false);
         this.creating.set(false);
       } catch (err: any) {
-        this.createError.set(err?.error?.detail ?? "Failed to create user");
+        this.createError.set(err?.error?.detail ?? this.translate.instant("ACCOUNTS.ERR_CREATE"));
         this.creating.set(false);
       }
     });
@@ -165,7 +167,7 @@ export class AccountsConfigPanel implements OnInit {
       const formData = form().value();
 
       if (formData.password.length > 0 && formData.password.length < 8) {
-        this.saveError.set("Password must be at least 8 characters");
+        this.saveError.set(this.translate.instant("ACCOUNTS.PWD_MIN"));
         this.saving.set(false);
         return;
       }
@@ -188,7 +190,7 @@ export class AccountsConfigPanel implements OnInit {
         this.editingId.set(null);
         this.saving.set(false);
       } catch (err: any) {
-        this.saveError.set(err?.error?.detail ?? "Failed to save user");
+        this.saveError.set(err?.error?.detail ?? this.translate.instant("ACCOUNTS.ERR_SAVE"));
         this.saving.set(false);
       }
     });
@@ -207,7 +209,7 @@ export class AccountsConfigPanel implements OnInit {
         this.deletingId.set(null);
       },
       error: (err) => {
-        this.error.set(err?.error?.detail ?? "Failed to delete user");
+        this.error.set(err?.error?.detail ?? this.translate.instant("ACCOUNTS.ERR_DELETE"));
         this.deletingId.set(null);
       },
     });

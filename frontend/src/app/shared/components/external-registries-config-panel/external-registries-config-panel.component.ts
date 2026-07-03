@@ -18,6 +18,7 @@
  */
 import { Component, effect, inject, OnInit, signal } from "@angular/core";
 import { form, FormField, required, submit } from "@angular/forms/signals";
+import { TranslatePipe, TranslateService } from "@ngx-translate/core";
 import { firstValueFrom } from "rxjs";
 import {
   KNOWN_REGISTRY_PRESETS,
@@ -41,13 +42,14 @@ interface RegistryFormModel {
 
 @Component({
   selector: "app-external-registries-config-panel",
-  imports: [FormField],
+  imports: [FormField, TranslatePipe],
   templateUrl: "./external-registries-config-panel.component.html",
   styleUrl: "./external-registries-config-panel.component.css",
 })
 export class ExternalRegistriesConfigPanelComponent implements OnInit {
   readonly authService = inject(AuthService);
   private readonly extRegSvc = inject(ExternalRegistryService);
+  private readonly translate = inject(TranslateService);
 
   readonly loading = signal(false);
 
@@ -228,7 +230,7 @@ export class ExternalRegistriesConfigPanelComponent implements OnInit {
           this.testResult.set({
             reachable: false,
             auth_ok: false,
-            message: "Test failed.",
+            message: this.translate.instant("ACCOUNT.TEST_FAILED"),
           });
           this.testingNew.set(false);
         },

@@ -1,10 +1,11 @@
 import { Component, inject, OnInit } from "@angular/core";
+import { TranslatePipe } from "@ngx-translate/core";
 import { AboutService } from "../../../core/services/about.service";
 import { AppLogo } from "../app-logo/app-logo";
 
 @Component({
   selector: "app-about-config-panel",
-  imports: [AppLogo],
+  imports: [AppLogo, TranslatePipe],
   templateUrl: "./about-config-panel.html",
   styleUrl: "./about-config-panel.css",
 })

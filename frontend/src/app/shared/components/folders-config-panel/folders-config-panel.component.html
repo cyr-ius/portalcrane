@@ -1,26 +1,32 @@
 <div class="card border-0 mb-3">
-  <div class="card-header border-0 d-flex align-items-center justify-content-between">
+  <div
+    class="card-header border-0 d-flex align-items-center justify-content-between"
+  >
     <div>
       <h6 class="fw-semibold mb-0">
-        <i class="bi bi-folder2-open text-primary me-2"></i>Registry Folders
+        <i class="bi bi-folder2-open text-primary me-2"></i
+        >{{ "FOLDERS.TITLE" | translate }}
       </h6>
       <div class="text-muted small mt-1">
-        Creating directories allows you to organize images and assign permissions to users.
+        {{ "FOLDERS.DESC" | translate }}
       </div>
     </div>
     @if (!showCreateForm()) {
       <button class="btn btn-sm btn-outline-primary" (click)="openCreateForm()">
-        <i class="bi bi-plus-lg me-1"></i>New folder
+        <i class="bi bi-plus-lg me-1"></i>{{ "FOLDERS.NEW_FOLDER" | translate }}
       </button>
     }
   </div>
 
   <div class="card-body">
-
     <!-- ── Create folder form ─────────────────────────────────────────────── -->
     @if (showCreateForm()) {
-      <div class="border border-primary-subtle rounded p-3 mb-3 bg-primary-subtle bg-opacity-10">
-        <h6 class="fw-semibold mb-3 text-primary">New folder</h6>
+      <div
+        class="border border-primary-subtle rounded p-3 mb-3 bg-primary-subtle bg-opacity-10"
+      >
+        <h6 class="fw-semibold mb-3 text-primary">
+          {{ "FOLDERS.NEW_FOLDER" | translate }}
+        </h6>
 
         @if (createError()) {
           <div class="alert alert-danger py-2 small">{{ createError() }}</div>
@@ -29,22 +35,26 @@
         <div class="row g-2 mb-2">
           <!-- Name (required) -->
           <div class="col-md-4">
-            <label class="form-label small fw-semibold">Name</label>
+            <label class="form-label small fw-semibold">{{
+              "COMMON.NAME" | translate
+            }}</label>
             <input
               type="text"
               class="form-control form-control-sm font-monospace"
-              placeholder="e.g. production"
+              [placeholder]="'FOLDERS.NAME_PLACEHOLDER' | translate"
               [formField]="folderForm.name"
             />
           </div>
 
           <!-- Description (optional) -->
           <div class="col-md-8">
-            <label class="form-label small fw-semibold">Description</label>
+            <label class="form-label small fw-semibold">{{
+              "COMMON.DESCRIPTION" | translate
+            }}</label>
             <input
               type="text"
               class="form-control form-control-sm"
-              placeholder="Optional description"
+              [placeholder]="'FOLDERS.DESC_PLACEHOLDER' | translate"
               [formField]="folderForm.description"
             />
           </div>
@@ -59,10 +69,13 @@
             @if (creating()) {
               <span class="spinner-border spinner-border-sm me-1"></span>
             }
-            Create
+            {{ "COMMON.CREATE" | translate }}
           </button>
-          <button class="btn btn-sm btn-link text-muted" (click)="cancelCreate()">
-            Cancel
+          <button
+            class="btn btn-sm btn-link text-muted"
+            (click)="cancelCreate()"
+          >
+            {{ "COMMON.CANCEL" | translate }}
           </button>
         </div>
       </div>
@@ -78,17 +91,15 @@
     } @else if (folders().length === 0) {
       <div class="text-center py-5 text-muted">
         <i class="bi bi-folder display-4 d-block mb-3 opacity-25"></i>
-        No folders configured yet.
+        {{ "FOLDERS.EMPTY" | translate }}
       </div>
     }
 
     <!-- ── Folder list ─────────────────────────────────────────────────────── -->
     @for (folder of folders(); track folder.id) {
-
       <!-- ── __root__ folder — special system card ─────────────────────────── -->
       @if (isRootFolder(folder)) {
         <div class="border border-warning-subtle rounded mb-2 overflow-hidden">
-
           <!-- Root folder header -->
           <div
             class="d-flex align-items-center gap-3 px-3 py-2 bg-warning-subtle"
@@ -102,36 +113,41 @@
             ></i>
             <!-- House icon to distinguish __root__ visually -->
             <i class="bi bi-house-door-fill text-warning"></i>
-            <span class="fw-semibold">Root namespace</span>
-            <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle">
-              system
+            <span class="fw-semibold">{{
+              "FOLDERS.ROOT_NAMESPACE" | translate
+            }}</span>
+            <span
+              class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle"
+            >
+              {{ "FOLDERS.SYSTEM" | translate }}
             </span>
             @if (folder.description) {
               <span class="text-muted small">{{ folder.description }}</span>
             }
             <span class="badge bg-secondary-subtle text-secondary ms-auto">
-              {{ folder.permissions.length }} user(s)
+              {{
+                "FOLDERS.USER_COUNT"
+                  | translate: { count: folder.permissions.length }
+              }}
             </span>
-            <span class="text-muted small">{{ formatDate(folder.created_at) }}</span>
+            <span class="text-muted small">{{
+              formatDate(folder.created_at)
+            }}</span>
           </div>
 
           <!-- Root folder — info banner explaining its purpose -->
           <div class="px-3 pt-2">
-            <div class="alert alert-warning py-2 small mb-2 d-flex align-items-start gap-2">
+            <div
+              class="alert alert-warning py-2 small mb-2 d-flex align-items-start gap-2"
+            >
               <i class="bi bi-info-circle-fill mt-1 flex-shrink-0"></i>
-              <span>
-                This folder controls access to images with <strong>no namespace prefix</strong>
-                (e.g. <code>nginx</code>, <code>ubuntu</code>) and to images whose prefix does not
-                match any configured folder.
-                It is created automatically and <strong>cannot be deleted</strong>.
-              </span>
+              <span>{{ "FOLDERS.ROOT_INFO" | translate }}</span>
             </div>
           </div>
 
           <!-- Expanded detail section -->
           @if (expandedId() === folder.id) {
             <div class="px-3 py-2">
-
               <!-- Description edit -->
               @if (editingDescId() === folder.id) {
                 <div class="d-flex gap-2 mb-3 align-items-center">
@@ -149,14 +165,14 @@
                     @if (savingDesc()) {
                       <span class="spinner-border spinner-border-sm"></span>
                     } @else {
-                      Save
+                      {{ "COMMON.SAVE" | translate }}
                     }
                   </button>
                   <button
                     class="btn btn-sm btn-outline-secondary"
                     (click)="cancelEditDesc()"
                   >
-                    Cancel
+                    {{ "COMMON.CANCEL" | translate }}
                   </button>
                 </div>
               } @else {
@@ -166,22 +182,27 @@
                     class="btn btn-sm btn-outline-secondary"
                     (click)="startEditDesc(folder)"
                   >
-                    <i class="bi bi-pencil me-1"></i>Edit description
+                    <i class="bi bi-pencil me-1"></i
+                    >{{ "FOLDERS.EDIT_DESC" | translate }}
                   </button>
                 </div>
               }
 
               <!-- Permissions header -->
-              <div class="d-flex align-items-center justify-content-between mb-2">
+              <div
+                class="d-flex align-items-center justify-content-between mb-2"
+              >
                 <span class="fw-semibold small">
-                  <i class="bi bi-key me-1"></i>User permissions
+                  <i class="bi bi-key me-1"></i
+                  >{{ "FOLDERS.USER_PERMS" | translate }}
                 </span>
                 @if (addPermFolderId() !== folder.id) {
                   <button
                     class="btn btn-outline-primary btn-sm"
                     (click)="openAddPerm(folder.id)"
                   >
-                    <i class="bi bi-person-plus me-1"></i>Add user
+                    <i class="bi bi-person-plus me-1"></i
+                    >{{ "FOLDERS.ADD_USER" | translate }}
                   </button>
                 }
               </div>
@@ -190,7 +211,9 @@
               @if (addPermFolderId() === folder.id) {
                 <div class="border rounded p-2 mb-2 bg-body-secondary">
                   @if (permError()) {
-                    <div class="alert alert-danger py-1 small mb-2">{{ permError() }}</div>
+                    <div class="alert alert-danger py-1 small mb-2">
+                      {{ permError() }}
+                    </div>
                   }
 
                   <datalist id="users-datalist-root">
@@ -201,11 +224,15 @@
 
                   <div class="row g-2 align-items-end">
                     <div class="col-md-4">
-                      <label class="form-label small fw-semibold mb-1">Username</label>
+                      <label class="form-label small fw-semibold mb-1">{{
+                        "AUTH.USERNAME" | translate
+                      }}</label>
                       <input
                         type="text"
                         class="form-control form-control-sm"
-                        placeholder="Select or type a username"
+                        [placeholder]="
+                          'FOLDERS.USERNAME_PLACEHOLDER' | translate
+                        "
                         list="users-datalist-root"
                         [formField]="permForm.username"
                       />
@@ -218,8 +245,12 @@
                           [id]="'perm-pull-root-' + folder.id"
                           [formField]="permForm.canPull"
                         />
-                        <label class="form-check-label small" [htmlFor]="'perm-pull-root-' + folder.id">
-                          <i class="bi bi-download me-1"></i>Pull
+                        <label
+                          class="form-check-label small"
+                          [htmlFor]="'perm-pull-root-' + folder.id"
+                        >
+                          <i class="bi bi-download me-1"></i
+                          >{{ "STAGING.PULL" | translate }}
                         </label>
                       </div>
                     </div>
@@ -231,8 +262,12 @@
                           [id]="'perm-push-root-' + folder.id"
                           [formField]="permForm.canPush"
                         />
-                        <label class="form-check-label small" [htmlFor]="'perm-push-root-' + folder.id">
-                          <i class="bi bi-upload me-1"></i>Push
+                        <label
+                          class="form-check-label small"
+                          [htmlFor]="'perm-push-root-' + folder.id"
+                        >
+                          <i class="bi bi-upload me-1"></i
+                          >{{ "STAGING.PUSH" | translate }}
                         </label>
                       </div>
                     </div>
@@ -245,14 +280,14 @@
                         @if (savingPerm()) {
                           <span class="spinner-border spinner-border-sm"></span>
                         } @else {
-                          Add
+                          {{ "COMMON.ADD" | translate }}
                         }
                       </button>
                       <button
                         class="btn btn-outline-secondary btn-sm"
                         (click)="cancelAddPerm()"
                       >
-                        Cancel
+                        {{ "COMMON.CANCEL" | translate }}
                       </button>
                     </div>
                   </div>
@@ -262,30 +297,46 @@
               <!-- Permissions list -->
               @if (folder.permissions.length === 0) {
                 <div class="text-muted small py-2">
-                  <i class="bi bi-person-slash me-1"></i>No users assigned yet.
+                  <i class="bi bi-person-slash me-1"></i
+                  >{{ "FOLDERS.NO_USERS" | translate }}
                 </div>
               } @else {
                 <table class="table table-sm align-middle mb-0">
                   <thead>
                     <tr class="text-muted" style="font-size: 0.78rem">
-                      <th>User</th>
-                      <th class="text-center">Pull</th>
-                      <th class="text-center">Push</th>
-                      <th class="text-end">Actions</th>
+                      <th>{{ "FOLDERS.COL_USER" | translate }}</th>
+                      <th class="text-center">
+                        {{ "STAGING.PULL" | translate }}
+                      </th>
+                      <th class="text-center">
+                        {{ "STAGING.PUSH" | translate }}
+                      </th>
+                      <th class="text-end">
+                        {{ "COMMON.ACTIONS" | translate }}
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
                     @for (perm of folder.permissions; track perm.username) {
                       <tr>
                         <td>
-                          <span class="fw-semibold font-monospace small">{{ perm.username }}</span>
+                          <span class="fw-semibold font-monospace small">{{
+                            perm.username
+                          }}</span>
                         </td>
                         <td class="text-center">
                           <input
                             class="form-check-input"
                             type="checkbox"
                             [checked]="perm.can_pull"
-                            (change)="updatePerm(folder.id, perm.username, $any($event.target).checked, perm.can_push)"
+                            (change)="
+                              updatePerm(
+                                folder.id,
+                                perm.username,
+                                $any($event.target).checked,
+                                perm.can_push
+                              )
+                            "
                           />
                         </td>
                         <td class="text-center">
@@ -293,14 +344,21 @@
                             class="form-check-input"
                             type="checkbox"
                             [checked]="perm.can_push"
-                            (change)="updatePerm(folder.id, perm.username, perm.can_pull, $any($event.target).checked)"
+                            (change)="
+                              updatePerm(
+                                folder.id,
+                                perm.username,
+                                perm.can_pull,
+                                $any($event.target).checked
+                              )
+                            "
                           />
                         </td>
                         <td class="text-end">
                           <button
                             class="btn btn-outline-danger btn-sm"
                             (click)="removePerm(folder.id, perm.username)"
-                            title="Remove user from folder"
+                            [title]="'FOLDERS.REMOVE_USER' | translate"
                           >
                             <i class="bi bi-person-dash"></i>
                           </button>
@@ -310,16 +368,12 @@
                   </tbody>
                 </table>
               }
-
             </div>
           }
         </div>
-
       } @else {
-
         <!-- ── Regular folder card ──────────────────────────────────────────── -->
         <div class="border rounded mb-2 overflow-hidden">
-
           <!-- Folder header row (accordion toggle) -->
           <div
             class="d-flex align-items-center gap-3 px-3 py-2 bg-body-secondary"
@@ -336,15 +390,19 @@
               <span class="text-muted small">{{ folder.description }}</span>
             }
             <span class="badge bg-secondary-subtle text-secondary ms-auto">
-              {{ folder.permissions.length }} user(s)
+              {{
+                "FOLDERS.USER_COUNT"
+                  | translate: { count: folder.permissions.length }
+              }}
             </span>
-            <span class="text-muted small">{{ formatDate(folder.created_at) }}</span>
+            <span class="text-muted small">{{
+              formatDate(folder.created_at)
+            }}</span>
           </div>
 
           <!-- Expanded detail section -->
           @if (expandedId() === folder.id) {
             <div class="px-3 py-2">
-
               <!-- Description edit -->
               @if (editingDescId() === folder.id) {
                 <div class="d-flex gap-2 mb-3 align-items-center">
@@ -362,14 +420,14 @@
                     @if (savingDesc()) {
                       <span class="spinner-border spinner-border-sm"></span>
                     } @else {
-                      Save
+                      {{ "COMMON.SAVE" | translate }}
                     }
                   </button>
                   <button
                     class="btn btn-sm btn-outline-secondary"
                     (click)="cancelEditDesc()"
                   >
-                    Cancel
+                    {{ "COMMON.CANCEL" | translate }}
                   </button>
                 </div>
               } @else {
@@ -378,7 +436,8 @@
                     class="btn btn-sm btn-outline-secondary"
                     (click)="startEditDesc(folder)"
                   >
-                    <i class="bi bi-pencil me-1"></i>Edit description
+                    <i class="bi bi-pencil me-1"></i
+                    >{{ "FOLDERS.EDIT_DESC" | translate }}
                   </button>
                   <button
                     class="btn btn-sm btn-outline-danger ms-auto"
@@ -388,23 +447,28 @@
                     @if (deletingId() === folder.id) {
                       <span class="spinner-border spinner-border-sm"></span>
                     } @else {
-                      <i class="bi bi-trash me-1"></i>Delete folder
+                      <i class="bi bi-trash me-1"></i
+                      >{{ "FOLDERS.DELETE_FOLDER" | translate }}
                     }
                   </button>
                 </div>
               }
 
               <!-- Permissions header -->
-              <div class="d-flex align-items-center justify-content-between mb-2">
+              <div
+                class="d-flex align-items-center justify-content-between mb-2"
+              >
                 <span class="fw-semibold small">
-                  <i class="bi bi-key me-1"></i>User permissions
+                  <i class="bi bi-key me-1"></i
+                  >{{ "FOLDERS.USER_PERMS" | translate }}
                 </span>
                 @if (addPermFolderId() !== folder.id) {
                   <button
                     class="btn btn-outline-primary btn-sm"
                     (click)="openAddPerm(folder.id)"
                   >
-                    <i class="bi bi-person-plus me-1"></i>Add user
+                    <i class="bi bi-person-plus me-1"></i
+                    >{{ "FOLDERS.ADD_USER" | translate }}
                   </button>
                 }
               </div>
@@ -412,9 +476,10 @@
               <!-- Add-permission form (Signal Form) -->
               @if (addPermFolderId() === folder.id) {
                 <div class="border rounded p-2 mb-2 bg-body-secondary">
-
                   @if (permError()) {
-                    <div class="alert alert-danger py-1 small mb-2">{{ permError() }}</div>
+                    <div class="alert alert-danger py-1 small mb-2">
+                      {{ permError() }}
+                    </div>
                   }
 
                   <datalist id="users-datalist">
@@ -424,14 +489,17 @@
                   </datalist>
 
                   <div class="row g-2 align-items-end">
-
                     <!-- Username (formField + datalist) -->
                     <div class="col-md-4">
-                      <label class="form-label small fw-semibold mb-1">Username</label>
+                      <label class="form-label small fw-semibold mb-1">{{
+                        "AUTH.USERNAME" | translate
+                      }}</label>
                       <input
                         type="text"
                         class="form-control form-control-sm"
-                        placeholder="Select or type a username"
+                        [placeholder]="
+                          'FOLDERS.USERNAME_PLACEHOLDER' | translate
+                        "
                         list="users-datalist"
                         [formField]="permForm.username"
                       />
@@ -450,7 +518,8 @@
                           class="form-check-label small"
                           [htmlFor]="'perm-pull-' + folder.id"
                         >
-                          <i class="bi bi-download me-1"></i>Pull
+                          <i class="bi bi-download me-1"></i
+                          >{{ "STAGING.PULL" | translate }}
                         </label>
                       </div>
                     </div>
@@ -468,7 +537,8 @@
                           class="form-check-label small"
                           [htmlFor]="'perm-push-' + folder.id"
                         >
-                          <i class="bi bi-upload me-1"></i>Push
+                          <i class="bi bi-upload me-1"></i
+                          >{{ "STAGING.PUSH" | translate }}
                         </label>
                       </div>
                     </div>
@@ -483,14 +553,14 @@
                         @if (savingPerm()) {
                           <span class="spinner-border spinner-border-sm"></span>
                         } @else {
-                          Add
+                          {{ "COMMON.ADD" | translate }}
                         }
                       </button>
                       <button
                         class="btn btn-outline-secondary btn-sm"
                         (click)="cancelAddPerm()"
                       >
-                        Cancel
+                        {{ "COMMON.CANCEL" | translate }}
                       </button>
                     </div>
                   </div>
@@ -500,30 +570,46 @@
               <!-- Permissions list -->
               @if (folder.permissions.length === 0) {
                 <div class="text-muted small py-2">
-                  <i class="bi bi-person-slash me-1"></i>No users assigned yet.
+                  <i class="bi bi-person-slash me-1"></i
+                  >{{ "FOLDERS.NO_USERS" | translate }}
                 </div>
               } @else {
                 <table class="table table-sm align-middle mb-0">
                   <thead>
                     <tr class="text-muted" style="font-size: 0.78rem">
-                      <th>User</th>
-                      <th class="text-center">Pull</th>
-                      <th class="text-center">Push</th>
-                      <th class="text-end">Actions</th>
+                      <th>{{ "FOLDERS.COL_USER" | translate }}</th>
+                      <th class="text-center">
+                        {{ "STAGING.PULL" | translate }}
+                      </th>
+                      <th class="text-center">
+                        {{ "STAGING.PUSH" | translate }}
+                      </th>
+                      <th class="text-end">
+                        {{ "COMMON.ACTIONS" | translate }}
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
                     @for (perm of folder.permissions; track perm.username) {
                       <tr>
                         <td>
-                          <span class="fw-semibold font-monospace small">{{ perm.username }}</span>
+                          <span class="fw-semibold font-monospace small">{{
+                            perm.username
+                          }}</span>
                         </td>
                         <td class="text-center">
                           <input
                             class="form-check-input"
                             type="checkbox"
                             [checked]="perm.can_pull"
-                            (change)="updatePerm(folder.id, perm.username, $any($event.target).checked, perm.can_push)"
+                            (change)="
+                              updatePerm(
+                                folder.id,
+                                perm.username,
+                                $any($event.target).checked,
+                                perm.can_push
+                              )
+                            "
                           />
                         </td>
                         <td class="text-center">
@@ -531,14 +617,21 @@
                             class="form-check-input"
                             type="checkbox"
                             [checked]="perm.can_push"
-                            (change)="updatePerm(folder.id, perm.username, perm.can_pull, $any($event.target).checked)"
+                            (change)="
+                              updatePerm(
+                                folder.id,
+                                perm.username,
+                                perm.can_pull,
+                                $any($event.target).checked
+                              )
+                            "
                           />
                         </td>
                         <td class="text-end">
                           <button
                             class="btn btn-outline-danger btn-sm"
                             (click)="removePerm(folder.id, perm.username)"
-                            title="Remove user from folder"
+                            [title]="'FOLDERS.REMOVE_USER' | translate"
                           >
                             <i class="bi bi-person-dash"></i>
                           </button>
@@ -548,13 +641,10 @@
                   </tbody>
                 </table>
               }
-
             </div>
           }
         </div>
-
       }
     }
-
   </div>
 </div>
