@@ -7,13 +7,14 @@ Example: folder "production" → images pushed as production/my-image:tag
 
 Access rules:
 - Admin users always have full access to all folders.
-- All access decisions for non-admin users go through folder permissions only.
+- Folder permissions are granted to GROUPS, never to individual users. A user's
+  effective access is the union of the permissions of every group they belong to.
 - The special __root__ folder covers:
     * images with no path prefix       (e.g. "nginx")
     * images whose prefix is unknown   (e.g. "editeur/nginx" when no folder
       named "editeur" exists)
     * only the FIRST segment matters   ("production/editeur/image" → "production")
-- A user without an explicit entry in the matched folder is always denied.
+- A user whose groups have no entry in the matched folder is always denied.
 
 Protection rules for __root__:
 - __root__ is created automatically at startup and cannot be deleted.
@@ -23,7 +24,7 @@ Protection rules for __root__:
 
 import json
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -31,6 +32,11 @@ from pydantic import BaseModel, field_validator
 
 from ..config import DATA_DIR
 from ..core.jwt import UserInfo, get_current_user, require_admin
+from .groups import (
+    ensure_group_for_username,
+    get_group_ids_for_user,
+    group_name_for_id,
+)
 
 router = APIRouter()
 
@@ -44,9 +50,14 @@ ROOT_FOLDER_NAME = "__root__"
 
 
 class FolderPermission(BaseModel):
-    """Permission entry for a single user on a folder."""
+    """Permission entry for a single group on a folder.
 
-    username: str
+    group_name is a read-only display field resolved from the group id at read
+    time; it is never persisted and may be None if the group was deleted.
+    """
+
+    group_id: str
+    group_name: str | None = None
     can_pull: bool = False
     can_push: bool = False
 
@@ -89,18 +100,18 @@ class UpdateFolderRequest(BaseModel):
 
 
 class SetPermissionRequest(BaseModel):
-    """Payload to set or update a user's permissions on a folder."""
+    """Payload to set or update a group's permissions on a folder."""
 
-    username: str
+    group_id: str
     can_pull: bool = False
     can_push: bool = False
 
-    @field_validator("username")
+    @field_validator("group_id")
     @classmethod
-    def username_not_empty(cls, v: str) -> str:
+    def group_id_not_empty(cls, v: str) -> str:
         v = v.strip()
         if not v:
-            raise ValueError("Username must not be empty")
+            raise ValueError("Group id must not be empty")
         return v
 
 
@@ -132,11 +143,13 @@ def _dict_to_folder(d: dict) -> Folder:
         created_at=d.get("created_at", ""),
         permissions=[
             FolderPermission(
-                username=p["username"],
+                group_id=p["group_id"],
+                group_name=group_name_for_id(p["group_id"]),
                 can_pull=p.get("can_pull", False),
                 can_push=p.get("can_push", False),
             )
             for p in d.get("permissions", [])
+            if "group_id" in p
         ],
     )
 
@@ -155,11 +168,48 @@ def ensure_root_folder_exists() -> None:
         "id": str(uuid.uuid4()),
         "name": ROOT_FOLDER_NAME,
         "description": "Default namespace — covers images with no folder prefix (e.g. nginx, ubuntu)",
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
         "permissions": [],
     }
     folders.append(root_entry)
     _save_folders(folders)
+
+
+def migrate_folder_permissions_to_groups() -> None:
+    """Convert legacy per-user folder permissions to per-group permissions.
+
+    Old schema stored ``{"username", "can_pull", "can_push"}`` entries. This
+    migration rewrites each such entry to ``{"group_id", "can_pull", "can_push"}``
+    by creating (or reusing) an auto-group named ``user-<username>`` that contains
+    only that user, so existing access is preserved. Idempotent: entries already
+    keyed by ``group_id`` are left untouched.
+    """
+    folders = _load_folders()
+    changed = False
+
+    for folder in folders:
+        migrated: list[dict] = []
+        for perm in folder.get("permissions", []):
+            if "group_id" in perm:
+                migrated.append(perm)
+                continue
+            username = perm.get("username")
+            if not username:
+                changed = True  # drop malformed legacy entry
+                continue
+            group_id = ensure_group_for_username(username)
+            migrated.append(
+                {
+                    "group_id": group_id,
+                    "can_pull": perm.get("can_pull", False),
+                    "can_push": perm.get("can_push", False),
+                }
+            )
+            changed = True
+        folder["permissions"] = migrated
+
+    if changed:
+        _save_folders(folders)
 
 
 # ── Public helpers used by registry_proxy and registry routers ────────────────
@@ -209,13 +259,18 @@ def check_folder_access(username: str, image_path: str, is_pull: bool) -> bool |
     if folder is None:
         return None
 
+    group_ids = get_group_ids_for_user(username)
+
+    # Effective access is the union over every group the user belongs to.
     for perm in folder.get("permissions", []):
-        if perm["username"] == username:
-            return (
+        if perm.get("group_id") in group_ids:
+            granted = (
                 perm.get("can_pull", False) if is_pull else perm.get("can_push", False)
             )
+            if granted:
+                return True
 
-    # User has no explicit entry in the matched folder → denied
+    # None of the user's groups grant the requested permission → denied
     return False
 
 
@@ -247,7 +302,7 @@ async def create_folder(
         "id": str(uuid.uuid4()),
         "name": payload.name,
         "description": payload.description,
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
         "permissions": [],
     }
     folders.append(entry)
@@ -314,20 +369,20 @@ async def set_permission(
     payload: SetPermissionRequest,
     _: UserInfo = Depends(require_admin),
 ) -> Folder:
-    """Set or update a user's pull/push permissions on a folder. Requires admin."""
+    """Set or update a group's pull/push permissions on a folder. Requires admin."""
     folders = _load_folders()
     for f in folders:
         if f["id"] == folder_id:
             perms: list[dict] = f.setdefault("permissions", [])
             for p in perms:
-                if p["username"] == payload.username:
+                if p.get("group_id") == payload.group_id:
                     p["can_pull"] = payload.can_pull
                     p["can_push"] = payload.can_push
                     _save_folders(folders)
                     return _dict_to_folder(f)
             perms.append(
                 {
-                    "username": payload.username,
+                    "group_id": payload.group_id,
                     "can_pull": payload.can_pull,
                     "can_push": payload.can_push,
                 }
@@ -340,21 +395,21 @@ async def set_permission(
 
 
 @router.delete(
-    "/{folder_id}/permissions/{username}",
+    "/{folder_id}/permissions/{group_id}",
     status_code=status.HTTP_204_NO_CONTENT,
 )
 async def remove_permission(
     folder_id: str,
-    username: str,
+    group_id: str,
     _: UserInfo = Depends(require_admin),
 ) -> None:
-    """Remove a user's permissions from a folder. Requires admin."""
+    """Remove a group's permissions from a folder. Requires admin."""
     folders = _load_folders()
     for f in folders:
         if f["id"] == folder_id:
             before = len(f.get("permissions", []))
             f["permissions"] = [
-                p for p in f.get("permissions", []) if p["username"] != username
+                p for p in f.get("permissions", []) if p.get("group_id") != group_id
             ]
             if len(f["permissions"]) == before:
                 raise HTTPException(
@@ -379,12 +434,13 @@ async def list_my_folders(
     """
     if current_user.is_admin:
         return []
+    group_ids = get_group_ids_for_user(current_user.username)
     allowed: list[str] = []
     for folder in _load_folders():
         if folder["name"] == ROOT_FOLDER_NAME:
             continue
         for perm in folder.get("permissions", []):
-            if perm["username"] == current_user.username and perm.get("can_pull"):
+            if perm.get("group_id") in group_ids and perm.get("can_pull"):
                 allowed.append(folder["name"])
                 break
     return allowed
@@ -401,12 +457,13 @@ async def list_pushable_folders(
     """
     if current_user.is_admin:
         return []
+    group_ids = get_group_ids_for_user(current_user.username)
     allowed: list[str] = []
     for folder in _load_folders():
         if folder["name"] == ROOT_FOLDER_NAME:
             continue
         for perm in folder.get("permissions", []):
-            if perm["username"] == current_user.username and perm.get("can_push"):
+            if perm.get("group_id") in group_ids and perm.get("can_push"):
                 allowed.append(folder["name"])
                 break
     return allowed
@@ -427,14 +484,14 @@ async def list_folder_names(
     return [f["name"] for f in _load_folders() if f["name"] != ROOT_FOLDER_NAME]
 
 
-def remove_permissions_for_username(username: str) -> int:
-    """Remove a username from all folder permission lists and return removals."""
+def remove_permissions_for_group(group_id: str) -> int:
+    """Remove a group from all folder permission lists and return removals."""
     folders = _load_folders()
     removed_count = 0
 
     for folder in folders:
         perms = folder.get("permissions", [])
-        filtered = [p for p in perms if p.get("username") != username]
+        filtered = [p for p in perms if p.get("group_id") != group_id]
         removed_count += len(perms) - len(filtered)
         folder["permissions"] = filtered
 

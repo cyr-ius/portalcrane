@@ -603,6 +603,34 @@
     "NO_USERS": "Aucun utilisateur assigné pour le moment.",
     "COL_USER": "Utilisateur",
     "REMOVE_USER": "Retirer l'utilisateur du dossier",
-    "DELETE_FOLDER": "Supprimer le dossier"
+    "DELETE_FOLDER": "Supprimer le dossier",
+    "GROUP_PERMS": "Permissions des groupes",
+    "ADD_GROUP": "Ajouter un groupe",
+    "GROUP_COUNT": "{{count}} groupe(s)",
+    "COL_GROUP": "Groupe",
+    "NO_GROUPS": "Aucun groupe n'a encore accès",
+    "REMOVE_GROUP": "Retirer ce groupe",
+    "SELECT_GROUP": "Sélectionner un groupe…"
+  },
+  "GROUPS": {
+    "GROUP": "Groupe",
+    "TITLE": "Groupes",
+    "DESC": "Créez des groupes et ajoutez des utilisateurs, puis attribuez les droits pull/push des dossiers aux groupes.",
+    "ADD_GROUP": "Nouveau groupe",
+    "NEW_GROUP": "Nouveau groupe",
+    "NAME_PLACEHOLDER": "ex. developpeurs",
+    "DESC_PLACEHOLDER": "Description optionnelle",
+    "EMPTY": "Aucun groupe défini",
+    "MEMBER_COUNT": "{{count}} membre(s)",
+    "ADD_MEMBER": "Ajouter un membre",
+    "SELECT_USER": "Sélectionner un utilisateur…",
+    "NO_MEMBERS": "Aucun membre",
+    "REMOVE_MEMBER": "Retirer le membre",
+    "DELETE_GROUP": "Supprimer le groupe",
+    "LEGEND": "Les permissions des dossiers sont attribuées aux groupes. L'accès d'un utilisateur est l'union des permissions des groupes auxquels il appartient.",
+    "ERR_LOAD": "Échec du chargement des groupes",
+    "ERR_CREATE": "Échec de la création du groupe",
+    "ERR_DELETE": "Échec de la suppression du groupe",
+    "ERR_MEMBER": "Échec de la mise à jour des membres"
   }
 }

@@ -28,6 +28,7 @@ from .routers import (
     auth,
     dashboard,
     folders,
+    groups,
     network,
     oidc,
     personal_tokens,
@@ -39,7 +40,10 @@ from .routers import (
     transfer,
     trivy,
 )
-from .routers.folders import ensure_root_folder_exists
+from .routers.folders import (
+    ensure_root_folder_exists,
+    migrate_folder_permissions_to_groups,
+)
 from .services.audit_service import log_web_ui_action
 from .services.proxy_service import (
     apply_proxy_to_os_environ,
@@ -136,6 +140,7 @@ async def lifespan(app: FastAPI):
     apply_proxy_to_os_environ(proxy_cfg)
     apply_syslog_config(resolve_syslog_settings())
     ensure_root_folder_exists()
+    migrate_folder_permissions_to_groups()
     # Only run the Trivy DB updater when Trivy is enabled; otherwise the embedded
     # server is not started (see docker/entrypoint.sh) and DB downloads are moot.
     db_task = (
@@ -184,6 +189,7 @@ app.include_router(about.router, prefix="/api", tags=["About"])
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(dashboard.router, prefix="/api/dashboard", tags=["Dashboard"])
 app.include_router(folders.router, prefix="/api/folders", tags=["Folders"])
+app.include_router(groups.router, prefix="/api/groups", tags=["Groups"])
 app.include_router(repositories.router, prefix="/api/images", tags=["Images"])
 app.include_router(network.router, prefix="/api/network", tags=["Network"])
 app.include_router(oidc.router, prefix="/api/oidc", tags=["OIDC"])

@@ -1,7 +1,7 @@
 /**
  * Portalcrane - Folders Configuration Panel
  *
- * Displays and manages registry folders (path prefixes) with per-user permissions.
+ * Displays and manages registry folders (path prefixes) with per-group permissions.
  *
  * Special handling for the __root__ folder:
  *  - Always present (created automatically at backend startup).
@@ -11,13 +11,14 @@
  *
  * Forms use Angular Signal Forms (form / FormField):
  *   1. folderForm  — create a new folder (name + description)
- *   2. permForm    — add a user permission to a folder (username + can_pull + can_push)
+ *   2. permForm    — add a group permission to a folder (groupId + can_pull + can_push)
  */
 import { Component, inject, OnInit, signal } from "@angular/core";
 import { form, FormField, required, submit } from "@angular/forms/signals";
 import { TranslatePipe, TranslateService } from "@ngx-translate/core";
 import { firstValueFrom } from "rxjs";
-import { Folder, FolderService, UserSummary } from "../../../core/services/folder.service";
+import { Folder, FolderService } from "../../../core/services/folder.service";
+import { Group, GroupsService } from "../../../core/services/groups.service";
 
 /** Reserved name for the root namespace folder. */
 const ROOT_FOLDER_NAME = "__root__";
@@ -30,7 +31,7 @@ interface FolderFormModel {
 
 /** Shape of the add-permission form model. */
 interface PermFormModel {
-  username: string;
+  groupId: string;
   canPull: boolean;
   canPush: boolean;
 }
@@ -44,6 +45,7 @@ interface PermFormModel {
 })
 export class FoldersConfigPanel implements OnInit {
   private readonly folderSvc = inject(FolderService);
+  private readonly groupsSvc = inject(GroupsService);
   private readonly translate = inject(TranslateService);
 
   // ── Folder list ────────────────────────────────────────────────────────────
@@ -51,8 +53,8 @@ export class FoldersConfigPanel implements OnInit {
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
 
-  // ── User list (for the username datalist in the permission form) ───────────
-  readonly users = signal<UserSummary[]>([]);
+  // ── Group list (for the group selector in the permission form) ─────────────
+  readonly groups = signal<Group[]>([]);
 
   // ── Expanded folder (accordion) ────────────────────────────────────────────
   readonly expandedId = signal<string | null>(null);
@@ -88,25 +90,25 @@ export class FoldersConfigPanel implements OnInit {
   readonly permError = signal<string | null>(null);
 
   private readonly permInit: PermFormModel = {
-    username: "",
+    groupId: "",
     canPull: false,
     canPush: false,
   };
   readonly permModel = signal<PermFormModel>({ ...this.permInit });
 
   /**
-   * Signal Form for adding a user permission.
-   * Username is required; the checkboxes default to false.
+   * Signal Form for adding a group permission.
+   * The group is required; the checkboxes default to false.
    */
   readonly permForm = form(this.permModel, (p) => {
-    required(p.username);
+    required(p.groupId);
   });
 
   // ──────────────────────────────────────────────────────────────────────────
 
   ngOnInit(): void {
     this.loadFolders();
-    this.loadUsers();
+    this.loadGroups();
   }
 
   /** Fetch the folder list from the backend. */
@@ -125,17 +127,19 @@ export class FoldersConfigPanel implements OnInit {
         this.loading.set(false);
       },
       error: (err) => {
-        this.error.set(err?.error?.detail ?? this.translate.instant("FOLDERS.ERR_LOAD"));
+        this.error.set(
+          err?.error?.detail ?? this.translate.instant("FOLDERS.ERR_LOAD"),
+        );
         this.loading.set(false);
       },
     });
   }
 
-  /** Fetch the user list so the permission form can offer a username datalist. */
-  loadUsers(): void {
-    this.folderSvc.getUserSummaries().subscribe({
-      next: (users) => this.users.set(users),
-      error: () => this.users.set([]), // Silently ignore when not admin
+  /** Fetch the group list so the permission form can offer a group selector. */
+  loadGroups(): void {
+    this.groupsSvc.getGroups().subscribe({
+      next: (groups) => this.groups.set(groups),
+      error: () => this.groups.set([]), // Silently ignore when not admin
     });
   }
 
@@ -188,7 +192,10 @@ export class FoldersConfigPanel implements OnInit {
         f().reset({ ...this.folderInit });
       } catch (err: unknown) {
         const httpErr = err as { error?: { detail?: string } };
-        this.createError.set(httpErr?.error?.detail ?? this.translate.instant("FOLDERS.ERR_CREATE"));
+        this.createError.set(
+          httpErr?.error?.detail ??
+            this.translate.instant("FOLDERS.ERR_CREATE"),
+        );
       } finally {
         this.creating.set(false);
       }
@@ -263,7 +270,7 @@ export class FoldersConfigPanel implements OnInit {
   /** Submit the add-permission form via Signal Forms. */
   savePerm(folderId: string): void {
     submit(this.permForm, async (f) => {
-      const { username, canPull, canPush } = f().value();
+      const { groupId, canPull, canPush } = f().value();
       this.savingPerm.set(true);
       this.permError.set(null);
 
@@ -271,7 +278,7 @@ export class FoldersConfigPanel implements OnInit {
         const updated = await firstValueFrom(
           this.folderSvc.savePerm(
             folderId,
-            username!.trim(),
+            groupId!.trim(),
             canPull ?? false,
             canPush ?? false,
           ),
@@ -283,7 +290,9 @@ export class FoldersConfigPanel implements OnInit {
         f().reset({ ...this.permInit });
       } catch (err: unknown) {
         const httpErr = err as { error?: { detail?: string } };
-        this.permError.set(httpErr?.error?.detail ?? this.translate.instant("FOLDERS.ERR_PERM"));
+        this.permError.set(
+          httpErr?.error?.detail ?? this.translate.instant("FOLDERS.ERR_PERM"),
+        );
       } finally {
         this.savingPerm.set(false);
       }
@@ -294,11 +303,11 @@ export class FoldersConfigPanel implements OnInit {
 
   updatePerm(
     folderId: string,
-    username: string,
+    groupId: string,
     can_pull: boolean,
     can_push: boolean,
   ): void {
-    this.folderSvc.savePerm(folderId, username, can_pull, can_push).subscribe({
+    this.folderSvc.savePerm(folderId, groupId, can_pull, can_push).subscribe({
       next: (updated) => {
         this.folders.update((list) =>
           list.map((f) => (f.id === updated.id ? updated : f)),
@@ -309,8 +318,8 @@ export class FoldersConfigPanel implements OnInit {
 
   // ── Remove permission ──────────────────────────────────────────────────────
 
-  removePerm(folderId: string, username: string): void {
-    this.folderSvc.removePerm(folderId, username).subscribe({
+  removePerm(folderId: string, groupId: string): void {
+    this.folderSvc.removePerm(folderId, groupId).subscribe({
       next: () => {
         this.folders.update((list) =>
           list.map((f) =>
@@ -318,7 +327,7 @@ export class FoldersConfigPanel implements OnInit {
               ? {
                   ...f,
                   permissions: f.permissions.filter(
-                    (p) => p.username !== username,
+                    (p) => p.group_id !== groupId,
                   ),
                 }
               : f,

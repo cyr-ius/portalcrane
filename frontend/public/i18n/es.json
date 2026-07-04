@@ -603,6 +603,34 @@
     "NO_USERS": "Aún no hay usuarios asignados.",
     "COL_USER": "Usuario",
     "REMOVE_USER": "Quitar usuario de la carpeta",
-    "DELETE_FOLDER": "Eliminar carpeta"
+    "DELETE_FOLDER": "Eliminar carpeta",
+    "GROUP_PERMS": "Permisos de grupos",
+    "ADD_GROUP": "Añadir grupo",
+    "GROUP_COUNT": "{{count}} grupo(s)",
+    "COL_GROUP": "Grupo",
+    "NO_GROUPS": "Ningún grupo tiene acceso todavía",
+    "REMOVE_GROUP": "Quitar este grupo",
+    "SELECT_GROUP": "Seleccionar un grupo…"
+  },
+  "GROUPS": {
+    "GROUP": "Grupo",
+    "TITLE": "Grupos",
+    "DESC": "Cree grupos y asigne usuarios, luego otorgue permisos de pull/push de carpetas a los grupos.",
+    "ADD_GROUP": "Nuevo grupo",
+    "NEW_GROUP": "Nuevo grupo",
+    "NAME_PLACEHOLDER": "p. ej. desarrolladores",
+    "DESC_PLACEHOLDER": "Descripción opcional",
+    "EMPTY": "Ningún grupo definido",
+    "MEMBER_COUNT": "{{count}} miembro(s)",
+    "ADD_MEMBER": "Añadir un miembro",
+    "SELECT_USER": "Seleccionar un usuario…",
+    "NO_MEMBERS": "Sin miembros",
+    "REMOVE_MEMBER": "Quitar miembro",
+    "DELETE_GROUP": "Eliminar grupo",
+    "LEGEND": "Los permisos de las carpetas se otorgan a los grupos. El acceso de un usuario es la unión de los permisos de los grupos a los que pertenece.",
+    "ERR_LOAD": "Error al cargar los grupos",
+    "ERR_CREATE": "Error al crear el grupo",
+    "ERR_DELETE": "Error al eliminar el grupo",
+    "ERR_MEMBER": "Error al actualizar los miembros"
   }
 }

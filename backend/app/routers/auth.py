@@ -33,7 +33,7 @@ from ..core.jwt import (
 from ..core.security import hash_password, verify_user
 from ..services.oidc_service import resolve_oidc_settings
 from ..services.registries_service import delete_registries_for_owner
-from .folders import remove_permissions_for_username
+from .groups import remove_member_from_all_groups
 from .personal_tokens import revoke_tokens_for_username
 
 router = APIRouter()
@@ -425,8 +425,10 @@ async def delete_local_user(
     if target.get("auth_source") == AUTH_SOURCE_OIDC:
         revoke_oidc_username(username)
 
-    # Cascade cleanup for resources tied to this account
-    remove_permissions_for_username(username)
+    # Cascade cleanup for resources tied to this account.
+    # Folder permissions are group-based, so removing the user from every group
+    # is enough to revoke their inherited access.
+    remove_member_from_all_groups(username)
     delete_registries_for_owner(username)
     revoke_tokens_for_username(username)
 

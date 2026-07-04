@@ -419,3 +419,218 @@
     }
   </div>
 </div>
+
+<!-- Portalcrane - Groups Management Panel -->
+<div class="card border-0 mb-3">
+  <div class="card-header border-0 d-flex align-items-center gap-2">
+    <div>
+      <h6 class="fw-semibold mb-0">
+        <i class="bi bi-people-fill text-primary me-2"></i>{{ "GROUPS.TITLE" |
+        translate }}
+      </h6>
+      <div class="text-muted small mt-1">{{ "GROUPS.DESC" | translate }}</div>
+    </div>
+    <button
+      class="btn btn-sm btn-outline-primary ms-auto"
+      (click)="openGroupForm()"
+      [disabled]="showGroupForm()"
+    >
+      <i class="bi bi-plus-lg"></i>
+      {{ "GROUPS.ADD_GROUP" | translate }}
+    </button>
+  </div>
+
+  <div class="card-body">
+    @if (groupsError()) {
+    <div class="alert alert-danger d-flex align-items-center gap-2 py-2 mb-3">
+      <i class="bi bi-exclamation-triangle-fill"></i>
+      {{ groupsError() }}
+    </div>
+    }
+
+    <!-- ── Create group form ──────────────────────────────────────────────── -->
+    @if (showGroupForm()) {
+    <div
+      class="card border border-primary-subtle bg-primary-subtle bg-opacity-10 mb-4"
+    >
+      <div class="card-body">
+        <h6 class="fw-semibold mb-3">
+          <i class="bi bi-people-fill me-2 text-primary"></i>{{
+          "GROUPS.NEW_GROUP" | translate }}
+        </h6>
+
+        @if (groupCreateError()) {
+        <div class="alert alert-danger py-2 small mb-3">
+          <i class="bi bi-exclamation-circle me-1"></i>{{ groupCreateError() }}
+        </div>
+        }
+
+        <div class="row g-3">
+          <div class="col-md-5">
+            <label class="form-label fw-semibold small">
+              {{ "COMMON.NAME" | translate }}
+              <span class="text-danger">*</span>
+            </label>
+            <input
+              type="text"
+              class="form-control form-control-sm"
+              [placeholder]="'GROUPS.NAME_PLACEHOLDER' | translate"
+              autocomplete="off"
+              [formField]="groupCreateForm.name"
+            />
+          </div>
+          <div class="col-md-7">
+            <label class="form-label fw-semibold small">
+              {{ "COMMON.DESCRIPTION" | translate }}
+            </label>
+            <input
+              type="text"
+              class="form-control form-control-sm"
+              [placeholder]="'GROUPS.DESC_PLACEHOLDER' | translate"
+              [formField]="groupCreateForm.description"
+            />
+          </div>
+        </div>
+
+        <div class="d-flex gap-2 mt-3">
+          <button
+            class="btn btn-primary btn-sm d-flex align-items-center gap-1"
+            (click)="createGroup()"
+            [disabled]="!groupCreateForm().valid() || creatingGroup()"
+          >
+            @if (creatingGroup()) {
+            <span class="spinner-border spinner-border-sm"></span>
+            } @else {
+            <i class="bi bi-check-lg"></i>
+            } {{ "COMMON.CREATE" | translate }}
+          </button>
+          <button
+            class="btn btn-outline-secondary btn-sm"
+            (click)="cancelGroupForm()"
+            [disabled]="creatingGroup()"
+          >
+            {{ "COMMON.CANCEL" | translate }}
+          </button>
+        </div>
+      </div>
+    </div>
+    }
+
+    <!-- ── Groups list ────────────────────────────────────────────────────── -->
+    @if (groups().length === 0) {
+    <div class="text-center text-muted py-4">
+      <i class="bi bi-people display-6 d-block mb-2"></i>
+      {{ "GROUPS.EMPTY" | translate }}
+    </div>
+    } @else { @for (group of groups(); track group.id) {
+    <div class="border rounded mb-2 overflow-hidden">
+      <!-- Group header (accordion toggle) -->
+      <div
+        class="d-flex align-items-center gap-3 px-3 py-2 bg-body-secondary"
+        style="cursor: pointer"
+        (click)="toggleGroupExpand(group.id)"
+      >
+        <i
+          class="bi"
+          [class.bi-chevron-right]="expandedGroupId() !== group.id"
+          [class.bi-chevron-down]="expandedGroupId() === group.id"
+        ></i>
+        <i class="bi bi-people-fill text-primary"></i>
+        <span class="fw-semibold">{{ group.name }}</span>
+        @if (group.description) {
+        <span class="text-muted small">{{ group.description }}</span>
+        }
+        <span class="badge bg-secondary-subtle text-secondary ms-auto">
+          {{ "GROUPS.MEMBER_COUNT" | translate: { count: group.members.length }
+          }}
+        </span>
+      </div>
+
+      <!-- Expanded detail section -->
+      @if (expandedGroupId() === group.id) {
+      <div class="px-3 py-2">
+        <!-- Add-member form -->
+        <div class="d-flex gap-2 align-items-end mb-3 flex-wrap">
+          <div>
+            <label class="form-label small fw-semibold mb-1">
+              {{ "GROUPS.ADD_MEMBER" | translate }}
+            </label>
+            <select
+              class="form-select form-select-sm"
+              [value]="memberToAdd()"
+              (change)="memberToAdd.set($any($event.target).value)"
+            >
+              <option value="">{{ "GROUPS.SELECT_USER" | translate }}</option>
+              @for (u of availableUsers(group); track u.id) {
+              <option [value]="u.username">{{ u.username }}</option>
+              }
+            </select>
+          </div>
+          <button
+            class="btn btn-outline-primary btn-sm"
+            (click)="addMember(group.id)"
+            [disabled]="!memberToAdd() || addingMember()"
+          >
+            @if (addingMember()) {
+            <span class="spinner-border spinner-border-sm"></span>
+            } @else {
+            <i class="bi bi-person-plus me-1"></i>
+            } {{ "COMMON.ADD" | translate }}
+          </button>
+          <button
+            class="btn btn-outline-danger btn-sm ms-auto"
+            (click)="deleteGroup(group.id)"
+            [disabled]="deletingGroupId() === group.id"
+          >
+            @if (deletingGroupId() === group.id) {
+            <span class="spinner-border spinner-border-sm"></span>
+            } @else {
+            <i class="bi bi-trash3 me-1"></i>
+            } {{ "GROUPS.DELETE_GROUP" | translate }}
+          </button>
+        </div>
+
+        @if (memberError()) {
+        <div class="alert alert-danger py-1 small mb-2">
+          <i class="bi bi-exclamation-circle me-1"></i>{{ memberError() }}
+        </div>
+        }
+
+        <!-- Members list -->
+        @if (group.members.length === 0) {
+        <div class="text-muted small py-2">
+          <i class="bi bi-person-slash me-1"></i>{{ "GROUPS.NO_MEMBERS" |
+          translate }}
+        </div>
+        } @else {
+        <div class="d-flex flex-wrap gap-2">
+          @for (member of group.members; track member) {
+          <span
+            class="badge bg-body-secondary text-body d-inline-flex align-items-center gap-1 border"
+            style="font-size: 0.8rem"
+          >
+            <i class="bi bi-person"></i>
+            <span class="font-monospace">{{ member }}</span>
+            <button
+              type="button"
+              class="btn-close btn-close-sm ms-1"
+              style="font-size: 0.6rem"
+              [title]="'GROUPS.REMOVE_MEMBER' | translate"
+              (click)="removeMember(group.id, member)"
+            ></button>
+          </span>
+          }
+        </div>
+        }
+      </div>
+      }
+    </div>
+    } }
+
+    <!-- ── Info note ────────────────────────────────────────────────────────── -->
+    <div class="alert alert-info d-flex gap-2 mt-3 py-2 small">
+      <i class="bi bi-folder2 flex-shrink-0 mt-1"></i>
+      <div>{{ "GROUPS.LEGEND" | translate }}</div>
+    </div>
+  </div>
+</div>

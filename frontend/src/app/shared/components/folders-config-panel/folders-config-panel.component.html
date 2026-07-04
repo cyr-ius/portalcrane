@@ -126,7 +126,7 @@
             }
             <span class="badge bg-secondary-subtle text-secondary ms-auto">
               {{
-                "FOLDERS.USER_COUNT"
+                "FOLDERS.GROUP_COUNT"
                   | translate: { count: folder.permissions.length }
               }}
             </span>
@@ -194,15 +194,15 @@
               >
                 <span class="fw-semibold small">
                   <i class="bi bi-key me-1"></i
-                  >{{ "FOLDERS.USER_PERMS" | translate }}
+                  >{{ "FOLDERS.GROUP_PERMS" | translate }}
                 </span>
                 @if (addPermFolderId() !== folder.id) {
                   <button
                     class="btn btn-outline-primary btn-sm"
                     (click)="openAddPerm(folder.id)"
                   >
-                    <i class="bi bi-person-plus me-1"></i
-                    >{{ "FOLDERS.ADD_USER" | translate }}
+                    <i class="bi bi-people me-1"></i
+                    >{{ "FOLDERS.ADD_GROUP" | translate }}
                   </button>
                 }
               </div>
@@ -216,26 +216,22 @@
                     </div>
                   }
 
-                  <datalist id="users-datalist-root">
-                    @for (u of users(); track u.id) {
-                      <option [value]="u.username">{{ u.username }}</option>
-                    }
-                  </datalist>
-
                   <div class="row g-2 align-items-end">
                     <div class="col-md-4">
                       <label class="form-label small fw-semibold mb-1">{{
-                        "AUTH.USERNAME" | translate
+                        "GROUPS.GROUP" | translate
                       }}</label>
-                      <input
-                        type="text"
-                        class="form-control form-control-sm"
-                        [placeholder]="
-                          'FOLDERS.USERNAME_PLACEHOLDER' | translate
-                        "
-                        list="users-datalist-root"
-                        [formField]="permForm.username"
-                      />
+                      <select
+                        class="form-select form-select-sm"
+                        [formField]="permForm.groupId"
+                      >
+                        <option value="" disabled>
+                          {{ "FOLDERS.SELECT_GROUP" | translate }}
+                        </option>
+                        @for (g of groups(); track g.id) {
+                          <option [value]="g.id">{{ g.name }}</option>
+                        }
+                      </select>
                     </div>
                     <div class="col-auto">
                       <div class="form-check mb-0">
@@ -297,14 +293,14 @@
               <!-- Permissions list -->
               @if (folder.permissions.length === 0) {
                 <div class="text-muted small py-2">
-                  <i class="bi bi-person-slash me-1"></i
-                  >{{ "FOLDERS.NO_USERS" | translate }}
+                  <i class="bi bi-people me-1"></i
+                  >{{ "FOLDERS.NO_GROUPS" | translate }}
                 </div>
               } @else {
                 <table class="table table-sm align-middle mb-0">
                   <thead>
                     <tr class="text-muted" style="font-size: 0.78rem">
-                      <th>{{ "FOLDERS.COL_USER" | translate }}</th>
+                      <th>{{ "FOLDERS.COL_GROUP" | translate }}</th>
                       <th class="text-center">
                         {{ "STAGING.PULL" | translate }}
                       </th>
@@ -317,12 +313,13 @@
                     </tr>
                   </thead>
                   <tbody>
-                    @for (perm of folder.permissions; track perm.username) {
+                    @for (perm of folder.permissions; track perm.group_id) {
                       <tr>
                         <td>
-                          <span class="fw-semibold font-monospace small">{{
-                            perm.username
-                          }}</span>
+                          <span class="fw-semibold small">
+                            <i class="bi bi-people-fill me-1 text-primary"></i>
+                            {{ perm.group_name ?? perm.group_id }}
+                          </span>
                         </td>
                         <td class="text-center">
                           <input
@@ -332,7 +329,7 @@
                             (change)="
                               updatePerm(
                                 folder.id,
-                                perm.username,
+                                perm.group_id,
                                 $any($event.target).checked,
                                 perm.can_push
                               )
@@ -347,7 +344,7 @@
                             (change)="
                               updatePerm(
                                 folder.id,
-                                perm.username,
+                                perm.group_id,
                                 perm.can_pull,
                                 $any($event.target).checked
                               )
@@ -357,10 +354,10 @@
                         <td class="text-end">
                           <button
                             class="btn btn-outline-danger btn-sm"
-                            (click)="removePerm(folder.id, perm.username)"
-                            [title]="'FOLDERS.REMOVE_USER' | translate"
+                            (click)="removePerm(folder.id, perm.group_id)"
+                            [title]="'FOLDERS.REMOVE_GROUP' | translate"
                           >
-                            <i class="bi bi-person-dash"></i>
+                            <i class="bi bi-x-lg"></i>
                           </button>
                         </td>
                       </tr>
@@ -391,7 +388,7 @@
             }
             <span class="badge bg-secondary-subtle text-secondary ms-auto">
               {{
-                "FOLDERS.USER_COUNT"
+                "FOLDERS.GROUP_COUNT"
                   | translate: { count: folder.permissions.length }
               }}
             </span>
@@ -460,15 +457,15 @@
               >
                 <span class="fw-semibold small">
                   <i class="bi bi-key me-1"></i
-                  >{{ "FOLDERS.USER_PERMS" | translate }}
+                  >{{ "FOLDERS.GROUP_PERMS" | translate }}
                 </span>
                 @if (addPermFolderId() !== folder.id) {
                   <button
                     class="btn btn-outline-primary btn-sm"
                     (click)="openAddPerm(folder.id)"
                   >
-                    <i class="bi bi-person-plus me-1"></i
-                    >{{ "FOLDERS.ADD_USER" | translate }}
+                    <i class="bi bi-people me-1"></i
+                    >{{ "FOLDERS.ADD_GROUP" | translate }}
                   </button>
                 }
               </div>
@@ -482,27 +479,23 @@
                     </div>
                   }
 
-                  <datalist id="users-datalist">
-                    @for (u of users(); track u.id) {
-                      <option [value]="u.username">{{ u.username }}</option>
-                    }
-                  </datalist>
-
                   <div class="row g-2 align-items-end">
-                    <!-- Username (formField + datalist) -->
+                    <!-- Group selector (formField) -->
                     <div class="col-md-4">
                       <label class="form-label small fw-semibold mb-1">{{
-                        "AUTH.USERNAME" | translate
+                        "GROUPS.GROUP" | translate
                       }}</label>
-                      <input
-                        type="text"
-                        class="form-control form-control-sm"
-                        [placeholder]="
-                          'FOLDERS.USERNAME_PLACEHOLDER' | translate
-                        "
-                        list="users-datalist"
-                        [formField]="permForm.username"
-                      />
+                      <select
+                        class="form-select form-select-sm"
+                        [formField]="permForm.groupId"
+                      >
+                        <option value="" disabled>
+                          {{ "FOLDERS.SELECT_GROUP" | translate }}
+                        </option>
+                        @for (g of groups(); track g.id) {
+                          <option [value]="g.id">{{ g.name }}</option>
+                        }
+                      </select>
                     </div>
 
                     <!-- Can pull -->
@@ -570,14 +563,14 @@
               <!-- Permissions list -->
               @if (folder.permissions.length === 0) {
                 <div class="text-muted small py-2">
-                  <i class="bi bi-person-slash me-1"></i
-                  >{{ "FOLDERS.NO_USERS" | translate }}
+                  <i class="bi bi-people me-1"></i
+                  >{{ "FOLDERS.NO_GROUPS" | translate }}
                 </div>
               } @else {
                 <table class="table table-sm align-middle mb-0">
                   <thead>
                     <tr class="text-muted" style="font-size: 0.78rem">
-                      <th>{{ "FOLDERS.COL_USER" | translate }}</th>
+                      <th>{{ "FOLDERS.COL_GROUP" | translate }}</th>
                       <th class="text-center">
                         {{ "STAGING.PULL" | translate }}
                       </th>
@@ -590,12 +583,13 @@
                     </tr>
                   </thead>
                   <tbody>
-                    @for (perm of folder.permissions; track perm.username) {
+                    @for (perm of folder.permissions; track perm.group_id) {
                       <tr>
                         <td>
-                          <span class="fw-semibold font-monospace small">{{
-                            perm.username
-                          }}</span>
+                          <span class="fw-semibold small">
+                            <i class="bi bi-people-fill me-1 text-primary"></i>
+                            {{ perm.group_name ?? perm.group_id }}
+                          </span>
                         </td>
                         <td class="text-center">
                           <input
@@ -605,7 +599,7 @@
                             (change)="
                               updatePerm(
                                 folder.id,
-                                perm.username,
+                                perm.group_id,
                                 $any($event.target).checked,
                                 perm.can_push
                               )
@@ -620,7 +614,7 @@
                             (change)="
                               updatePerm(
                                 folder.id,
-                                perm.username,
+                                perm.group_id,
                                 perm.can_pull,
                                 $any($event.target).checked
                               )
@@ -630,10 +624,10 @@
                         <td class="text-end">
                           <button
                             class="btn btn-outline-danger btn-sm"
-                            (click)="removePerm(folder.id, perm.username)"
-                            [title]="'FOLDERS.REMOVE_USER' | translate"
+                            (click)="removePerm(folder.id, perm.group_id)"
+                            [title]="'FOLDERS.REMOVE_GROUP' | translate"
                           >
-                            <i class="bi bi-person-dash"></i>
+                            <i class="bi bi-x-lg"></i>
                           </button>
                         </td>
                       </tr>

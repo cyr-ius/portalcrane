@@ -603,6 +603,34 @@
     "NO_USERS": "No users assigned yet.",
     "COL_USER": "User",
     "REMOVE_USER": "Remove user from folder",
-    "DELETE_FOLDER": "Delete folder"
+    "DELETE_FOLDER": "Delete folder",
+    "GROUP_PERMS": "Group permissions",
+    "ADD_GROUP": "Add group",
+    "GROUP_COUNT": "{{count}} group(s)",
+    "COL_GROUP": "Group",
+    "NO_GROUPS": "No group has access yet",
+    "REMOVE_GROUP": "Remove this group",
+    "SELECT_GROUP": "Select a group…"
+  },
+  "GROUPS": {
+    "GROUP": "Group",
+    "TITLE": "Groups",
+    "DESC": "Create groups and assign users, then grant folder pull/push permissions to groups.",
+    "ADD_GROUP": "New group",
+    "NEW_GROUP": "New group",
+    "NAME_PLACEHOLDER": "e.g. developers",
+    "DESC_PLACEHOLDER": "Optional description",
+    "EMPTY": "No group defined yet",
+    "MEMBER_COUNT": "{{count}} member(s)",
+    "ADD_MEMBER": "Add a member",
+    "SELECT_USER": "Select a user…",
+    "NO_MEMBERS": "No members yet",
+    "REMOVE_MEMBER": "Remove member",
+    "DELETE_GROUP": "Delete group",
+    "LEGEND": "Folder permissions are granted to groups. A user's access is the union of the permissions of the groups they belong to.",
+    "ERR_LOAD": "Failed to load groups",
+    "ERR_CREATE": "Failed to create group",
+    "ERR_DELETE": "Failed to delete group",
+    "ERR_MEMBER": "Failed to update members"
   }
 }

@@ -19,8 +19,12 @@ import {
 } from "@angular/forms/signals";
 import { TranslatePipe, TranslateService } from "@ngx-translate/core";
 import { firstValueFrom } from "rxjs";
-import { LocalUser, UpdateUser, UsersService } from "../../../core/services/users.service";
-
+import { Group, GroupsService } from "../../../core/services/groups.service";
+import {
+  LocalUser,
+  UpdateUser,
+  UsersService,
+} from "../../../core/services/users.service";
 
 @Component({
   selector: "app-accounts-config-panel",
@@ -29,8 +33,9 @@ import { LocalUser, UpdateUser, UsersService } from "../../../core/services/user
   styleUrl: "./accounts-config-panel.css",
 })
 export class AccountsConfigPanel implements OnInit {
-  private usersSvc = inject(UsersService)
-  private translate = inject(TranslateService)
+  private usersSvc = inject(UsersService);
+  private groupsSvc = inject(GroupsService);
+  private translate = inject(TranslateService);
 
   // ── Users list ─────────────────────────────────────────────────────────────
   readonly users = signal<LocalUser[]>([]);
@@ -79,8 +84,29 @@ export class AccountsConfigPanel implements OnInit {
     });
   });
 
+  // ── Groups ─────────────────────────────────────────────────────────────────
+  readonly groups = signal<Group[]>([]);
+  readonly groupsError = signal<string | null>(null);
+  readonly expandedGroupId = signal<string | null>(null);
+
+  readonly showGroupForm = signal(false);
+  readonly creatingGroup = signal(false);
+  readonly groupCreateError = signal<string | null>(null);
+
+  groupCreateModel = signal({ name: "", description: "" });
+  groupCreateForm = form(this.groupCreateModel, (p) => {
+    required(p.name);
+  });
+
+  // Add-member state (a single group is expanded at a time)
+  readonly memberToAdd = signal<string>("");
+  readonly addingMember = signal(false);
+  readonly memberError = signal<string | null>(null);
+  readonly deletingGroupId = signal<string | null>(null);
+
   ngOnInit(): void {
     this.loadUsers();
+    this.loadGroups();
   }
 
   /** Fetch the user list from the backend. */
@@ -93,7 +119,9 @@ export class AccountsConfigPanel implements OnInit {
         this.loading.set(false);
       },
       error: (err) => {
-        this.error.set(err?.error?.detail ?? this.translate.instant("ACCOUNTS.ERR_LOAD"));
+        this.error.set(
+          err?.error?.detail ?? this.translate.instant("ACCOUNTS.ERR_LOAD"),
+        );
         this.loading.set(false);
       },
     });
@@ -136,13 +164,15 @@ export class AccountsConfigPanel implements OnInit {
             formData.username.trim(),
             formData.password,
             formData.isAdmin,
-          )
+          ),
         );
         this.users.update((list) => [...list, user]);
         this.showCreateForm.set(false);
         this.creating.set(false);
       } catch (err: any) {
-        this.createError.set(err?.error?.detail ?? this.translate.instant("ACCOUNTS.ERR_CREATE"));
+        this.createError.set(
+          err?.error?.detail ?? this.translate.instant("ACCOUNTS.ERR_CREATE"),
+        );
         this.creating.set(false);
       }
     });
@@ -194,7 +224,7 @@ export class AccountsConfigPanel implements OnInit {
 
       try {
         const updated = await firstValueFrom(
-          this.usersSvc.updateUser(userId, body)
+          this.usersSvc.updateUser(userId, body),
         );
         this.users.update((list) =>
           list.map((u) => (u.id === userId ? updated : u)),
@@ -202,7 +232,9 @@ export class AccountsConfigPanel implements OnInit {
         this.editingId.set(null);
         this.saving.set(false);
       } catch (err: any) {
-        this.saveError.set(err?.error?.detail ?? this.translate.instant("ACCOUNTS.ERR_SAVE"));
+        this.saveError.set(
+          err?.error?.detail ?? this.translate.instant("ACCOUNTS.ERR_SAVE"),
+        );
         this.saving.set(false);
       }
     });
@@ -221,7 +253,9 @@ export class AccountsConfigPanel implements OnInit {
         this.deletingId.set(null);
       },
       error: (err) => {
-        this.error.set(err?.error?.detail ?? this.translate.instant("ACCOUNTS.ERR_DELETE"));
+        this.error.set(
+          err?.error?.detail ?? this.translate.instant("ACCOUNTS.ERR_DELETE"),
+        );
         this.deletingId.set(null);
       },
     });
@@ -239,5 +273,120 @@ export class AccountsConfigPanel implements OnInit {
     } catch {
       return iso;
     }
+  }
+
+  // ── Group management ─────────────────────────────────────────────────────
+
+  /** Fetch the group list from the backend. */
+  loadGroups(): void {
+    this.groupsError.set(null);
+    this.groupsSvc.getGroups().subscribe({
+      next: (groups) => this.groups.set(groups),
+      error: (err) =>
+        this.groupsError.set(
+          err?.error?.detail ?? this.translate.instant("GROUPS.ERR_LOAD"),
+        ),
+    });
+  }
+
+  openGroupForm(): void {
+    this.groupCreateModel.set({ name: "", description: "" });
+    this.groupCreateForm().reset();
+    this.groupCreateError.set(null);
+    this.showGroupForm.set(true);
+  }
+
+  cancelGroupForm(): void {
+    this.showGroupForm.set(false);
+  }
+
+  /** Submit the create-group form. */
+  createGroup(): void {
+    this.creatingGroup.set(true);
+    this.groupCreateError.set(null);
+
+    submit(this.groupCreateForm, async (form) => {
+      const { name, description } = form().value();
+      try {
+        const group = await firstValueFrom(
+          this.groupsSvc.createGroup(name.trim(), description?.trim() ?? ""),
+        );
+        this.groups.update((list) => [...list, group]);
+        this.showGroupForm.set(false);
+        this.creatingGroup.set(false);
+      } catch (err: any) {
+        this.groupCreateError.set(
+          err?.error?.detail ?? this.translate.instant("GROUPS.ERR_CREATE"),
+        );
+        this.creatingGroup.set(false);
+      }
+    });
+  }
+
+  toggleGroupExpand(groupId: string): void {
+    this.expandedGroupId.update((id) => (id === groupId ? null : groupId));
+    this.memberToAdd.set("");
+    this.memberError.set(null);
+  }
+
+  /** Delete a group; its folder permissions are purged server-side. */
+  deleteGroup(groupId: string): void {
+    this.deletingGroupId.set(groupId);
+    this.groupsSvc.deleteGroup(groupId).subscribe({
+      next: () => {
+        this.groups.update((list) => list.filter((g) => g.id !== groupId));
+        if (this.expandedGroupId() === groupId) this.expandedGroupId.set(null);
+        this.deletingGroupId.set(null);
+      },
+      error: (err) => {
+        this.groupsError.set(
+          err?.error?.detail ?? this.translate.instant("GROUPS.ERR_DELETE"),
+        );
+        this.deletingGroupId.set(null);
+      },
+    });
+  }
+
+  /** Add the currently selected user to a group. */
+  addMember(groupId: string): void {
+    const username = this.memberToAdd().trim();
+    if (!username) return;
+    this.addingMember.set(true);
+    this.memberError.set(null);
+    this.groupsSvc.addMember(groupId, username).subscribe({
+      next: (updated) => {
+        this.groups.update((list) =>
+          list.map((g) => (g.id === updated.id ? updated : g)),
+        );
+        this.memberToAdd.set("");
+        this.addingMember.set(false);
+      },
+      error: (err) => {
+        this.memberError.set(
+          err?.error?.detail ?? this.translate.instant("GROUPS.ERR_MEMBER"),
+        );
+        this.addingMember.set(false);
+      },
+    });
+  }
+
+  /** Remove a user from a group. */
+  removeMember(groupId: string, username: string): void {
+    this.groupsSvc.removeMember(groupId, username).subscribe({
+      next: () => {
+        this.groups.update((list) =>
+          list.map((g) =>
+            g.id === groupId
+              ? { ...g, members: g.members.filter((m) => m !== username) }
+              : g,
+          ),
+        );
+      },
+    });
+  }
+
+  /** Users not yet members of the given group (for the add-member selector). */
+  availableUsers(group: Group): LocalUser[] {
+    return this.users().filter((u) => !group.members.includes(u.username));
   }
 }
