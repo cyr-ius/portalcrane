@@ -30,7 +30,7 @@ repos:
           - --skip="./.*,*.csv,*.json",README.es.md,README.fr.md
           - --quiet-level=2
         exclude_types: [csv, json]
-        exclude: .devcontainer|.claude|.github|.vscode|node_modules|dist|build|i18n|locales
+        exclude: .devcontainer|.agents|.claude|.github|.vscode|node_modules|dist|build|i18n|locales
   # ── TypeScript / Angular: Prettier ───────────────────────────────────────
   - repo: https://github.com/rbubley/mirrors-prettier
     rev: v3.6.2

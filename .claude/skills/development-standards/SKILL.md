@@ -1,13 +1,13 @@
 ---
 name: development-standards
-description: Normes de code Portalcrane (Angular 22 + FastAPI). À utiliser quand on écrit/refactore du code frontend Angular ou backend FastAPI de ce dépôt, ou avant un commit. Charge les détails depuis references/ uniquement au besoin.
+description: Normes de code (Angular 22 + FastAPI). À utiliser quand on écrit/refactore du code frontend Angular ou backend FastAPI de ce dépôt, ou avant un commit. Charge les détails depuis references/ uniquement au besoin.
 ---
 
 # 🎓 Portalcrane — Normes de développement
 
 Index des **règles propres à ce dépôt**. Les détails sont dans `references/` — n'y aller que si la tâche concerne la partie correspondante.
 
-> **Best practices génériques des frameworks** : utiliser les skills dédiés plutôt que dupliquer ici — `angular-developer` (Angular), `fastapi` (FastAPI), `sqlmodel` (couche base de données / ORM). Ce skill ne couvre que ce qui est spécifique à Portalcrane.
+> **Best practices génériques des frameworks** : utiliser les skills dédiés plutôt que dupliquer ici — `angular-developer` (Angular), `fastapi` (FastAPI), `sqlmodel` (couche base de données / ORM).
 
 | Couche      | Techno                      | Version                                          |
 | ----------- | --------------------------- | ------------------------------------------------ |
@@ -39,6 +39,7 @@ Index des **règles propres à ce dépôt**. Les détails sont dans `references/
 
 - Python : `ruff check --fix` + `ruff format` (line-length 100). Frontend : `prettier`.
 - Tout doit passer `pre-commit run --all-files` avant commit ; fichiers finissant par un saut de ligne.
+- **Commit sûr** : lancer `prek run --files <fichiers>` **avant** `git commit` puis re-stager, pour que la passe au commit ne modifie rien. Attention au **staging partiel** (stash de `prek` → conflit → commit avorté).
 - Conventions de nommage fichiers/symboles et checklist commit dans le fichier de référence.
 
 ## Quand utiliser ce skill
