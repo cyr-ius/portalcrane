@@ -505,6 +505,7 @@
   },
   "ACCOUNTS": {
     "PWD_MIN": "Password must be at least 8 characters",
+    "PWD_REQUIRED": "A new password is required",
     "ERR_LOAD": "Failed to load users",
     "ERR_CREATE": "Failed to create user",
     "ERR_SAVE": "Failed to save user",
@@ -530,13 +531,15 @@
     "DELETE_OIDC": "Delete and revoke SSO access",
     "DELETE_USER": "Delete user",
     "READ_ONLY": "Read-only",
+    "CHANGE_PASSWORD": "Change password",
     "EDITING": "Editing:",
     "OIDC_ACCOUNT": "OIDC account",
     "OIDC_INFO": "This account is authenticated via an external identity provider. The password is managed by the provider and cannot be changed here. You can only modify the admin role.",
+    "ENV_INFO": "Built-in admin account. Only the password can be changed here — the account is always an administrator and cannot be deleted. The new password takes effect immediately.",
     "NEW_PASSWORD": "New Password",
     "LEAVE_EMPTY": "Leave empty to keep current",
     "ADMIN_RIGHTS": "Admin rights",
-    "LEGEND": "The built-in admin account (badge ENV) has a password that is auto-generated on first launch and shown once in the server logs — it cannot be modified here. OIDC accounts are provisioned automatically on first SSO login — deleting one revokes future access."
+    "LEGEND": "The built-in admin account (badge ENV) has a password that is auto-generated on first launch and shown once in the server logs — you can change it here, but the account is always an administrator and cannot be deleted. OIDC accounts are provisioned automatically on first SSO login — deleting one revokes future access."
   },
   "NETWORK": {
     "LOADING": "Loading network settings…",

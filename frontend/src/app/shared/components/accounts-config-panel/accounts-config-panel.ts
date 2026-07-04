@@ -104,6 +104,11 @@ export class AccountsConfigPanel implements OnInit {
     return user.auth_source === "oidc";
   }
 
+  /** Return true for the built-in env-admin account (password-only edit). */
+  isEnvAdmin(user: LocalUser): boolean {
+    return user.id === "env-admin";
+  }
+
   /** Open the create form (only for local accounts). */
   openCreateForm(): void {
     this.createModel.set(this.createModelOrig);
@@ -165,6 +170,13 @@ export class AccountsConfigPanel implements OnInit {
 
     submit(this.updateForm, async (form) => {
       const formData = form().value();
+
+      // The env-admin edit only changes the password, so it must be provided.
+      if (userId === "env-admin" && formData.password.length === 0) {
+        this.saveError.set(this.translate.instant("ACCOUNTS.PWD_REQUIRED"));
+        this.saving.set(false);
+        return;
+      }
 
       if (formData.password.length > 0 && formData.password.length < 8) {
         this.saveError.set(this.translate.instant("ACCOUNTS.PWD_MIN"));

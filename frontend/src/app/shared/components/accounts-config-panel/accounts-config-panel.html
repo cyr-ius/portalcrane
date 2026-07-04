@@ -272,10 +272,15 @@
                 </button>
               </div>
               } @else {
-              <span class="text-muted small">
-                <i class="bi bi-lock me-1"></i>{{ "ACCOUNTS.READ_ONLY" |
-                translate }}
-              </span>
+              <div class="d-flex gap-1 justify-content-end">
+                <button
+                  class="btn btn-sm btn-outline-secondary"
+                  (click)="openEdit(user)"
+                  [title]="'ACCOUNTS.CHANGE_PASSWORD' | translate"
+                >
+                  <i class="bi bi-key"></i>
+                </button>
+              </div>
               }
             </td>
           </tr>
@@ -315,6 +320,14 @@
                 </div>
                 }
 
+                <!-- env-admin info banner — only the password can be changed -->
+                @if (isEnvAdmin(user)) {
+                <div class="alert alert-info d-flex gap-2 py-2 small mb-3">
+                  <i class="bi bi-info-circle-fill flex-shrink-0 mt-1"></i>
+                  <div>{{ "ACCOUNTS.ENV_INFO" | translate }}</div>
+                </div>
+                }
+
                 <div class="row g-2 align-items-end">
                   <!-- New password — hidden for OIDC accounts -->
                   @if (!isOidcUser(user)) {
@@ -329,7 +342,7 @@
                       <input
                         [type]="showEditPassword() ? 'text' : 'password'"
                         class="form-control"
-                        [placeholder]="'ACCOUNTS.LEAVE_EMPTY' | translate"
+                        [placeholder]="(isEnvAdmin(user) ? 'ACCOUNTS.MIN_8' : 'ACCOUNTS.LEAVE_EMPTY') | translate"
                         autocomplete="new-password"
                         [formField]="updateForm.password"
                       />
@@ -346,7 +359,8 @@
                   </div>
                   }
 
-                  <!-- Admin toggle -->
+                  <!-- Admin toggle — hidden for the always-admin env-admin -->
+                  @if (!isEnvAdmin(user)) {
                   <div class="col-md-3">
                     <div class="form-check form-switch">
                       <input
@@ -364,6 +378,7 @@
                       </label>
                     </div>
                   </div>
+                  }
 
                   <!-- Buttons -->
                   <div class="col-md-4 d-flex gap-2 justify-content-end">

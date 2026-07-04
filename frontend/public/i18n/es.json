@@ -505,6 +505,7 @@
   },
   "ACCOUNTS": {
     "PWD_MIN": "La contraseña debe tener al menos 8 caracteres",
+    "PWD_REQUIRED": "Se requiere una nueva contraseña",
     "ERR_LOAD": "Error al cargar los usuarios",
     "ERR_CREATE": "Error al crear el usuario",
     "ERR_SAVE": "Error al guardar el usuario",
@@ -530,13 +531,15 @@
     "DELETE_OIDC": "Eliminar y revocar el acceso SSO",
     "DELETE_USER": "Eliminar usuario",
     "READ_ONLY": "Solo lectura",
+    "CHANGE_PASSWORD": "Cambiar contraseña",
     "EDITING": "Editando:",
     "OIDC_ACCOUNT": "Cuenta OIDC",
     "OIDC_INFO": "Esta cuenta se autentica a través de un proveedor de identidad externo. La contraseña la gestiona el proveedor y no se puede cambiar aquí. Solo puede modificar el rol de administrador.",
+    "ENV_INFO": "Cuenta de administrador integrada. Aquí solo se puede cambiar la contraseña — la cuenta siempre es administradora y no se puede eliminar. La nueva contraseña surte efecto de inmediato.",
     "NEW_PASSWORD": "Nueva contraseña",
     "LEAVE_EMPTY": "Dejar vacío para mantener la actual",
     "ADMIN_RIGHTS": "Derechos de administración",
-    "LEGEND": "La cuenta de administrador integrada (insignia ENV) tiene una contraseña que se genera automáticamente en el primer arranque y se muestra una vez en los registros del servidor — no se puede modificar aquí. Las cuentas OIDC se aprovisionan automáticamente en el primer inicio de sesión SSO — eliminar una revoca el acceso futuro."
+    "LEGEND": "La cuenta de administrador integrada (insignia ENV) tiene una contraseña que se genera automáticamente en el primer arranque y se muestra una vez en los registros del servidor — puede cambiarla aquí, pero la cuenta siempre es administradora y no se puede eliminar. Las cuentas OIDC se aprovisionan automáticamente en el primer inicio de sesión SSO — eliminar una revoca el acceso futuro."
   },
   "NETWORK": {
     "LOADING": "Cargando configuración de red…",

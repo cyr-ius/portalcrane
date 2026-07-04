@@ -152,3 +152,19 @@ def ensure_admin_credentials(settings: Settings) -> None:
         )
 
     _log_generated_password(settings.admin_username, password)
+
+
+def set_admin_password(settings: Settings, password: str) -> bool:
+    """Change the built-in admin password from an authenticated request.
+
+    Hashes *password*, updates the in-memory ``settings.admin_password_hash`` so
+    the new credential takes effect immediately, and persists the hash under
+    DATA_DIR so it survives restarts.
+
+    Returns True on success, False when the hash could not be persisted (e.g. a
+    read-only volume) — the caller should surface this as an error rather than
+    silently accept a change that will be lost on the next restart.
+    """
+    hashed = hash_password(password)
+    settings.set_admin_password_hash(hashed)
+    return _write_secret_file(_ADMIN_HASH_FILE, hashed)

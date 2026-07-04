@@ -505,6 +505,7 @@
   },
   "ACCOUNTS": {
     "PWD_MIN": "Le mot de passe doit comporter au moins 8 caractères",
+    "PWD_REQUIRED": "Un nouveau mot de passe est requis",
     "ERR_LOAD": "Échec du chargement des utilisateurs",
     "ERR_CREATE": "Échec de la création de l'utilisateur",
     "ERR_SAVE": "Échec de l'enregistrement de l'utilisateur",
@@ -530,13 +531,15 @@
     "DELETE_OIDC": "Supprimer et révoquer l'accès SSO",
     "DELETE_USER": "Supprimer l'utilisateur",
     "READ_ONLY": "Lecture seule",
+    "CHANGE_PASSWORD": "Changer le mot de passe",
     "EDITING": "Modification :",
     "OIDC_ACCOUNT": "Compte OIDC",
     "OIDC_INFO": "Ce compte est authentifié via un fournisseur d'identité externe. Le mot de passe est géré par le fournisseur et ne peut pas être modifié ici. Vous pouvez uniquement modifier le rôle admin.",
+    "ENV_INFO": "Compte administrateur intégré. Seul le mot de passe peut être modifié ici — le compte est toujours administrateur et ne peut pas être supprimé. Le nouveau mot de passe prend effet immédiatement.",
     "NEW_PASSWORD": "Nouveau mot de passe",
     "LEAVE_EMPTY": "Laisser vide pour conserver l'actuel",
     "ADMIN_RIGHTS": "Droits d'administration",
-    "LEGEND": "Le compte administrateur intégré (badge ENV) a un mot de passe généré automatiquement au premier lancement et affiché une seule fois dans les journaux du serveur — il ne peut pas être modifié ici. Les comptes OIDC sont provisionnés automatiquement lors de la première connexion SSO — en supprimer un révoque l'accès futur."
+    "LEGEND": "Le compte administrateur intégré (badge ENV) a un mot de passe généré automatiquement au premier lancement et affiché une seule fois dans les journaux du serveur — vous pouvez le changer ici, mais le compte est toujours administrateur et ne peut pas être supprimé. Les comptes OIDC sont provisionnés automatiquement lors de la première connexion SSO — en supprimer un révoque l'accès futur."
   },
   "NETWORK": {
     "LOADING": "Chargement des paramètres réseau…",

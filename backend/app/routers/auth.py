@@ -21,6 +21,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, field_validator
 
 from ..config import DATA_DIR, Settings, get_settings
+from ..core.bootstrap import set_admin_password
 from ..core.cookies import clear_auth_cookie, set_auth_cookie
 from ..core.jwt import (
     Token,
@@ -331,17 +332,40 @@ async def create_local_user(
 async def update_local_user(
     user_id: str,
     payload: UpdateUserRequest,
+    settings: Settings = Depends(get_settings),
     _: UserInfo = Depends(require_admin),
 ) -> LocalUserPublic:
     """Update a local user's password and/or admin role.
 
     Password changes are rejected for OIDC users — their identity is managed
     exclusively by the external provider.
+
+    The built-in env-admin can only have its password changed (it is always an
+    administrator and cannot be renamed or demoted). The new hash is persisted
+    under DATA_DIR so it survives restarts.
     """
     if user_id == "env-admin":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="The env-based admin account cannot be modified here",
+        if payload.password is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Only the password can be changed for the admin account",
+            )
+        if len(payload.password) < 8:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Password must be at least 8 characters",
+            )
+        if not set_admin_password(settings, payload.password):
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Could not persist the new admin password",
+            )
+        return LocalUserPublic(
+            id="env-admin",
+            username=settings.admin_username,
+            is_admin=True,
+            created_at="",
+            auth_source=AUTH_SOURCE_LOCAL,
         )
 
     users = _load_users()
