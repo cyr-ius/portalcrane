@@ -543,20 +543,20 @@ async def list_pushable_folders(
 async def list_external_pullable_folders(
     current_user: UserInfo = Depends(get_current_user),
 ) -> list[str]:
-    """Return folder names the user may pull INTO from an external registry.
+    """Return folder names granting the user external-pull, __root__ included.
 
-    Empty list means admin (all folders allowed). Used by the Staging page to
-    decide whether the external pull sources (Docker Hub, saved / ad-hoc
-    registries) are offered at all.
-    __root__ is excluded — it has no display name in the UI.
+    Empty list means admin (all folders allowed). Consumed by the frontend purely
+    as a capability gate (``length > 0``) to decide whether the external pull
+    sources (Docker Hub, saved / ad-hoc registries) are offered at all, so it
+    mirrors the backend ``has_external_pull_access`` capability — a grant on the
+    __root__ catch-all must count too. Unlike ``/mine`` / ``/pushable`` (display
+    lists) __root__ is therefore NOT excluded here.
     """
     if current_user.is_admin:
         return []
     group_ids = get_group_ids_for_user(current_user.username)
     allowed: list[str] = []
     for folder in _load_folders():
-        if folder["name"] == ROOT_FOLDER_NAME:
-            continue
         for perm in folder.get("permissions", []):
             if perm.get("group_id") in group_ids and perm.get("can_pull_external"):
                 allowed.append(folder["name"])
@@ -568,19 +568,20 @@ async def list_external_pullable_folders(
 async def list_external_pushable_folders(
     current_user: UserInfo = Depends(get_current_user),
 ) -> list[str]:
-    """Return folder names the user may push OUT to an external registry.
+    """Return folder names granting the user external-push, __root__ included.
 
-    Empty list means admin (all folders allowed). Used by the Staging page to
-    decide whether the "External" push destination is offered at all.
-    __root__ is excluded — it has no display name in the UI.
+    Empty list means admin (all folders allowed). Consumed by the frontend purely
+    as a capability gate (``length > 0``) to decide whether the "External" push
+    destination is offered at all, so it mirrors the backend
+    ``has_external_push_access`` capability — a grant on the __root__ catch-all
+    must count too. Unlike ``/mine`` / ``/pushable`` (display lists) __root__ is
+    therefore NOT excluded here.
     """
     if current_user.is_admin:
         return []
     group_ids = get_group_ids_for_user(current_user.username)
     allowed: list[str] = []
     for folder in _load_folders():
-        if folder["name"] == ROOT_FOLDER_NAME:
-            continue
         for perm in folder.get("permissions", []):
             if perm.get("group_id") in group_ids and perm.get("can_push_external"):
                 allowed.append(folder["name"])
