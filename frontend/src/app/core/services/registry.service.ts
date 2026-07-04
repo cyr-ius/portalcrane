@@ -270,6 +270,22 @@ export class RegistryService {
     return this.http.get<string[]>(`${this.FOLDERS}/pushable`);
   }
 
+  /**
+   * Return the list of folder names the current user may pull INTO from an
+   * external registry (Staging page). Admins receive an empty list (full access).
+   */
+  getExternalPullableFolders(): Observable<string[]> {
+    return this.http.get<string[]>(`${this.FOLDERS}/pullable-external`);
+  }
+
+  /**
+   * Return the list of folder names the current user may push OUT to an
+   * external registry (Staging page). Admins receive an empty list (full access).
+   */
+  getExternalPushableFolders(): Observable<string[]> {
+    return this.http.get<string[]>(`${this.FOLDERS}/pushable-external`);
+  }
+
   // ── Garbage collection ──────────────────────────────────────────────────
 
   /**

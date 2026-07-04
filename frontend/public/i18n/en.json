@@ -280,6 +280,8 @@
     "PUSH_TO": "Push to:",
     "LOCAL": "Local",
     "EXTERNAL": "External",
+    "EXTERNAL_PULL": "External pull",
+    "EXTERNAL_PUSH": "External push",
     "ADHOC_BELOW": "— Ad-hoc (enter below) —",
     "EXT_HOST_PLACEHOLDER": "Registry host (e.g. registry.mycompany.com)",
     "FOLDER": "Folder",

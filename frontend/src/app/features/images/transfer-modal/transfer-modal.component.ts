@@ -154,6 +154,13 @@ export class TransferModalComponent implements OnInit, AfterViewInit, OnDestroy 
 
   readonly pushFolders = computed(() => this.folderSvc.allowedPushFolders());
 
+  // Coarse gate for offering genuinely external destinations. Admins always
+  // qualify; otherwise the user must hold can_push_external on at least one
+  // folder. The backend enforces the precise per-folder rule at transfer time.
+  readonly canExternalPush = computed(
+    () => this.isAdmin() || this.folderSvc.allowedExternalPushFolders().length > 0,
+  );
+
   /** Selected image refs ordered as they appear in the list. */
   readonly selectedImageRefs = computed(() => {
     const refs: { repository: string; tag: string }[] = [];
@@ -242,6 +249,11 @@ export class TransferModalComponent implements OnInit, AfterViewInit, OnDestroy 
     if (this.extRegSvc.externalRegistries().length === 0) {
       this.extRegSvc.loadRegistries();
     }
+
+    // Ensure folder permissions are loaded so the external-destination gate
+    // (canExternalPush) reflects the user's actual can_push_external grants —
+    // this modal lives on the Images page, which does not otherwise load them.
+    this.folderSvc.loadPermissions();
 
     // Load effective vulnerability scan config from the server
     // (env vars or admin override from Settings → Vulnerabilities)

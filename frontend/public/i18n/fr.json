@@ -280,6 +280,8 @@
     "PUSH_TO": "Pousser vers :",
     "LOCAL": "Local",
     "EXTERNAL": "Externe",
+    "EXTERNAL_PULL": "Récupération externe",
+    "EXTERNAL_PUSH": "Envoi externe",
     "ADHOC_BELOW": "— Ad-hoc (saisir ci-dessous) —",
     "EXT_HOST_PLACEHOLDER": "Hôte du registre (ex. registry.mycompany.com)",
     "FOLDER": "Dossier",

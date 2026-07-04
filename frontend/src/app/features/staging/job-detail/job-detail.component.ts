@@ -31,8 +31,21 @@ export class JobDetailComponent {
   pushExtRegistryId = signal<Record<string, string>>({});
 
   readonly externalRegistries = computed<ExternalRegistry[]>(() => this.extRegistrySvc.externalRegistries());
+  // Push destinations for the "External" mode. The local embedded registry is a
+  // hidden system entry with its own dedicated "Local" push button, so it must be
+  // excluded here to avoid offering it twice.
+  readonly pushableRegistries = computed<ExternalRegistry[]>(() =>
+    this.externalRegistries().filter((r) => !r.system),
+  );
   readonly isAdmin = computed(() => this.authService.currentUser()?.is_admin ?? false);
   readonly pushFolderOptions = computed(() => this.folderSvc.allowedPushFolders());
+
+  // Coarse gate for the "External" push destination. Admins always qualify;
+  // otherwise the user must hold can_push_external on at least one folder. The
+  // backend enforces the precise per-folder rule at push time.
+  readonly canExternalPush = computed(
+    () => this.isAdmin() || this.folderSvc.allowedExternalPushFolders().length > 0,
+  );
 
   /**
    * Delegate pushing state to the service so it survives @for re-renders.

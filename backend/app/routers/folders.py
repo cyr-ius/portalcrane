@@ -59,7 +59,16 @@ class FolderPermission(BaseModel):
     group_id: str
     group_name: str | None = None
     can_pull: bool = False
+    # Authorizes pulling images INTO Portalcrane FROM a genuinely external
+    # registry (Docker Hub, saved or ad-hoc registries) from the Staging page.
+    # Independent from can_pull (which governs reads from the local embedded
+    # registry).
+    can_pull_external: bool = False
     can_push: bool = False
+    # Authorizes pushing images OUT of Portalcrane to a genuinely external
+    # registry from the Staging page. Independent from can_push (which governs
+    # writes to the local embedded registry).
+    can_push_external: bool = False
 
 
 class Folder(BaseModel):
@@ -104,7 +113,9 @@ class SetPermissionRequest(BaseModel):
 
     group_id: str
     can_pull: bool = False
+    can_pull_external: bool = False
     can_push: bool = False
+    can_push_external: bool = False
 
     @field_validator("group_id")
     @classmethod
@@ -146,7 +157,9 @@ def _dict_to_folder(d: dict) -> Folder:
                 group_id=p["group_id"],
                 group_name=group_name_for_id(p["group_id"]),
                 can_pull=p.get("can_pull", False),
+                can_pull_external=p.get("can_pull_external", False),
                 can_push=p.get("can_push", False),
+                can_push_external=p.get("can_push_external", False),
             )
             for p in d.get("permissions", [])
             if "group_id" in p
@@ -274,6 +287,59 @@ def check_folder_access(username: str, image_path: str, is_pull: bool) -> bool |
     return False
 
 
+def has_external_pull_access(username: str) -> bool:
+    """Whether username may pull images IN from a genuinely external registry.
+
+    External pull is a *capability*, not a per-namespace right. Unlike the local
+    ``can_pull`` check, it cannot be scoped to the folder resolved from the image
+    path because:
+      * in Staging the destination folder is only chosen at push time, so at pull
+        time no local folder applies; and
+      * the source path belongs to a foreign registry (e.g. Docker Hub's
+        ``library/nginx``) which does not map to a Portalcrane folder — it would
+        almost always collapse onto __root__, forcing admins to grant the right
+        on __root__ instead of the user's own folder.
+
+    The user therefore qualifies as soon as any of their groups holds
+    ``can_pull_external`` on any folder (the __root__ catch-all included). This
+    matches the coarse gate the frontend already applies. Admins are handled by
+    the caller. The precise destination namespace is still protected separately
+    by ``can_push`` when the pulled image is written to a local folder.
+    """
+    group_ids = get_group_ids_for_user(username)
+    for folder in _load_folders():
+        for perm in folder.get("permissions", []):
+            if perm.get("group_id") in group_ids and perm.get(
+                "can_pull_external", False
+            ):
+                return True
+    return False
+
+
+def has_external_push_access(username: str) -> bool:
+    """Whether username may push images OUT to a genuinely external registry.
+
+    External push is a *capability* for the same reasons as external pull: the
+    image being exported is frequently a freshly staged foreign image (no local
+    folder prefix) or is exported under a folder chosen at push time, so scoping
+    the right to the folder resolved from the source path would force the grant
+    onto __root__ rather than honouring the user's own folder.
+
+    The user qualifies as soon as any of their groups holds ``can_push_external``
+    on any folder (the __root__ catch-all included), matching the frontend gate.
+    Admins are handled by the caller. Writes that actually land on the local
+    registry remain protected by the separate ``can_push`` check.
+    """
+    group_ids = get_group_ids_for_user(username)
+    for folder in _load_folders():
+        for perm in folder.get("permissions", []):
+            if perm.get("group_id") in group_ids and perm.get(
+                "can_push_external", False
+            ):
+                return True
+    return False
+
+
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 
@@ -377,14 +443,18 @@ async def set_permission(
             for p in perms:
                 if p.get("group_id") == payload.group_id:
                     p["can_pull"] = payload.can_pull
+                    p["can_pull_external"] = payload.can_pull_external
                     p["can_push"] = payload.can_push
+                    p["can_push_external"] = payload.can_push_external
                     _save_folders(folders)
                     return _dict_to_folder(f)
             perms.append(
                 {
                     "group_id": payload.group_id,
                     "can_pull": payload.can_pull,
+                    "can_pull_external": payload.can_pull_external,
                     "can_push": payload.can_push,
+                    "can_push_external": payload.can_push_external,
                 }
             )
             _save_folders(folders)
@@ -464,6 +534,55 @@ async def list_pushable_folders(
             continue
         for perm in folder.get("permissions", []):
             if perm.get("group_id") in group_ids and perm.get("can_push"):
+                allowed.append(folder["name"])
+                break
+    return allowed
+
+
+@router.get("/pullable-external", response_model=list[str])
+async def list_external_pullable_folders(
+    current_user: UserInfo = Depends(get_current_user),
+) -> list[str]:
+    """Return folder names the user may pull INTO from an external registry.
+
+    Empty list means admin (all folders allowed). Used by the Staging page to
+    decide whether the external pull sources (Docker Hub, saved / ad-hoc
+    registries) are offered at all.
+    __root__ is excluded — it has no display name in the UI.
+    """
+    if current_user.is_admin:
+        return []
+    group_ids = get_group_ids_for_user(current_user.username)
+    allowed: list[str] = []
+    for folder in _load_folders():
+        if folder["name"] == ROOT_FOLDER_NAME:
+            continue
+        for perm in folder.get("permissions", []):
+            if perm.get("group_id") in group_ids and perm.get("can_pull_external"):
+                allowed.append(folder["name"])
+                break
+    return allowed
+
+
+@router.get("/pushable-external", response_model=list[str])
+async def list_external_pushable_folders(
+    current_user: UserInfo = Depends(get_current_user),
+) -> list[str]:
+    """Return folder names the user may push OUT to an external registry.
+
+    Empty list means admin (all folders allowed). Used by the Staging page to
+    decide whether the "External" push destination is offered at all.
+    __root__ is excluded — it has no display name in the UI.
+    """
+    if current_user.is_admin:
+        return []
+    group_ids = get_group_ids_for_user(current_user.username)
+    allowed: list[str] = []
+    for folder in _load_folders():
+        if folder["name"] == ROOT_FOLDER_NAME:
+            continue
+        for perm in folder.get("permissions", []):
+            if perm.get("group_id") in group_ids and perm.get("can_push_external"):
                 allowed.append(folder["name"])
                 break
     return allowed

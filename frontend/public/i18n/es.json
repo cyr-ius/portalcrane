@@ -280,6 +280,8 @@
     "PUSH_TO": "Enviar a:",
     "LOCAL": "Local",
     "EXTERNAL": "Externo",
+    "EXTERNAL_PULL": "Extracción externa",
+    "EXTERNAL_PUSH": "Envío externo",
     "ADHOC_BELOW": "— Ad-hoc (introducir abajo) —",
     "EXT_HOST_PLACEHOLDER": "Host del registro (p. ej. registry.mycompany.com)",
     "FOLDER": "Carpeta",

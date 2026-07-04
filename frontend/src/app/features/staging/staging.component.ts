@@ -7,6 +7,7 @@
 import {
   Component,
   computed,
+  effect,
   inject,
   OnInit,
   signal
@@ -29,7 +30,7 @@ import { TrivyService } from "../../core/services/trivy.service";
 import { JobsListComponent } from "./jobs-list/jobs-list.component";
 
 
-export type PullSourceMode = "dockerhub" | "saved" | "adhoc";
+export type PullSourceMode = "dockerhub" | "local" | "saved" | "adhoc";
 
 @Component({
   selector: "app-staging",
@@ -62,16 +63,36 @@ export class StagingComponent implements OnInit {
   pullSourceUser = signal<string>("");
   pullSourcePass = signal<string>("");
 
+  // The local embedded registry is exposed as a hidden system entry (owner="global").
+  // It has its own dedicated "Local" pull-source button, so it must be excluded from
+  // the saved/external registries dropdown to avoid listing it twice.
   readonly globalRegistries = computed(() =>
-    this.externalRegistries().filter((r) => r.owner === "global"),
+    this.externalRegistries().filter((r) => r.owner === "global" && !r.system),
   );
   readonly personalRegistries = computed(() =>
-    this.externalRegistries().filter((r) => r.owner !== "global"),
+    this.externalRegistries().filter((r) => r.owner !== "global" && !r.system),
   );
 
   readonly isAdmin = computed(
     () => this.authService.currentUser()?.is_admin ?? false,
   );
+
+  // Coarse gate for the genuinely external pull sources (Docker Hub, saved /
+  // ad-hoc registries). Admins always qualify; otherwise the user must hold
+  // can_pull_external on at least one folder. The backend enforces the precise
+  // per-folder rule at pull time. The "Local" source stays governed by can_pull.
+  readonly canExternalPull = computed(
+    () => this.isAdmin() || this.folderSvc.allowedExternalPullFolders().length > 0,
+  );
+
+  // When the user is not allowed to pull from external sources, keep them on the
+  // local registry source rather than a disabled external mode. Runs once
+  // permissions resolve; the "local" fallback is always governed by can_pull.
+  private readonly _guardExternalPullMode = effect(() => {
+    if (!this.canExternalPull() && this.pullSourceMode() !== "local") {
+      this.setPullSourceMode("local");
+    }
+  });
 
   /**
    * Bare host:port of the local embedded registry.
@@ -80,10 +101,11 @@ export class StagingComponent implements OnInit {
    * so that folder access rules are enforced before the pull is started.
    */
   readonly isPullingFromLocal = computed(() => {
-    if (this.pullSourceMode() === "adhoc") {
-      return false;
+    const mode = this.pullSourceMode();
+    if (mode === "local") {
+      return true;
     }
-    if (this.pullSourceMode() === "saved") {
+    if (mode === "saved") {
       return this.pullSourceRegistryId() === LOCAL_REGISTRY_SYSTEM_ID;
     }
     return false;
@@ -113,6 +135,8 @@ export class StagingComponent implements OnInit {
 
   readonly pullSourceLabel = computed(() => {
     switch (this.pullSourceMode()) {
+      case "local":
+        return "Local Registry";
       case "saved": {
         const reg = this.externalRegistries().find(
           (r) => r.id === this.pullSourceRegistryId(),
@@ -216,7 +240,11 @@ export class StagingComponent implements OnInit {
 
         // Source registry resolution
         source_registry_id:
-          mode === "saved" ? this.pullSourceRegistryId() || null : null,
+          mode === "local"
+            ? LOCAL_REGISTRY_SYSTEM_ID
+            : mode === "saved"
+              ? this.pullSourceRegistryId() || null
+              : null,
         source_registry_host:
           mode === "adhoc" ? this.pullSourceHost() || null : null,
         source_registry_username:

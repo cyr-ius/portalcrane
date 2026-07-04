@@ -33,7 +33,9 @@ interface FolderFormModel {
 interface PermFormModel {
   groupId: string;
   canPull: boolean;
+  canPullExternal: boolean;
   canPush: boolean;
+  canPushExternal: boolean;
 }
 
 @Component({
@@ -92,7 +94,9 @@ export class FoldersConfigPanel implements OnInit {
   private readonly permInit: PermFormModel = {
     groupId: "",
     canPull: false,
+    canPullExternal: false,
     canPush: false,
+    canPushExternal: false,
   };
   readonly permModel = signal<PermFormModel>({ ...this.permInit });
 
@@ -270,7 +274,8 @@ export class FoldersConfigPanel implements OnInit {
   /** Submit the add-permission form via Signal Forms. */
   savePerm(folderId: string): void {
     submit(this.permForm, async (f) => {
-      const { groupId, canPull, canPush } = f().value();
+      const { groupId, canPull, canPullExternal, canPush, canPushExternal } =
+        f().value();
       this.savingPerm.set(true);
       this.permError.set(null);
 
@@ -280,7 +285,9 @@ export class FoldersConfigPanel implements OnInit {
             folderId,
             groupId!.trim(),
             canPull ?? false,
+            canPullExternal ?? false,
             canPush ?? false,
+            canPushExternal ?? false,
           ),
         );
         this.folders.update((list) =>
@@ -305,15 +312,26 @@ export class FoldersConfigPanel implements OnInit {
     folderId: string,
     groupId: string,
     can_pull: boolean,
+    can_pull_external: boolean,
     can_push: boolean,
+    can_push_external: boolean,
   ): void {
-    this.folderSvc.savePerm(folderId, groupId, can_pull, can_push).subscribe({
-      next: (updated) => {
-        this.folders.update((list) =>
-          list.map((f) => (f.id === updated.id ? updated : f)),
-        );
-      },
-    });
+    this.folderSvc
+      .savePerm(
+        folderId,
+        groupId,
+        can_pull,
+        can_pull_external,
+        can_push,
+        can_push_external,
+      )
+      .subscribe({
+        next: (updated) => {
+          this.folders.update((list) =>
+            list.map((f) => (f.id === updated.id ? updated : f)),
+          );
+        },
+      });
   }
 
   // ── Remove permission ──────────────────────────────────────────────────────

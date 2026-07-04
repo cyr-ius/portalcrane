@@ -370,10 +370,12 @@
                   <option [value]="null">
                     {{ "TRANSFER.LOCAL_REGISTRY_EMBEDDED" | translate }}
                   </option>
-                  @for (reg of externalRegistries(); track reg.id) {
-                    <option [value]="reg.id">
-                      {{ reg.name }} ({{ reg.host }})
-                    </option>
+                  @if (canExternalPush()) {
+                    @for (reg of externalRegistries(); track reg.id) {
+                      <option [value]="reg.id">
+                        {{ reg.name }} ({{ reg.host }})
+                      </option>
+                    }
                   }
                 </select>
               </div>

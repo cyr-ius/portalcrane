@@ -20,7 +20,13 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from ..config import Settings, get_settings
 from ..core.jwt import UserInfo, get_current_user, require_push_access
-from ..routers.folders import check_folder_access
+from ..helpers import is_local_registry_host
+from ..routers.folders import (
+    check_folder_access,
+    has_external_pull_access,
+    has_external_push_access,
+)
+from ..services.providers import resolve_provider_from_registry
 from ..services.registries_service import get_registry_for_user
 from ..services.transfer_service import (
     TransferRequest,
@@ -32,6 +38,29 @@ from ..services.transfer_service import (
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+def _resolves_to_local_registry(
+    registry_id: str | None, current_user: UserInfo
+) -> bool:
+    """Return True when a transfer end resolves to the embedded local registry.
+
+    ``registry_id is None`` is the explicit local-registry selector. A non-None
+    id is a saved registry whose host is resolved and matched against the local
+    registry host — this catches the ``__local__`` system entry and any ad-hoc
+    saved registry pointing back at the internal registry, so those ends are
+    governed by the local can_pull / can_push permissions rather than the
+    external ones. Ownership of the id is already validated by the caller.
+    """
+    if registry_id is None:
+        return True
+    registry = get_registry_for_user(
+        registry_id, current_user.username, current_user.is_admin
+    )
+    if not registry:
+        return False
+    provider = resolve_provider_from_registry(registry)
+    return is_local_registry_host(provider.host)
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
@@ -65,16 +94,32 @@ async def start_transfer(
     # Validate folder access for non-admin users.
     #
     # The transfer pipeline talks to the local embedded registry directly
-    # (localhost:5000), bypassing the registry auth proxy. We must therefore
-    # enforce folder permissions here for both ends when they resolve to the
-    # local registry:
-    #   - pull permission on the source repository  (source_registry_id is None)
-    #   - push permission on the destination folder  (dest_registry_id is None)
+    # (localhost:5000), bypassing the registry auth proxy, so folder permissions
+    # must be enforced here. Which permission applies depends on whether each end
+    # resolves to the local registry or a genuinely external one — a saved
+    # registry_id may itself point at the local registry (the __local__ system
+    # entry or an ad-hoc host resolving to localhost:5000), so the id being
+    # non-None is not sufficient to treat the end as external.
+    #
+    #   source local    → can_pull on each source repository (per-folder)
+    #   source external → can_pull_external capability (any folder grant)
+    #   dest   local    → can_push on each destination folder (per-folder)
+    #   dest   external → can_push_external capability (any folder grant)
+    #
+    # The external ends use capability checks rather than per-folder ones: a
+    # foreign repository path does not map to a Portalcrane folder, so scoping
+    # the right to the resolved folder would collapse onto __root__.
     if not current_user.is_admin:
-        if request.source_registry_id is None:
-            # Source is the local registry — check pull permission on each
-            # source repository (full path, namespace included).
+        source_is_local = _resolves_to_local_registry(
+            request.source_registry_id, current_user
+        )
+        dest_is_local = _resolves_to_local_registry(
+            request.dest_registry_id, current_user
+        )
+
+        if source_is_local:
             for img_ref in request.images:
+                # Source repository full path (namespace included).
                 access = check_folder_access(
                     current_user.username, img_ref.repository, is_pull=True
                 )
@@ -85,9 +130,13 @@ async def start_transfer(
                             f"Pull permission denied for source '{img_ref.repository}'"
                         ),
                     )
+        elif not has_external_pull_access(current_user.username):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="External pull permission denied",
+            )
 
-        if request.dest_registry_id is None:
-            # Destination is local registry — check folder permissions
+        if dest_is_local:
             folder = request.dest_folder or ""
             for img_ref in request.images:
                 dest_name = img_ref.repository.split("/")[-1]
@@ -100,6 +149,13 @@ async def start_transfer(
                         status_code=status.HTTP_403_FORBIDDEN,
                         detail=f"Push permission denied for folder '{folder}'",
                     )
+        elif not has_external_push_access(current_user.username):
+            # Genuinely external destination — governed by the can_push_external
+            # capability (granted on any folder).
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="External push permission denied",
+            )
 
     job_ids = await start_transfer_jobs(
         request=request,

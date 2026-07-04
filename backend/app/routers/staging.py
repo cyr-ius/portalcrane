@@ -14,7 +14,12 @@ from pydantic import BaseModel
 
 from ..config import DEFAULT_TIMEOUT, REGISTRY_HOST, Settings, get_settings
 from ..core.jwt import UserInfo, is_admin_user, require_pull_access, require_push_access
-from ..routers.folders import check_folder_access
+from ..helpers import is_local_registry_host
+from ..routers.folders import (
+    check_folder_access,
+    has_external_pull_access,
+    has_external_push_access,
+)
 from ..services.job_service import (
     JobStatus,
     PullRequest,
@@ -50,22 +55,8 @@ class DockerHubSearchResult(BaseModel):
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 
 
-def _is_local_registry_host(host: str) -> bool:
-    """Return True when *host* resolves to the embedded local registry.
-
-    The host may arrive with a scheme (ad-hoc registries) or as a bare netloc
-    (saved / system registries), so both forms are normalized before comparing
-    against REGISTRY_HOST. This lets the external-push branch detect writes that
-    actually land on the internal registry and enforce local push permissions.
-    """
-    if not host:
-        return False
-    bare = host.rstrip("/")
-    for scheme in ("http://", "https://"):
-        if bare.startswith(scheme):
-            bare = bare[len(scheme) :]
-            break
-    return bare == REGISTRY_HOST
+# Re-exported under the module-local name kept by the external-push branch.
+_is_local_registry_host = is_local_registry_host
 
 
 def _build_external_target_image(image: str, username: str) -> str:
@@ -191,9 +182,13 @@ async def pull_image(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
 
-    if display_host and display_host == REGISTRY_HOST:
-        # folder check uses image name (no tag)
-        if not is_admin_user(current_user.username, settings):
+    # folder check uses image name (no tag). Two distinct permissions apply:
+    #  * pulling FROM the local embedded registry is governed by can_pull;
+    #  * pulling FROM a genuinely external source (Docker Hub, saved / ad-hoc
+    #    registries) is governed by the dedicated can_pull_external permission
+    #    on the folder the pulled image lands in.
+    if not is_admin_user(current_user.username, settings):
+        if display_host and display_host == REGISTRY_HOST:
             access = check_folder_access(
                 current_user.username, request.image, is_pull=True
             )
@@ -203,6 +198,11 @@ async def pull_image(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Folder access denied: pull permission required",
                 )
+        elif not has_external_pull_access(current_user.username):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Folder access denied: external pull permission required",
+            )
 
     job_id = str(uuid.uuid4())
     jobs_list[job_id] = {
@@ -304,28 +304,39 @@ async def push_image(
             external_target_image,
         )
 
-        # Security: the "external" push path must not become a back door onto the
-        # local registry. The embedded local registry is exposed as a hidden
-        # system entry (id=__local__, host=REGISTRY_HOST) in the same registry
-        # selector, and a user could also register an ad-hoc external host that
-        # resolves to localhost:5000. In both cases the write actually lands on
-        # the internal registry, so the same folder-based push permission that
-        # guards the dedicated local-push branch below must be enforced here —
-        # otherwise a pull-only user could push simply by choosing
-        # External → Local Registry.
-        if _is_local_registry_host(host) and not is_admin_user(
-            current_user.username, settings
-        ):
-            full_path = (
-                f"{folder}/{external_target_image}" if folder else external_target_image
-            )
-            access = check_folder_access(
-                current_user.username, full_path, is_pull=False
-            )
-            if access is not True:
+        if not is_admin_user(current_user.username, settings):
+            if _is_local_registry_host(host):
+                # Security: the "external" push path must not become a back door
+                # onto the local registry. The embedded local registry is exposed
+                # as a hidden system entry (id=__local__, host=REGISTRY_HOST) in
+                # the same registry selector, and a user could also register an
+                # ad-hoc external host that resolves to localhost:5000. In both
+                # cases the write actually lands on the internal registry, so the
+                # same folder-based push permission that guards the dedicated
+                # local-push branch below must be enforced here — otherwise a
+                # pull-only user could push simply by choosing
+                # External → Local Registry.
+                full_path = (
+                    f"{folder}/{external_target_image}"
+                    if folder
+                    else external_target_image
+                )
+                access = check_folder_access(
+                    current_user.username, full_path, is_pull=False
+                )
+                if access is not True:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Folder access denied: push permission required",
+                    )
+            elif not has_external_push_access(current_user.username):
+                # Genuinely external destination (outside Portalcrane). Requires
+                # the dedicated can_push_external capability (granted on any
+                # folder) — the staged source image has no meaningful local
+                # folder to scope the check to.
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Folder access denied: push permission required",
+                    detail="Folder access denied: external push permission required",
                 )
 
         dest_ref = build_target_path(folder, external_target_image, target_tag, host)

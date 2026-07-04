@@ -159,23 +159,25 @@
           >
             <i class="bi bi-hdd me-1"></i>{{ "STAGING.LOCAL" | translate }}
           </button>
-          <button
-            type="button"
-            class="btn"
-            [class.btn-primary]="getPushMode(job()!) === 'external'"
-            [class.btn-outline-secondary]="getPushMode(job()!) !== 'external'"
-            (click)="setPushMode(job()!, 'external')"
-          >
-            <i class="bi bi-cloud-upload me-1"></i
-            >{{ "STAGING.EXTERNAL" | translate }}
-          </button>
+          @if (canExternalPush()) {
+            <button
+              type="button"
+              class="btn"
+              [class.btn-primary]="getPushMode(job()!) === 'external'"
+              [class.btn-outline-secondary]="getPushMode(job()!) !== 'external'"
+              (click)="setPushMode(job()!, 'external')"
+            >
+              <i class="bi bi-cloud-upload me-1"></i
+              >{{ "STAGING.EXTERNAL" | translate }}
+            </button>
+          }
         </div>
       </div>
 
       <!-- External registry selector -->
       @if (getPushMode(job()!) === "external") {
         <div class="mb-2">
-          @if (externalRegistries().length > 0) {
+          @if (pushableRegistries().length > 0) {
             <select
               class="form-select form-select-sm mb-2"
               [value]="getExtRegistryId(job()!)"
@@ -184,7 +186,7 @@
               <option value="">
                 {{ "STAGING.ADHOC_BELOW" | translate }}
               </option>
-              @for (reg of externalRegistries(); track reg.id) {
+              @for (reg of pushableRegistries(); track reg.id) {
                 <option [value]="reg.id">
                   {{ reg.name }} ({{ reg.host }})
                 </option>

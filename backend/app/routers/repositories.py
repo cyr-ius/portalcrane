@@ -36,7 +36,11 @@ from ..services.repositories_service import (
     skopeo_copy_image_image,
     validate_folder_path,
 )
-from .folders import check_folder_access
+from .folders import (
+    check_folder_access,
+    has_external_pull_access,
+    has_external_push_access,
+)
 from .registries import resolve_owned_registry
 
 router = APIRouter()
@@ -361,6 +365,29 @@ async def start_sync(
 ):
     """Trigger a sync job (local -> external). Returns job_id immediately."""
     _ensure_registry_access(current_user, request.dest_registry_id)
+
+    # Exporting a local image OUT to an external registry requires reading the
+    # local source (can_pull on its folder) plus the can_push_external capability
+    # (same invariant as the /transfer and staging push endpoints): a pull-only
+    # user must not be able to export images externally. Bulk "(all)" export
+    # spans every folder, so it is restricted to admins.
+    if not current_user.is_admin:
+        if request.source_image == "(all)":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Exporting all images requires admin privileges",
+            )
+        _ensure_folder_permission(
+            current_user=current_user,
+            image_path=request.source_image,
+            is_pull=True,
+        )
+        if not has_external_push_access(current_user.username):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="External push permission denied",
+            )
+
     try:
         folder = validate_folder_path(request.dest_folder or "")
     except ValueError as exc:
@@ -395,6 +422,29 @@ async def start_import(
         folder = validate_folder_path(request.dest_folder or "")
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+
+    # Importing from an external registry INTO the local one requires the
+    # can_pull_external capability (reading a foreign source) plus can_push on the
+    # destination folder (writing locally). Bulk "(all)" import spans every
+    # folder, so it is restricted to admins.
+    if not current_user.is_admin:
+        if request.source_image == "(all)":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Importing all images requires admin privileges",
+            )
+        if not has_external_pull_access(current_user.username):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="External pull permission denied",
+            )
+        dest_name = request.source_image.split("/")[-1]
+        dest_path = f"{folder}/{dest_name}" if folder else dest_name
+        _ensure_folder_permission(
+            current_user=current_user,
+            image_path=dest_path,
+            is_pull=False,
+        )
 
     try:
         job_id = await run_import_job(

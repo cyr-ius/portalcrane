@@ -255,6 +255,23 @@
                         <input
                           class="form-check-input"
                           type="checkbox"
+                          [id]="'perm-pullext-root-' + folder.id"
+                          [formField]="permForm.canPullExternal"
+                        />
+                        <label
+                          class="form-check-label small"
+                          [htmlFor]="'perm-pullext-root-' + folder.id"
+                        >
+                          <i class="bi bi-cloud-download me-1"></i
+                          >{{ "STAGING.EXTERNAL_PULL" | translate }}
+                        </label>
+                      </div>
+                    </div>
+                    <div class="col-auto">
+                      <div class="form-check mb-0">
+                        <input
+                          class="form-check-input"
+                          type="checkbox"
                           [id]="'perm-push-root-' + folder.id"
                           [formField]="permForm.canPush"
                         />
@@ -264,6 +281,23 @@
                         >
                           <i class="bi bi-upload me-1"></i
                           >{{ "STAGING.PUSH" | translate }}
+                        </label>
+                      </div>
+                    </div>
+                    <div class="col-auto">
+                      <div class="form-check mb-0">
+                        <input
+                          class="form-check-input"
+                          type="checkbox"
+                          [id]="'perm-pushext-root-' + folder.id"
+                          [formField]="permForm.canPushExternal"
+                        />
+                        <label
+                          class="form-check-label small"
+                          [htmlFor]="'perm-pushext-root-' + folder.id"
+                        >
+                          <i class="bi bi-cloud-upload me-1"></i
+                          >{{ "STAGING.EXTERNAL_PUSH" | translate }}
                         </label>
                       </div>
                     </div>
@@ -305,7 +339,13 @@
                         {{ "STAGING.PULL" | translate }}
                       </th>
                       <th class="text-center">
+                        {{ "STAGING.EXTERNAL_PULL" | translate }}
+                      </th>
+                      <th class="text-center">
                         {{ "STAGING.PUSH" | translate }}
+                      </th>
+                      <th class="text-center">
+                        {{ "STAGING.EXTERNAL_PUSH" | translate }}
                       </th>
                       <th class="text-end">
                         {{ "COMMON.ACTIONS" | translate }}
@@ -331,7 +371,26 @@
                                 folder.id,
                                 perm.group_id,
                                 $any($event.target).checked,
-                                perm.can_push
+                                perm.can_pull_external,
+                                perm.can_push,
+                                perm.can_push_external
+                              )
+                            "
+                          />
+                        </td>
+                        <td class="text-center">
+                          <input
+                            class="form-check-input"
+                            type="checkbox"
+                            [checked]="perm.can_pull_external"
+                            (change)="
+                              updatePerm(
+                                folder.id,
+                                perm.group_id,
+                                perm.can_pull,
+                                $any($event.target).checked,
+                                perm.can_push,
+                                perm.can_push_external
                               )
                             "
                           />
@@ -346,6 +405,25 @@
                                 folder.id,
                                 perm.group_id,
                                 perm.can_pull,
+                                perm.can_pull_external,
+                                $any($event.target).checked,
+                                perm.can_push_external
+                              )
+                            "
+                          />
+                        </td>
+                        <td class="text-center">
+                          <input
+                            class="form-check-input"
+                            type="checkbox"
+                            [checked]="perm.can_push_external"
+                            (change)="
+                              updatePerm(
+                                folder.id,
+                                perm.group_id,
+                                perm.can_pull,
+                                perm.can_pull_external,
+                                perm.can_push,
                                 $any($event.target).checked
                               )
                             "
@@ -517,6 +595,25 @@
                       </div>
                     </div>
 
+                    <!-- Can pull external -->
+                    <div class="col-auto">
+                      <div class="form-check mb-0">
+                        <input
+                          class="form-check-input"
+                          type="checkbox"
+                          [id]="'perm-pullext-' + folder.id"
+                          [formField]="permForm.canPullExternal"
+                        />
+                        <label
+                          class="form-check-label small"
+                          [htmlFor]="'perm-pullext-' + folder.id"
+                        >
+                          <i class="bi bi-cloud-download me-1"></i
+                          >{{ "STAGING.EXTERNAL_PULL" | translate }}
+                        </label>
+                      </div>
+                    </div>
+
                     <!-- Can push -->
                     <div class="col-auto">
                       <div class="form-check mb-0">
@@ -532,6 +629,25 @@
                         >
                           <i class="bi bi-upload me-1"></i
                           >{{ "STAGING.PUSH" | translate }}
+                        </label>
+                      </div>
+                    </div>
+
+                    <!-- Can push external -->
+                    <div class="col-auto">
+                      <div class="form-check mb-0">
+                        <input
+                          class="form-check-input"
+                          type="checkbox"
+                          [id]="'perm-pushext-' + folder.id"
+                          [formField]="permForm.canPushExternal"
+                        />
+                        <label
+                          class="form-check-label small"
+                          [htmlFor]="'perm-pushext-' + folder.id"
+                        >
+                          <i class="bi bi-cloud-upload me-1"></i
+                          >{{ "STAGING.EXTERNAL_PUSH" | translate }}
                         </label>
                       </div>
                     </div>
@@ -575,7 +691,13 @@
                         {{ "STAGING.PULL" | translate }}
                       </th>
                       <th class="text-center">
+                        {{ "STAGING.EXTERNAL_PULL" | translate }}
+                      </th>
+                      <th class="text-center">
                         {{ "STAGING.PUSH" | translate }}
+                      </th>
+                      <th class="text-center">
+                        {{ "STAGING.EXTERNAL_PUSH" | translate }}
                       </th>
                       <th class="text-end">
                         {{ "COMMON.ACTIONS" | translate }}
@@ -601,7 +723,26 @@
                                 folder.id,
                                 perm.group_id,
                                 $any($event.target).checked,
-                                perm.can_push
+                                perm.can_pull_external,
+                                perm.can_push,
+                                perm.can_push_external
+                              )
+                            "
+                          />
+                        </td>
+                        <td class="text-center">
+                          <input
+                            class="form-check-input"
+                            type="checkbox"
+                            [checked]="perm.can_pull_external"
+                            (change)="
+                              updatePerm(
+                                folder.id,
+                                perm.group_id,
+                                perm.can_pull,
+                                $any($event.target).checked,
+                                perm.can_push,
+                                perm.can_push_external
                               )
                             "
                           />
@@ -616,6 +757,25 @@
                                 folder.id,
                                 perm.group_id,
                                 perm.can_pull,
+                                perm.can_pull_external,
+                                $any($event.target).checked,
+                                perm.can_push_external
+                              )
+                            "
+                          />
+                        </td>
+                        <td class="text-center">
+                          <input
+                            class="form-check-input"
+                            type="checkbox"
+                            [checked]="perm.can_push_external"
+                            (change)="
+                              updatePerm(
+                                folder.id,
+                                perm.group_id,
+                                perm.can_pull,
+                                perm.can_pull_external,
+                                perm.can_push,
                                 $any($event.target).checked
                               )
                             "
