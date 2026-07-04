@@ -337,6 +337,8 @@
   "ACCOUNT": {
     "LANGUAGE": "Language",
     "LANGUAGE_DESC": "Choose the interface language.",
+    "THEME": "Theme",
+    "THEME_DESC": "Choose the interface theme.",
     "TEST_FAILED": "Test failed.",
     "PERSONAL_REGISTRIES": "Personal Registries",
     "PERSONAL_REGISTRIES_DESC": "Private registry credentials for your account only.",

@@ -2,7 +2,8 @@
  * Portalcrane - Layout Component
  *
  * Authenticated application shell with collapsible sidebar, navigation,
- * theme switcher, user zone, and account modal.
+ * user zone, and account modal. Theme and language selection now live in
+ * the account modal.
  *
  * Change: BackendAvailabilityService is no longer injected here for
  * backend-down detection. The detection is now handled at the root level
@@ -93,10 +94,5 @@ export class LayoutComponent implements OnInit, OnDestroy {
     this.sidebarCollapsed.set(next);
     this.userHasToggled.set(true);
     localStorage.setItem(this.SIDEBAR_KEY, String(next));
-  }
-
-  setTheme(theme: "light" | "dark" | "auto"): void {
-    this.themeService.setTheme(theme);
-    this.themePickerOpen.set(false);
   }
 }

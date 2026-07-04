@@ -125,33 +125,6 @@
                 </button>
                 <!-- Divider -->
                 <div class="border-top my-1 mx-1"></div>
-                <!-- Theme options -->
-                <button
-                  class="theme-option"
-                  [class.active]="themeService.theme() === 'light'"
-                  (click)="setTheme('light')"
-                  [title]="'THEME.LIGHT' | translate"
-                >
-                  <i class="bi bi-sun-fill"></i>
-                </button>
-                <button
-                  class="theme-option"
-                  [class.active]="themeService.theme() === 'dark'"
-                  (click)="setTheme('dark')"
-                  [title]="'THEME.DARK' | translate"
-                >
-                  <i class="bi bi-moon-fill"></i>
-                </button>
-                <button
-                  class="theme-option"
-                  [class.active]="themeService.theme() === 'auto'"
-                  (click)="setTheme('auto')"
-                  [title]="'THEME.AUTO' | translate"
-                >
-                  <i class="bi bi-circle-half"></i>
-                </button>
-                <!-- Divider -->
-                <div class="border-top my-1 mx-1"></div>
                 <!-- Logout -->
                 <button
                   class="theme-option text-danger"
@@ -166,37 +139,6 @@
         }
 
         @if (!sidebarCollapsed()) {
-          <!-- Theme switcher inline -->
-          <div class="d-flex gap-1 mb-2">
-            <button
-              class="btn btn-sm px-2 flex-fill"
-              [class.btn-primary]="themeService.theme() === 'light'"
-              [class.btn-outline-secondary]="themeService.theme() !== 'light'"
-              (click)="themeService.setTheme('light')"
-              [title]="'THEME.LIGHT' | translate"
-            >
-              <i class="bi bi-sun-fill"></i>
-            </button>
-            <button
-              class="btn btn-sm px-2 flex-fill"
-              [class.btn-primary]="themeService.theme() === 'dark'"
-              [class.btn-outline-secondary]="themeService.theme() !== 'dark'"
-              (click)="themeService.setTheme('dark')"
-              [title]="'THEME.DARK' | translate"
-            >
-              <i class="bi bi-moon-fill"></i>
-            </button>
-            <button
-              class="btn btn-sm px-2 flex-fill"
-              [class.btn-primary]="themeService.theme() === 'auto'"
-              [class.btn-outline-secondary]="themeService.theme() !== 'auto'"
-              (click)="themeService.setTheme('auto')"
-              [title]="'THEME.AUTO' | translate"
-            >
-              <i class="bi bi-circle-half"></i>
-            </button>
-          </div>
-
           <div class="d-flex align-items-center gap-2">
             <!-- User info row — cliquable pour ouvrir la modale -->
             <div

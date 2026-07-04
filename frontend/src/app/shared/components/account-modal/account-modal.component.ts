@@ -21,6 +21,7 @@ import {
   ExternalRegistryService,
 } from "../../../core/services/external-registry.service";
 import { Language, LanguageService } from "../../../core/services/language.service";
+import { Theme, ThemeService } from "../../../core/services/theme.service";
 import { PersonalTokensPanelComponent } from "../personal-tokens-panel/personal-tokens-panel.component";
 
 /** Internal shape of the registry form model. */
@@ -52,14 +53,27 @@ export class AccountModalComponent implements OnInit {
   readonly close = output<void>();
   readonly authService = inject(AuthService);
   readonly languageService = inject(LanguageService);
+  readonly themeService = inject(ThemeService);
   private readonly extRegSvc = inject(ExternalRegistryService);
   private readonly translate = inject(TranslateService);
 
   readonly currentUser = this.authService.currentUser;
 
+  /** Selectable interface themes shown in the account panel. */
+  readonly themes: { value: Theme; icon: string; label: string }[] = [
+    { value: "light", icon: "bi-sun-fill", label: "THEME.LIGHT" },
+    { value: "dark", icon: "bi-moon-fill", label: "THEME.DARK" },
+    { value: "auto", icon: "bi-circle-half", label: "THEME.AUTO" },
+  ];
+
   /** Change the interface language from the account panel. */
   setLanguage(lang: Language): void {
     this.languageService.setLanguage(lang);
+  }
+
+  /** Change the interface theme from the account panel. */
+  setTheme(theme: Theme): void {
+    this.themeService.setTheme(theme);
   }
 
   // ── Personal external registries list ──────────────────────────────────────

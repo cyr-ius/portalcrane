@@ -337,6 +337,8 @@
   "ACCOUNT": {
     "LANGUAGE": "Idioma",
     "LANGUAGE_DESC": "Elija el idioma de la interfaz.",
+    "THEME": "Tema",
+    "THEME_DESC": "Elija el tema de la interfaz.",
     "TEST_FAILED": "Prueba fallida.",
     "PERSONAL_REGISTRIES": "Registros personales",
     "PERSONAL_REGISTRIES_DESC": "Credenciales de registro privadas solo para su cuenta.",
