@@ -551,17 +551,30 @@ class V2Provider(BaseRegistryProvider):
         if not tags:
             return None
 
+        # Several tags can point to the same manifest digest. Deleting a digest
+        # removes every tag referencing it at once, so resolve digests first and
+        # delete each unique digest only once to avoid spurious 404s.
+        deleted_digests: set[str] = set()
         failed: list[str] = []
 
         for tag in tags:
-            result = await self.delete_tag(repository, tag)
-            if not result.get("success"):
+            manifest = await self.get_manifest(repository, tag)
+            digest = manifest.get("_digest", "") if manifest else ""
+            if not digest:
+                # Tag already gone (e.g. removed via a shared digest) — skip it.
+                continue
+            if digest in deleted_digests:
+                continue
+
+            if await self.delete_manifest(repository, digest):
+                deleted_digests.add(digest)
+            else:
                 failed.append(tag)
                 logger.warning(
-                    "delete_repository: error deleting %s:%s — %s",
+                    "delete_repository: error deleting %s:%s (digest=%s)",
                     repository,
                     tag,
-                    result.get("message"),
+                    digest,
                 )
 
         return f"Failed to delete tags: {', '.join(failed)}" if failed else None
