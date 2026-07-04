@@ -152,19 +152,6 @@
                 </button>
                 <!-- Divider -->
                 <div class="border-top my-1 mx-1"></div>
-                <!-- Language options -->
-                @for (l of languageService.languages; track l.value) {
-                  <button
-                    class="theme-option"
-                    [class.active]="languageService.language() === l.value"
-                    (click)="setLanguage(l.value)"
-                    [title]="l.label"
-                  >
-                    <span class="lang-flag">{{ l.flag }}</span>
-                  </button>
-                }
-                <!-- Divider -->
-                <div class="border-top my-1 mx-1"></div>
                 <!-- Logout -->
                 <button
                   class="theme-option text-danger"
@@ -208,23 +195,6 @@
             >
               <i class="bi bi-circle-half"></i>
             </button>
-          </div>
-
-          <!-- Language switcher inline -->
-          <div class="d-flex gap-1 mb-2">
-            @for (l of languageService.languages; track l.value) {
-              <button
-                class="btn btn-sm px-2 flex-fill"
-                [class.btn-primary]="languageService.language() === l.value"
-                [class.btn-outline-secondary]="
-                  languageService.language() !== l.value
-                "
-                (click)="languageService.setLanguage(l.value)"
-                [title]="l.label"
-              >
-                <span class="lang-flag">{{ l.flag }}</span>
-              </button>
-            }
           </div>
 
           <div class="d-flex align-items-center gap-2">

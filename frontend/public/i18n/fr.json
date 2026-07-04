@@ -335,6 +335,8 @@
     "GENERATED_WITH": "Code généré avec"
   },
   "ACCOUNT": {
+    "LANGUAGE": "Langue",
+    "LANGUAGE_DESC": "Choisissez la langue de l'interface.",
     "TEST_FAILED": "Échec du test.",
     "PERSONAL_REGISTRIES": "Registres personnels",
     "PERSONAL_REGISTRIES_DESC": "Identifiants de registre privés pour votre compte uniquement.",

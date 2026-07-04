@@ -335,6 +335,8 @@
     "GENERATED_WITH": "Code generated with"
   },
   "ACCOUNT": {
+    "LANGUAGE": "Language",
+    "LANGUAGE_DESC": "Choose the interface language.",
     "TEST_FAILED": "Test failed.",
     "PERSONAL_REGISTRIES": "Personal Registries",
     "PERSONAL_REGISTRIES_DESC": "Private registry credentials for your account only.",

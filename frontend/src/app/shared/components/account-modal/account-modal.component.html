@@ -45,6 +45,37 @@
     <!-- Personal access tokens panel -->
     <app-personal-tokens-panel />
 
+    <!-- ── Language card ────────────────────────────────────────────────── -->
+    <div class="card border-0 mb-3">
+      <div class="card-header border-0 pb-0">
+        <h6 class="fw-semibold mb-0">
+          <i class="bi bi-translate me-2 text-primary"></i
+          >{{ "ACCOUNT.LANGUAGE" | translate }}
+        </h6>
+        <p class="text-muted small mt-1 mb-0">
+          {{ "ACCOUNT.LANGUAGE_DESC" | translate }}
+        </p>
+      </div>
+      <div class="card-body">
+        <div class="d-flex flex-wrap gap-2">
+          @for (l of languageService.languages; track l.value) {
+            <button
+              type="button"
+              class="btn btn-sm px-3"
+              [class.btn-primary]="languageService.language() === l.value"
+              [class.btn-outline-secondary]="
+                languageService.language() !== l.value
+              "
+              (click)="setLanguage(l.value)"
+            >
+              <span class="lang-flag me-1">{{ l.flag }}</span
+              >{{ l.label }}
+            </button>
+          }
+        </div>
+      </div>
+    </div>
+
     <!-- ── External registries card ─────────────────────────────────────── -->
     <div class="card border-0 mb-3">
       <div

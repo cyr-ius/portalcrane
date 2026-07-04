@@ -20,6 +20,7 @@ import {
   ExternalRegistry,
   ExternalRegistryService,
 } from "../../../core/services/external-registry.service";
+import { Language, LanguageService } from "../../../core/services/language.service";
 import { PersonalTokensPanelComponent } from "../personal-tokens-panel/personal-tokens-panel.component";
 
 /** Internal shape of the registry form model. */
@@ -50,10 +51,16 @@ interface RegistryFormModel {
 export class AccountModalComponent implements OnInit {
   readonly close = output<void>();
   readonly authService = inject(AuthService);
+  readonly languageService = inject(LanguageService);
   private readonly extRegSvc = inject(ExternalRegistryService);
   private readonly translate = inject(TranslateService);
 
   readonly currentUser = this.authService.currentUser;
+
+  /** Change the interface language from the account panel. */
+  setLanguage(lang: Language): void {
+    this.languageService.setLanguage(lang);
+  }
 
   // ── Personal external registries list ──────────────────────────────────────
   readonly registries = signal<ExternalRegistry[]>([]);
