@@ -133,7 +133,7 @@ class GithubProvider(BaseRegistryProvider):
                 timeout=self.probe_timeout, verify=self.verify, follow_redirects=True
             ) as client:
                 cred_resp = await client.get(
-                    f"{_GITHUB_API}/octocat/", headers=self._github_api_headers()
+                    f"{_GITHUB_API}/user", headers=self._github_api_headers()
                 )
                 if cred_resp.status_code == 200:
                     return {
