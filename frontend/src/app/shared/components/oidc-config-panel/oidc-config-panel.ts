@@ -9,11 +9,9 @@ import { form, FormField, required, submit } from "@angular/forms/signals";
 import { TranslatePipe, TranslateService } from "@ngx-translate/core";
 import { firstValueFrom } from "rxjs";
 
-import {
-  OidcAdminSettings,
-  OidcTestResult,
-} from "../../../core/models/auth.models";
+import { OidcAdminSettings, OidcTestResult } from "../../../core/models/auth.models";
 import { OidcService } from "../../../core/services/oidc.service";
+import { UsersService } from "../../../core/services/users.service";
 
 @Component({
   selector: "app-oidc-config-panel",
@@ -23,6 +21,7 @@ import { OidcService } from "../../../core/services/oidc.service";
 })
 export class OidcConfigPanel implements OnInit {
   private readonly oidc = inject(OidcService);
+  private readonly users = inject(UsersService);
   private readonly translate = inject(TranslateService);
 
   readonly loading = signal(false);
@@ -37,6 +36,12 @@ export class OidcConfigPanel implements OnInit {
    * the backend does not override each user's role on login.
    */
   readonly groupMappingEnabled = signal(false);
+  /**
+   * True when at least one OIDC account has already been promoted to admin.
+   * Such an account keeps admin access reachable in OIDC-only mode even without
+   * the group mapping, so the anti-lockout guard can be satisfied by it.
+   */
+  readonly hasOidcAdmin = signal(false);
   readonly oidcModel = signal<OidcAdminSettings>({
     enabled: false,
     issuer: "",
@@ -45,7 +50,7 @@ export class OidcConfigPanel implements OnInit {
     redirect_uri: "",
     post_logout_redirect_uri: "",
     response_type: "code",
-    scope: "openid profile email",
+    scope: "openid profile email groups",
     oidc_only: false,
     admin_group_claim: "",
     admin_group: "",
@@ -55,16 +60,16 @@ export class OidcConfigPanel implements OnInit {
   });
 
   /**
-   * True when OIDC-only mode is requested but no admin group mapping is
-   * configured. Mirrors the backend anti-lockout guard so the user is warned
-   * before the save call is rejected with a 400.
+   * True when OIDC-only mode is requested but admin access cannot be guaranteed:
+   * neither the admin group mapping is configured nor an OIDC account has been
+   * promoted to admin. Mirrors the backend anti-lockout guard so the user is
+   * warned before the save call is rejected with a 400.
    */
   readonly oidcOnlyMissingAdmin = computed(() => {
     const m = this.oidcModel();
     if (!m.oidc_only) return false;
-    const hasAdminGroup =
-      m.admin_group_claim.trim().length > 0 && m.admin_group.trim().length > 0;
-    return !hasAdminGroup;
+    const hasAdminGroup = m.admin_group_claim.trim().length > 0 && m.admin_group.trim().length > 0;
+    return !hasAdminGroup && !this.hasOidcAdmin();
   });
 
   oidcForm = form(this.oidcModel, (p) => {
@@ -89,11 +94,18 @@ export class OidcConfigPanel implements OnInit {
         this.loading.set(false);
       },
       error: (err) => {
-        this.error.set(
-          err?.error?.detail ?? this.translate.instant("OIDC.ERR_LOAD"),
-        );
+        this.error.set(err?.error?.detail ?? this.translate.instant("OIDC.ERR_LOAD"));
         this.loading.set(false);
       },
+    });
+    // Non-blocking: detect an already-promoted OIDC admin so OIDC-only mode can
+    // be enabled without the group mapping. A failure here just leaves the
+    // stricter guard in place.
+    this.users.getUser().subscribe({
+      next: (list) => {
+        this.hasOidcAdmin.set(list.some((u) => u.auth_source === "oidc" && u.is_admin));
+      },
+      error: () => this.hasOidcAdmin.set(false),
     });
   }
 
@@ -110,22 +122,14 @@ export class OidcConfigPanel implements OnInit {
         setTimeout(() => this.saved.set(false), 3000);
       } catch (err: unknown) {
         const httpErr = err as { error?: { detail?: string } };
-        this.error.set(
-          httpErr?.error?.detail ?? this.translate.instant("OIDC.ERR_SAVE"),
-        );
+        this.error.set(httpErr?.error?.detail ?? this.translate.instant("OIDC.ERR_SAVE"));
       }
     });
   }
 
   /** True when any group-mapping field carries a value. */
   private hasAnyMapping(m: OidcAdminSettings): boolean {
-    return !!(
-      m.admin_group_claim ||
-      m.admin_group ||
-      m.user_group_claim ||
-      m.user_group ||
-      m.restrict_to_groups
-    );
+    return !!(m.admin_group_claim || m.admin_group || m.user_group_claim || m.user_group || m.restrict_to_groups);
   }
 
   /**
@@ -171,9 +175,7 @@ export class OidcConfigPanel implements OnInit {
         this.testing.set(false);
       },
       error: (err) => {
-        this.error.set(
-          err?.error?.detail ?? this.translate.instant("OIDC.ERR_TEST"),
-        );
+        this.error.set(err?.error?.detail ?? this.translate.instant("OIDC.ERR_TEST"));
         this.testing.set(false);
       },
     });
