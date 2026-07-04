@@ -138,8 +138,15 @@ async def start_transfer(
 
         if dest_is_local:
             folder = request.dest_folder or ""
+            single = len(request.images) == 1
             for img_ref in request.images:
-                dest_name = img_ref.repository.split("/")[-1]
+                # Honour the per-image rename (or the single-image request-level
+                # override) so the permission check matches the repository that
+                # is actually pushed, not the untouched source name.
+                override = (img_ref.dest_name or "").strip() or (
+                    request.dest_name_override if single else None
+                )
+                dest_name = (override or img_ref.repository).split("/")[-1]
                 dest_path = f"{folder}/{dest_name}" if folder else dest_name
                 access = check_folder_access(
                     current_user.username, dest_path, is_pull=False

@@ -403,50 +403,60 @@
                 </datalist>
               </div>
 
-              <!-- Name / tag override — only available for single selection -->
-              @if (isSingleSelection()) {
-                <div class="row g-2 mb-3">
-                  <div class="col-8">
-                    <label class="form-label small fw-semibold">
-                      {{ "TRANSFER.DEST_NAME" | translate }}
-                      <span class="text-muted fw-normal">{{
-                        "TRANSFER.OPTIONAL" | translate
-                      }}</span>
-                    </label>
-                    <input
-                      type="text"
-                      class="form-control form-control-sm font-monospace"
-                      [placeholder]="
-                        selectedImageRefs().at(0)?.repository ?? 'image-name'
-                      "
-                      [value]="destNameOverride()"
-                      (input)="destNameOverride.set($any($event.target).value)"
-                    />
-                  </div>
-                  <div class="col-4">
-                    <label class="form-label small fw-semibold">
-                      {{ "TRANSFER.DEST_TAG" | translate }}
-                      <span class="text-muted fw-normal">{{
-                        "TRANSFER.OPTIONAL" | translate
-                      }}</span>
-                    </label>
-                    <input
-                      type="text"
-                      class="form-control form-control-sm font-monospace"
-                      [placeholder]="selectedImageRefs().at(0)?.tag ?? 'latest'"
-                      [value]="destTagOverride()"
-                      (input)="destTagOverride.set($any($event.target).value)"
-                    />
+              <!-- Per-image rename — one destination name override per image -->
+              @if (selectedRepositories().length > 0) {
+                <div class="mb-3">
+                  <label class="form-label small fw-semibold mb-1">
+                    {{ "TRANSFER.DEST_NAME" | translate }}
+                    <span class="text-muted fw-normal">{{
+                      "TRANSFER.OPTIONAL" | translate
+                    }}</span>
+                  </label>
+                  <div
+                    class="border rounded"
+                    style="max-height: 240px; overflow-y: auto"
+                  >
+                    @for (repo of selectedRepositories(); track repo) {
+                      <div class="px-2 py-2 border-bottom">
+                        <div
+                          class="text-muted font-monospace text-truncate mb-1"
+                          style="font-size: 0.72rem"
+                          [title]="repo"
+                        >
+                          {{ repo }}
+                        </div>
+                        <input
+                          type="text"
+                          class="form-control form-control-sm font-monospace"
+                          [placeholder]="repo"
+                          [value]="nameOverride(repo)"
+                          (input)="
+                            setNameOverride(repo, $any($event.target).value)
+                          "
+                        />
+                      </div>
+                    }
                   </div>
                 </div>
               }
 
-              <!-- Destination preview -->
-              @if (destPreview()) {
+              <!-- Destination preview — one resolved path per selected image -->
+              @if (destPreviews().length > 0) {
                 <div class="alert alert-info py-2 small mb-3">
-                  <i class="bi bi-arrow-right me-1"></i>
-                  {{ "TRANSFER.PREVIEW" | translate }}:
-                  <code>{{ destPreview() }}</code>
+                  <div class="fw-semibold mb-1">
+                    <i class="bi bi-arrow-right me-1"></i>
+                    {{ "TRANSFER.PREVIEW" | translate }}
+                  </div>
+                  <div
+                    class="d-flex flex-column gap-1"
+                    style="max-height: 160px; overflow-y: auto"
+                  >
+                    @for (p of destPreviews(); track p.source) {
+                      <code class="d-block text-truncate" [title]="p.dest">{{
+                        p.dest
+                      }}</code>
+                    }
+                  </div>
                 </div>
               }
 

@@ -60,10 +60,17 @@ class TransferStatus(str, Enum):
 
 
 class TransferImageRef(BaseModel):
-    """Reference to a single image (repository + tag) to transfer."""
+    """Reference to a single image (repository + tag) to transfer.
+
+    dest_name is an optional per-image destination name override, letting the
+    user rename each image independently even when several are transferred at
+    once. When unset, the request-level fallback and the namespace rules apply
+    (see ``start_transfer_jobs``). The source tag is always preserved.
+    """
 
     repository: str
     tag: str
+    dest_name: str | None = None
 
 
 class TransferRequest(BaseModel):
@@ -79,8 +86,11 @@ class TransferRequest(BaseModel):
       - dest_registry_id = "<id>" → saved external registry
 
     dest_folder: optional path prefix for destination images.
-    dest_name_override: optional name override (only valid for single-image transfers).
-    dest_tag_override: optional tag override (only valid for single-image transfers).
+    dest_name_override: request-level name override, applied only when a single
+        image is transferred and the image has no per-image dest_name. Kept for
+        backward compatibility; per-image TransferImageRef.dest_name is preferred.
+    dest_tag_override: request-level tag override, same single-image semantics as
+        dest_name_override.
     vuln_scan_enabled_override: None → use server settings.
     vuln_severities_override: None → use server settings.
     """
@@ -376,17 +386,21 @@ async def start_transfer_jobs(
         # Compute destination repository name.
         #
         # Rules (in priority order):
-        #   1. dest_name_override (single-image transfer only) → use as-is
-        #   2. Destination is the local embedded registry → preserve the full
+        #   1. per-image dest_name → use as-is
+        #   2. dest_name_override (single-image transfer only) → use as-is
+        #   3. Destination is the local embedded registry → preserve the full
         #      source path including any namespace (traefik/whoami → traefik/whoami)
-        #   3. Destination is an external registry with a username configured →
+        #   4. Destination is an external registry with a username configured →
         #      replace the source namespace with the registry username so the
         #      image is pushed under the owner's account
         #      (traefik/whoami + username=myuser → myuser/whoami)
-        #   4. Destination is an external registry without a username →
+        #   5. Destination is an external registry without a username →
         #      preserve the full source path
-        if request.dest_name_override and len(request.images) == 1:
-            dest_name = request.dest_name_override
+        name_override = (img_ref.dest_name or "").strip() or (
+            request.dest_name_override if len(request.images) == 1 else None
+        )
+        if name_override:
+            dest_name = name_override
         elif request.dest_registry_id is None:
             # Local embedded registry → keep the full source path
             dest_name = repository

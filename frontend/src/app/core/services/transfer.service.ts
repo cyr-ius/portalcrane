@@ -49,6 +49,8 @@ export const TRANSFER_TERMINAL_STATUSES = new Set<TransferStatus>([
 export interface TransferImageRef {
   repository: string;
   tag: string;
+  /** Optional per-image destination name override (rename). */
+  dest_name?: string | null;
 }
 
 export interface VulnerabilityEntry {

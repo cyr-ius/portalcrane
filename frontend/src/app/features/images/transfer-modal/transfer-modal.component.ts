@@ -124,8 +124,14 @@ export class TransferModalComponent implements OnInit, AfterViewInit, OnDestroy 
 
   readonly destRegistryId = signal<string | null>(null);
   readonly destFolder = signal("");
-  readonly destNameOverride = signal("");
-  readonly destTagOverride = signal("");
+
+  /**
+   * Per-image destination name overrides, keyed by repository (image name).
+   * A single override applies to every selected tag of that image; empty
+   * entries fall back to the namespace rules mirrored in resolveDestName. The
+   * source tag is always preserved (no tag override).
+   */
+  readonly destNameOverrides = signal<Map<string, string>>(new Map());
 
   // ── Transfer state ─────────────────────────────────────────────────────────
 
@@ -176,55 +182,79 @@ export class TransferModalComponent implements OnInit, AfterViewInit, OnDestroy 
     return refs;
   });
 
-  /** True when exactly one image+tag is selected (enables name/tag overrides). */
-  readonly isSingleSelection = computed(
-    () => this.selectedImageRefs().length === 1,
-  );
-
-  /** Preview of the destination path shown in the info banner. */
-  readonly destPreview = computed(() => {
-    const refs = this.selectedImageRefs();
-    if (refs.length === 0) return "";
-    const folder = this.destFolder().trim();
-    const destId = this.destRegistryId();
-    const reg = this.externalRegistries().find((r) => r.id === destId);
-    const host = reg ? reg.host : "local";
-
-    /**
-     * Mirror the backend naming rules:
-     *   - local registry (destId null)     → keep full source path
-     *   - external + username configured   → replace namespace with username
-     *   - external without username        → keep full source path
-     *   - dest_name_override (single only) → use override as-is
-     */
-    const resolveDestName = (repository: string): string => {
-      if (refs.length === 1 && this.destNameOverride().trim()) {
-        return this.destNameOverride().trim();
+  /** Unique repositories among the selected refs, in list order. */
+  readonly selectedRepositories = computed(() => {
+    const seen = new Set<string>();
+    const repos: string[] = [];
+    for (const ref of this.selectedImageRefs()) {
+      if (!seen.has(ref.repository)) {
+        seen.add(ref.repository);
+        repos.push(ref.repository);
       }
-      if (destId === null) {
-        // Local registry: preserve the full path
-        return repository;
-      }
-      const username = reg?.username?.trim() ?? "";
-      if (username) {
-        // External with username: replace namespace with username
-        const leaf = repository.includes("/")
-          ? repository.split("/").pop()!
-          : repository;
-        return `${username}/${leaf}`;
-      }
-      // External without username: preserve the full path
-      return repository;
-    };
-
-    if (refs.length === 1) {
-      const destName = resolveDestName(refs[0].repository);
-      const tag = this.destTagOverride().trim() || refs[0].tag;
-      const path = folder ? `${folder}/${destName}` : destName;
-      return `${host}/${path}:${tag}`;
     }
-    return `${host}/${folder ? folder + "/" : ""}[${refs.length} images]`;
+    return repos;
   });
+
+  /** Current name-override value for a repository (empty string when unset). */
+  nameOverride(repository: string): string {
+    return this.destNameOverrides().get(repository) ?? "";
+  }
+
+  setNameOverride(repository: string, value: string): void {
+    const next = new Map(this.destNameOverrides());
+    next.set(repository, value);
+    this.destNameOverrides.set(next);
+  }
+
+  /**
+   * Resolve the destination repository name for a single image, mirroring the
+   * backend naming rules:
+   *   - per-image name override           → use as-is
+   *   - local registry (destId null)      → keep full source path
+   *   - external + username configured    → replace namespace with username
+   *   - external without username         → keep full source path
+   */
+  private resolveDestName(ref: { repository: string; tag: string }): string {
+    const override = this.nameOverride(ref.repository).trim();
+    if (override) return override;
+
+    const destId = this.destRegistryId();
+    if (destId === null) return ref.repository;
+
+    const reg = this.externalRegistries().find((r) => r.id === destId);
+    const username = reg?.username?.trim() ?? "";
+    if (username) {
+      const leaf = ref.repository.includes("/")
+        ? ref.repository.split("/").pop()!
+        : ref.repository;
+      return `${username}/${leaf}`;
+    }
+    return ref.repository;
+  }
+
+  /** Destination registry host label used in previews ("local" for embedded). */
+  private destHost(): string {
+    const reg = this.externalRegistries().find(
+      (r) => r.id === this.destRegistryId(),
+    );
+    return reg ? reg.host : "local";
+  }
+
+  /** Full destination path preview for a single image. */
+  resolveDestPath(ref: { repository: string; tag: string }): string {
+    const folder = this.destFolder().trim();
+    const name = this.resolveDestName(ref);
+    const path = folder ? `${folder}/${name}` : name;
+    return `${this.destHost()}/${path}:${ref.tag}`;
+  }
+
+  /** Per-image source → destination path previews (shown for any count). */
+  readonly destPreviews = computed(() =>
+    this.selectedImageRefs().map((ref) => ({
+      source: `${ref.repository}:${ref.tag}`,
+      dest: this.resolveDestPath(ref),
+    })),
+  );
 
   /** Jobs still running (not yet terminal). */
   readonly runningJobs = computed(() =>
@@ -381,22 +411,24 @@ export class TransferModalComponent implements OnInit, AfterViewInit, OnDestroy 
 
     const destId = this.destRegistryId();
     const folder = this.destFolder().trim() || null;
-    const nameOverride = this.isSingleSelection()
-      ? this.destNameOverride().trim() || null
-      : null;
-    const tagOverride = this.isSingleSelection()
-      ? this.destTagOverride().trim() || null
-      : null;
+
+    // Carry each image's own rename so the backend applies it per job.
+    const images = refs.map((ref) => ({
+      repository: ref.repository,
+      tag: ref.tag,
+      dest_name: this.nameOverride(ref.repository).trim() || null,
+    }));
 
     try {
       const result = await firstValueFrom(
         this.transferSvc.startTransfer({
-          images: refs,
+          images,
           source_registry_id: sourceId,
           dest_registry_id: destId,
           dest_folder: folder,
-          dest_name_override: nameOverride,
-          dest_tag_override: tagOverride,
+          // Per-image overrides above supersede the request-level ones.
+          dest_name_override: null,
+          dest_tag_override: null,
           // Scan policy is always inherited from the server (Settings → Vulnerabilities)
           vuln_scan_enabled_override: null,
           vuln_severities_override: null,
