@@ -38,7 +38,7 @@ Portalcrane's internal registry allows you to organize images into directories. 
 - 🎨 Modern UI with light / dark / auto themes
 - 🔐 Local authentication (admin + per-user accounts) with optional OIDC support
 - 👥 Multi-user management with granular pull / push permissions
-- 📁 Folder-based access control (per-user pull/push permissions on image namespaces)
+- 📁 Folder-based access control (per-folder local and external pull/push permissions on image namespaces)
 - 📦 Browse, search, and paginate images and tags
 - 🗑️ Delete images or individual tags
 - 🏷️ Retag: add new tags to existing images
@@ -334,7 +334,16 @@ Portalcrane supports two types of accounts:
 
 ## Folder-Based Access Control
 
-Administrators can define **folders** (image namespace prefixes, e.g. `production/`) and assign per-user pull/push permissions on each folder. Non-admin users can only access images whose path matches a folder they have been granted access to.
+Administrators can define **folders** (image namespace prefixes, e.g. `production/`) and grant permissions on each folder. Non-admin users can only access images whose path matches a folder they have been granted access to.
+
+Four independent permissions can be granted per folder:
+
+- **Pull** — read images from the **local** embedded registry.
+- **Push** — write / delete images in the **local** embedded registry.
+- **External pull** — pull images **into** Portalcrane **from** a genuinely external registry (Docker Hub, saved or ad-hoc registries) via the Staging page.
+- **External push** — push images **out** of Portalcrane **to** a genuinely external registry via the Staging page.
+
+The external pull / push permissions are independent from their local counterparts: they govern transfers with external registries, not reads and writes on the local registry.
 
 ---
 

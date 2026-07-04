@@ -40,7 +40,7 @@ Un modelo RBAC permite controlar el uso de las imágenes.
 - 🎨 Interfaz moderna con temas claro / oscuro / automático
 - 🔐 Autenticación local (admin + cuentas por usuario) con soporte OIDC opcional
 - 👥 Gestión multiusuario con permisos granulares pull / push
-- 📁 Control de acceso por directorio (permisos pull/push por usuario sobre los espacios de nombres de imágenes)
+- 📁 Control de acceso por directorio (permisos pull/push locales y externos por directorio sobre los espacios de nombres de imágenes)
 - 📦 Navegar, buscar y paginar imágenes y etiquetas
 - 🗑️ Eliminar imágenes o etiquetas individuales
 - 🏷️ Retag: añadir nuevas etiquetas a imágenes existentes
@@ -351,9 +351,22 @@ Portalcrane admite dos tipos de cuentas:
 ## Control de acceso por directorio
 
 Los administradores pueden definir **directorios** (prefijos de espacios de nombres
-de imágenes, p. ej. `production/`) y asignar permisos pull/push por usuario en cada
-directorio. Los usuarios no admin solo pueden acceder a las imágenes cuya ruta
-coincida con un directorio al que se les haya concedido acceso.
+de imágenes, p. ej. `production/`) y asignar permisos en cada directorio. Los usuarios
+no admin solo pueden acceder a las imágenes cuya ruta coincida con un directorio al
+que se les haya concedido acceso.
+
+Se pueden conceder cuatro permisos independientes por directorio:
+
+- **Pull** — leer imágenes del registro **local** integrado.
+- **Push** — escribir / eliminar imágenes en el registro **local** integrado.
+- **Pull externo** — traer imágenes **hacia** Portalcrane **desde** un registro
+  realmente externo (Docker Hub, registros guardados o ad-hoc) desde la página de preparación.
+- **Push externo** — enviar imágenes **fuera** de Portalcrane **hacia** un registro
+  realmente externo desde la página de preparación.
+
+Los permisos pull / push externos son independientes de sus equivalentes locales:
+rigen las transferencias con registros externos, no las lecturas y escrituras en el
+registro local.
 
 ---
 

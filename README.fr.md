@@ -41,7 +41,7 @@ Un modèle RBAC permet de contrôler l'utilisation des images.
 - 🎨 Interface moderne avec thèmes clair / sombre / auto
 - 🔐 Authentification locale (admin + comptes par utilisateur) avec support OIDC optionnel
 - 👥 Gestion multi-utilisateurs avec permissions granulaires pull / push
-- 📁 Contrôle d'accès par répertoire (permissions pull/push par utilisateur sur les espaces de noms d'images)
+- 📁 Contrôle d'accès par répertoire (permissions pull/push locales et externes par répertoire sur les espaces de noms d'images)
 - 📦 Parcourir, rechercher et paginer les images et les tags
 - 🗑️ Supprimer des images ou des tags individuels
 - 🏷️ Retag : ajouter de nouveaux tags à des images existantes
@@ -353,9 +353,22 @@ Portalcrane prend en charge deux types de comptes :
 ## Contrôle d'accès par répertoire
 
 Les administrateurs peuvent définir des **répertoires** (préfixes d'espaces de noms
-d'images, ex. `production/`) et attribuer des permissions pull/push par utilisateur
-sur chaque répertoire. Les utilisateurs non-admin ne peuvent accéder qu'aux images
-dont le chemin correspond à un répertoire auquel ils ont reçu l'accès.
+d'images, ex. `production/`) et attribuer des permissions sur chaque répertoire. Les
+utilisateurs non-admin ne peuvent accéder qu'aux images dont le chemin correspond à
+un répertoire auquel ils ont reçu l'accès.
+
+Quatre permissions indépendantes peuvent être accordées par répertoire :
+
+- **Pull** — lire les images du registre **local** embarqué.
+- **Push** — écrire / supprimer des images dans le registre **local** embarqué.
+- **Pull externe** — récupérer des images **dans** Portalcrane **depuis** un registre
+  réellement externe (Docker Hub, registres enregistrés ou ad-hoc) via la page de préparation.
+- **Push externe** — pousser des images **hors** de Portalcrane **vers** un registre
+  réellement externe via la page de préparation.
+
+Les permissions pull / push externes sont indépendantes de leurs équivalents locaux :
+elles régissent les transferts avec les registres externes, et non les lectures et
+écritures sur le registre local.
 
 ---
 
