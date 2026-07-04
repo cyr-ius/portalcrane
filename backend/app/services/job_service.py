@@ -5,7 +5,7 @@ import shutil
 from enum import Enum
 from pathlib import Path
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from ..config import REGISTRY_HOST, REGISTRY_URL, Settings, staging_root
 from ..core.jwt import UserInfo, is_admin_user
@@ -66,6 +66,11 @@ class PullRequest(BaseModel):
       3. No source fields    → Docker Hub (docker.io) using the user's saved Hub credentials
     """
 
+    # Strip surrounding whitespace from all string fields so a stray space in
+    # the image/tag (e.g. "cyr-ius/portalcrane ") never leaks into the skopeo
+    # reference and produces an "invalid reference format" error.
+    model_config = ConfigDict(str_strip_whitespace=True)
+
     image: str
     tag: str = "latest"
 
@@ -84,6 +89,8 @@ class PullRequest(BaseModel):
 
 class PushRequest(BaseModel):
     """Request to push a staged image to the local or an external registry."""
+
+    model_config = ConfigDict(str_strip_whitespace=True)
 
     job_id: str
     external_registry_host: str | None = None
