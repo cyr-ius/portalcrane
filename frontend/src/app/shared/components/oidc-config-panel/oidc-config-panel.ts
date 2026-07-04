@@ -31,6 +31,12 @@ export class OidcConfigPanel implements OnInit {
   readonly showSecret = signal(false);
   readonly testing = signal(false);
   readonly testResult = signal<OidcTestResult | null>(null);
+  /**
+   * UI-only toggle that unfolds the group-mapping section. When off, roles are
+   * managed manually in the users panel and the mapping fields are cleared so
+   * the backend does not override each user's role on login.
+   */
+  readonly groupMappingEnabled = signal(false);
   readonly oidcModel = signal<OidcAdminSettings>({
     enabled: false,
     issuer: "",
@@ -79,6 +85,7 @@ export class OidcConfigPanel implements OnInit {
     this.oidc.getAdminSettings().subscribe({
       next: (s) => {
         this.oidcModel.set(s);
+        this.groupMappingEnabled.set(this.hasAnyMapping(s));
         this.loading.set(false);
       },
       error: (err) => {
@@ -108,6 +115,37 @@ export class OidcConfigPanel implements OnInit {
         );
       }
     });
+  }
+
+  /** True when any group-mapping field carries a value. */
+  private hasAnyMapping(m: OidcAdminSettings): boolean {
+    return !!(
+      m.admin_group_claim ||
+      m.admin_group ||
+      m.user_group_claim ||
+      m.user_group ||
+      m.restrict_to_groups
+    );
+  }
+
+  /**
+   * Toggle the group-mapping section. Turning it off clears every mapping field
+   * so the backend reverts to manual role management (roles set in the users
+   * panel are then preserved across logins instead of being overwritten).
+   */
+  onGroupMappingToggle(event: Event): void {
+    const checked = (event.target as HTMLInputElement).checked;
+    this.groupMappingEnabled.set(checked);
+    if (!checked) {
+      this.oidcModel.update((m) => ({
+        ...m,
+        admin_group_claim: "",
+        admin_group: "",
+        user_group_claim: "",
+        user_group: "",
+        restrict_to_groups: false,
+      }));
+    }
   }
 
   /** Persist OIDC enable/disable once the checkbox value has been applied. */

@@ -135,6 +135,16 @@ def _matches_mapping(identity: OidcIdentity, group_claim: str, group: str) -> bo
     return False
 
 
+def has_admin_mapping(merged: OidcAdminSettings) -> bool:
+    """Return True when the admin group mapping is configured.
+
+    Both the claim name and the expected group value must be set. When this is
+    False, admin rights are managed manually (via the users panel) and must not
+    be overwritten from OIDC on every login.
+    """
+    return bool(merged.admin_group_claim and merged.admin_group)
+
+
 def is_oidc_admin(identity: OidcIdentity, merged: OidcAdminSettings) -> bool:
     """Return True when *identity* should be granted admin rights.
 

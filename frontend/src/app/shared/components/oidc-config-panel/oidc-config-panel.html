@@ -15,7 +15,7 @@
 } @else {
 
 <!-- ══════════════════════════════════════════════════════════════════════ -->
-<!-- CARD 1 — OIDC                                                          -->
+<!-- CARD 1 — OIDC Configuration                                            -->
 <!-- ══════════════════════════════════════════════════════════════════════ -->
 
 <div class="card border-0 mb-3">
@@ -27,10 +27,7 @@
         <i class="bi bi-shield-lock text-primary me-2"></i>{{ "OIDC.TITLE" |
         translate }}
       </h6>
-      <div class="text-muted small mt-1">
-        <i class="bi bi-info-circle me-1"></i>
-        {{ "OIDC.INTRO" | translate }}
-      </div>
+      <div class="text-muted small mt-1">{{ "OIDC.INTRO" | translate }}</div>
     </div>
 
     <!-- Active state badge -->
@@ -196,15 +193,147 @@
         />
       </div>
 
-      <!-- ── Admin bootstrap & OIDC-only ─────────────────────────────────── -->
+      <!-- OIDC-only mode -->
       <div class="col-12">
         <hr class="my-2" />
-        <h6 class="fw-semibold small mb-0">
-          <i class="bi bi-person-gear text-primary me-1"></i>{{
-          "OIDC.ACCESS_CONTROL" | translate }}
-        </h6>
+        <div class="form-check form-switch">
+          <input
+            class="form-check-input"
+            type="checkbox"
+            id="oidcOnly"
+            [formField]="oidcForm.oidc_only"
+          />
+          <label class="form-check-label small fw-semibold" for="oidcOnly">
+            {{ "OIDC.OIDC_ONLY" | translate }}
+          </label>
+        </div>
+        <div class="form-text">{{ "OIDC.OIDC_ONLY_HELP" | translate }}</div>
+        @if (oidcOnlyMissingAdmin()) {
+        <div class="alert alert-warning d-flex gap-2 mt-2 py-2 small mb-0">
+          <i class="bi bi-exclamation-triangle-fill flex-shrink-0 mt-1"></i>
+          <div>{{ "OIDC.OIDC_ONLY_WARN" | translate }}</div>
+        </div>
+        }
       </div>
+    </div>
 
+    <!-- Actions -->
+    <div class="d-flex gap-2 mt-3 flex-wrap">
+      <button
+        class="btn btn-primary btn-sm"
+        (click)="save()"
+        [disabled]="
+          !oidcForm.enabled().value() ||
+          !oidcForm().valid() ||
+          oidcOnlyMissingAdmin()
+        "
+      >
+        @if (oidcForm().submitting()) {
+        <span class="spinner-border spinner-border-sm me-1"></span>
+        {{ "COMMON.SAVING" | translate }} }
+        <i class="bi bi-floppy-fill me-1"></i>{{ "OIDC.SAVE_SETTINGS" |
+        translate }}
+      </button>
+
+      <button
+        type="button"
+        class="btn btn-outline-primary btn-sm"
+        (click)="testConnection()"
+        [disabled]="!oidcForm().valid() || testing()"
+        [title]="'OIDC.TEST_TITLE' | translate"
+      >
+        @if (testing()) {
+        <span class="spinner-border spinner-border-sm me-1"></span>
+        {{ "OIDC.TESTING" | translate }} } @else {
+        <i class="bi bi-plug-fill me-1"></i>{{ "EXTREG.TEST_CONNECTION" |
+        translate }} }
+      </button>
+    </div>
+
+    <!-- ── Test connection results ─────────────────────────────────────────── -->
+    @if (testResult(); as result) {
+    <div
+      class="alert d-flex flex-column gap-2 mt-3 py-2 small mb-0"
+      [class.alert-success]="result.success"
+      [class.alert-danger]="!result.success"
+    >
+      <div class="fw-semibold">
+        @if (result.success) {
+        <i class="bi bi-check-circle-fill me-1"></i>{{ "OIDC.TEST_SUCCESS" |
+        translate }} } @else { <i class="bi bi-x-octagon-fill me-1"></i>{{
+        "OIDC.TEST_FAILED" | translate }} }
+      </div>
+      <ul class="list-unstyled mb-0">
+        @for (step of result.steps; track step.name) {
+        <li class="d-flex gap-2 align-items-start">
+          <i
+            class="bi flex-shrink-0 mt-1"
+            [class.bi-check-circle-fill]="step.ok"
+            [class.text-success]="step.ok"
+            [class.bi-x-circle-fill]="!step.ok"
+            [class.text-danger]="!step.ok"
+          ></i>
+          <span> <strong>{{ step.name }}</strong> — {{ step.detail }} </span>
+        </li>
+        }
+      </ul>
+    </div>
+    } }
+
+    <!-- Info note -->
+    <div class="alert alert-info d-flex gap-2 mt-3 py-2 small mb-0">
+      <i class="bi bi-lightbulb-fill flex-shrink-0 mt-1"></i>
+      <div>
+        {{ "OIDC.INFO_PRE" | translate }}
+        <code>/var/lib/portalcrane/oidc_config.json</code>
+        {{ "OIDC.INFO_MID" | translate }} (<code>OIDC_*</code>) {{
+        "OIDC.INFO_POST" | translate }}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<!-- CARD 2 — Access control                                               -->
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+
+@if (oidcForm.enabled().value()) {
+<div class="card border-0 mb-3">
+  <div
+    class="card-header border-0 d-flex align-items-center justify-content-between"
+  >
+    <div>
+      <h6 class="fw-semibold mb-0">
+        <i class="bi bi-person-gear text-primary me-2"></i>{{
+        "OIDC.ACCESS_CONTROL" | translate }}
+      </h6>
+      <div class="text-muted small mt-1">
+        {{ "OIDC.ACCESS_CONTROL_INTRO" | translate }}
+      </div>
+    </div>
+
+    <!-- Group-mapping toggle: unfolds the mapping fields -->
+    <div class="form-check form-switch mb-0 ms-2 me-2">
+      <input
+        class="form-check-input"
+        type="checkbox"
+        id="oidcGroupMapping"
+        [checked]="groupMappingEnabled()"
+        (change)="onGroupMappingToggle($event)"
+      />
+    </div>
+  </div>
+
+  <div class="card-body">
+    @if (!groupMappingEnabled()) {
+    <div class="alert alert-secondary d-flex gap-2 py-2 small mb-0">
+      <i class="bi bi-info-circle-fill flex-shrink-0 mt-1"></i>
+      <div>{{ "OIDC.GROUP_MAPPING_OFF_HELP" | translate }}</div>
+    </div>
+    }
+
+    <div class="row g-3">
+      @if (groupMappingEnabled()) {
       <!-- Admins subsection -->
       <div class="col-12">
         <span class="badge bg-primary-subtle text-primary">
@@ -299,40 +428,16 @@
           {{ "OIDC.RESTRICT_GROUPS_HELP" | translate }}
         </div>
       </div>
-
-      <!-- OIDC-only mode -->
-      <div class="col-12">
-        <div class="form-check form-switch">
-          <input
-            class="form-check-input"
-            type="checkbox"
-            id="oidcOnly"
-            [formField]="oidcForm.oidc_only"
-          />
-          <label class="form-check-label small fw-semibold" for="oidcOnly">
-            {{ "OIDC.OIDC_ONLY" | translate }}
-          </label>
-        </div>
-        <div class="form-text">{{ "OIDC.OIDC_ONLY_HELP" | translate }}</div>
-        @if (oidcOnlyMissingAdmin()) {
-        <div class="alert alert-warning d-flex gap-2 mt-2 py-2 small mb-0">
-          <i class="bi bi-exclamation-triangle-fill flex-shrink-0 mt-1"></i>
-          <div>{{ "OIDC.OIDC_ONLY_WARN" | translate }}</div>
-        </div>
-        }
-      </div>
+      }
     </div>
 
     <!-- Actions -->
+    @if (groupMappingEnabled()) {
     <div class="d-flex gap-2 mt-3 flex-wrap">
       <button
         class="btn btn-primary btn-sm"
         (click)="save()"
-        [disabled]="
-          !oidcForm.enabled().value() ||
-          !oidcForm().valid() ||
-          oidcOnlyMissingAdmin()
-        "
+        [disabled]="!oidcForm().valid() || oidcOnlyMissingAdmin()"
       >
         @if (oidcForm().submitting()) {
         <span class="spinner-border spinner-border-sm me-1"></span>
@@ -340,62 +445,8 @@
         <i class="bi bi-floppy-fill me-1"></i>{{ "OIDC.SAVE_SETTINGS" |
         translate }}
       </button>
-
-      <button
-        type="button"
-        class="btn btn-outline-primary btn-sm"
-        (click)="testConnection()"
-        [disabled]="!oidcForm().valid() || testing()"
-        [title]="'OIDC.TEST_TITLE' | translate"
-      >
-        @if (testing()) {
-        <span class="spinner-border spinner-border-sm me-1"></span>
-        {{ "OIDC.TESTING" | translate }} } @else {
-        <i class="bi bi-plug-fill me-1"></i>{{ "EXTREG.TEST_CONNECTION" |
-        translate }} }
-      </button>
     </div>
-
-    <!-- ── Test connection results ─────────────────────────────────────────── -->
-    @if (testResult(); as result) {
-    <div
-      class="alert d-flex flex-column gap-2 mt-3 py-2 small mb-0"
-      [class.alert-success]="result.success"
-      [class.alert-danger]="!result.success"
-    >
-      <div class="fw-semibold">
-        @if (result.success) {
-        <i class="bi bi-check-circle-fill me-1"></i>{{ "OIDC.TEST_SUCCESS" |
-        translate }} } @else { <i class="bi bi-x-octagon-fill me-1"></i>{{
-        "OIDC.TEST_FAILED" | translate }} }
-      </div>
-      <ul class="list-unstyled mb-0">
-        @for (step of result.steps; track step.name) {
-        <li class="d-flex gap-2 align-items-start">
-          <i
-            class="bi flex-shrink-0 mt-1"
-            [class.bi-check-circle-fill]="step.ok"
-            [class.text-success]="step.ok"
-            [class.bi-x-circle-fill]="!step.ok"
-            [class.text-danger]="!step.ok"
-          ></i>
-          <span> <strong>{{ step.name }}</strong> — {{ step.detail }} </span>
-        </li>
-        }
-      </ul>
-    </div>
-    } }
-
-    <!-- Info note -->
-    <div class="alert alert-info d-flex gap-2 mt-3 py-2 small">
-      <i class="bi bi-lightbulb-fill flex-shrink-0 mt-1"></i>
-      <div>
-        {{ "OIDC.INFO_PRE" | translate }}
-        <code>/var/lib/portalcrane/oidc_config.json</code>
-        {{ "OIDC.INFO_MID" | translate }} (<code>OIDC_*</code>) {{
-        "OIDC.INFO_POST" | translate }}
-      </div>
-    </div>
+    }
   </div>
 </div>
-}
+} }

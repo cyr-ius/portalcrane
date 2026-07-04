@@ -42,6 +42,7 @@ from ..services.oidc_service import (
     OidcTestResult,
     build_public_config,
     exchange_code_for_identity,
+    has_admin_mapping,
     has_user_restriction,
     is_oidc_admin,
     is_oidc_user_allowed,
@@ -80,7 +81,9 @@ def _provision_oidc_user(identity: OidcIdentity, settings: Settings) -> None:
     - If the username collides with an existing *local* account → 403. An OIDC
       identity must never bind onto a password-based account.
     - Admin rights are (re)computed from the OIDC config (admin group claim) on
-      every login, so promote/demote take effect live.
+      every login, so promote/demote take effect live. This only applies when
+      the admin group mapping is configured; otherwise the role is managed
+      manually (via the users panel) and is preserved across logins.
     - When restrict_to_groups is enabled, OIDC access becomes an allowlist: a
       user matching neither the admin nor the user mapping is denied (403)
       instead of being provisioned.
@@ -120,6 +123,7 @@ def _provision_oidc_user(identity: OidcIdentity, settings: Settings) -> None:
         )
 
     merged = resolve_oidc_settings(settings)
+    admin_mapping = has_admin_mapping(merged)
     is_admin = is_oidc_admin(identity, merged)
 
     # Access allowlist: when restrict_to_groups is enabled, only admins or users
@@ -148,8 +152,10 @@ def _provision_oidc_user(identity: OidcIdentity, settings: Settings) -> None:
         }
         users.append(entry)
         _save_users(users)
-    elif existing.get("is_admin", False) != is_admin:
+    elif admin_mapping and existing.get("is_admin", False) != is_admin:
         # Subsequent login — refresh admin status (live promote/demote).
+        # Only when the admin group mapping is configured: without it the role
+        # is managed manually and must not be overwritten here.
         existing["is_admin"] = is_admin
         _save_users(users)
 
