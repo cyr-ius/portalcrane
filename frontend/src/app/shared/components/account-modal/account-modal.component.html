@@ -45,67 +45,76 @@
     <!-- Personal access tokens panel -->
     <app-personal-tokens-panel />
 
-    <!-- ── Language card ────────────────────────────────────────────────── -->
-    <div class="card border-0 mb-3">
-      <div class="card-header border-0 pb-0">
-        <h6 class="fw-semibold mb-0">
-          <i class="bi bi-translate me-2 text-primary"></i
-          >{{ "ACCOUNT.LANGUAGE" | translate }}
-        </h6>
-        <p class="text-muted small mt-1 mb-0">
-          {{ "ACCOUNT.LANGUAGE_DESC" | translate }}
-        </p>
-      </div>
-      <div class="card-body">
-        <div class="d-flex flex-wrap gap-2">
-          @for (l of languageService.languages; track l.value) {
-            <button
-              type="button"
-              class="btn btn-sm px-3"
-              [class.btn-primary]="languageService.language() === l.value"
-              [class.btn-outline-secondary]="
-                languageService.language() !== l.value
-              "
-              (click)="setLanguage(l.value)"
-            >
-              <span class="lang-flag me-1">{{ l.flag }}</span
-              >{{ l.label }}
-            </button>
-          }
+    <!-- ── Preferences: language + theme side by side ───────────────────── -->
+    <div class="row g-3 mb-3">
+      <!-- Language card -->
+      <div class="col-md-6">
+        <div class="card section-card h-100">
+          <div class="card-header border-0 pb-0">
+            <h6 class="fw-semibold mb-0">
+              <i class="bi bi-translate me-2 text-primary"></i
+              >{{ "ACCOUNT.LANGUAGE" | translate }}
+            </h6>
+            <p class="text-muted small mt-1 mb-0">
+              {{ "ACCOUNT.LANGUAGE_DESC" | translate }}
+            </p>
+          </div>
+          <div class="card-body">
+            <div class="d-flex flex-wrap gap-2">
+              @for (l of languageService.languages; track l.value) {
+                <button
+                  type="button"
+                  class="btn btn-sm px-3"
+                  [class.btn-primary]="languageService.language() === l.value"
+                  [class.btn-outline-secondary]="
+                    languageService.language() !== l.value
+                  "
+                  (click)="setLanguage(l.value)"
+                >
+                  <span class="lang-flag me-1">{{ l.flag }}</span
+                  >{{ l.label }}
+                </button>
+              }
+            </div>
+          </div>
         </div>
       </div>
-    </div>
 
-    <!-- ── Theme card ───────────────────────────────────────────────────── -->
-    <div class="card border-0 mb-3">
-      <div class="card-header border-0 pb-0">
-        <h6 class="fw-semibold mb-0">
-          <i class="bi bi-palette me-2 text-primary"></i
-          >{{ "ACCOUNT.THEME" | translate }}
-        </h6>
-        <p class="text-muted small mt-1 mb-0">
-          {{ "ACCOUNT.THEME_DESC" | translate }}
-        </p>
-      </div>
-      <div class="card-body">
-        <div class="d-flex flex-wrap gap-2">
-          @for (t of themes; track t.value) {
-            <button
-              type="button"
-              class="btn btn-sm px-3"
-              [class.btn-primary]="themeService.theme() === t.value"
-              [class.btn-outline-secondary]="themeService.theme() !== t.value"
-              (click)="setTheme(t.value)"
-            >
-              <i class="bi {{ t.icon }} me-1"></i>{{ t.label | translate }}
-            </button>
-          }
+      <!-- Theme card -->
+      <div class="col-md-6">
+        <div class="card section-card h-100">
+          <div class="card-header border-0 pb-0">
+            <h6 class="fw-semibold mb-0">
+              <i class="bi bi-palette me-2 text-primary"></i
+              >{{ "ACCOUNT.THEME" | translate }}
+            </h6>
+            <p class="text-muted small mt-1 mb-0">
+              {{ "ACCOUNT.THEME_DESC" | translate }}
+            </p>
+          </div>
+          <div class="card-body">
+            <div class="d-flex flex-wrap gap-2">
+              @for (t of themes; track t.value) {
+                <button
+                  type="button"
+                  class="btn btn-sm px-3"
+                  [class.btn-primary]="themeService.theme() === t.value"
+                  [class.btn-outline-secondary]="
+                    themeService.theme() !== t.value
+                  "
+                  (click)="setTheme(t.value)"
+                >
+                  <i class="bi {{ t.icon }} me-1"></i>{{ t.label | translate }}
+                </button>
+              }
+            </div>
+          </div>
         </div>
       </div>
     </div>
 
     <!-- ── External registries card ─────────────────────────────────────── -->
-    <div class="card border-0 mb-3">
+    <div class="card section-card mb-3">
       <div
         class="card-header border-0 d-flex align-items-center justify-content-between pb-0"
       >

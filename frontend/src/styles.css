@@ -88,6 +88,19 @@ body {
   border-color: var(--pc-border);
 }
 
+/* Section card — distinct, self-contained block on a contrasting body.
+   Used to visually separate the sections of the account drawer. */
+.section-card {
+  border: 1px solid var(--pc-border);
+  border-radius: 0.75rem;
+  background-color: var(--pc-card-bg);
+}
+
+.section-card > .card-header {
+  background-color: transparent;
+  padding-top: 0.9rem;
+}
+
 /* Tables */
 .table {
   color: var(--pc-text);
@@ -236,6 +249,10 @@ router-outlet + * {
 }
 
 @keyframes pc-spin {
-  from { transform: rotate(0deg); }
-  to   { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
