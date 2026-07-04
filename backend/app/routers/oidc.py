@@ -242,9 +242,11 @@ async def update_oidc_settings(
     Saved values take precedence over environment variables on next request.
 
     Anti-lockout guard: OIDC-only mode disables every local login (including the
-    env-admin), so it can only be enabled when OIDC is itself enabled AND the
-    admin group-claim mapping is configured. Otherwise no one could ever obtain
-    admin rights again.
+    env-admin), so it can only be enabled when OIDC is itself enabled AND admin
+    rights are guaranteed to remain reachable — either the admin group-claim
+    mapping is configured (roles are recomputed on every login) OR at least one
+    OIDC account has already been manually promoted to admin. Otherwise no one
+    could ever obtain admin rights again.
     """
     if payload.oidc_only:
         if not payload.enabled:
@@ -255,12 +257,17 @@ async def update_oidc_settings(
         has_admin_group = bool(
             payload.admin_group_claim.strip() and payload.admin_group.strip()
         )
-        if not has_admin_group:
+        has_oidc_admin = any(
+            u.get("auth_source") == AUTH_SOURCE_OIDC and u.get("is_admin", False)
+            for u in _load_users()
+        )
+        if not has_admin_group and not has_oidc_admin:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=(
-                    "OIDC-only mode requires the admin group mapping: set both "
-                    "admin_group_claim and admin_group."
+                    "OIDC-only mode requires a reachable admin: either configure "
+                    "the admin group mapping (admin_group_claim and admin_group) "
+                    "or promote an existing OIDC account to admin first."
                 ),
             )
 

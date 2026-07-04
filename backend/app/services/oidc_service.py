@@ -40,7 +40,7 @@ class OidcPublicConfig(BaseModel):
     authorization_endpoint: str = ""
     end_session_endpoint: str = ""
     response_type: str = "code"
-    scope: str = "openid profile email"
+    scope: str = "openid profile email groups"
     oidc_only: bool = False
 
 
@@ -54,7 +54,7 @@ class OidcAdminSettings(BaseModel):
     redirect_uri: str = ""
     post_logout_redirect_uri: str = ""
     response_type: str = "code"
-    scope: str = "openid profile email"
+    scope: str = "openid profile email groups"
     # OIDC-only mode and admin bootstrap (see config.Settings for semantics).
     oidc_only: bool = False
     admin_group_claim: str = ""

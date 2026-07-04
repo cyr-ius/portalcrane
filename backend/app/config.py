@@ -73,12 +73,13 @@ class Settings(BaseSettings):
     oidc_redirect_uri: str = ""
     oidc_post_logout_redirect_uri: str = ""
     oidc_response_type: str = "code"
-    oidc_scope: str = "openid profile email"
+    oidc_scope: str = "openid profile email groups"
 
     # OIDC-only mode: when True, local username/password login (including the
     # built-in env-admin) is disabled and authentication is delegated entirely
-    # to the OIDC provider. The admin group-claim mapping below must be
-    # configured to avoid a lockout.
+    # to the OIDC provider. To avoid a lockout, either the admin group-claim
+    # mapping below must be configured, or an OIDC account must already have been
+    # promoted to admin (see the guard in routers/oidc.py).
     oidc_only: bool = False
 
     # Admin bootstrap for OIDC users via group-claim mapping: when an OIDC user
