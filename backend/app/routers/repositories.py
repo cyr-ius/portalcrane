@@ -20,7 +20,11 @@ from ..core.jwt import (
     require_push_access,
 )
 from ..services.job_service import normalize_sync_job
-from ..services.registries_service import get_registry_by_id, get_registry_for_user
+from ..services.registries_service import (
+    LOCAL_REGISTRY_SYSTEM_ID,
+    get_registry_by_id,
+    get_registry_for_user,
+)
 from ..services.repositories_service import (
     append_tag,
     browse_images,
@@ -90,14 +94,23 @@ async def list_images(
     _: dict = Depends(resolve_owned_registry),
 ):
     """List repositories available in an external registry via /v2/_catalog."""
-    # Non-admins only see repositories they have folder-level pull access to.
-    # The predicate is applied before pagination inside the provider so the
-    # total / total_pages counters stay consistent with the visible items.
+    # Visibility rules for non-admins (applied before pagination inside the
+    # provider so total / total_pages stay consistent with the visible items):
+    #   * Local registry  -> per-folder ``can_pull`` on each repository path.
+    #   * External registry -> the coarse ``can_pull_external`` capability.
+    #     Foreign paths (e.g. Docker Hub ``library/nginx``) don't map to a
+    #     Portalcrane folder — they'd collapse onto __root__ — so external
+    #     visibility is governed by the capability, not the folder resolved
+    #     from the path. See has_external_pull_access() for the rationale.
     repo_filter = None
     if not current_user.is_admin:
-        repo_filter = lambda name: (  # noqa: E731
-            check_folder_access(current_user.username, name, is_pull=True) is True
-        )
+        if registry_id == LOCAL_REGISTRY_SYSTEM_ID:
+            repo_filter = lambda name: (  # noqa: E731
+                check_folder_access(current_user.username, name, is_pull=True) is True
+            )
+        else:
+            allowed = has_external_pull_access(current_user.username)
+            repo_filter = lambda name: allowed  # noqa: E731
 
     try:
         result = await browse_images(
@@ -152,8 +165,8 @@ async def get_tag_detail(
     _: dict = Depends(resolve_owned_registry),
 ):
     """Return detailed metadata for a specific tag in an external V2 registry."""
-    _ensure_folder_permission(
-        current_user=current_user, image_path=repository, is_pull=True
+    _ensure_read_access(
+        current_user=current_user, registry_id=registry_id, repository=repository
     )
     try:
         detail = await metadata_by_tag(
@@ -183,8 +196,8 @@ async def get_tags(
     _: dict = Depends(resolve_owned_registry),
 ):
     """List tags for a specific repository in an external registry."""
-    _ensure_folder_permission(
-        current_user=current_user, image_path=repository, is_pull=True
+    _ensure_read_access(
+        current_user=current_user, registry_id=registry_id, repository=repository
     )
     try:
         return await browse_tags(registry_id=registry_id, repository=repository)
@@ -492,3 +505,27 @@ def _ensure_folder_permission(
         status_code=status.HTTP_403_FORBIDDEN,
         detail=f"No {action} access on folder for '{image_path}'",
     )
+
+
+def _ensure_read_access(
+    *, current_user: UserInfo, registry_id: str, repository: str
+) -> None:
+    """Enforce read (pull) access for a repository in the given registry.
+
+    Local registry: per-folder ``can_pull`` on the repository path.
+    External registry: the coarse ``can_pull_external`` capability, because
+    foreign paths don't map to a Portalcrane folder (they'd collapse onto
+    __root__). This mirrors the visibility rule applied when listing images.
+    """
+    if current_user.is_admin:
+        return
+    if registry_id == LOCAL_REGISTRY_SYSTEM_ID:
+        _ensure_folder_permission(
+            current_user=current_user, image_path=repository, is_pull=True
+        )
+        return
+    if not has_external_pull_access(current_user.username):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No external pull access",
+        )
