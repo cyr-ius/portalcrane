@@ -50,6 +50,24 @@ class DockerHubSearchResult(BaseModel):
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 
 
+def _is_local_registry_host(host: str) -> bool:
+    """Return True when *host* resolves to the embedded local registry.
+
+    The host may arrive with a scheme (ad-hoc registries) or as a bare netloc
+    (saved / system registries), so both forms are normalized before comparing
+    against REGISTRY_HOST. This lets the external-push branch detect writes that
+    actually land on the internal registry and enforce local push permissions.
+    """
+    if not host:
+        return False
+    bare = host.rstrip("/")
+    for scheme in ("http://", "https://"):
+        if bare.startswith(scheme):
+            bare = bare[len(scheme) :]
+            break
+    return bare == REGISTRY_HOST
+
+
 def _build_external_target_image(image: str, username: str) -> str:
     """Return external target image path, replacing source namespace with destination username."""
     if not username:
@@ -285,6 +303,31 @@ async def push_image(
             username,
             external_target_image,
         )
+
+        # Security: the "external" push path must not become a back door onto the
+        # local registry. The embedded local registry is exposed as a hidden
+        # system entry (id=__local__, host=REGISTRY_HOST) in the same registry
+        # selector, and a user could also register an ad-hoc external host that
+        # resolves to localhost:5000. In both cases the write actually lands on
+        # the internal registry, so the same folder-based push permission that
+        # guards the dedicated local-push branch below must be enforced here —
+        # otherwise a pull-only user could push simply by choosing
+        # External → Local Registry.
+        if _is_local_registry_host(host) and not is_admin_user(
+            current_user.username, settings
+        ):
+            full_path = (
+                f"{folder}/{external_target_image}" if folder else external_target_image
+            )
+            access = check_folder_access(
+                current_user.username, full_path, is_pull=False
+            )
+            if access is not True:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Folder access denied: push permission required",
+                )
+
         dest_ref = build_target_path(folder, external_target_image, target_tag, host)
 
         job["status"] = JobStatus.PUSHING
