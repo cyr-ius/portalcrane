@@ -244,7 +244,13 @@ async def _authorize_registry_proxy(
         if not username:
             return await _unauthorized_response("Invalid bearer token")
 
-    await audit.log(subject="registry_authorize", status=status.HTTP_200_OK)
+    # An authenticated /v2/ ping (empty path) is what `docker login` performs,
+    # so we surface it as a distinct `registry_login` event. For actual
+    # pull/push requests the registry_pull / registry_push event already records
+    # the outcome, so we deliberately skip a per-request authorize entry here —
+    # that keeps the audit stream readable and lets the UI group operations.
+    if not v2_path:
+        await audit.log(subject="registry_login", status=status.HTTP_200_OK)
 
     # Admins bypass all folder checks
     if is_admin_user(username, settings):

@@ -317,7 +317,15 @@
     "DESC": "Flux en direct des événements d'audit générés par le proxy du registre et les actions de l'interface web.",
     "FETCHING": "Récupération des événements…",
     "EMPTY": "Aucun journal d'audit disponible pour le moment.",
-    "ERR_LOAD": "Impossible de charger les journaux d'audit."
+    "ERR_LOAD": "Impossible de charger les journaux d'audit.",
+    "GROUPED": "Requêtes regroupées d'une même opération",
+    "EVENTS": {
+      "registry_login": "Connexion Docker",
+      "registry_pull": "Pull",
+      "registry_push": "Push",
+      "registry_authorize": "Autorisation",
+      "web_ui_action": "Action web"
+    }
   },
   "ABOUT": {
     "TITLE": "À propos",

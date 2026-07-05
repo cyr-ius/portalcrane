@@ -317,7 +317,15 @@
     "DESC": "Flujo en vivo de eventos de auditoría generados por el proxy del registro y las acciones de la interfaz web.",
     "FETCHING": "Obteniendo eventos…",
     "EMPTY": "Aún no hay registros de auditoría disponibles.",
-    "ERR_LOAD": "No se pueden cargar los registros de auditoría."
+    "ERR_LOAD": "No se pueden cargar los registros de auditoría.",
+    "GROUPED": "Solicitudes agrupadas de una misma operación",
+    "EVENTS": {
+      "registry_login": "Inicio de sesión Docker",
+      "registry_pull": "Pull",
+      "registry_push": "Push",
+      "registry_authorize": "Autorización",
+      "web_ui_action": "Acción web"
+    }
   },
   "ABOUT": {
     "TITLE": "Acerca de",

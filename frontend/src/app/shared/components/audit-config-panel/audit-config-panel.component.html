@@ -41,8 +41,8 @@
       } @else {
         <div class="audit-log-list border rounded">
           @for (
-            entry of auditLogs();
-            track entry.timestamp + entry.path + $index
+            group of auditGroups();
+            track group.timestamp + group.image + group.event + $index
           ) {
             <details class="audit-log-item border-bottom px-3 py-2">
               <summary
@@ -50,38 +50,47 @@
                 style="cursor: pointer; list-style: none"
               >
                 <span
-                  class="badge bg-secondary-subtle text-secondary font-monospace"
+                  class="badge bg-secondary-subtle text-secondary"
                   style="font-size: 0.7rem"
                 >
-                  {{ entry.event }}
+                  {{ eventLabel(group.event) }}
                 </span>
+                @if (group.count > 1) {
+                  <span
+                    class="badge bg-primary-subtle text-primary"
+                    style="font-size: 0.7rem"
+                    [title]="'AUDIT.GROUPED' | translate"
+                  >
+                    ×{{ group.count }}
+                  </span>
+                }
                 <span class="small text-muted text-truncate flex-grow-1">{{
-                  entry.path
+                  group.image
                 }}</span>
-                @if (entry.username) {
+                @if (group.username) {
                   <span
                     class="badge bg-body-secondary text-muted d-flex align-items-center gap-1"
                     style="font-size: 0.7rem"
                   >
-                    <i class="bi bi-person"></i>{{ entry.username }}
+                    <i class="bi bi-person"></i>{{ group.username }}
                   </span>
                 }
                 <span
                   class="badge"
                   [class]="
-                    entry.http_status < 400
+                    group.httpStatus < 400
                       ? 'badge bg-success-subtle text-success'
                       : 'badge bg-danger-subtle text-danger'
                   "
                 >
-                  {{ entry.http_status }}
+                  {{ group.httpStatus }}
                 </span>
                 <span class="text-muted small ms-auto">
-                  {{ formatAuditTimestamp(entry.timestamp) }}
+                  {{ formatAuditTimestamp(group.timestamp) }}
                 </span>
               </summary>
               <pre class="small mb-0 mt-2 audit-log-payload">{{
-                prettyAuditPayload(entry)
+                prettyAuditPayload(group)
               }}</pre>
             </details>
           }
