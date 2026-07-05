@@ -312,6 +312,23 @@
       </div>
     </div>
 
+    <!-- Active state badge -->
+    @if (groupMappingEnabled()) {
+    <span
+      class="badge bg-warning-subtle text-warning d-flex align-items-center gap-1 ms-auto"
+    >
+      <i class="bi bi-pencil-fill" style="font-size: 0.6rem"></i>
+      {{ "TRANSFER.CUSTOM" | translate }}
+    </span>
+    } @else {
+    <span
+      class="badge bg-secondary-subtle text-secondary d-flex align-items-center gap-1 ms-auto"
+    >
+      <i class="bi bi-server" style="font-size: 0.6rem"></i>
+      {{ "TRANSFER.FROM_ENV" | translate }}
+    </span>
+    }
+
     <!-- Group-mapping toggle: unfolds the mapping fields -->
     <div class="form-check form-switch mb-0 ms-2 me-2">
       <input
