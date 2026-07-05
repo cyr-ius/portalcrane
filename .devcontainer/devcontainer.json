@@ -83,7 +83,8 @@
   },
   "containerEnv": {
     "DATA_DIR": "${containerWorkspaceFolder}/.data_env", // (db, configuration files, etc...)
-    "NG_FORCE_TTY": "false"
+    "NG_FORCE_TTY": "false",
+    "UV_LINK_MODE": "copy"
   },
 
   // Uncomment to connect as an existing user other than the container default. More info: https://aka.ms/dev-containers-non-root.
