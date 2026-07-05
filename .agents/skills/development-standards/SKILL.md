@@ -37,11 +37,11 @@ Index des **règles propres à ce dépôt**. Les détails sont dans `references/
 
 ### Pre-commit, conventions & checklist → détails : [references/precommit-linting.md](references/precommit-linting.md)
 
+- Le message d'un commit doit être écrit en **anglais**, avec un **verbe à l'infinitif** et un **objet clair**.
 - Python : `ruff check --fix` + `ruff format` (line-length 100). Frontend : `prettier`.
 - Tout doit passer `pre-commit run --all-files` avant commit ; fichiers finissant par un saut de ligne.
 - **Commit sûr** : lancer `prek run --files <fichiers>` **avant** `git commit` puis re-stager, pour que la passe au commit ne modifie rien. Attention au **staging partiel** (stash de `prek` → conflit → commit avorté).
 - Conventions de nommage fichiers/symboles et checklist commit dans le fichier de référence.
-- Le commentaire des commits doit être **clair et concis** (1 ligne + 1 paragraphe si nécessaire) et en anglais. Commits atomiques, pas de "fix all the things" ou "refactor code" — détailler le changement.
 
 ## Quand utiliser ce skill
 
