@@ -1,12 +1,11 @@
 {
   "name": "Portalcrane Dev",
-  "build": {
-    "context": ".",
-    "dockerfile": "Dockerfile",
-    "args": {
-      "REGISTRY_VERSION": "3.0.0",
-      "TRIVY_VERSION": "0.72.0"
-    }
+  "image": "mcr.microsoft.com/devcontainers/base:trixie",
+  "features": {
+    "ghcr.io/devcontainers/features/python:1": {},
+    "ghcr.io/devcontainers-extra/features/prek:1": {},
+    "ghcr.io/devcontainers-extra/features/uv:1": {},
+    "ghcr.io/devcontainers/features/node:2.1.0": {}
   },
   "mounts": [
     "source=${env:HOME}/.claude,target=/home/vscode/.claude,type=bind,consistency=cached",
@@ -68,6 +67,7 @@
       }
     }
   },
+  "postCreateCommand": "bash .devcontainer/scripts/install-trivy-registry.sh ${containerWorkspaceFolder} && bash .devcontainer/scripts/post-create.sh ${containerWorkspaceFolder}",
   "appPort": ["0.0.0.0:4200:4200", "0.0.0.0:8000:8000"],
   "portsAttributes": {
     "4200": {
@@ -85,7 +85,6 @@
     "DATA_DIR": "${containerWorkspaceFolder}/.data_env", // (db, configuration files, etc...)
     "NG_FORCE_TTY": "false"
   },
-  "postCreateCommand": "bash .devcontainer/scripts/post-create.sh ${containerWorkspaceFolder}",
 
   // Uncomment to connect as an existing user other than the container default. More info: https://aka.ms/dev-containers-non-root.
   "remoteUser": "vscode"
