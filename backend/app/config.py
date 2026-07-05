@@ -107,6 +107,34 @@ class Settings(BaseSettings):
     https_proxy: str = ""
     no_proxy: str = "localhost,127.0.0.1"
 
+    # Syslog forwarding (env-var defaults, overridable via the Network UI).
+    # A persisted admin override in DATA_DIR/proxy_config.json always wins over
+    # these values — same precedence as the proxy settings above.
+    syslog_enabled: bool = False
+    syslog_host: str = ""
+    syslog_port: int = 514
+    syslog_protocol: str = "udp"  # 'udp' | 'tcp' | 'tcp+tls'
+    syslog_rfc: str = "rfc5424"  # 'rfc3164' | 'rfc5424'
+    syslog_forward_audit: bool = True
+    syslog_forward_uvicorn: bool = False
+    syslog_tls_verify: bool = True
+    syslog_tls_ca_cert: str = ""
+    syslog_auth_enabled: bool = False
+    syslog_auth_username: str = ""
+    syslog_auth_password: str = ""
+
+    # Audit-log email delivery (env-var defaults, overridable via the Network UI).
+    # A persisted admin override always wins over these values.
+    email_enabled: bool = False
+    email_host: str = ""
+    email_port: int = 587
+    email_security: str = "starttls"  # 'none' | 'starttls' | 'ssl'
+    email_username: str = ""
+    email_password: str = ""
+    email_from_address: str = ""
+    email_to_addresses: str = ""  # comma-separated recipients
+    email_subject: str = "Portalcrane audit log"
+
     # Vulnerability scanning configuration
     # Master kill-switch: when TRIVY_ENABLED=false the embedded Trivy server is
     # not started by supervisord (see docker/entrypoint.sh). Mirror that here so

@@ -44,6 +44,27 @@ services:
       # - HTTPS_PROXY=http://proxy.corp:3128
       # - NO_PROXY=localhost,127.0.0.1
 
+      # ── Syslog forwarding (optional) ──────────────────────────────────────
+      # Defaults; a persisted override from the Network UI takes precedence.
+      # - SYSLOG_ENABLED=true
+      # - SYSLOG_HOST=syslog.corp.example.com
+      # - SYSLOG_PORT=6514
+      # - SYSLOG_PROTOCOL=tcp+tls        # udp | tcp | tcp+tls
+      # - SYSLOG_RFC=rfc5424             # rfc5424 | rfc3164
+      # - SYSLOG_FORWARD_AUDIT=true
+      # - SYSLOG_FORWARD_UVICORN=false
+
+      # ── Audit log by email (optional) ─────────────────────────────────────
+      # Defaults; a persisted override from the Network UI takes precedence.
+      # - EMAIL_ENABLED=true
+      # - EMAIL_HOST=smtp.corp.example.com
+      # - EMAIL_PORT=587
+      # - EMAIL_SECURITY=starttls        # none | starttls | ssl
+      # - EMAIL_USERNAME=portalcrane
+      # - EMAIL_PASSWORD=change-me
+      # - EMAIL_FROM_ADDRESS=portalcrane@corp.example.com
+      # - EMAIL_TO_ADDRESSES=security@corp.example.com
+
       # ── Logging ───────────────────────────────────────────────────────────
       - SWAGGER_ENABLE=${SWAGGER_ENABLE:-false}
       - LOG_LEVEL=${LOG_LEVEL:-DEBUG}

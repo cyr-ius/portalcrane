@@ -34,9 +34,24 @@ export interface SyslogSettings {
   auth_password: string;
 }
 
+export interface EmailSettings {
+  enabled: boolean;
+  host: string;
+  port: number;
+  /** 'none' | 'starttls' | 'ssl' */
+  security: string;
+  username: string;
+  password: string;
+  from_address: string;
+  /** Comma-separated recipient addresses */
+  to_addresses: string;
+  subject: string;
+}
+
 export interface NetworkConfig {
   proxy: ProxySettings;
   syslog: SyslogSettings;
+  email: EmailSettings;
 }
 
 // ── Service ───────────────────────────────────────────────────────────────────
@@ -54,6 +69,7 @@ export class NetworkService {
   readonly saved = signal(false);
   readonly error = signal<string | null>(null);
   readonly testResult = signal<{ success: boolean; message: string } | null>(null);
+  readonly emailResult = signal<{ success: boolean; message: string } | null>(null);
 
   // ── Load ──────────────────────────────────────────────────────────────────
 
@@ -152,6 +168,70 @@ export class NetworkService {
       this.testResult.set(result);
     } catch {
       this.testResult.set({ success: false, message: 'Test request failed.' });
+    }
+  }
+
+  // ── Email ─────────────────────────────────────────────────────────────────
+
+  async saveEmail(payload: EmailSettings): Promise<void> {
+    this.saving.set(true);
+    this.error.set(null);
+    try {
+      const cfg = await firstValueFrom(
+        this.http.put<NetworkConfig>(`${this.BASE}/email`, payload)
+      );
+      this.config.set(cfg);
+      this._flashSaved();
+    } catch (err: any) {
+      this.error.set(err?.error?.detail ?? 'Failed to save email settings.');
+    } finally {
+      this.saving.set(false);
+    }
+  }
+
+  async disableEmail(): Promise<void> {
+    this.saving.set(true);
+    this.error.set(null);
+    try {
+      const cfg = await firstValueFrom(
+        this.http.delete<NetworkConfig>(`${this.BASE}/email`)
+      );
+      this.config.set(cfg);
+      this._flashSaved();
+    } catch (err: any) {
+      this.error.set(err?.error?.detail ?? 'Failed to disable email.');
+    } finally {
+      this.saving.set(false);
+    }
+  }
+
+  async testEmail(): Promise<void> {
+    this.emailResult.set(null);
+    try {
+      const result = await firstValueFrom(
+        this.http.post<{ success: boolean; message: string }>(
+          `${this.BASE}/email/test`,
+          {}
+        )
+      );
+      this.emailResult.set(result);
+    } catch {
+      this.emailResult.set({ success: false, message: 'Test request failed.' });
+    }
+  }
+
+  async sendAuditLogEmail(): Promise<void> {
+    this.emailResult.set(null);
+    try {
+      const result = await firstValueFrom(
+        this.http.post<{ success: boolean; message: string }>(
+          `${this.BASE}/email/send`,
+          {}
+        )
+      );
+      this.emailResult.set(result);
+    } catch {
+      this.emailResult.set({ success: false, message: 'Send request failed.' });
     }
   }
 

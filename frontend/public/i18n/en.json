@@ -582,7 +582,21 @@
     "AUTHENTICATION": "Authentication",
     "ENABLE": "Enable",
     "SAVE_SYSLOG": "Save Syslog Settings",
-    "SEND_TEST": "Send Test Message"
+    "SEND_TEST": "Send Test Message",
+    "EMAIL_TITLE": "Audit log by email",
+    "EMAIL_DESC": "Deliver the audit log by email through an SMTP server. Configure the mail server below, then send the log on demand or test connectivity.",
+    "SMTP_HOST": "SMTP server",
+    "SECURITY": "Connection security",
+    "SEC_STARTTLS": "STARTTLS (port 587, recommended)",
+    "SEC_SSL": "SSL / implicit TLS (port 465)",
+    "SEC_NONE": "None (unencrypted)",
+    "SUBJECT": "Message subject",
+    "FROM_ADDRESS": "Sender address",
+    "TO_ADDRESSES": "Recipients",
+    "SMTP_AUTH": "SMTP authentication",
+    "SMTP_AUTH_HINT": "(leave empty if the server requires no credentials)",
+    "SAVE_EMAIL": "Save Email Settings",
+    "SEND_AUDIT_LOG": "Send Audit Log"
   },
   "FOLDERS": {
     "ERR_LOAD": "Failed to load folders",

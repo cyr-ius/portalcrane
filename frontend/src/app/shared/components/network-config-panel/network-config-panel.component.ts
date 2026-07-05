@@ -12,6 +12,7 @@ import {
 import { FormsModule } from '@angular/forms';
 import { TranslatePipe } from '@ngx-translate/core';
 import {
+  EmailSettings,
   NetworkService,
   ProxySettings,
   SyslogSettings,
@@ -33,6 +34,7 @@ export class NetworkConfigPanelComponent implements OnInit {
   readonly saved = this.networkSvc.saved;
   readonly error = this.networkSvc.error;
   readonly testResult = this.networkSvc.testResult;
+  readonly emailResult = this.networkSvc.emailResult;
 
   // ── Proxy form state ──────────────────────────────────────────────────────
   proxyForm = signal<ProxySettings>({
@@ -64,6 +66,21 @@ export class NetworkConfigPanelComponent implements OnInit {
 
   showSyslogPassword = signal(false);
 
+  // ── Email form state ──────────────────────────────────────────────────────
+  emailForm = signal<EmailSettings>({
+    enabled: false,
+    host: '',
+    port: 587,
+    security: 'starttls',
+    username: '',
+    password: '',
+    from_address: '',
+    to_addresses: '',
+    subject: 'Portalcrane audit log',
+  });
+
+  showEmailPassword = signal(false);
+
   /** True when the selected protocol supports TLS. */
   readonly tlsAvailable = computed(
     () => this.syslogForm().protocol === 'tcp+tls'
@@ -87,6 +104,7 @@ export class NetworkConfigPanelComponent implements OnInit {
       if (cfg) {
         this.proxyForm.set({ ...cfg.proxy });
         this.syslogForm.set({ ...cfg.syslog });
+        this.emailForm.set({ ...cfg.email });
       }
     });
   }
@@ -171,5 +189,38 @@ export class NetworkConfigPanelComponent implements OnInit {
   async disableSyslog(): Promise<void> {
     await this.networkSvc.disableSyslog();
     this.syslogForm.update((f) => ({ ...f, enabled: false }));
+  }
+
+  // ── Email actions ─────────────────────────────────────────────────────────
+
+  updateEmail(patch: Partial<EmailSettings>): void {
+    this.emailForm.update((f) => ({ ...f, ...patch }));
+  }
+
+  /**
+   * Toggle email delivery on/off and save immediately.
+   *
+   * Mirrors the syslog enabled toggle: the switch is a global on/off that
+   * takes effect at once without requiring a "Save" click.
+   */
+  async onEmailEnabledToggle(enabled: boolean): Promise<void> {
+    this.emailForm.update((f) => ({ ...f, enabled }));
+    await this.networkSvc.saveEmail(this.emailForm());
+    const cfg = this.networkSvc.config();
+    if (cfg) this.emailForm.set({ ...cfg.email });
+  }
+
+  async saveEmail(): Promise<void> {
+    await this.networkSvc.saveEmail(this.emailForm());
+    const cfg = this.config();
+    if (cfg) this.emailForm.set({ ...cfg.email });
+  }
+
+  async testEmail(): Promise<void> {
+    await this.networkSvc.testEmail();
+  }
+
+  async sendAuditLogEmail(): Promise<void> {
+    await this.networkSvc.sendAuditLogEmail();
   }
 }

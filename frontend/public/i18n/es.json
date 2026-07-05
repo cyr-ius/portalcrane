@@ -582,7 +582,21 @@
     "AUTHENTICATION": "Autenticación",
     "ENABLE": "Activar",
     "SAVE_SYSLOG": "Guardar configuración de syslog",
-    "SEND_TEST": "Enviar mensaje de prueba"
+    "SEND_TEST": "Enviar mensaje de prueba",
+    "EMAIL_TITLE": "Registro de auditoría por correo",
+    "EMAIL_DESC": "Envía el registro de auditoría por correo electrónico a través de un servidor SMTP. Configure el servidor de correo a continuación y luego envíe el registro bajo demanda o pruebe la conectividad.",
+    "SMTP_HOST": "Servidor SMTP",
+    "SECURITY": "Seguridad de la conexión",
+    "SEC_STARTTLS": "STARTTLS (puerto 587, recomendado)",
+    "SEC_SSL": "SSL / TLS implícito (puerto 465)",
+    "SEC_NONE": "Ninguna (sin cifrar)",
+    "SUBJECT": "Asunto del mensaje",
+    "FROM_ADDRESS": "Dirección del remitente",
+    "TO_ADDRESSES": "Destinatarios",
+    "SMTP_AUTH": "Autenticación SMTP",
+    "SMTP_AUTH_HINT": "(déjelo vacío si el servidor no requiere credenciales)",
+    "SAVE_EMAIL": "Guardar configuración de correo",
+    "SEND_AUDIT_LOG": "Enviar registro de auditoría"
   },
   "FOLDERS": {
     "ERR_LOAD": "Error al cargar las carpetas",

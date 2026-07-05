@@ -9,6 +9,10 @@ DELETE /api/network/proxy         → clear proxy override             (admin on
 PUT    /api/network/syslog        → save syslog config               (admin only)
 DELETE /api/network/syslog        → disable syslog forwarding        (admin only)
 POST   /api/network/syslog/test   → send a test syslog message       (admin only)
+PUT    /api/network/email         → save SMTP email config           (admin only)
+DELETE /api/network/email         → disable email delivery           (admin only)
+POST   /api/network/email/test    → send a test email                (admin only)
+POST   /api/network/email/send    → email the audit log now          (admin only)
 """
 
 import logging
@@ -16,15 +20,17 @@ import logging
 from fastapi import APIRouter, Depends
 
 from ..config import Settings, get_settings
-from ..core.jwt import require_admin, UserInfo
-
+from ..core.jwt import UserInfo, require_admin
+from ..services.email_service import send_audit_log_email, send_test_email
 from ..services.proxy_service import (
+    EmailSettings,
     NetworkConfig,
     ProxySettings,
     SyslogSettings,
     apply_proxy_to_os_environ,
     apply_syslog_config,
     load_proxy_config,
+    resolve_email_settings,
     resolve_network_config,
     save_proxy_config,
 )
@@ -172,3 +178,62 @@ async def test_syslog(
         return {"success": True, "message": "Test message sent to syslog"}
     except Exception as exc:
         return {"success": False, "message": str(exc)}
+
+
+# ── Email configuration ───────────────────────────────────────────────────────
+
+
+@router.put("/email", response_model=NetworkConfig)
+async def save_email_config(
+    payload: EmailSettings,
+    settings: Settings = Depends(get_settings),
+    _: UserInfo = Depends(require_admin),
+) -> NetworkConfig:
+    """Persist the SMTP email configuration used to deliver the audit log."""
+    persisted = load_proxy_config()
+    persisted["email"] = payload.model_dump()
+    save_proxy_config(persisted)
+
+    logger.info(
+        "Email config updated: enabled=%s host=%s:%d security=%s",
+        payload.enabled,
+        payload.host,
+        payload.port,
+        payload.security,
+    )
+    return resolve_network_config(settings)
+
+
+@router.delete("/email", response_model=NetworkConfig)
+async def disable_email(
+    settings: Settings = Depends(get_settings),
+    _: UserInfo = Depends(require_admin),
+) -> NetworkConfig:
+    """Disable email delivery of the audit log."""
+    persisted = load_proxy_config()
+    email_data = persisted.get("email", {})
+    email_data["enabled"] = False
+    persisted["email"] = email_data
+    save_proxy_config(persisted)
+
+    return resolve_network_config(settings)
+
+
+@router.post("/email/test")
+async def test_email(
+    settings: Settings = Depends(get_settings),
+    _: UserInfo = Depends(require_admin),
+) -> dict:
+    """Send a test email to verify SMTP connectivity."""
+    success, message = send_test_email(resolve_email_settings(settings))
+    return {"success": success, "message": message}
+
+
+@router.post("/email/send")
+async def send_email(
+    settings: Settings = Depends(get_settings),
+    _: UserInfo = Depends(require_admin),
+) -> dict:
+    """Email the recent audit log to the configured recipients now."""
+    success, message = send_audit_log_email(resolve_email_settings(settings))
+    return {"success": success, "message": message}

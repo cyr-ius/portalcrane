@@ -138,7 +138,7 @@ async def lifespan(app: FastAPI):
     ensure_admin_credentials(app_settings)
     proxy_cfg = resolve_proxy_settings(app_settings)
     apply_proxy_to_os_environ(proxy_cfg)
-    apply_syslog_config(resolve_syslog_settings())
+    apply_syslog_config(resolve_syslog_settings(app_settings))
     ensure_root_folder_exists()
     migrate_folder_permissions_to_groups()
     # Only run the Trivy DB updater when Trivy is enabled; otherwise the embedded

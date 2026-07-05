@@ -82,11 +82,33 @@ class SyslogSettings(BaseModel):
     auth_password: str = ""
 
 
+class EmailSettings(BaseModel):
+    """SMTP email configuration stored on disk and served via the API.
+
+    Used to deliver the audit log by email — either on demand or as a test
+    connectivity check. Passwords are stored alongside the other network
+    overrides in DATA_DIR/proxy_config.json.
+    """
+
+    enabled: bool = False
+    host: str = ""
+    port: int = 587
+    # Connection security: 'none' (plain), 'starttls', or 'ssl' (implicit TLS)
+    security: str = "starttls"
+    username: str = ""
+    password: str = ""
+    from_address: str = ""
+    # Comma-separated list of recipient addresses
+    to_addresses: str = ""
+    subject: str = "Portalcrane audit log"
+
+
 class NetworkConfig(BaseModel):
     """Combined network configuration returned by the API."""
 
     proxy: ProxySettings
     syslog: SyslogSettings
+    email: EmailSettings
 
 
 # ── Persistence helpers ───────────────────────────────────────────────────────
@@ -239,20 +261,64 @@ def resolve_proxy_settings(settings: Settings) -> ProxySettings:
     )
 
 
-def resolve_syslog_settings() -> SyslogSettings:
-    """Return the effective syslog configuration from the persisted override."""
+def resolve_syslog_settings(settings: Settings) -> SyslogSettings:
+    """Return the effective syslog configuration.
+
+    A persisted admin override (written via the Network UI) wins; otherwise
+    the values fall back to the container environment variables — same
+    precedence pattern as resolve_proxy_settings.
+    """
     persisted = load_proxy_config()
     syslog_data = persisted.get("syslog", {})
     if syslog_data:
         return SyslogSettings(**syslog_data)
-    return SyslogSettings()
+
+    return SyslogSettings(
+        enabled=settings.syslog_enabled,
+        host=settings.syslog_host,
+        port=settings.syslog_port,
+        protocol=settings.syslog_protocol,
+        rfc=settings.syslog_rfc,
+        forward_audit=settings.syslog_forward_audit,
+        forward_uvicorn=settings.syslog_forward_uvicorn,
+        tls_verify=settings.syslog_tls_verify,
+        tls_ca_cert=settings.syslog_tls_ca_cert,
+        auth_enabled=settings.syslog_auth_enabled,
+        auth_username=settings.syslog_auth_username,
+        auth_password=settings.syslog_auth_password,
+    )
+
+
+def resolve_email_settings(settings: Settings) -> EmailSettings:
+    """Return the effective email configuration.
+
+    A persisted admin override wins; otherwise the values fall back to the
+    container environment variables.
+    """
+    persisted = load_proxy_config()
+    email_data = persisted.get("email", {})
+    if email_data:
+        return EmailSettings(**email_data)
+
+    return EmailSettings(
+        enabled=settings.email_enabled,
+        host=settings.email_host,
+        port=settings.email_port,
+        security=settings.email_security,
+        username=settings.email_username,
+        password=settings.email_password,
+        from_address=settings.email_from_address,
+        to_addresses=settings.email_to_addresses,
+        subject=settings.email_subject,
+    )
 
 
 def resolve_network_config(settings: Settings) -> NetworkConfig:
     """Return the full effective network configuration."""
     return NetworkConfig(
         proxy=resolve_proxy_settings(settings),
-        syslog=resolve_syslog_settings(),
+        syslog=resolve_syslog_settings(settings),
+        email=resolve_email_settings(settings),
     )
 
 
@@ -282,7 +348,7 @@ class _TlsSysLogHandler(logging.handlers.SysLogHandler):
         # Pass socktype=SOCK_STREAM so the parent opens a TCP connection.
         super().__init__(address=address, socktype=__import__("socket").SOCK_STREAM)
 
-    def makeSocket(self, timeout: float = 1) -> ssl.SSLSocket:  # type: ignore[override]
+    def makeSocket(self, timeout: float = 1) -> ssl.SSLSocket:  # type: ignore[override]  # noqa: N802
         """Return a TLS-wrapped TCP socket connected to the syslog server."""
         import socket as _socket
 

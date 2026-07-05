@@ -63,145 +63,140 @@
       </div>
     </div>
 
-    <div class="card-body">
-      <!-- Info banner when override is off -->
-      @if (!proxyForm().proxy_override) {
-        <div class="alert alert-info py-2 small mb-3">
-          <i class="bi bi-info-circle me-1"></i>
-          {{ "NETWORK.PROXY_ENV_PRE" | translate }}
-          (<code>HTTP_PROXY</code>, <code>HTTPS_PROXY</code>,
-          <code>NO_PROXY</code>).
-          {{ "NETWORK.PROXY_ENV_POST" | translate }}
-        </div>
-      }
+    @if (proxyForm().proxy_override) {
+      <div class="card-body">
+        <fieldset [disabled]="!proxyForm().proxy_override">
+          <div class="row g-3">
+            <!-- HTTP Proxy -->
+            <div class="col-md-6">
+              <label class="form-label small fw-semibold" for="httpProxy">
+                {{ "NETWORK.HTTP_PROXY" | translate }}
+              </label>
+              <input
+                id="httpProxy"
+                type="text"
+                class="form-control form-control-sm font-monospace"
+                placeholder="http://proxy.corp:3128"
+                [value]="proxyForm().http_proxy"
+                (input)="updateProxy({ http_proxy: $any($event.target).value })"
+              />
+            </div>
 
-      <fieldset [disabled]="!proxyForm().proxy_override">
-        <div class="row g-3">
-          <!-- HTTP Proxy -->
-          <div class="col-md-6">
-            <label class="form-label small fw-semibold" for="httpProxy">
-              {{ "NETWORK.HTTP_PROXY" | translate }}
-            </label>
-            <input
-              id="httpProxy"
-              type="text"
-              class="form-control form-control-sm font-monospace"
-              placeholder="http://proxy.corp:3128"
-              [value]="proxyForm().http_proxy"
-              (input)="updateProxy({ http_proxy: $any($event.target).value })"
-            />
-          </div>
+            <!-- HTTPS Proxy -->
+            <div class="col-md-6">
+              <label class="form-label small fw-semibold" for="httpsProxy">
+                {{ "NETWORK.HTTPS_PROXY" | translate }}
+              </label>
+              <input
+                id="httpsProxy"
+                type="text"
+                class="form-control form-control-sm font-monospace"
+                placeholder="http://proxy.corp:3128"
+                [value]="proxyForm().https_proxy"
+                (input)="
+                  updateProxy({ https_proxy: $any($event.target).value })
+                "
+              />
+            </div>
 
-          <!-- HTTPS Proxy -->
-          <div class="col-md-6">
-            <label class="form-label small fw-semibold" for="httpsProxy">
-              {{ "NETWORK.HTTPS_PROXY" | translate }}
-            </label>
-            <input
-              id="httpsProxy"
-              type="text"
-              class="form-control form-control-sm font-monospace"
-              placeholder="http://proxy.corp:3128"
-              [value]="proxyForm().https_proxy"
-              (input)="updateProxy({ https_proxy: $any($event.target).value })"
-            />
-          </div>
+            <!-- No Proxy -->
+            <div class="col-12">
+              <label class="form-label small fw-semibold" for="noProxy">
+                {{ "NETWORK.NO_PROXY" | translate }}
+                <span class="text-muted fw-normal">{{
+                  "NETWORK.COMMA_HOSTS" | translate
+                }}</span>
+              </label>
+              <input
+                id="noProxy"
+                type="text"
+                class="form-control form-control-sm font-monospace"
+                placeholder="localhost,127.0.0.1,registry.local"
+                [value]="proxyForm().no_proxy"
+                (input)="updateProxy({ no_proxy: $any($event.target).value })"
+              />
+            </div>
 
-          <!-- No Proxy -->
-          <div class="col-12">
-            <label class="form-label small fw-semibold" for="noProxy">
-              {{ "NETWORK.NO_PROXY" | translate }}
-              <span class="text-muted fw-normal">{{
-                "NETWORK.COMMA_HOSTS" | translate
-              }}</span>
-            </label>
-            <input
-              id="noProxy"
-              type="text"
-              class="form-control form-control-sm font-monospace"
-              placeholder="localhost,127.0.0.1,registry.local"
-              [value]="proxyForm().no_proxy"
-              (input)="updateProxy({ no_proxy: $any($event.target).value })"
-            />
-          </div>
-
-          <!-- Proxy credentials -->
-          <div class="col-12">
-            <div class="border rounded p-3 bg-body-tertiary">
-              <div class="small fw-semibold mb-2">
-                <i class="bi bi-key me-1"></i
-                >{{ "NETWORK.PROXY_AUTH" | translate }}
-                <span class="text-muted fw-normal">
-                  {{ "NETWORK.PROXY_AUTH_HINT" | translate }}
-                </span>
-              </div>
-              <div class="row g-2">
-                <div class="col-md-5">
-                  <input
-                    type="text"
-                    class="form-control form-control-sm"
-                    [placeholder]="'AUTH.USERNAME' | translate"
-                    autocomplete="off"
-                    [value]="proxyForm().proxy_username"
-                    (input)="
-                      updateProxy({ proxy_username: $any($event.target).value })
-                    "
-                  />
+            <!-- Proxy credentials -->
+            <div class="col-12">
+              <div class="border rounded p-3 bg-body-tertiary">
+                <div class="small fw-semibold mb-2">
+                  <i class="bi bi-key me-1"></i
+                  >{{ "NETWORK.PROXY_AUTH" | translate }}
+                  <span class="text-muted fw-normal">
+                    {{ "NETWORK.PROXY_AUTH_HINT" | translate }}
+                  </span>
                 </div>
-                <div class="col-md-5">
-                  <div class="input-group input-group-sm">
+                <div class="row g-2">
+                  <div class="col-md-5">
                     <input
-                      [type]="showProxyPassword() ? 'text' : 'password'"
+                      type="text"
                       class="form-control form-control-sm"
-                      [placeholder]="'AUTH.PASSWORD' | translate"
-                      autocomplete="new-password"
-                      [value]="proxyForm().proxy_password"
+                      [placeholder]="'AUTH.USERNAME' | translate"
+                      autocomplete="off"
+                      [value]="proxyForm().proxy_username"
                       (input)="
                         updateProxy({
-                          proxy_password: $any($event.target).value,
+                          proxy_username: $any($event.target).value,
                         })
                       "
                     />
-                    <button
-                      class="btn btn-outline-secondary btn-sm"
-                      type="button"
-                      (click)="showProxyPassword.set(!showProxyPassword())"
-                      [title]="
-                        (showProxyPassword()
-                          ? 'NETWORK.HIDE_PASSWORD'
-                          : 'NETWORK.SHOW_PASSWORD'
-                        ) | translate
-                      "
-                    >
-                      <i
-                        class="bi"
-                        [class.bi-eye]="!showProxyPassword()"
-                        [class.bi-eye-slash]="showProxyPassword()"
-                      ></i>
-                    </button>
+                  </div>
+                  <div class="col-md-5">
+                    <div class="input-group input-group-sm">
+                      <input
+                        [type]="showProxyPassword() ? 'text' : 'password'"
+                        class="form-control form-control-sm"
+                        [placeholder]="'AUTH.PASSWORD' | translate"
+                        autocomplete="new-password"
+                        [value]="proxyForm().proxy_password"
+                        (input)="
+                          updateProxy({
+                            proxy_password: $any($event.target).value,
+                          })
+                        "
+                      />
+                      <button
+                        class="btn btn-outline-secondary btn-sm"
+                        type="button"
+                        (click)="showProxyPassword.set(!showProxyPassword())"
+                        [title]="
+                          (showProxyPassword()
+                            ? 'NETWORK.HIDE_PASSWORD'
+                            : 'NETWORK.SHOW_PASSWORD'
+                          ) | translate
+                        "
+                      >
+                        <i
+                          class="bi"
+                          [class.bi-eye]="!showProxyPassword()"
+                          [class.bi-eye-slash]="showProxyPassword()"
+                        ></i>
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-      </fieldset>
+        </fieldset>
 
-      <!-- Actions -->
-      <div class="d-flex gap-2 mt-3">
-        <button
-          class="btn btn-primary btn-sm"
-          (click)="saveProxy()"
-          [disabled]="saving() || !proxyForm().proxy_override"
-        >
-          @if (saving()) {
-            <span class="spinner-border spinner-border-sm me-1"></span>
-          }
-          <i class="bi bi-floppy me-1"></i
-          >{{ "NETWORK.SAVE_PROXY" | translate }}
-        </button>
+        <!-- Actions -->
+        <div class="d-flex gap-2 mt-3">
+          <button
+            class="btn btn-primary btn-sm"
+            (click)="saveProxy()"
+            [disabled]="saving() || !proxyForm().proxy_override"
+          >
+            @if (saving()) {
+              <span class="spinner-border spinner-border-sm me-1"></span>
+            }
+            <i class="bi bi-floppy me-1"></i
+            >{{ "NETWORK.SAVE_PROXY" | translate }}
+          </button>
+        </div>
       </div>
-    </div>
+    }
   </div>
 
   <!-- ══════════════════════════════════════════════════════════════════════ -->
@@ -221,8 +216,25 @@
         </div>
       </div>
 
+      <!-- Active state badge -->
+      @if (syslogForm().enabled) {
+        <span
+          class="badge bg-warning-subtle text-warning d-flex align-items-center gap-1 ms-auto"
+        >
+          <i class="bi bi-pencil-fill" style="font-size: 0.6rem"></i>
+          {{ "TRANSFER.CUSTOM" | translate }}
+        </span>
+      } @else {
+        <span
+          class="badge bg-secondary-subtle text-secondary d-flex align-items-center gap-1 ms-auto"
+        >
+          <i class="bi bi-server" style="font-size: 0.6rem"></i>
+          {{ "TRANSFER.FROM_ENV" | translate }}
+        </span>
+      }
+
       <!-- Enabled toggle -->
-      <div class="form-check form-switch ms-3 mb-0">
+      <div class="form-check form-switch ms-2 me-2 mb-0">
         <input
           class="form-check-input"
           type="checkbox"
@@ -234,295 +246,304 @@
       </div>
     </div>
 
-    <div class="card-body">
-      <fieldset [disabled]="!syslogForm().enabled">
-        <div class="row g-3">
-          <!-- Server host -->
-          <div class="col-md-8">
-            <label class="form-label small fw-semibold" for="syslogHost">
-              {{ "NETWORK.SYSLOG_HOST" | translate }}
-            </label>
-            <input
-              id="syslogHost"
-              type="text"
-              class="form-control form-control-sm font-monospace"
-              placeholder="syslog.corp.example.com"
-              [value]="syslogForm().host"
-              (input)="updateSyslog({ host: $any($event.target).value })"
-            />
-          </div>
-
-          <!-- Port -->
-          <div class="col-md-4">
-            <label class="form-label small fw-semibold" for="syslogPort">
-              {{ "NETWORK.PORT" | translate }}
-            </label>
-            <input
-              id="syslogPort"
-              type="number"
-              class="form-control form-control-sm"
-              min="1"
-              max="65535"
-              [value]="syslogForm().port"
-              (input)="updateSyslog({ port: +$any($event.target).value })"
-            />
-          </div>
-
-          <!-- Protocol -->
-          <div class="col-md-6">
-            <label class="form-label small fw-semibold" for="syslogProtocol">
-              {{ "NETWORK.TRANSPORT" | translate }}
-            </label>
-            <select
-              id="syslogProtocol"
-              class="form-select form-select-sm"
-              [value]="syslogForm().protocol"
-              (change)="updateSyslog({ protocol: $any($event.target).value })"
-            >
-              <option value="udp">{{ "NETWORK.PROTO_UDP" | translate }}</option>
-              <option value="tcp">{{ "NETWORK.PROTO_TCP" | translate }}</option>
-              <option value="tcp+tls">
-                {{ "NETWORK.PROTO_TCP_TLS" | translate }}
-              </option>
-            </select>
-          </div>
-
-          <!-- RFC variant -->
-          <div class="col-md-6">
-            <label class="form-label small fw-semibold" for="syslogRfc">
-              {{ "NETWORK.MSG_FORMAT" | translate }}
-            </label>
-            <select
-              id="syslogRfc"
-              class="form-select form-select-sm"
-              [value]="syslogForm().rfc"
-              (change)="updateSyslog({ rfc: $any($event.target).value })"
-            >
-              <option value="rfc5424">
-                {{ "NETWORK.RFC5424" | translate }}
-              </option>
-              <option value="rfc3164">
-                {{ "NETWORK.RFC3164" | translate }}
-              </option>
-            </select>
-          </div>
-
-          <!-- Log channels -->
-          <div class="col-12">
-            <div class="small fw-semibold mb-2">
-              {{ "NETWORK.LOG_CHANNELS" | translate }}
+    @if (syslogForm().enabled) {
+      <div class="card-body">
+        <fieldset [disabled]="!syslogForm().enabled">
+          <div class="row g-3">
+            <!-- Server host -->
+            <div class="col-md-8">
+              <label class="form-label small fw-semibold" for="syslogHost">
+                {{ "NETWORK.SYSLOG_HOST" | translate }}
+              </label>
+              <input
+                id="syslogHost"
+                type="text"
+                class="form-control form-control-sm font-monospace"
+                placeholder="syslog.corp.example.com"
+                [value]="syslogForm().host"
+                (input)="updateSyslog({ host: $any($event.target).value })"
+              />
             </div>
-            <div class="d-flex gap-4">
-              <div class="form-check">
-                <input
-                  class="form-check-input"
-                  type="checkbox"
-                  id="forwardAudit"
-                  [checked]="syslogForm().forward_audit"
-                  (change)="
-                    updateSyslog({ forward_audit: $any($event.target).checked })
-                  "
-                />
-                <label class="form-check-label small" for="forwardAudit">
-                  <i class="bi bi-journal-text me-1"></i
-                  >{{ "NETWORK.AUDIT_LOGS" | translate }}
-                </label>
-              </div>
-              <div class="form-check">
-                <input
-                  class="form-check-input"
-                  type="checkbox"
-                  id="forwardUvicorn"
-                  [checked]="syslogForm().forward_uvicorn"
-                  (change)="
-                    updateSyslog({
-                      forward_uvicorn: $any($event.target).checked,
-                    })
-                  "
-                />
-                <label class="form-check-label small" for="forwardUvicorn">
-                  <i class="bi bi-terminal me-1"></i
-                  >{{ "NETWORK.UVICORN_LOGS" | translate }}
-                </label>
-              </div>
-            </div>
-          </div>
 
-          <!-- TLS options — only when tcp+tls -->
-          @if (tlsAvailable()) {
+            <!-- Port -->
+            <div class="col-md-4">
+              <label class="form-label small fw-semibold" for="syslogPort">
+                {{ "NETWORK.PORT" | translate }}
+              </label>
+              <input
+                id="syslogPort"
+                type="number"
+                class="form-control form-control-sm"
+                min="1"
+                max="65535"
+                [value]="syslogForm().port"
+                (input)="updateSyslog({ port: +$any($event.target).value })"
+              />
+            </div>
+
+            <!-- Protocol -->
+            <div class="col-md-6">
+              <label class="form-label small fw-semibold" for="syslogProtocol">
+                {{ "NETWORK.TRANSPORT" | translate }}
+              </label>
+              <select
+                id="syslogProtocol"
+                class="form-select form-select-sm"
+                [value]="syslogForm().protocol"
+                (change)="updateSyslog({ protocol: $any($event.target).value })"
+              >
+                <option value="udp">
+                  {{ "NETWORK.PROTO_UDP" | translate }}
+                </option>
+                <option value="tcp">
+                  {{ "NETWORK.PROTO_TCP" | translate }}
+                </option>
+                <option value="tcp+tls">
+                  {{ "NETWORK.PROTO_TCP_TLS" | translate }}
+                </option>
+              </select>
+            </div>
+
+            <!-- RFC variant -->
+            <div class="col-md-6">
+              <label class="form-label small fw-semibold" for="syslogRfc">
+                {{ "NETWORK.MSG_FORMAT" | translate }}
+              </label>
+              <select
+                id="syslogRfc"
+                class="form-select form-select-sm"
+                [value]="syslogForm().rfc"
+                (change)="updateSyslog({ rfc: $any($event.target).value })"
+              >
+                <option value="rfc5424">
+                  {{ "NETWORK.RFC5424" | translate }}
+                </option>
+                <option value="rfc3164">
+                  {{ "NETWORK.RFC3164" | translate }}
+                </option>
+              </select>
+            </div>
+
+            <!-- Log channels -->
             <div class="col-12">
-              <div class="border rounded p-3 bg-body-tertiary">
-                <div class="small fw-semibold mb-2">
-                  <i class="bi bi-shield-lock me-1"></i
-                  >{{ "NETWORK.TLS_OPTIONS" | translate }}
-                  <span class="badge bg-info-subtle text-info ms-1"
-                    >RFC 5425</span
-                  >
+              <div class="small fw-semibold mb-2">
+                {{ "NETWORK.LOG_CHANNELS" | translate }}
+              </div>
+              <div class="d-flex gap-4">
+                <div class="form-check">
+                  <input
+                    class="form-check-input"
+                    type="checkbox"
+                    id="forwardAudit"
+                    [checked]="syslogForm().forward_audit"
+                    (change)="
+                      updateSyslog({
+                        forward_audit: $any($event.target).checked,
+                      })
+                    "
+                  />
+                  <label class="form-check-label small" for="forwardAudit">
+                    <i class="bi bi-journal-text me-1"></i
+                    >{{ "NETWORK.AUDIT_LOGS" | translate }}
+                  </label>
                 </div>
-                <div class="row g-2">
-                  <div class="col-12">
-                    <div class="form-check">
-                      <input
-                        class="form-check-input"
-                        type="checkbox"
-                        id="tlsVerify"
-                        [checked]="syslogForm().tls_verify"
-                        (change)="
-                          updateSyslog({
-                            tls_verify: $any($event.target).checked,
-                          })
-                        "
-                      />
-                      <label class="form-check-label small" for="tlsVerify">
-                        {{ "NETWORK.VERIFY_CERT" | translate }}
-                      </label>
-                    </div>
-                  </div>
-                  <div class="col-12">
-                    <label class="form-label small" for="tlsCaCert">
-                      {{ "NETWORK.CA_CERT_PATH" | translate }}
-                      <span class="text-muted">{{
-                        "NETWORK.CA_CERT_HINT" | translate
-                      }}</span>
-                    </label>
-                    <input
-                      id="tlsCaCert"
-                      type="text"
-                      class="form-control form-control-sm font-monospace"
-                      placeholder="/etc/ssl/certs/my-ca.pem"
-                      [value]="syslogForm().tls_ca_cert"
-                      (input)="
-                        updateSyslog({ tls_ca_cert: $any($event.target).value })
-                      "
-                    />
-                  </div>
+                <div class="form-check">
+                  <input
+                    class="form-check-input"
+                    type="checkbox"
+                    id="forwardUvicorn"
+                    [checked]="syslogForm().forward_uvicorn"
+                    (change)="
+                      updateSyslog({
+                        forward_uvicorn: $any($event.target).checked,
+                      })
+                    "
+                  />
+                  <label class="form-check-label small" for="forwardUvicorn">
+                    <i class="bi bi-terminal me-1"></i
+                    >{{ "NETWORK.UVICORN_LOGS" | translate }}
+                  </label>
                 </div>
               </div>
             </div>
-          }
 
-          <!-- Authentication — only when TCP (RFC 6587) -->
-          @if (authAvailable()) {
-            <div class="col-12">
-              <div class="border rounded p-3 bg-body-tertiary">
-                <div
-                  class="d-flex align-items-center justify-content-between mb-2"
-                >
-                  <div class="small fw-semibold">
-                    <i class="bi bi-key me-1"></i
-                    >{{ "NETWORK.AUTHENTICATION" | translate }}
-                    <span class="badge bg-secondary-subtle text-secondary ms-1"
-                      >RFC 6587 / RELP</span
+            <!-- TLS options — only when tcp+tls -->
+            @if (tlsAvailable()) {
+              <div class="col-12">
+                <div class="border rounded p-3 bg-body-tertiary">
+                  <div class="small fw-semibold mb-2">
+                    <i class="bi bi-shield-lock me-1"></i
+                    >{{ "NETWORK.TLS_OPTIONS" | translate }}
+                    <span class="badge bg-info-subtle text-info ms-1"
+                      >RFC 5425</span
                     >
                   </div>
-                  <div class="form-check form-switch mb-0">
-                    <input
-                      class="form-check-input"
-                      type="checkbox"
-                      id="authEnabled"
-                      [checked]="syslogForm().auth_enabled"
-                      (change)="
-                        updateSyslog({
-                          auth_enabled: $any($event.target).checked,
-                        })
-                      "
-                    />
-                    <label class="form-check-label small" for="authEnabled">{{
-                      "NETWORK.ENABLE" | translate
-                    }}</label>
-                  </div>
-                </div>
-
-                @if (syslogForm().auth_enabled) {
                   <div class="row g-2">
-                    <div class="col-md-5">
-                      <input
-                        type="text"
-                        class="form-control form-control-sm"
-                        [placeholder]="'AUTH.USERNAME' | translate"
-                        autocomplete="off"
-                        [value]="syslogForm().auth_username"
-                        (input)="
-                          updateSyslog({
-                            auth_username: $any($event.target).value,
-                          })
-                        "
-                      />
-                    </div>
-                    <div class="col-md-5">
-                      <div class="input-group input-group-sm">
+                    <div class="col-12">
+                      <div class="form-check">
                         <input
-                          [type]="showSyslogPassword() ? 'text' : 'password'"
-                          class="form-control form-control-sm"
-                          [placeholder]="'AUTH.PASSWORD' | translate"
-                          autocomplete="new-password"
-                          [value]="syslogForm().auth_password"
-                          (input)="
+                          class="form-check-input"
+                          type="checkbox"
+                          id="tlsVerify"
+                          [checked]="syslogForm().tls_verify"
+                          (change)="
                             updateSyslog({
-                              auth_password: $any($event.target).value,
+                              tls_verify: $any($event.target).checked,
                             })
                           "
                         />
-                        <button
-                          class="btn btn-outline-secondary btn-sm"
-                          type="button"
-                          (click)="
-                            showSyslogPassword.set(!showSyslogPassword())
-                          "
-                          [title]="
-                            (showSyslogPassword()
-                              ? 'NETWORK.HIDE_PASSWORD'
-                              : 'NETWORK.SHOW_PASSWORD'
-                            ) | translate
-                          "
-                        >
-                          <i
-                            class="bi"
-                            [class.bi-eye]="!showSyslogPassword()"
-                            [class.bi-eye-slash]="showSyslogPassword()"
-                          ></i>
-                        </button>
+                        <label class="form-check-label small" for="tlsVerify">
+                          {{ "NETWORK.VERIFY_CERT" | translate }}
+                        </label>
                       </div>
                     </div>
+                    <div class="col-12">
+                      <label class="form-label small" for="tlsCaCert">
+                        {{ "NETWORK.CA_CERT_PATH" | translate }}
+                        <span class="text-muted">{{
+                          "NETWORK.CA_CERT_HINT" | translate
+                        }}</span>
+                      </label>
+                      <input
+                        id="tlsCaCert"
+                        type="text"
+                        class="form-control form-control-sm font-monospace"
+                        placeholder="/etc/ssl/certs/my-ca.pem"
+                        [value]="syslogForm().tls_ca_cert"
+                        (input)="
+                          updateSyslog({
+                            tls_ca_cert: $any($event.target).value,
+                          })
+                        "
+                      />
+                    </div>
                   </div>
-                }
+                </div>
               </div>
-            </div>
-          }
-        </div>
-      </fieldset>
+            }
 
-      <!-- Test result banner -->
-      @if (testResult()) {
-        <div
-          class="alert py-2 small mt-3 mb-0"
-          [class.alert-success]="testResult()!.success"
-          [class.alert-danger]="!testResult()!.success"
-        >
-          <i
-            class="bi me-1"
-            [class.bi-check-circle]="testResult()!.success"
-            [class.bi-exclamation-triangle]="!testResult()!.success"
-          ></i>
-          {{ testResult()!.message }}
-        </div>
-      }
+            <!-- Authentication — only when TCP (RFC 6587) -->
+            @if (authAvailable()) {
+              <div class="col-12">
+                <div class="border rounded p-3 bg-body-tertiary">
+                  <div
+                    class="d-flex align-items-center justify-content-between mb-2"
+                  >
+                    <div class="small fw-semibold">
+                      <i class="bi bi-key me-1"></i
+                      >{{ "NETWORK.AUTHENTICATION" | translate }}
+                      <span
+                        class="badge bg-secondary-subtle text-secondary ms-1"
+                        >RFC 6587 / RELP</span
+                      >
+                    </div>
+                    <div class="form-check form-switch mb-0">
+                      <input
+                        class="form-check-input"
+                        type="checkbox"
+                        id="authEnabled"
+                        [checked]="syslogForm().auth_enabled"
+                        (change)="
+                          updateSyslog({
+                            auth_enabled: $any($event.target).checked,
+                          })
+                        "
+                      />
+                      <label class="form-check-label small" for="authEnabled">{{
+                        "NETWORK.ENABLE" | translate
+                      }}</label>
+                    </div>
+                  </div>
 
-      <!-- Actions -->
-      <div class="d-flex gap-2 mt-3 flex-wrap">
-        <button
-          class="btn btn-primary btn-sm"
-          (click)="saveSyslog()"
-          [disabled]="saving() || !syslogForm().enabled"
-        >
-          @if (saving()) {
-            <span class="spinner-border spinner-border-sm me-1"></span>
-          }
-          <i class="bi bi-floppy me-1"></i
-          >{{ "NETWORK.SAVE_SYSLOG" | translate }}
-        </button>
+                  @if (syslogForm().auth_enabled) {
+                    <div class="row g-2">
+                      <div class="col-md-5">
+                        <input
+                          type="text"
+                          class="form-control form-control-sm"
+                          [placeholder]="'AUTH.USERNAME' | translate"
+                          autocomplete="off"
+                          [value]="syslogForm().auth_username"
+                          (input)="
+                            updateSyslog({
+                              auth_username: $any($event.target).value,
+                            })
+                          "
+                        />
+                      </div>
+                      <div class="col-md-5">
+                        <div class="input-group input-group-sm">
+                          <input
+                            [type]="showSyslogPassword() ? 'text' : 'password'"
+                            class="form-control form-control-sm"
+                            [placeholder]="'AUTH.PASSWORD' | translate"
+                            autocomplete="new-password"
+                            [value]="syslogForm().auth_password"
+                            (input)="
+                              updateSyslog({
+                                auth_password: $any($event.target).value,
+                              })
+                            "
+                          />
+                          <button
+                            class="btn btn-outline-secondary btn-sm"
+                            type="button"
+                            (click)="
+                              showSyslogPassword.set(!showSyslogPassword())
+                            "
+                            [title]="
+                              (showSyslogPassword()
+                                ? 'NETWORK.HIDE_PASSWORD'
+                                : 'NETWORK.SHOW_PASSWORD'
+                              ) | translate
+                            "
+                          >
+                            <i
+                              class="bi"
+                              [class.bi-eye]="!showSyslogPassword()"
+                              [class.bi-eye-slash]="showSyslogPassword()"
+                            ></i>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  }
+                </div>
+              </div>
+            }
+          </div>
+        </fieldset>
 
-        @if (syslogForm().enabled) {
+        <!-- Test result banner -->
+        @if (testResult()) {
+          <div
+            class="alert py-2 small mt-3 mb-0"
+            [class.alert-success]="testResult()!.success"
+            [class.alert-danger]="!testResult()!.success"
+          >
+            <i
+              class="bi me-1"
+              [class.bi-check-circle]="testResult()!.success"
+              [class.bi-exclamation-triangle]="!testResult()!.success"
+            ></i>
+            {{ testResult()!.message }}
+          </div>
+        }
+
+        <!-- Actions -->
+        <div class="d-flex gap-2 mt-3 flex-wrap">
+          <button
+            class="btn btn-primary btn-sm"
+            (click)="saveSyslog()"
+            [disabled]="saving() || !syslogForm().enabled"
+          >
+            @if (saving()) {
+              <span class="spinner-border spinner-border-sm me-1"></span>
+            }
+            <i class="bi bi-floppy me-1"></i
+            >{{ "NETWORK.SAVE_SYSLOG" | translate }}
+          </button>
+
           <button
             class="btn btn-outline-secondary btn-sm"
             (click)="testSyslog()"
@@ -530,8 +551,273 @@
           >
             <i class="bi bi-send me-1"></i>{{ "NETWORK.SEND_TEST" | translate }}
           </button>
-        }
+        </div>
+      </div>
+    }
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════════════ -->
+  <!-- CARD 3 — Audit log by email                                           -->
+  <!-- ══════════════════════════════════════════════════════════════════════ -->
+  <div class="card border-0 mb-3">
+    <div
+      class="card-header border-0 d-flex align-items-center justify-content-between"
+    >
+      <div>
+        <h6 class="fw-semibold mb-0">
+          <i class="bi bi-envelope-at text-primary me-2"></i
+          >{{ "NETWORK.EMAIL_TITLE" | translate }}
+        </h6>
+        <div class="text-muted small mt-1">
+          {{ "NETWORK.EMAIL_DESC" | translate }}
+        </div>
+      </div>
+
+      <!-- Active state badge -->
+      @if (emailForm().enabled) {
+        <span
+          class="badge bg-warning-subtle text-warning d-flex align-items-center gap-1 ms-auto"
+        >
+          <i class="bi bi-pencil-fill" style="font-size: 0.6rem"></i>
+          {{ "TRANSFER.CUSTOM" | translate }}
+        </span>
+      } @else {
+        <span
+          class="badge bg-secondary-subtle text-secondary d-flex align-items-center gap-1 ms-auto"
+        >
+          <i class="bi bi-server" style="font-size: 0.6rem"></i>
+          {{ "TRANSFER.FROM_ENV" | translate }}
+        </span>
+      }
+
+      <!-- Enabled toggle -->
+      <div class="form-check form-switch ms-2 me-2 mb-0">
+        <input
+          class="form-check-input"
+          type="checkbox"
+          id="emailEnabled"
+          [checked]="emailForm().enabled"
+          (change)="onEmailEnabledToggle($any($event.target).checked)"
+        />
+        <label class="form-check-label small" for="emailEnabled"></label>
       </div>
     </div>
+
+    @if (emailForm().enabled) {
+      <div class="card-body">
+        <fieldset [disabled]="!emailForm().enabled">
+          <div class="row g-3">
+            <!-- SMTP host -->
+            <div class="col-md-8">
+              <label class="form-label small fw-semibold" for="emailHost">
+                {{ "NETWORK.SMTP_HOST" | translate }}
+              </label>
+              <input
+                id="emailHost"
+                type="text"
+                class="form-control form-control-sm font-monospace"
+                placeholder="smtp.corp.example.com"
+                [value]="emailForm().host"
+                (input)="updateEmail({ host: $any($event.target).value })"
+              />
+            </div>
+
+            <!-- Port -->
+            <div class="col-md-4">
+              <label class="form-label small fw-semibold" for="emailPort">
+                {{ "NETWORK.PORT" | translate }}
+              </label>
+              <input
+                id="emailPort"
+                type="number"
+                class="form-control form-control-sm"
+                min="1"
+                max="65535"
+                [value]="emailForm().port"
+                (input)="updateEmail({ port: +$any($event.target).value })"
+              />
+            </div>
+
+            <!-- Security -->
+            <div class="col-md-6">
+              <label class="form-label small fw-semibold" for="emailSecurity">
+                {{ "NETWORK.SECURITY" | translate }}
+              </label>
+              <select
+                id="emailSecurity"
+                class="form-select form-select-sm"
+                [value]="emailForm().security"
+                (change)="updateEmail({ security: $any($event.target).value })"
+              >
+                <option value="starttls">
+                  {{ "NETWORK.SEC_STARTTLS" | translate }}
+                </option>
+                <option value="ssl">{{ "NETWORK.SEC_SSL" | translate }}</option>
+                <option value="none">
+                  {{ "NETWORK.SEC_NONE" | translate }}
+                </option>
+              </select>
+            </div>
+
+            <!-- Subject -->
+            <div class="col-md-6">
+              <label class="form-label small fw-semibold" for="emailSubject">
+                {{ "NETWORK.SUBJECT" | translate }}
+              </label>
+              <input
+                id="emailSubject"
+                type="text"
+                class="form-control form-control-sm"
+                [value]="emailForm().subject"
+                (input)="updateEmail({ subject: $any($event.target).value })"
+              />
+            </div>
+
+            <!-- From address -->
+            <div class="col-md-6">
+              <label class="form-label small fw-semibold" for="emailFrom">
+                {{ "NETWORK.FROM_ADDRESS" | translate }}
+              </label>
+              <input
+                id="emailFrom"
+                type="email"
+                class="form-control form-control-sm font-monospace"
+                placeholder="portalcrane@corp.example.com"
+                [value]="emailForm().from_address"
+                (input)="
+                  updateEmail({ from_address: $any($event.target).value })
+                "
+              />
+            </div>
+
+            <!-- Recipients -->
+            <div class="col-md-6">
+              <label class="form-label small fw-semibold" for="emailTo">
+                {{ "NETWORK.TO_ADDRESSES" | translate }}
+                <span class="text-muted fw-normal">{{
+                  "NETWORK.COMMA_HOSTS" | translate
+                }}</span>
+              </label>
+              <input
+                id="emailTo"
+                type="text"
+                class="form-control form-control-sm font-monospace"
+                placeholder="security@corp.example.com"
+                [value]="emailForm().to_addresses"
+                (input)="
+                  updateEmail({ to_addresses: $any($event.target).value })
+                "
+              />
+            </div>
+
+            <!-- SMTP credentials -->
+            <div class="col-12">
+              <div class="border rounded p-3 bg-body-tertiary">
+                <div class="small fw-semibold mb-2">
+                  <i class="bi bi-key me-1"></i
+                  >{{ "NETWORK.SMTP_AUTH" | translate }}
+                  <span class="text-muted fw-normal">
+                    {{ "NETWORK.SMTP_AUTH_HINT" | translate }}
+                  </span>
+                </div>
+                <div class="row g-2">
+                  <div class="col-md-5">
+                    <input
+                      type="text"
+                      class="form-control form-control-sm"
+                      [placeholder]="'AUTH.USERNAME' | translate"
+                      autocomplete="off"
+                      [value]="emailForm().username"
+                      (input)="
+                        updateEmail({ username: $any($event.target).value })
+                      "
+                    />
+                  </div>
+                  <div class="col-md-5">
+                    <div class="input-group input-group-sm">
+                      <input
+                        [type]="showEmailPassword() ? 'text' : 'password'"
+                        class="form-control form-control-sm"
+                        [placeholder]="'AUTH.PASSWORD' | translate"
+                        autocomplete="new-password"
+                        [value]="emailForm().password"
+                        (input)="
+                          updateEmail({ password: $any($event.target).value })
+                        "
+                      />
+                      <button
+                        class="btn btn-outline-secondary btn-sm"
+                        type="button"
+                        (click)="showEmailPassword.set(!showEmailPassword())"
+                        [title]="
+                          (showEmailPassword()
+                            ? 'NETWORK.HIDE_PASSWORD'
+                            : 'NETWORK.SHOW_PASSWORD'
+                          ) | translate
+                        "
+                      >
+                        <i
+                          class="bi"
+                          [class.bi-eye]="!showEmailPassword()"
+                          [class.bi-eye-slash]="showEmailPassword()"
+                        ></i>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </fieldset>
+
+        <!-- Email result banner -->
+        @if (emailResult()) {
+          <div
+            class="alert py-2 small mt-3 mb-0"
+            [class.alert-success]="emailResult()!.success"
+            [class.alert-danger]="!emailResult()!.success"
+          >
+            <i
+              class="bi me-1"
+              [class.bi-check-circle]="emailResult()!.success"
+              [class.bi-exclamation-triangle]="!emailResult()!.success"
+            ></i>
+            {{ emailResult()!.message }}
+          </div>
+        }
+
+        <!-- Actions -->
+        <div class="d-flex gap-2 mt-3 flex-wrap">
+          <button
+            class="btn btn-primary btn-sm"
+            (click)="saveEmail()"
+            [disabled]="saving() || !emailForm().enabled"
+          >
+            @if (saving()) {
+              <span class="spinner-border spinner-border-sm me-1"></span>
+            }
+            <i class="bi bi-floppy me-1"></i
+            >{{ "NETWORK.SAVE_EMAIL" | translate }}
+          </button>
+
+          <button
+            class="btn btn-outline-secondary btn-sm"
+            (click)="testEmail()"
+            [disabled]="saving() || !emailForm().host"
+          >
+            <i class="bi bi-send me-1"></i>{{ "NETWORK.SEND_TEST" | translate }}
+          </button>
+
+          <button
+            class="btn btn-outline-primary btn-sm"
+            (click)="sendAuditLogEmail()"
+            [disabled]="saving() || !emailForm().host"
+          >
+            <i class="bi bi-envelope-arrow-up me-1"></i
+            >{{ "NETWORK.SEND_AUDIT_LOG" | translate }}
+          </button>
+        </div>
+      </div>
+    }
   </div>
 }

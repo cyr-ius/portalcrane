@@ -582,7 +582,21 @@
     "AUTHENTICATION": "Authentification",
     "ENABLE": "Activer",
     "SAVE_SYSLOG": "Enregistrer les paramètres syslog",
-    "SEND_TEST": "Envoyer un message de test"
+    "SEND_TEST": "Envoyer un message de test",
+    "EMAIL_TITLE": "Journal d'audit par e-mail",
+    "EMAIL_DESC": "Envoie le journal d'audit par e-mail via un serveur SMTP. Configurez le serveur de messagerie ci-dessous, puis envoyez le journal à la demande ou testez la connectivité.",
+    "SMTP_HOST": "Serveur SMTP",
+    "SECURITY": "Sécurité de la connexion",
+    "SEC_STARTTLS": "STARTTLS (port 587, recommandé)",
+    "SEC_SSL": "SSL / TLS implicite (port 465)",
+    "SEC_NONE": "Aucune (non chiffré)",
+    "SUBJECT": "Objet du message",
+    "FROM_ADDRESS": "Adresse de l'expéditeur",
+    "TO_ADDRESSES": "Destinataires",
+    "SMTP_AUTH": "Authentification SMTP",
+    "SMTP_AUTH_HINT": "(laisser vide si le serveur n'exige pas d'identifiants)",
+    "SAVE_EMAIL": "Enregistrer les paramètres e-mail",
+    "SEND_AUDIT_LOG": "Envoyer le journal d'audit"
   },
   "FOLDERS": {
     "ERR_LOAD": "Échec du chargement des dossiers",
