@@ -31,7 +31,7 @@ from ..core.jwt import (
     require_admin,
 )
 from ..core.security import hash_password, verify_user
-from ..services.audit_service import log_web_login
+from ..services.audit_service import log_web_login, log_web_logout
 from ..services.oidc_service import resolve_oidc_settings
 from ..services.registries_service import delete_registries_for_owner
 from .groups import remove_member_from_all_groups
@@ -258,12 +258,21 @@ async def login(
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
-async def logout(response: Response) -> None:
+async def logout(
+    request: Request,
+    response: Response,
+    settings: Settings = Depends(get_settings),
+) -> None:
     """Clear the HttpOnly auth cookie (browser logout).
 
     Idempotent and unauthenticated: it only deletes the session cookie. OIDC
     end-session (provider logout) is handled separately by the frontend.
+
+    A web_logout audit event is emitted first, reading the username from the
+    session cookie still present on the request (skipped when already logged
+    out).
     """
+    await log_web_logout(request, settings)
     clear_auth_cookie(response)
 
 

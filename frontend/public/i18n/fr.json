@@ -336,7 +336,8 @@
       "registry_push": "Push",
       "registry_authorize": "Autorisation",
       "web_ui_action": "Action web",
-      "web_login": "Connexion web"
+      "web_login": "Connexion web",
+      "web_logout": "Déconnexion web"
     }
   },
   "ABOUT": {

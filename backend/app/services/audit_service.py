@@ -211,11 +211,18 @@ def _extract_username_from_request(request: Request, settings: Settings) -> str 
     return username if isinstance(username, str) and username else None
 
 
-# Login endpoints emit a dedicated web_login event carrying the resolved
-# username (unavailable from the request itself, which has no session cookie
-# yet). Skip them in the generic middleware to avoid a duplicate, username-less
-# entry.
-_LOGIN_PATHS = frozenset({"/api/auth/login", "/api/auth/token", "/api/oidc/callback"})
+# Login/logout endpoints emit dedicated web_login / web_logout events. Login
+# paths carry a username the request itself cannot provide (no session cookie
+# yet); logout is emitted before the cookie is cleared. Skip them in the generic
+# middleware to avoid duplicate entries.
+_AUTH_EVENT_PATHS = frozenset(
+    {
+        "/api/auth/login",
+        "/api/auth/token",
+        "/api/oidc/callback",
+        "/api/auth/logout",
+    }
+)
 
 
 async def log_web_login(
@@ -242,6 +249,28 @@ async def log_web_login(
     )
 
 
+async def log_web_logout(request: Request, settings: Settings) -> None:
+    """Log a web UI logout to the audit stream.
+
+    The username is read from the session cookie still present on the incoming
+    request — logout only clears the cookie on the response. When no valid
+    session is attached (already logged out) no event is emitted.
+    """
+    username = _extract_username_from_request(request, settings)
+    if not username:
+        return
+
+    audit = AuditService(settings)
+    await audit.log(
+        subject="web_logout",
+        path=request.url.path,
+        method=request.method,
+        status=200,
+        client_ip=request.client.host if request.client else None,
+        username=username,
+    )
+
+
 async def log_web_ui_action(
     request: Request,
     status_code: int,
@@ -259,7 +288,7 @@ async def log_web_ui_action(
     if path.startswith("/api/system/audit/logs"):
         return
 
-    if path in _LOGIN_PATHS:
+    if path in _AUTH_EVENT_PATHS:
         return
 
     audit = AuditService(settings)

@@ -336,7 +336,8 @@
       "registry_push": "Push",
       "registry_authorize": "Autorización",
       "web_ui_action": "Acción web",
-      "web_login": "Inicio de sesión web"
+      "web_login": "Inicio de sesión web",
+      "web_logout": "Cierre de sesión web"
     }
   },
   "ABOUT": {
