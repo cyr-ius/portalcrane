@@ -31,13 +31,14 @@ jobs:
         uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
-          cache-dependency-glob: uv.lock
+          cache-dependency-glob: backend/uv.lock
 
       - name: 📦 Install dependencies
         run: uv sync --locked --all-groups
+        working-directory: backend
 
-      - name: Run pre-commit
-        run: uv run pre-commit run --all-files
+      - name: Run prek
+        run: uv run --project backend prek run --all-files
 
   # ── Angular frontend checks ─────────────────────────────────────────────
   frontend:
@@ -62,7 +63,7 @@ jobs:
         working-directory: frontend
 
       - name: Build (production)
-        run: npm run build:prod
+        run: npm run build
         working-directory: frontend
 
   # ── Docker build check (no push) ────────────────────────────────────────
