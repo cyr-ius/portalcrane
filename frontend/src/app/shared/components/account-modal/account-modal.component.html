@@ -224,7 +224,11 @@
               <!-- Password -->
               <div class="col-6">
                 <label class="form-label small fw-semibold">
-                  {{ "AUTH.PASSWORD" | translate }}
+                  @if (registryForm.host().value() == "ghcr.io") {
+                    {{ "EXTREG.PAT" | translate }}
+                  } @else {
+                    {{ "AUTH.PASSWORD" | translate }}
+                  }
                   @if (editingId()) {
                     <span class="text-muted fw-normal">{{
                       "ACCOUNT.BLANK_KEEP" | translate
