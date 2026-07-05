@@ -163,8 +163,10 @@ app = FastAPI(
     lifespan=lifespan,
     docs_url=None,
     redoc_url=None,
-    openapi_url="/api/openapi.json" if app_settings.SWAGGER_ENABLE else None,
+    openapi_url="/api/openapi.json" if app_settings.swagger_enabled else None,
 )
+
+# ── Middleware ───────────────────────────────────────────────────────────────
 app.add_middleware(SecurityHeadersMiddleware)
 
 
@@ -211,7 +213,7 @@ app.mount("/api/static", StaticFiles(directory=static_dir), name="static")
 
 @app.get("/api/docs", include_in_schema=False)
 async def swagger_ui():
-    if not app_settings.SWAGGER_ENABLE:
+    if not app_settings.swagger_enabled:
         raise HTTPException(status_code=404, detail="Not Found")
     return get_swagger_ui_html(
         openapi_url="/api/openapi.json",

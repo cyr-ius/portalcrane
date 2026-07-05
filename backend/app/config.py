@@ -152,7 +152,7 @@ class Settings(BaseSettings):
     audit_max_events: int = 100
 
     # Swagger UI
-    SWAGGER_ENABLE: bool = False
+    swagger_enabled: bool = False
 
     # ── Internal helpers ─────────────────────────────────────────────────────────
 

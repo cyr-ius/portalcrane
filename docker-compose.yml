@@ -66,7 +66,7 @@ services:
       # - EMAIL_TO_ADDRESSES=security@corp.example.com
 
       # ── Logging ───────────────────────────────────────────────────────────
-      - SWAGGER_ENABLE=${SWAGGER_ENABLE:-false}
+      - SWAGGER_ENABLED=${SWAGGER_ENABLED:-false}
       - LOG_LEVEL=${LOG_LEVEL:-DEBUG}
 
     volumes:
