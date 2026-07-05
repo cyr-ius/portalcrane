@@ -1,0 +1,4 @@
+/* Pill-shaped preset quick-select buttons. */
+.preset-btn {
+  border-radius: 999px;
+}

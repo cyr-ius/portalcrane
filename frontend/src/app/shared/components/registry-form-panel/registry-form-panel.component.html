@@ -1,0 +1,413 @@
+<!-- Portalcrane - Shared Registry Form Panel (add/edit form + list) -->
+@if (loading()) {
+  <div class="text-center py-5 text-muted">
+    <span class="spinner-border spinner-border-sm me-2"></span
+    >{{ "EXTREG.LOADING" | translate }}
+  </div>
+} @else {
+  <div
+    class="card mb-3"
+    [class.section-card]="compact()"
+    [class.border-0]="!compact()"
+  >
+    <!-- Header -->
+    <div
+      class="card-header border-0 d-flex align-items-center justify-content-between"
+      [class.pb-0]="compact()"
+    >
+      <div>
+        <h6 class="fw-semibold mb-0">
+          <i class="bi bi-globe text-primary me-2"></i
+          >{{ titleKey() | translate }}
+        </h6>
+        <p class="text-muted small mt-1 mb-0">
+          {{ descriptionKey() | translate }}
+        </p>
+      </div>
+      <button class="btn btn-sm btn-primary" (click)="openAddForm()">
+        <i class="bi bi-plus-lg" [class.me-1]="!compact()"></i>
+        @if (!compact()) {
+          {{ "EXTREG.ADD" | translate }}
+        }
+      </button>
+    </div>
+
+    <div class="card-body">
+      <!-- ── Add / edit form ──────────────────────────────────────────────── -->
+      @if (showAddForm()) {
+        <div
+          class="border border-primary-subtle rounded p-3 mb-3 bg-primary-subtle bg-opacity-10"
+        >
+          <h6 class="fw-semibold mb-3 text-primary" [class.small]="compact()">
+            {{
+              (editingId() ? "ACCOUNT.EDIT_REGISTRY" : "EXTREG.NEW_REGISTRY")
+                | translate
+            }}
+          </h6>
+
+          <div class="row g-2 mb-2">
+            <!-- Display name -->
+            <div class="col-12 col-md-6">
+              <label class="form-label small fw-semibold">{{
+                "EXTREG.DISPLAY_NAME" | translate
+              }}</label>
+              <input
+                type="text"
+                class="form-control form-control-sm"
+                [placeholder]="'EXTREG.DISPLAY_NAME_PLACEHOLDER' | translate"
+                [formField]="registryForm.name"
+              />
+            </div>
+
+            <!-- Known registries preset picker -->
+            <div class="col-12">
+              <label class="form-label small fw-semibold">{{
+                "ACCOUNT.KNOWN_REGISTRIES" | translate
+              }}</label>
+              <div class="d-flex flex-wrap gap-2 mb-2">
+                @for (preset of registryPresets(); track preset.id) {
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-outline-secondary preset-btn"
+                    (click)="selectPreset(preset)"
+                  >
+                    <span class="me-1">{{ preset.logo }}</span
+                    >{{ preset.name }}
+                  </button>
+                }
+              </div>
+
+              <!-- Custom host adder (personal panel only) -->
+              @if (allowCustomHost()) {
+                <div class="input-group input-group-sm">
+                  <input
+                    type="text"
+                    class="form-control"
+                    [placeholder]="
+                      'ACCOUNT.CUSTOM_HOST_PLACEHOLDER' | translate
+                    "
+                    [value]="customHost()"
+                    (input)="customHost.set($any($event.target).value)"
+                  />
+                  <button
+                    type="button"
+                    class="btn btn-outline-primary"
+                    (click)="addCustomHostToPresets()"
+                  >
+                    <i class="bi bi-plus-lg me-1"></i
+                    >{{ "ACCOUNT.ADD_TO_LIST" | translate }}
+                  </button>
+                </div>
+              }
+            </div>
+
+            <!-- Registry host -->
+            <div class="col-12 col-md-4">
+              <label class="form-label small fw-semibold">{{
+                "STAGING.REGISTRY_HOST" | translate
+              }}</label>
+              <input
+                type="text"
+                class="form-control form-control-sm"
+                placeholder="registry.example.com"
+                [formField]="registryForm.host"
+              />
+            </div>
+
+            <!-- Username -->
+            <div class="col-12 col-md-4">
+              <label class="form-label small fw-semibold">{{
+                "AUTH.USERNAME" | translate
+              }}</label>
+              <input
+                type="text"
+                class="form-control form-control-sm"
+                [formField]="registryForm.username"
+              />
+            </div>
+
+            <!-- Password / PAT (GitHub Container Registry uses a token) -->
+            <div class="col-12 col-md-4">
+              <label class="form-label small fw-semibold">
+                @if (registryForm.host().value() == "ghcr.io") {
+                  {{ "EXTREG.PAT" | translate }}
+                } @else {
+                  {{ "EXTREG.PASSWORD_TOKEN" | translate }}
+                }
+                @if (editingId()) {
+                  <span class="text-muted fw-normal">{{
+                    "EXTREG.LEAVE_BLANK" | translate
+                  }}</span>
+                }
+              </label>
+              <input
+                type="password"
+                class="form-control form-control-sm"
+                [formField]="registryForm.password"
+              />
+            </div>
+
+            <!-- TLS settings -->
+            <!-- Manual binding: checkbox change returns boolean via $any() — Signal Form
+               does not support boolean toggles directly through [formField] -->
+            <div class="col-12 mt-1">
+              <!-- use_tls switch: controls HTTP vs HTTPS -->
+              <div class="form-check form-switch">
+                <input
+                  class="form-check-input"
+                  type="checkbox"
+                  [id]="'use-tls-' + uid"
+                  role="switch"
+                  [checked]="registryModel().use_tls"
+                  (change)="registryModel.update(m => ({ ...m, use_tls: $any($event.target).checked }))"
+                />
+                <label class="form-check-label small" [for]="'use-tls-' + uid">
+                  <i class="bi bi-lock me-1"></i
+                  >{{ "ACCOUNT.USE_TLS" | translate }}
+                  <span class="text-muted fw-normal ms-1">
+                    {{ "ACCOUNT.USE_TLS_HINT" | translate }}
+                  </span>
+                </label>
+              </div>
+
+              <!-- tls_verify switch: only shown when use_tls is enabled -->
+              @if (registryModel().use_tls) {
+                <div class="form-check form-switch mt-2 ms-3">
+                  <input
+                    class="form-check-input"
+                    type="checkbox"
+                    [id]="'tls-verify-' + uid"
+                    role="switch"
+                    [checked]="registryModel().tls_verify"
+                    (change)="registryModel.update(m => ({ ...m, tls_verify: $any($event.target).checked }))"
+                  />
+                  <label
+                    class="form-check-label small"
+                    [for]="'tls-verify-' + uid"
+                  >
+                    <i class="bi bi-shield-lock me-1"></i
+                    >{{ "ACCOUNT.VERIFY_TLS" | translate }}
+                    <span class="text-muted fw-normal ms-1">
+                      {{ "ACCOUNT.VERIFY_TLS_HINT" | translate }}
+                    </span>
+                  </label>
+                </div>
+                @if (!registryModel().tls_verify) {
+                  <div
+                    class="alert alert-warning py-1 px-2 small mt-1 mb-0 ms-3"
+                  >
+                    <i class="bi bi-exclamation-triangle me-1"></i>
+                    {{ "ACCOUNT.TLS_UNVERIFIED_WARN" | translate }}
+                  </div>
+                }
+              }
+
+              @if (!registryModel().use_tls) {
+                <div class="alert alert-warning py-1 px-2 small mt-1 mb-0">
+                  <i class="bi bi-exclamation-triangle me-1"></i>
+                  {{ "ACCOUNT.HTTP_WARN" | translate }}
+                </div>
+              }
+            </div>
+          </div>
+
+          <!-- Visibility (admin + global-capable panel only) — radios use manual
+             binding: DOM change events return strings, incompatible with the
+             "global" | "personal" union type in the Signal Form model -->
+          @if (canChooseScope()) {
+            <div class="col-12 mt-2">
+              <label class="form-label small fw-semibold">{{
+                "EXTREG.VISIBILITY" | translate
+              }}</label>
+              <div class="d-flex gap-3">
+                <div class="form-check">
+                  <input
+                    class="form-check-input"
+                    type="radio"
+                    [id]="'owner-personal-' + uid"
+                    [name]="'regOwner-' + uid"
+                    value="personal"
+                    [checked]="registryModel().owner === 'personal'"
+                    (change)="registryModel.update(m => ({ ...m, owner: 'personal' }))"
+                  />
+                  <label
+                    class="form-check-label small"
+                    [for]="'owner-personal-' + uid"
+                  >
+                    <i class="bi bi-person me-1"></i
+                    >{{ "EXTREG.PERSONAL" | translate }}
+                    <span class="text-muted">{{
+                      "EXTREG.ONLY_YOU" | translate
+                    }}</span>
+                  </label>
+                </div>
+                <div class="form-check">
+                  <input
+                    class="form-check-input"
+                    type="radio"
+                    [id]="'owner-global-' + uid"
+                    [name]="'regOwner-' + uid"
+                    value="global"
+                    [checked]="registryModel().owner === 'global'"
+                    (change)="registryModel.update(m => ({ ...m, owner: 'global' }))"
+                  />
+                  <label
+                    class="form-check-label small"
+                    [for]="'owner-global-' + uid"
+                  >
+                    <i class="bi bi-globe me-1"></i
+                    >{{ "EXTREG.GLOBAL" | translate }}
+                    <span class="text-muted">{{
+                      "EXTREG.VISIBLE_ALL" | translate
+                    }}</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+          }
+
+          <!-- Test result banner -->
+          @if (testResult()) {
+            <div
+              class="alert py-2 small mb-2 mt-2"
+              [class.alert-success]="
+                testResult()!.reachable && testResult()!.auth_ok
+              "
+              [class.alert-warning]="
+                testResult()!.reachable && !testResult()!.auth_ok
+              "
+              [class.alert-danger]="!testResult()!.reachable"
+            >
+              <i
+                class="bi me-1"
+                [class.bi-check-circle]="testResult()!.reachable"
+                [class.bi-x-circle]="!testResult()!.reachable"
+              ></i>
+              {{ testResult()!.message }}
+            </div>
+          }
+
+          <!-- Action buttons -->
+          <div class="d-flex gap-2 mt-3">
+            <button
+              class="btn btn-sm btn-primary"
+              (click)="saveRegistry()"
+              [disabled]="savingRegistry() || !registryForm().valid()"
+            >
+              @if (savingRegistry()) {
+                <span class="spinner-border spinner-border-sm me-1"></span>
+              }
+              {{ (editingId() ? "EXTREG.UPDATE" : "COMMON.SAVE") | translate }}
+            </button>
+            <button
+              class="btn btn-sm btn-outline-secondary"
+              (click)="testNewConnection()"
+              [disabled]="testingNew()"
+            >
+              @if (testingNew()) {
+                <span class="spinner-border spinner-border-sm me-1"></span>
+              } @else {
+                <i class="bi bi-plug me-1"></i>
+              }
+              {{ "EXTREG.TEST_CONNECTION" | translate }}
+            </button>
+            <button
+              class="btn btn-sm btn-link text-muted ms-auto"
+              (click)="cancelForm()"
+            >
+              {{ "COMMON.CANCEL" | translate }}
+            </button>
+          </div>
+        </div>
+      }
+
+      <!-- Empty state -->
+      @if (registries().length === 0 && !showAddForm()) {
+        <div class="text-center py-4 text-muted">
+          <i class="bi bi-globe display-5 d-block mb-3 opacity-25"></i>
+          {{ "EXTREG.EMPTY" | translate }}
+        </div>
+      }
+
+      <!-- Registry list -->
+      @for (reg of registries(); track reg.id) {
+        <div
+          class="border rounded mb-2 d-flex align-items-center gap-2"
+          [class.p-2]="compact()"
+          [class.p-3]="!compact()"
+          [class.gap-3]="!compact()"
+        >
+          <div class="flex-grow-1 min-width-0">
+            <div class="fw-semibold text-truncate" [class.small]="compact()">
+              {{ reg.name }}
+            </div>
+            <div
+              class="text-muted font-monospace text-truncate"
+              [class.x-small]="compact()"
+              [class.small]="!compact()"
+            >
+              {{ reg.host }}
+            </div>
+            <div class="d-flex flex-wrap gap-1 mt-1">
+              <!-- Owner badge (only when global registries can appear here) -->
+              @if (allowGlobalScope()) {
+                @if (reg.owner === "global") {
+                  <span class="badge bg-info-subtle text-info">
+                    <i class="bi bi-globe me-1"></i
+                    >{{ "EXTREG.GLOBAL" | translate }}
+                  </span>
+                } @else {
+                  <span class="badge bg-secondary-subtle text-secondary">
+                    <i class="bi bi-person me-1"></i
+                    >{{ "EXTREG.PERSONAL" | translate }}
+                  </span>
+                }
+              }
+              <!-- TLS badges: reflect use_tls and tls_verify state -->
+              @if (!reg.use_tls) {
+                <span
+                  class="badge bg-danger-subtle text-danger"
+                  [title]="'ACCOUNT.TLS_HTTP_TITLE' | translate"
+                >
+                  <i class="bi bi-unlock me-1"></i>HTTP
+                </span>
+              } @else if (reg.tls_verify === false) {
+                <span
+                  class="badge bg-warning-subtle text-warning"
+                  [title]="'ACCOUNT.TLS_UNVERIFIED_TITLE' | translate"
+                >
+                  <i class="bi bi-shield-exclamation me-1"></i
+                  >{{ "ACCOUNT.HTTPS_UNVERIFIED" | translate }}
+                </span>
+              } @else {
+                <span
+                  class="badge bg-success-subtle text-success"
+                  [title]="'ACCOUNT.TLS_VERIFIED_TITLE' | translate"
+                >
+                  <i class="bi bi-shield-lock me-1"></i
+                  >{{ "ACCOUNT.HTTPS_VERIFIED" | translate }}
+                </span>
+              }
+            </div>
+          </div>
+          <div class="d-flex gap-1 flex-shrink-0">
+            <button
+              class="btn btn-sm btn-outline-secondary"
+              (click)="openEditForm(reg)"
+              [title]="'EXTREG.EDIT_REGISTRY' | translate"
+            >
+              <i class="bi bi-pencil"></i>
+            </button>
+            <button
+              class="btn btn-sm btn-outline-danger"
+              (click)="deleteRegistry(reg.id)"
+              [title]="'EXTREG.DELETE_REGISTRY' | translate"
+            >
+              <i class="bi bi-trash"></i>
+            </button>
+          </div>
+        </div>
+      }
+    </div>
+  </div>
+}
