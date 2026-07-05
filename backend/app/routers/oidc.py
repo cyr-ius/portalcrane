@@ -35,6 +35,7 @@ from ..routers.auth import (
     _save_users,
     is_oidc_revoked,
 )
+from ..services.audit_service import log_web_login
 from ..services.oidc_service import (
     OidcAdminSettings,
     OidcIdentity,
@@ -208,6 +209,7 @@ async def oidc_callback(
 
     access_token = create_access_token({"sub": identity.username}, settings)
     set_auth_cookie(response, request, access_token)
+    await log_web_login(request, identity.username, settings, AUTH_SOURCE_OIDC)
     return Token(
         access_token=access_token,
         token_type="bearer",

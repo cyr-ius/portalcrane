@@ -33,6 +33,8 @@ export interface AuditEvent {
   elapsed_s: number;
   client_ip: string;
   username: string | null;
+  /** Authentication origin for web_login events: "local" or "oidc". */
+  auth_source?: string | null;
 }
 
 // ── Service ───────────────────────────────────────────────────────────────────

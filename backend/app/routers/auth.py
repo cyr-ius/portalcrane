@@ -31,6 +31,7 @@ from ..core.jwt import (
     require_admin,
 )
 from ..core.security import hash_password, verify_user
+from ..services.audit_service import log_web_login
 from ..services.oidc_service import resolve_oidc_settings
 from ..services.registries_service import delete_registries_for_owner
 from .groups import remove_member_from_all_groups
@@ -220,6 +221,7 @@ async def login_for_access_token(
         )
     access_token = create_access_token({"sub": form_data.username}, settings)
     set_auth_cookie(response, request, access_token)
+    await log_web_login(request, form_data.username, settings, AUTH_SOURCE_LOCAL)
     return Token(
         access_token=access_token,
         token_type="bearer",
@@ -247,6 +249,7 @@ async def login(
         )
     access_token = create_access_token({"sub": payload.username}, settings)
     set_auth_cookie(response, request, access_token)
+    await log_web_login(request, payload.username, settings, AUTH_SOURCE_LOCAL)
     return Token(
         access_token=access_token,
         token_type="bearer",

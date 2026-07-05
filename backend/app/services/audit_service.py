@@ -83,6 +83,8 @@ class AuditEvent(BaseModel):
     bytes: int
     elapsed_s: float = 0.0
     username: str | None = None
+    # Authentication origin for web_login events: "local" or "oidc".
+    auth_source: str | None = None
 
 
 def _store_recent_event(event: dict[str, Any]) -> None:
@@ -154,19 +156,21 @@ class AuditService:
         elapsed: float = 0.0,
         client_ip: str | None = None,
         username: str | None = None,
+        auth_source: str | None = None,
     ) -> None:
         """
         Log a registry pull (GET/HEAD) event.
 
         Parameters
         ----------
-        path:       The v2 API path, e.g. "library/nginx/manifests/latest"
-        method:     HTTP method (GET or HEAD)
-        status:     HTTP response status code from the upstream registry
-        size:       Response body size in bytes
-        elapsed:    Round-trip time in seconds
-        client_ip:  IP address of the Docker client (or reverse-proxy forwarded IP)
-        username:   Username
+        path:        The v2 API path, e.g. "library/nginx/manifests/latest"
+        method:      HTTP method (GET or HEAD)
+        status:      HTTP response status code from the upstream registry
+        size:        Response body size in bytes
+        elapsed:     Round-trip time in seconds
+        client_ip:   IP address of the Docker client (or reverse-proxy forwarded IP)
+        username:    Username
+        auth_source: Authentication origin for web_login events ("local"/"oidc")
         """
 
         event = AuditEvent(
@@ -179,6 +183,7 @@ class AuditService:
             elapsed_s=round(elapsed, 3),
             client_ip=client_ip or self.client_ip,
             username=username or self.username,
+            auth_source=auth_source,
         ).model_dump()
 
         _store_recent_event(event)
@@ -206,6 +211,37 @@ def _extract_username_from_request(request: Request, settings: Settings) -> str 
     return username if isinstance(username, str) and username else None
 
 
+# Login endpoints emit a dedicated web_login event carrying the resolved
+# username (unavailable from the request itself, which has no session cookie
+# yet). Skip them in the generic middleware to avoid a duplicate, username-less
+# entry.
+_LOGIN_PATHS = frozenset({"/api/auth/login", "/api/auth/token", "/api/oidc/callback"})
+
+
+async def log_web_login(
+    request: Request,
+    username: str,
+    settings: Settings,
+    auth_source: str,
+) -> None:
+    """Log a successful web UI login (local or OIDC) to the audit stream.
+
+    Emitted from the login endpoints themselves rather than the generic
+    middleware, because the authenticated username is only known here — the
+    incoming request carries no session cookie yet.
+    """
+    audit = AuditService(settings)
+    await audit.log(
+        subject="web_login",
+        path=request.url.path,
+        method=request.method,
+        status=200,
+        client_ip=request.client.host if request.client else None,
+        username=username,
+        auth_source=auth_source,
+    )
+
+
 async def log_web_ui_action(
     request: Request,
     status_code: int,
@@ -221,6 +257,9 @@ async def log_web_ui_action(
         return
 
     if path.startswith("/api/system/audit/logs"):
+        return
+
+    if path in _LOGIN_PATHS:
         return
 
     audit = AuditService(settings)

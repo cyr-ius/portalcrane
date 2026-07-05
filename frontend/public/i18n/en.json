@@ -335,7 +335,8 @@
       "registry_pull": "Pull",
       "registry_push": "Push",
       "registry_authorize": "Authorization",
-      "web_ui_action": "Web action"
+      "web_ui_action": "Web action",
+      "web_login": "Web login"
     }
   },
   "ABOUT": {
