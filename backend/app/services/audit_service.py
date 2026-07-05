@@ -31,7 +31,7 @@ your logging configuration:
 import json
 import logging
 from collections import deque
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from threading import Lock
 from typing import Any
@@ -171,7 +171,7 @@ class AuditService:
 
         event = AuditEvent(
             event=subject,
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
             path=path or self.path,
             method=method or self.method,
             http_status=status or self.http_status,
@@ -187,10 +187,13 @@ class AuditService:
 
 def _extract_username_from_request(request: Request, settings: Settings) -> str | None:
     auth_header = request.headers.get("authorization", "")
-    if not auth_header.lower().startswith("bearer "):
-        return None
+    if auth_header.lower().startswith("bearer "):
+        token = auth_header[7:].strip()
+    else:
+        # Web UI requests authenticate via cookie, not the Authorization header
+        # (see core.jwt.get_current_user which accepts both sources).
+        token = request.cookies.get(settings.auth_cookie_name, "").strip()
 
-    token = auth_header[7:].strip()
     if not token:
         return None
 

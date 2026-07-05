@@ -39,44 +39,96 @@
           {{ "AUDIT.EMPTY" | translate }}
         </div>
       } @else {
-        <div class="audit-log-list border rounded">
+        <div class="audit-table border rounded">
+          <div class="audit-header text-muted small fw-semibold">
+            @for (col of columns; track col) {
+              <button
+                type="button"
+                class="audit-sort btn btn-link btn-sm p-0 text-decoration-none text-muted d-inline-flex align-items-center gap-1"
+                [class.text-primary]="sortColumn() === col"
+                [class.fw-semibold]="sortColumn() === col"
+                (click)="toggleSort(col)"
+              >
+                {{ "AUDIT.COL." + col | translate }}
+                @if (sortColumn() === col) {
+                  <i
+                    class="bi"
+                    [class.bi-caret-up-fill]="sortDirection() === 'asc'"
+                    [class.bi-caret-down-fill]="sortDirection() === 'desc'"
+                  ></i>
+                } @else {
+                  <i class="bi bi-arrow-down-up opacity-50"></i>
+                }
+              </button>
+            }
+          </div>
+          <div class="audit-filter">
+            @for (col of columns; track col) {
+              <input
+                type="text"
+                class="form-control form-control-sm"
+                [value]="filters()[col]"
+                [placeholder]="'AUDIT.FILTER_PLACEHOLDER' | translate"
+                (input)="setFilter(col, $any($event.target).value)"
+              />
+            }
+          </div>
           @for (
-            group of auditGroups();
+            group of displayedGroups();
             track group.timestamp + group.image + group.event + $index
           ) {
-            <details class="audit-log-item border-bottom px-3 py-2">
+            <details class="audit-log-item border-top px-3 py-2">
               <summary
-                class="d-flex align-items-center gap-2 py-1"
+                class="audit-row py-1"
                 style="cursor: pointer; list-style: none"
               >
-                <span
-                  class="badge bg-secondary-subtle text-secondary"
-                  style="font-size: 0.7rem"
-                >
-                  {{ eventLabel(group.event) }}
+                <span class="text-muted small text-nowrap">
+                  {{ formatAuditTimestamp(group.timestamp) }}
                 </span>
-                @if (group.count > 1) {
+                <span class="text-truncate">
+                  @if (group.username) {
+                    <span
+                      class="badge bg-body-secondary text-muted d-inline-flex align-items-center gap-1"
+                      style="font-size: 0.7rem"
+                    >
+                      <i class="bi bi-person"></i>{{ group.username }}
+                    </span>
+                  }
+                </span>
+                <span class="text-truncate">
+                  @if (group.clientIp) {
+                    <span
+                      class="badge bg-body-secondary text-muted d-inline-flex align-items-center gap-1"
+                      style="font-size: 0.7rem"
+                    >
+                      <i class="bi bi-hdd-network"></i>{{ group.clientIp }}
+                    </span>
+                  }
+                </span>
+                <span>
                   <span
-                    class="badge bg-primary-subtle text-primary"
+                    class="badge bg-secondary-subtle text-secondary"
                     style="font-size: 0.7rem"
-                    [title]="'AUDIT.GROUPED' | translate"
                   >
-                    ×{{ group.count }}
+                    {{ eventLabel(group.event) }}
                   </span>
-                }
-                <span class="small text-muted text-truncate flex-grow-1">{{
+                </span>
+                <span class="small text-muted text-truncate">{{
                   group.image
                 }}</span>
-                @if (group.username) {
-                  <span
-                    class="badge bg-body-secondary text-muted d-flex align-items-center gap-1"
-                    style="font-size: 0.7rem"
-                  >
-                    <i class="bi bi-person"></i>{{ group.username }}
-                  </span>
-                }
+                <span class="text-center">
+                  @if (group.count > 1) {
+                    <span
+                      class="badge bg-primary-subtle text-primary"
+                      style="font-size: 0.7rem"
+                      [title]="'AUDIT.GROUPED' | translate"
+                    >
+                      ×{{ group.count }}
+                    </span>
+                  }
+                </span>
                 <span
-                  class="badge"
+                  class="badge text-nowrap"
                   [class]="
                     group.httpStatus < 400
                       ? 'badge bg-success-subtle text-success'
@@ -85,14 +137,16 @@
                 >
                   {{ group.httpStatus }}
                 </span>
-                <span class="text-muted small ms-auto">
-                  {{ formatAuditTimestamp(group.timestamp) }}
-                </span>
               </summary>
               <pre class="small mb-0 mt-2 audit-log-payload">{{
                 prettyAuditPayload(group)
               }}</pre>
             </details>
+          } @empty {
+            <div class="text-center py-4 text-muted small border-top">
+              <i class="bi bi-funnel display-6 d-block mb-2 opacity-25"></i>
+              {{ "AUDIT.NO_MATCH" | translate }}
+            </div>
           }
         </div>
       }

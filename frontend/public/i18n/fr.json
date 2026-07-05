@@ -319,6 +319,17 @@
     "EMPTY": "Aucun journal d'audit disponible pour le moment.",
     "ERR_LOAD": "Impossible de charger les journaux d'audit.",
     "GROUPED": "Requêtes regroupées d'une même opération",
+    "NO_MATCH": "Aucun événement ne correspond aux filtres.",
+    "FILTER_PLACEHOLDER": "Filtrer…",
+    "COL": {
+      "timestamp": "Date",
+      "username": "Utilisateur",
+      "clientIp": "Adresse IP",
+      "event": "Événement",
+      "image": "Image",
+      "count": "Nb",
+      "httpStatus": "Statut HTTP"
+    },
     "EVENTS": {
       "registry_login": "Connexion Docker",
       "registry_pull": "Pull",

@@ -319,6 +319,17 @@
     "EMPTY": "No audit logs available yet.",
     "ERR_LOAD": "Unable to load audit logs.",
     "GROUPED": "Grouped requests from a single operation",
+    "NO_MATCH": "No events match the filters.",
+    "FILTER_PLACEHOLDER": "Filter…",
+    "COL": {
+      "timestamp": "Date",
+      "username": "User",
+      "clientIp": "IP address",
+      "event": "Event",
+      "image": "Image",
+      "count": "Count",
+      "httpStatus": "HTTP status"
+    },
     "EVENTS": {
       "registry_login": "Docker login",
       "registry_pull": "Pull",

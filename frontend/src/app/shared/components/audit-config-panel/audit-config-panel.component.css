@@ -1,0 +1,46 @@
+/* Shared column template so header, filters and every row stay aligned.
+   Columns: date | user | ip | event | image (flexible) | count | status. */
+.audit-table {
+  --audit-cols: max-content minmax(6rem, max-content) minmax(6rem, max-content)
+    max-content minmax(6rem, 1fr) max-content max-content;
+  overflow-x: auto;
+}
+
+.audit-header,
+.audit-filter,
+.audit-row {
+  display: grid;
+  grid-template-columns: var(--audit-cols);
+  gap: 0.5rem;
+  align-items: center;
+  min-width: max-content;
+}
+
+.audit-header,
+.audit-filter {
+  padding: 0.5rem 1rem;
+}
+
+.audit-header {
+  background: var(--bs-tertiary-bg, rgba(0, 0, 0, 0.03));
+  border-bottom: 1px solid var(--bs-border-color);
+}
+
+.audit-filter {
+  border-bottom: 1px solid var(--bs-border-color);
+}
+
+.audit-sort {
+  white-space: nowrap;
+}
+
+/* Right-align the numeric column headers/inputs with their cells. */
+.audit-header > .audit-sort:nth-child(6),
+.audit-header > .audit-sort:nth-child(7) {
+  justify-content: center;
+}
+
+.audit-log-payload {
+  white-space: pre-wrap;
+  word-break: break-all;
+}

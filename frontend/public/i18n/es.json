@@ -319,6 +319,17 @@
     "EMPTY": "Aún no hay registros de auditoría disponibles.",
     "ERR_LOAD": "No se pueden cargar los registros de auditoría.",
     "GROUPED": "Solicitudes agrupadas de una misma operación",
+    "NO_MATCH": "Ningún evento coincide con los filtros.",
+    "FILTER_PLACEHOLDER": "Filtrar…",
+    "COL": {
+      "timestamp": "Fecha",
+      "username": "Usuario",
+      "clientIp": "Dirección IP",
+      "event": "Evento",
+      "image": "Imagen",
+      "count": "Nº",
+      "httpStatus": "Estado HTTP"
+    },
     "EVENTS": {
       "registry_login": "Inicio de sesión Docker",
       "registry_pull": "Pull",

@@ -8,6 +8,8 @@ export interface AuditGroup {
   /** Extracted image repository (grouping key), or the raw path for singles. */
   image: string;
   username: string | null;
+  /** Client IP address of the request(s). */
+  clientIp: string;
   count: number;
   totalBytes: number;
   /** Worst HTTP status of the group so any failure surfaces in red. */
@@ -16,6 +18,28 @@ export interface AuditGroup {
   timestamp: string;
   entries: AuditEvent[];
 }
+
+/** Sortable/filterable columns of the audit table, in display order. */
+export type AuditColumn =
+  | "timestamp"
+  | "username"
+  | "clientIp"
+  | "event"
+  | "image"
+  | "count"
+  | "httpStatus";
+
+export const AUDIT_COLUMNS: AuditColumn[] = [
+  "timestamp",
+  "username",
+  "clientIp",
+  "event",
+  "image",
+  "count",
+  "httpStatus",
+];
+
+type SortDirection = "asc" | "desc";
 
 const GROUPABLE_EVENTS = new Set(["registry_pull", "registry_push"]);
 const IMAGE_PATH_MARKERS = [
@@ -43,8 +67,101 @@ export class AuditConfigPanelComponent implements OnInit {
   /** Audit events with consecutive pull/push requests coalesced per operation. */
   auditGroups = computed<AuditGroup[]>(() => this.groupEvents(this.auditLogs()));
 
+  readonly columns = AUDIT_COLUMNS;
+  sortColumn = signal<AuditColumn>("timestamp");
+  sortDirection = signal<SortDirection>("desc");
+  /** Per-column substring filters, keyed by column. */
+  filters = signal<Record<AuditColumn, string>>({
+    timestamp: "",
+    username: "",
+    clientIp: "",
+    event: "",
+    image: "",
+    count: "",
+    httpStatus: "",
+  });
+
+  /** Groups after per-column filtering and sorting are applied. */
+  displayedGroups = computed<AuditGroup[]>(() =>
+    this.sortGroups(this.filterGroups(this.auditGroups())),
+  );
+
   ngOnInit(): void {
     this.loadAuditLogs();
+  }
+
+  /** Toggle direction when re-selecting a column, else sort by the new one. */
+  toggleSort(column: AuditColumn): void {
+    if (this.sortColumn() === column) {
+      this.sortDirection.update((d) => (d === "asc" ? "desc" : "asc"));
+      return;
+    }
+    this.sortColumn.set(column);
+    // Numeric and time columns feel more useful newest/highest first.
+    this.sortDirection.set(
+      column === "timestamp" || column === "count" || column === "httpStatus"
+        ? "desc"
+        : "asc",
+    );
+  }
+
+  setFilter(column: AuditColumn, value: string): void {
+    this.filters.update((f) => ({ ...f, [column]: value }));
+  }
+
+  /** Displayable text of a column, used for both filtering and text sorting. */
+  columnText(group: AuditGroup, column: AuditColumn): string {
+    switch (column) {
+      case "timestamp":
+        return this.formatAuditTimestamp(group.timestamp);
+      case "username":
+        return group.username ?? "";
+      case "clientIp":
+        return group.clientIp ?? "";
+      case "event":
+        return `${this.eventLabel(group.event)} ${group.event}`;
+      case "image":
+        return group.image;
+      case "count":
+        return String(group.count);
+      case "httpStatus":
+        return String(group.httpStatus);
+    }
+  }
+
+  private filterGroups(groups: AuditGroup[]): AuditGroup[] {
+    const active = (Object.entries(this.filters()) as [AuditColumn, string][])
+      .map(([column, value]) => [column, value.trim().toLowerCase()] as const)
+      .filter(([, value]) => value !== "");
+    if (active.length === 0) return groups;
+    return groups.filter((group) =>
+      active.every(([column, value]) =>
+        this.columnText(group, column).toLowerCase().includes(value),
+      ),
+    );
+  }
+
+  private sortGroups(groups: AuditGroup[]): AuditGroup[] {
+    const column = this.sortColumn();
+    const factor = this.sortDirection() === "asc" ? 1 : -1;
+    return [...groups].sort((a, b) => factor * this.compareGroups(a, b, column));
+  }
+
+  private compareGroups(a: AuditGroup, b: AuditGroup, column: AuditColumn): number {
+    switch (column) {
+      case "count":
+        return a.count - b.count;
+      case "httpStatus":
+        return a.httpStatus - b.httpStatus;
+      case "timestamp":
+        return (
+          new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+        );
+      default:
+        return this.columnText(a, column).localeCompare(
+          this.columnText(b, column),
+        );
+    }
   }
 
   async loadAuditLogs() {
@@ -131,6 +248,7 @@ export class AuditConfigPanelComponent implements OnInit {
         event: entry.event,
         image,
         username: entry.username,
+        clientIp: entry.client_ip,
         count: 1,
         totalBytes: entry.bytes ?? 0,
         httpStatus: entry.http_status,
