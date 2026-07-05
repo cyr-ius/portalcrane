@@ -35,15 +35,9 @@ else
 fi
 
 if [ -n "$WORKSPACE" ] && [ -f "$WORKSPACE/.devcontainer/registry-config.yml.tpl" ]; then
-  ${SUDO} mkdir -p /etc/registry
-  ${SUDO} cp "$WORKSPACE/.devcontainer/registry-config.yml.tpl" /etc/registry/config.yml
+  mkdir -p /etc/registry
+  cp "$WORKSPACE/.devcontainer/registry-config.yml.tpl" /etc/registry/registry-config.yml.tpl
   echo "✅ Template de configuration registry copié vers /etc/registry"
-fi
-
-if command -v skopeo >/dev/null 2>&1; then
-  echo "✅ skopeo déjà installé : $(command -v skopeo)"
-else
-  ${SUDO} apt-get update && ${SUDO} apt-get install -y skopeo
 fi
 
 echo "✅ trivy et registry sont prêts dans le devcontainer."
