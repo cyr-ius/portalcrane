@@ -342,7 +342,7 @@
   },
   "ABOUT": {
     "TITLE": "About",
-    "BUILT_WITH": "Built with Angular 21 (Zoneless + Signals) + FastAPI. Manages CNCF Distribution (Docker Registry).",
+    "BUILT_WITH": "Built with Angular 22 (Zoneless + Signals) + FastAPI. Manages CNCF Distribution (Docker Registry).",
     "FEATURES": "Features: Browse images, manage tags, staging pipeline with optional ClamAV scanning, optional Trivy CVE scanning, OIDC support.",
     "OPEN_API_DOCS": "Open API documentation",
     "OPEN_ISSUE": "Open an issue on GitHub",
