@@ -35,8 +35,8 @@ else
 fi
 
 if [ -n "$WORKSPACE" ] && [ -f "$WORKSPACE/.devcontainer/registry-config.yml.tpl" ]; then
-  mkdir -p /etc/registry
-  cp "$WORKSPACE/.devcontainer/registry-config.yml.tpl" /etc/registry/registry-config.yml.tpl
+  ${SUDO} mkdir -p /etc/registry
+  ${SUDO} cp "$WORKSPACE/.devcontainer/registry-config.yml.tpl" /etc/registry/config.yml.tpl
   echo "✅ Template de configuration registry copié vers /etc/registry"
 fi
 
