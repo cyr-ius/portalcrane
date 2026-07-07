@@ -1,6 +1,6 @@
 {
   "name": "portalcrane",
-  "version": "2.3.5",
+  "version": "3.8.0",
   "scripts": {
     "ng": "ng",
     "start": "ng serve --host 0.0.0.0",
