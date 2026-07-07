@@ -10,7 +10,6 @@ Authentication accepted:
 """
 
 import base64
-import ipaddress
 import json
 import logging
 import time
@@ -24,6 +23,7 @@ from ..core.jwt import ALGORITHM, is_admin_user
 from ..core.security import verify_user
 from ..routers.folders import check_folder_access
 from ..routers.personal_tokens import SCOPE_DOCKER, verify_personal_token
+from ..security import client_ip
 from ..services.audit_service import AuditService
 
 logger = logging.getLogger(__name__)
@@ -144,48 +144,6 @@ def _is_push_preflight_head(v2_path: str, method: str) -> bool:
     return "/blobs/" in v2_path or "/manifests/" in v2_path
 
 
-def _client_ip(request: Request) -> str:
-    """Extract the real client IP, handling common reverse-proxy headers."""
-    forwarded = request.headers.get("forwarded")
-    if forwarded:
-        for part in forwarded.split(","):
-            for item in part.split(";"):
-                key, sep, value = item.strip().partition("=")
-                if sep and key.lower() == "for" and value:
-                    candidate = (
-                        value.strip().strip('"').removeprefix("[").removesuffix("]")
-                    )
-                    if candidate.count(":") > 1 and "]:" in value:
-                        candidate = candidate.rsplit(":", 1)[0]
-                    elif candidate.count(":") == 1:
-                        host, port = candidate.rsplit(":", 1)
-                        if port.isdigit():
-                            candidate = host
-                    try:
-                        return str(ipaddress.ip_address(candidate))
-                    except ValueError:
-                        continue
-
-    x_forwarded_for = request.headers.get("x-forwarded-for")
-    if x_forwarded_for:
-        for ip in x_forwarded_for.split(","):
-            candidate = ip.strip()
-            try:
-                return str(ipaddress.ip_address(candidate))
-            except ValueError:
-                continue
-
-    x_real_ip = request.headers.get("x-real-ip")
-    if x_real_ip:
-        candidate = x_real_ip.strip()
-        try:
-            return str(ipaddress.ip_address(candidate))
-        except ValueError:
-            pass
-
-    return request.client.host if request.client else "unknown"
-
-
 # ─── Authorization ────────────────────────────────────────────────────────────
 
 
@@ -300,7 +258,7 @@ async def _proxy(request: Request, v2_path: str) -> Response:
     method = request.method
 
     audit.path = v2_path
-    audit.client_ip = _client_ip(request)
+    audit.client_ip = client_ip(request)
     audit.method = method
 
     if query_string:

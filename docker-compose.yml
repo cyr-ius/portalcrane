@@ -39,6 +39,17 @@ services:
       - VULN_IGNORE_UNFIXED=${VULN_IGNORE_UNFIXED:-false}
       - VULN_SCAN_TIMEOUT=${VULN_SCAN_TIMEOUT:-5m}
 
+      # ── Reverse proxy / rate limiting (optional) ──────────────────────────
+      # CIDR(s) of the reverse proxy in front of the app. Only when the request
+      # arrives from one of these ranges are X-Forwarded-For / Forwarded headers
+      # trusted to resolve the real client IP (used by the audit log and the
+      # per-IP rate limiter). Leave empty when the app is exposed directly.
+      # - TRUSTED_PROXIES=10.0.0.0/8,172.16.0.0/12
+      - RATE_LIMIT_ENABLED=${RATE_LIMIT_ENABLED:-true}
+      - RATE_LIMIT_MAX_REQUESTS=${RATE_LIMIT_MAX_REQUESTS:-100}
+      - RATE_LIMIT_AUTH_MAX_REQUESTS=${RATE_LIMIT_AUTH_MAX_REQUESTS:-5}
+      - RATE_LIMIT_WINDOW_SECONDS=${RATE_LIMIT_WINDOW_SECONDS:-60}
+
       # ── HTTP Proxy (optional) ─────────────────────────────────────────────
       # - HTTP_PROXY=http://proxy.corp:3128
       # - HTTPS_PROXY=http://proxy.corp:3128

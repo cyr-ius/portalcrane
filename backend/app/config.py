@@ -154,6 +154,28 @@ class Settings(BaseSettings):
     # Swagger UI
     swagger_enabled: bool = False
 
+    # Reverse-proxy trust boundary. Comma-separated CIDR ranges (or bare IPs) of
+    # the reverse proxies in front of the app. Forwarded client IPs
+    # (Forwarded / X-Forwarded-For / X-Real-IP) are honoured ONLY when the direct
+    # TCP peer matches one of these ranges; otherwise the headers are treated as
+    # spoofable and ignored, falling back to the real peer address. This feeds
+    # both the audit log and the per-IP rate limiter, so leaving it empty
+    # (default) keys every request by the real peer — safe, but behind a proxy
+    # all clients then share the proxy's IP. Docker env var: TRUSTED_PROXIES
+    # (e.g. "10.0.0.0/8,172.16.0.0/12").
+    trusted_proxies: str = ""
+
+    # Rate limiting (in-memory sliding window, keyed per client IP).
+    # Applies to /api/* routes only. Authentication endpoints get a stricter
+    # budget to throttle password brute-force attempts. The state lives in the
+    # process memory, which is adequate for the single-container deployment
+    # (one Uvicorn process); it is not shared across workers/replicas.
+    # The client IP is resolved via trusted_proxies above.
+    rate_limit_enabled: bool = True
+    rate_limit_window_seconds: int = 60
+    rate_limit_max_requests: int = 100  # per IP per window, all /api/* routes
+    rate_limit_auth_max_requests: int = 5  # per IP per window, login/token only
+
     # ── Internal helpers ─────────────────────────────────────────────────────────
 
     class Config:

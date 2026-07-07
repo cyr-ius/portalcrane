@@ -18,8 +18,6 @@ from fastapi import FastAPI, HTTPException
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.requests import Request
 
 from .config import DATA_DIR, STAGING_DIR, app_settings
 from .core.bootstrap import ensure_admin_credentials, ensure_secret_key
@@ -44,6 +42,7 @@ from .routers.folders import (
     ensure_root_folder_exists,
     migrate_folder_permissions_to_groups,
 )
+from .security import RateLimitMiddleware, SecurityHeadersMiddleware
 from .services.audit_service import log_web_ui_action
 from .services.proxy_service import (
     apply_proxy_to_os_environ,
@@ -63,38 +62,6 @@ logging.basicConfig(
 project_root = Path(__file__).resolve().parents[2]
 frontend_dist = (project_root / "frontend").resolve()
 frontend_index = frontend_dist / "index.html"
-
-
-class SecurityHeadersMiddleware(BaseHTTPMiddleware):
-    """Add security headers to every HTTP response."""
-
-    # Build CSP once at class level — one directive per list entry, auditable.
-    _CSP_DIRECTIVES: list[str] = [
-        "default-src 'self'",
-        "script-src 'self' 'unsafe-inline'",  # Angular + Swagger UI (self-hosted)
-        "style-src 'self' 'unsafe-inline'",  # Bootstrap + Swagger UI (self-hosted)
-        "img-src 'self' data: https:",  # logos, QR codes base64
-        "font-src 'self' data:",  # Bootstrap Icons embedded font
-        f"connect-src 'self' {app_settings.oidc_issuer}",  # API calls + Azure endpoints
-        "worker-src 'self'",  # Angular Service Worker (PWA)
-        "frame-ancestors 'none'",  # replaces X-Frame-Options
-    ]
-    _CSP: str = "; ".join(_CSP_DIRECTIVES) + ";"
-
-    async def dispatch(self, request: Request, call_next):
-        response = await call_next(request)
-        response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["X-Frame-Options"] = "DENY"
-        response.headers["X-XSS-Protection"] = "1; mode=block"
-        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        response.headers["Permissions-Policy"] = (
-            "camera=(), microphone=(), geolocation=(), payment=()"
-        )
-        response.headers["Strict-Transport-Security"] = (
-            "max-age=31536000; includeSubDomains"
-        )
-        response.headers["Content-Security-Policy"] = self._CSP
-        return response
 
 
 def _resolve_safe_path(full_path: str) -> Path | None:
@@ -184,6 +151,12 @@ async def audit_web_ui_actions(request, call_next):
         elapsed_s=elapsed,
     )
     return response
+
+
+# Registered last so it wraps the stack as the outermost layer: throttled
+# requests are rejected before the audit middleware runs, keeping brute-force
+# floods out of the bounded audit ring buffer.
+app.add_middleware(RateLimitMiddleware)
 
 
 # ── Routers ───────────────────────────────────────────────────────────────────
