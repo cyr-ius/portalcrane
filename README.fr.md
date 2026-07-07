@@ -475,6 +475,16 @@ Le workflow GitHub Actions (`.github/workflows/docker-publish.yml`) automatiquem
 
 Les tags d'image suivent le versionnage sémantique : `latest`, `edge`, `X`, `X.Y`, `X.Y.Z`, `sha-<commit>`.
 
+### Publier une release
+
+Utilisez le script d'aide — il incrémente la version frontend, la committe, tague **ce** commit puis pousse, afin que le tag contienne toujours une version cohérente :
+
+```bash
+scripts/release.sh patch     # ou minor / major / une version explicite X.Y.Z
+```
+
+Le push du tag `X.Y.Z` déclenche la release et la construction de l'image. Utilisez `--no-push` pour préparer le commit et le tag localement sans pousser.
+
 ---
 
 ## Captures d'écran

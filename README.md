@@ -445,6 +445,16 @@ The GitHub Actions workflow (`.github/workflows/docker-publish.yml`) automatical
 
 Image tags follow semantic versioning: `latest`, `edge`, `X`, `X.Y`, `X.Y.Z`, `sha-<commit>`.
 
+### Cutting a release
+
+Use the helper script — it bumps the frontend version, commits it, tags **that** commit and pushes, so the tag always contains a matching version:
+
+```bash
+scripts/release.sh patch     # or minor / major / an explicit X.Y.Z
+```
+
+Pushing the `X.Y.Z` tag triggers the release and image build. Use `--no-push` to prepare the commit and tag locally without pushing.
+
 ---
 
 ## Screenshots

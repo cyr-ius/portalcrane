@@ -473,6 +473,16 @@ El workflow de GitHub Actions (`.github/workflows/docker-publish.yml`) automáti
 
 Las etiquetas de imagen siguen el versionado semántico: `latest`, `edge`, `X`, `X.Y`, `X.Y.Z`, `sha-<commit>`.
 
+### Publicar una release
+
+Use el script de ayuda — incrementa la versión del frontend, la confirma, etiqueta **ese** commit y hace push, de modo que la etiqueta siempre contenga una versión coherente:
+
+```bash
+scripts/release.sh patch     # o minor / major / una versión explícita X.Y.Z
+```
+
+El push de la etiqueta `X.Y.Z` desencadena la release y la construcción de la imagen. Use `--no-push` para preparar el commit y la etiqueta localmente sin hacer push.
+
 ---
 
 ## Capturas de pantalla
