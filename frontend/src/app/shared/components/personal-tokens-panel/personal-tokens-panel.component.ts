@@ -17,11 +17,13 @@ import {
   PersonalToken,
   PersonalTokenCreated,
   PersonalTokensService,
+  TokenScope,
 } from "../../../core/services/personal-tokens.service";
 
 /** Shape of the token creation form model. */
 interface TokenFormModel {
   name: string;
+  scope: TokenScope;
   expiresInDays: number;
 }
 
@@ -58,6 +60,7 @@ export class PersonalTokensPanelComponent implements OnInit {
   /** Default values; spread to avoid mutating the constant on reset. */
   private readonly tokenInit: TokenFormModel = {
     name: "",
+    scope: "docker",
     expiresInDays: 90,
   };
 
@@ -121,7 +124,7 @@ export class PersonalTokensPanelComponent implements OnInit {
    */
   createToken(): void {
     submit(this.tokenForm, async (f) => {
-      const { name, expiresInDays } = f().value();
+      const { name, scope, expiresInDays } = f().value();
       this.creating.set(true);
       this.createError.set(null);
 
@@ -129,6 +132,7 @@ export class PersonalTokensPanelComponent implements OnInit {
         const created = await firstValueFrom(
           this.svc.create({
             name: name!,
+            scope: scope ?? "docker",
             expires_in_days: expiresInDays ?? 90,
           }),
         );
@@ -139,6 +143,7 @@ export class PersonalTokensPanelComponent implements OnInit {
           {
             id: created.id,
             name: created.name,
+            scope: created.scope,
             created_at: created.created_at,
             expires_at: created.expires_at,
             last_used_at: null,

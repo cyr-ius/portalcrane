@@ -400,6 +400,13 @@
     "COPIED": "Copié !",
     "COPY": "Copier dans le presse-papiers",
     "QUICK_LOGIN": "Jeton de connexion rapide (16 caractères) :",
+    "SWAGGER_HINT": "Utilisez ce jeton comme clé API dans Swagger : ouvrez la documentation de l'API, cliquez sur Authorize et collez-le.",
+    "SWAGGER_LINK": "Ouvrir la documentation de l'API",
+    "SCOPE": "Usage",
+    "SCOPE_DOCKER": "Docker",
+    "SCOPE_API": "API",
+    "SCOPE_DOCKER_HELP": "Mot de passe pour docker login (fournit aussi un jeton court de 16 caractères).",
+    "SCOPE_API_HELP": "Clé API pour l'API REST / Swagger. Inutilisable pour docker login.",
     "NEW_TOKEN": "Nouveau jeton d'accès personnel",
     "NAME_PLACEHOLDER": "Mon ordinateur portable, pipeline CI/CD…",
     "EXPIRES_IN": "Expire dans",
@@ -416,7 +423,7 @@
     "EXPIRES": "Expire le {{date}}",
     "LAST_USED": "Dernière utilisation le {{date}}",
     "REVOKE": "Révoquer le jeton",
-    "INFO_PRE": "Les jetons sont stockés de manière sécurisée sous forme de hachages bcrypt. La valeur brute n'est affichée qu'une seule fois à la création. Vous pouvez utiliser le jeton complet ou un jeton court dédié de 16 caractères pour",
+    "INFO_PRE": "La valeur n'est affichée qu'une seule fois à la création. Vous pouvez utiliser le jeton complet ou un jeton court dédié de 16 caractères pour",
     "INFO_POST": "."
   },
   "EXTREG": {

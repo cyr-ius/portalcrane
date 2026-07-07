@@ -11,7 +11,11 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from fastapi import Depends, HTTPException, Request, status
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import (
+    HTTPAuthorizationCredentials,
+    HTTPBearer,
+    OAuth2PasswordBearer,
+)
 from jose import JWTError, jwt
 from pydantic import BaseModel
 
@@ -20,6 +24,17 @@ from ..config import DATA_DIR, Settings, get_settings
 # auto_error=False so a missing Authorization header does not raise 401 on its
 # own — the token may instead be carried by the HttpOnly auth cookie.
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/token", auto_error=False)
+
+# Personal Access Token (API key) scheme. Rendered as a dedicated "Authorize"
+# entry in Swagger UI: paste a raw PAT (pct_…) and it is sent as
+# `Authorization: Bearer <token>`. auto_error=False so it stays optional and can
+# co-exist with the OAuth2 password flow and the HttpOnly cookie.
+api_key_scheme = HTTPBearer(
+    scheme_name="PersonalAccessToken",
+    description="Paste a personal access token (pct_…) created from your account.",
+    bearerFormat="pct",
+    auto_error=False,
+)
 
 ALGORITHM = "HS256"
 _USERS_FILE = Path(f"{DATA_DIR}/local_users.json")
@@ -90,13 +105,17 @@ def create_access_token(data: dict, settings: Settings) -> str:
 async def get_current_user(
     request: Request,
     token: str | None = Depends(oauth2_scheme),
+    api_key: HTTPAuthorizationCredentials | None = Depends(api_key_scheme),
     settings: Settings = Depends(get_settings),
 ) -> UserInfo:
-    """FastAPI dependency: validate the session JWT and return the UserInfo.
+    """FastAPI dependency: validate the caller's credentials and return UserInfo.
 
-    The token is accepted either from the ``Authorization: Bearer`` header
-    (API clients, Swagger) or from the HttpOnly auth cookie (browser sessions
-    set at login). The cookie keeps the token out of reach of JavaScript.
+    Three credential sources are accepted, in order of preference:
+      1. ``Authorization: Bearer`` header — either a short-lived session JWT or
+         a personal access token / API key (``pct_…``) created by the user.
+      2. The HttpOnly auth cookie (browser sessions set at login).
+    Personal access tokens are always validated against the on-disk store so
+    that revoked or expired keys are rejected, even though they are signed JWTs.
     """
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -104,20 +123,48 @@ async def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
 
-    # Prefer the Bearer header; fall back to the HttpOnly cookie.
-    token = token or request.cookies.get(settings.auth_cookie_name)
+    # Prefer an explicit Bearer header (OAuth2 flow or API key); fall back to
+    # the HttpOnly cookie carried by browser sessions.
+    token = (
+        token
+        or (api_key.credentials if api_key else None)
+        or request.cookies.get(settings.auth_cookie_name)
+    )
     if not token:
         raise credentials_exception
+
+    # Personal access token (API key) path — validated against the store so that
+    # revocation, expiry and scope are honoured. Only api-scoped tokens are
+    # accepted here; docker-scoped tokens are rejected. Imported lazily to avoid
+    # a circular import (personal_tokens imports from this module).
+    from ..routers.personal_tokens import (
+        _TOKEN_PREFIX,
+        SCOPE_API,
+        verify_personal_token,
+    )
+
     try:
         payload = jwt.decode(token, settings.secret_key, algorithms=[ALGORITHM])
-        username: str | None = payload.get("sub")
-        if username is None:
-            raise credentials_exception
-        token_data = TokenData(username=username)
     except JWTError:
+        payload = None
+
+    is_pat = token.startswith(_TOKEN_PREFIX) or bool(payload and payload.get("pat"))
+    if is_pat:
+        # Reconstruct the prefixed form so verify_personal_token can decode and
+        # locate the record even when only the inner JWT was supplied.
+        raw = token if token.startswith(_TOKEN_PREFIX) else _TOKEN_PREFIX + token
+        username = verify_personal_token(raw, settings, expected_scope=SCOPE_API)
+        if not username:
+            raise credentials_exception
+        return UserInfo(username=username, is_admin=is_admin_user(username, settings))
+
+    # Session JWT path.
+    if payload is None:
+        raise credentials_exception
+    username = payload.get("sub")
+    if username is None:
         raise credentials_exception
 
-    username = token_data.username or ""
     return UserInfo(
         username=username,
         is_admin=is_admin_user(username, settings),

@@ -1,7 +1,10 @@
 """
 Portalcrane - Personal Access Tokens Router
-Allows any authenticated user to generate long-lived tokens usable with
-docker login as a password substitute.
+Allows any authenticated user to generate long-lived tokens usable both as:
+  - a password substitute for `docker login`, and
+  - an API key for the REST API / Swagger UI ("Authorize" → PersonalAccessToken),
+    sent as `Authorization: Bearer <raw_token>` and validated by
+    core.jwt.get_current_user against this store (revocation & expiry honoured).
 
 Endpoints:
   - GET    /api/auth/tokens        → list the caller's tokens (hashed, no secret shown)
@@ -35,7 +38,7 @@ import json
 import secrets
 import string
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -57,6 +60,14 @@ _SHORT_TOKEN_LENGTH = 16
 # Default validity when no expiry is requested (90 days).
 _DEFAULT_EXPIRY_DAYS = 90
 
+# Token scopes — a token is bound to exactly one usage so that a Docker CI
+# credential can never reach the REST API and vice-versa.
+#   docker → usable as `docker login` password (registry proxy) only
+#   api    → usable as an API key / Bearer for the REST API & Swagger only
+SCOPE_DOCKER = "docker"
+SCOPE_API = "api"
+_VALID_SCOPES = {SCOPE_DOCKER, SCOPE_API}
+
 
 # ─── Pydantic models ──────────────────────────────────────────────────────────
 
@@ -66,6 +77,7 @@ class PersonalTokenPublic(BaseModel):
 
     id: str
     name: str
+    scope: str = SCOPE_DOCKER
     created_at: str
     expires_at: str | None = None
     last_used_at: str | None = None
@@ -76,13 +88,15 @@ class PersonalTokenCreated(PersonalTokenPublic):
     """Returned only at creation time — contains the raw token shown once."""
 
     raw_token: str
-    short_token: str
+    # Only issued for docker-scoped tokens (quick `docker login` password).
+    short_token: str | None = None
 
 
 class CreateTokenRequest(BaseModel):
     """Payload to create a new personal access token."""
 
     name: str
+    scope: str = SCOPE_DOCKER  # "docker" (default) or "api"
     expires_in_days: int | None = None  # None → use default (90 days)
 
 
@@ -110,6 +124,7 @@ def _token_to_public(t: dict) -> PersonalTokenPublic:
     return PersonalTokenPublic(
         id=t["id"],
         name=t["name"],
+        scope=t.get("scope", SCOPE_DOCKER),
         created_at=t["created_at"],
         expires_at=t.get("expires_at"),
         last_used_at=t.get("last_used_at"),
@@ -138,21 +153,45 @@ def _generate_short_token() -> str:
 # ─── Token verification (used by registry_proxy) ─────────────────────────────
 
 
-def verify_personal_token(raw_token: str, settings: Settings) -> str | None:
+def verify_personal_token(
+    raw_token: str,
+    settings: Settings,
+    expected_scope: str | None = None,
+) -> str | None:
     """Verify a raw PAT string and return the associated username.
 
     Steps:
-    1. Decode the JWT to extract the username (sub) and the pat=true claim.
-    2. Look up the token record by username and verify the bcrypt hash.
-    3. Check that the token has not expired.
+    1. Decode the JWT (validates signature + exp) to read sub, scope and jti.
+    2. Match the signed ``jti`` against a stored record (revocation check).
+       Legacy records without a ``jti`` fall back to a bcrypt hash match.
+    3. Check that the token has not expired and matches *expected_scope*.
     4. Update last_used_at in the store.
+
+    ``expected_scope`` restricts which tokens are accepted:
+      - ``"docker"`` → only tokens usable as a `docker login` password
+      - ``"api"``    → only tokens usable as a REST API key
+      - ``None``     → any scope (no restriction)
+    Legacy tokens (JWT without a scope claim) are treated as ``"docker"``.
+
+    NOTE ON MATCHING: the raw token is a long signed JWT. bcrypt silently
+    truncates its input to 72 bytes, and every PAT for a given user shares the
+    same 72-byte prefix (``pct_`` + header + ``{"sub":…,"scope":"``), so a
+    bcrypt hash match cannot distinguish two tokens of the same user. We
+    therefore identify the record by the signed, unique ``jti`` claim; the JWT
+    signature itself guarantees authenticity.
 
     Returns the username string on success, None on any failure.
     """
     tokens = _load_tokens()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
-    # Path A: full PAT (legacy and current format)
+    def _not_expired(token: dict) -> bool:
+        # Belt-and-suspenders with the JWT `exp` claim already checked at decode.
+        if token.get("expires_at"):
+            return now <= datetime.fromisoformat(token["expires_at"])
+        return True
+
+    # Path A: full PAT (a signed JWT, current and legacy format)
     try:
         token_to_decode = raw_token
         if raw_token.startswith(_TOKEN_PREFIX):
@@ -165,37 +204,51 @@ def verify_personal_token(raw_token: str, settings: Settings) -> str | None:
 
     if payload and payload.get("pat"):
         username: str = payload.get("sub", "")
-        if username:
+        token_scope: str = payload.get("scope", SCOPE_DOCKER)
+        jti = payload.get("jti")
+        scope_ok = expected_scope is None or token_scope == expected_scope
+        if username and scope_ok:
             for token in tokens:
                 if token["username"] != username:
                     continue
-                if not verify_password(raw_token, token.get("token_hash", "")):
+                if token.get("scope", SCOPE_DOCKER) != token_scope:
                     continue
-                # Check expiry stored in the record (belt-and-suspenders with JWT exp)
-                if token.get("expires_at"):
-                    exp = datetime.fromisoformat(token["expires_at"])
-                    if now > exp:
+                stored_jti = token.get("jti")
+                if stored_jti is not None:
+                    # Robust identification for current tokens.
+                    if stored_jti != jti:
                         continue
+                elif not verify_password(raw_token, token.get("token_hash", "")):
+                    # Legacy record (no jti) → fall back to bcrypt hash.
+                    continue
+                if not _not_expired(token):
+                    continue
                 token["last_used_at"] = now.isoformat()
                 _save_tokens(tokens)
                 return username
 
-    # Path B: short 16-char discriminator (or pct_<discriminator>)
+    # Path B: short 16-char discriminator (or pct_<discriminator>).
+    # Short tokens are a docker-login convenience only; never accept them when
+    # an api scope is required.
+    if expected_scope == SCOPE_API:
+        return None
+
     short_candidate = _normalise_short_token(raw_token)
     if len(short_candidate) != _SHORT_TOKEN_LENGTH:
         return None
 
     for token in tokens:
+        if expected_scope is not None and (
+            token.get("scope", SCOPE_DOCKER) != expected_scope
+        ):
+            continue
         short_hash = token.get("short_token_hash", "")
         if not short_hash:
             continue
         if not verify_password(short_candidate, short_hash):
             continue
-        if token.get("expires_at"):
-            exp = datetime.fromisoformat(token["expires_at"])
-            if now > exp:
-                continue
-
+        if not _not_expired(token):
+            continue
         token["last_used_at"] = now.isoformat()
         _save_tokens(tokens)
         return token["username"]
@@ -242,8 +295,11 @@ async def create_token(
     The raw token is returned only once in the response — it cannot be
     retrieved again.  Store it securely (e.g. in a secrets manager).
 
-    Usage with docker login:
-        docker login <registry-host> -u <username> -p <raw_token>
+    Two mutually exclusive scopes are available:
+      - ``docker`` → password for `docker login` (also yields a 16-char short
+        token for quick login);
+      - ``api``    → API key for the REST API / Swagger, sent as
+        ``Authorization: Bearer <raw_token>``.
     """
     name = payload.name.strip()
     if not name:
@@ -252,35 +308,51 @@ async def create_token(
             detail="Token name must not be empty",
         )
 
+    scope = payload.scope
+    if scope not in _VALID_SCOPES:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Invalid scope '{scope}'; expected one of {sorted(_VALID_SCOPES)}",
+        )
+
     expiry_days = payload.expires_in_days or _DEFAULT_EXPIRY_DAYS
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     expires_at = now + timedelta(days=expiry_days)
 
-    # Build a signed JWT that carries the pat=true claim
+    # Build a signed JWT that carries the pat=true claim and the token scope
+    jti = str(uuid.uuid4())  # Unique JWT ID — used to match the stored record
     claims = {
         "sub": current_user.username,
         "pat": True,
+        "scope": scope,
         "exp": expires_at,
         "iat": now,
-        "jti": str(uuid.uuid4()),  # Unique JWT ID for each token
+        "jti": jti,
     }
     raw_token = _TOKEN_PREFIX + jwt.encode(
         claims, settings.secret_key, algorithm=ALGORITHM
     )
-    short_token = _generate_short_token()
 
     token_id = str(uuid.uuid4())
     entry = {
         "id": token_id,
         "username": current_user.username,
         "name": name,
+        "scope": scope,
+        "jti": jti,
         "token_hash": hash_password(raw_token),
-        "short_token_hash": hash_password(short_token),
-        "short_token_hint": f"{short_token[:4]}…{short_token[-4:]}",
         "created_at": now.isoformat(),
         "expires_at": expires_at.isoformat(),
         "last_used_at": None,
     }
+
+    # The 16-char short token is a docker-login convenience only; api-scoped
+    # keys are pasted verbatim into Swagger and never need it.
+    short_token: str | None = None
+    if scope == SCOPE_DOCKER:
+        short_token = _generate_short_token()
+        entry["short_token_hash"] = hash_password(short_token)
+        entry["short_token_hint"] = f"{short_token[:4]}…{short_token[-4:]}"
 
     tokens = _load_tokens()
     tokens.append(entry)
@@ -289,11 +361,12 @@ async def create_token(
     return PersonalTokenCreated(
         id=token_id,
         name=name,
+        scope=scope,
         created_at=now.isoformat(),
         expires_at=expires_at.isoformat(),
         raw_token=raw_token,
         short_token=short_token,
-        short_token_hint=entry["short_token_hint"],
+        short_token_hint=entry.get("short_token_hint"),
     )
 
 

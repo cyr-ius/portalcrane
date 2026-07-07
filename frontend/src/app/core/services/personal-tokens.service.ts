@@ -8,10 +8,14 @@ import { HttpClient } from "@angular/common/http";
 import { inject, Injectable } from "@angular/core";
 import { Observable } from "rxjs";
 
+/** Token usage scope — mutually exclusive. */
+export type TokenScope = "docker" | "api";
+
 /** Token metadata returned by the API (no raw secret). */
 export interface PersonalToken {
   id: string;
   name: string;
+  scope: TokenScope;
   created_at: string;
   expires_at: string | null;
   last_used_at: string | null;
@@ -21,12 +25,14 @@ export interface PersonalToken {
 /** Returned once at creation time — contains the raw token shown once. */
 export interface PersonalTokenCreated extends PersonalToken {
   raw_token: string;
-  short_token: string;
+  /** Only present for docker-scoped tokens (quick login password). */
+  short_token: string | null;
 }
 
 /** Request body to create a new token. */
 export interface CreateTokenRequest {
   name: string;
+  scope: TokenScope;
   expires_in_days: number | null;
 }
 

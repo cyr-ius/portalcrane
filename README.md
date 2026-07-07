@@ -24,6 +24,7 @@ Portalcrane's internal registry allows you to organize images into directories. 
 - [Environment Variables](#environment-variables)
 - [Dashboard](#dashboard)
 - [User Management](#user-management)
+- [Personal Access Tokens](#personal-access-tokens)
 - [Folder-Based Access Control](#folder-based-access-control)
 - [Staging Pipeline](#staging-pipeline)
 - [External Registries & Sync](#external-registries--sync)
@@ -329,6 +330,43 @@ Portalcrane supports two types of accounts:
   - Admin role (full access)
   - Pull permission (read images from the registry)
   - Push permission (write / delete images in the registry)
+
+---
+
+## Personal Access Tokens
+
+Every authenticated user can generate **personal access tokens** from the **account menu → Personal Access Tokens** panel. They are especially useful for OIDC users who have no local password. The raw token value is shown **only once** at creation time (it is stored as a bcrypt hash and identified internally by a unique signed `jti`).
+
+Each token is created with **one of two mutually exclusive scopes**:
+
+| Scope      | `docker login` | REST API / Swagger | Short 16-char token |
+| ---------- | :------------: | :----------------: | :-----------------: |
+| **Docker** |       ✅       |         ❌         |         ✅          |
+| **API**    |       ❌       |         ✅         |         ❌          |
+
+A token created for one scope is rejected on the other, so a Docker CI credential can never reach the REST API and an API key can never be used to push/pull images.
+
+### Docker-scoped tokens
+
+Use the token as the password for `docker login` — either the full token or the shorter 16-character quick-login token shown at creation:
+
+```bash
+docker login <host>:8000 -u <username> -p <token>
+```
+
+### API-scoped tokens (Swagger / REST API)
+
+Use the token as an API key by sending it in the `Authorization` header:
+
+```bash
+curl -H "Authorization: Bearer <token>" http(s)://<host>:8000/api/auth/me
+```
+
+In **Swagger UI** (`/api/docs`, enabled with `SWAGGER_ENABLED=true`): click **Authorize**, choose **PersonalAccessToken**, paste the token, and all requests are then authenticated as you.
+
+Tokens can be revoked at any time from the same panel; expired or revoked tokens are rejected immediately. Deleting a user also revokes all of their tokens.
+
+> The registry proxy endpoints (`/v2/...`) implement the Docker Registry HTTP API and are intentionally hidden from Swagger, as they are only meaningful to the Docker CLI.
 
 ---
 

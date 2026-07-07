@@ -26,6 +26,7 @@ Un modelo RBAC permite controlar el uso de las imágenes.
 - [Variables de entorno](#variables-de-entorno)
 - [Panel de control](#panel-de-control)
 - [Gestión de usuarios](#gestión-de-usuarios)
+- [Tokens de acceso personal](#tokens-de-acceso-personal)
 - [Control de acceso por directorio](#control-de-acceso-por-directorio)
 - [Pipeline de preparación](#pipeline-de-preparación)
 - [Registros externos y sincronización](#registros-externos-y-sincronización)
@@ -345,6 +346,43 @@ Portalcrane admite dos tipos de cuentas:
   - Rol de admin (acceso completo)
   - Permiso pull (leer imágenes del registro)
   - Permiso push (escribir / eliminar imágenes en el registro)
+
+---
+
+## Tokens de acceso personal
+
+Todo usuario autenticado puede generar **tokens de acceso personal** desde el panel **menú de la cuenta → Tokens de acceso personal**. Son especialmente útiles para los usuarios OIDC que no tienen contraseña local. El valor sin procesar del token se muestra **solo una vez** en el momento de la creación (se almacena como hash bcrypt y se identifica internamente mediante un `jti` único y firmado).
+
+Cada token se crea con **uno de dos scopes mutuamente excluyentes**:
+
+| Scope      | `docker login` | API REST / Swagger | Token corto 16 car. |
+| ---------- | :------------: | :----------------: | :-----------------: |
+| **Docker** |       ✅       |         ❌         |         ✅          |
+| **API**    |       ❌       |         ✅         |         ❌          |
+
+Un token creado para un scope se rechaza en el otro: así, una credencial Docker de CI nunca puede alcanzar la API REST, y una clave API nunca puede usarse para descargar/subir imágenes.
+
+### Tokens con scope Docker
+
+Use el token como contraseña para `docker login` — ya sea el token completo o el token corto de 16 caracteres mostrado en la creación:
+
+```bash
+docker login <host>:8000 -u <username> -p <token>
+```
+
+### Tokens con scope API (Swagger / API REST)
+
+Use el token como clave API enviándolo en la cabecera `Authorization`:
+
+```bash
+curl -H "Authorization: Bearer <token>" http(s)://<host>:8000/api/auth/me
+```
+
+En **Swagger UI** (`/api/docs`, habilitado con `SWAGGER_ENABLED=true`): haga clic en **Authorize**, elija **PersonalAccessToken**, pegue el token, y todas las solicitudes se autenticarán en su nombre.
+
+Los tokens pueden revocarse en cualquier momento desde el mismo panel; los tokens caducados o revocados se rechazan de inmediato. Al eliminar un usuario también se revocan todos sus tokens.
+
+> Los endpoints del proxy de registro (`/v2/...`) implementan la API HTTP del Docker Registry y están ocultos intencionadamente de Swagger, ya que solo son relevantes para el CLI de Docker.
 
 ---
 

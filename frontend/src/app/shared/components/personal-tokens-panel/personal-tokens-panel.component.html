@@ -73,25 +73,47 @@
           </button>
         </div>
 
-        <!-- Short token (16 chars) — shown once at creation time -->
-        <div class="small text-success-emphasis mb-2">
-          {{ "TOKENS.QUICK_LOGIN" | translate }}
-          <code>{{ createdToken()!.short_token }}</code>
-        </div>
+        <!-- ── Docker-scoped token: short token + docker login hints ───────── -->
+        @if (createdToken()!.scope === "docker") {
+          <!-- Short token (16 chars) — shown once at creation time -->
+          <div class="small text-success-emphasis mb-2">
+            {{ "TOKENS.QUICK_LOGIN" | translate }}
+            <code>{{ createdToken()!.short_token }}</code>
+          </div>
 
-        <!-- docker login usage hints -->
-        <div class="bg-dark rounded p-2" style="font-size: 0.7rem">
-          <code class="text-success">
-            docker login &lt;registry-host&gt; -u &lt;username&gt; -p
-            {{ createdToken()!.raw_token }}
-          </code>
-        </div>
-        <div class="bg-dark rounded p-2 mt-2" style="font-size: 0.7rem">
-          <code class="text-success">
-            docker login &lt;registry-host&gt; -u &lt;username&gt; -p
-            {{ createdToken()!.short_token }}
-          </code>
-        </div>
+          <!-- docker login usage hints -->
+          <div class="bg-dark rounded p-2" style="font-size: 0.7rem">
+            <code class="text-success">
+              docker login &lt;registry-host&gt; -u &lt;username&gt; -p
+              {{ createdToken()!.raw_token }}
+            </code>
+          </div>
+          <div class="bg-dark rounded p-2 mt-2" style="font-size: 0.7rem">
+            <code class="text-success">
+              docker login &lt;registry-host&gt; -u &lt;username&gt; -p
+              {{ createdToken()!.short_token }}
+            </code>
+          </div>
+        }
+
+        <!-- ── API-scoped token: Swagger / API key usage hint ──────────────── -->
+        @if (createdToken()!.scope === "api") {
+          <div class="small text-success-emphasis mt-1 d-flex gap-2">
+            <i class="bi bi-braces-asterisk flex-shrink-0 mt-1"></i>
+            <div>
+              {{ "TOKENS.SWAGGER_HINT" | translate }}
+              <a
+                href="/api/docs"
+                target="_blank"
+                rel="noopener"
+                class="fw-semibold"
+              >
+                {{ "TOKENS.SWAGGER_LINK" | translate }}
+                <i class="bi bi-box-arrow-up-right ms-1"></i>
+              </a>
+            </div>
+          </div>
+        }
       </div>
     }
 
@@ -111,6 +133,30 @@
         }
 
         <div class="row g-2 mb-3">
+          <!-- Token scope (Docker vs API) — manual binding: DOM returns strings -->
+          <div class="col-12">
+            <label class="form-label small fw-semibold">{{
+              "TOKENS.SCOPE" | translate
+            }}</label>
+            <select
+              class="form-select form-select-sm"
+              [value]="tokenModel().scope"
+              (change)="tokenModel.update(m => ({ ...m, scope: $any($event.target).value }))"
+            >
+              <option value="docker">
+                {{ "TOKENS.SCOPE_DOCKER" | translate }}
+              </option>
+              <option value="api">{{ "TOKENS.SCOPE_API" | translate }}</option>
+            </select>
+            <div class="form-text small">
+              @if (tokenModel().scope === "api") {
+                {{ "TOKENS.SCOPE_API_HELP" | translate }}
+              } @else {
+                {{ "TOKENS.SCOPE_DOCKER_HELP" | translate }}
+              }
+            </div>
+          </div>
+
           <!-- Token name -->
           <div class="col-12">
             <label class="form-label small fw-semibold">{{
@@ -205,8 +251,21 @@
 
             <!-- Info -->
             <div class="flex-grow-1 min-w-0">
-              <div class="fw-semibold small text-truncate">
-                {{ token.name }}
+              <div
+                class="fw-semibold small text-truncate d-flex align-items-center gap-2"
+              >
+                <span class="text-truncate">{{ token.name }}</span>
+                @if (token.scope === "api") {
+                  <span class="badge text-bg-info flex-shrink-0">
+                    <i class="bi bi-braces-asterisk me-1"></i
+                    >{{ "TOKENS.SCOPE_API" | translate }}
+                  </span>
+                } @else {
+                  <span class="badge text-bg-secondary flex-shrink-0">
+                    <i class="bi bi-box-seam me-1"></i
+                    >{{ "TOKENS.SCOPE_DOCKER" | translate }}
+                  </span>
+                }
               </div>
               <div class="text-muted" style="font-size: 0.7rem">
                 @if (token.short_token_hint) {

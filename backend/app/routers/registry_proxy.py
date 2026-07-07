@@ -23,7 +23,7 @@ from ..config import REGISTRY_URL, get_settings
 from ..core.jwt import ALGORITHM, is_admin_user
 from ..core.security import verify_user
 from ..routers.folders import check_folder_access
-from ..routers.personal_tokens import verify_personal_token
+from ..routers.personal_tokens import SCOPE_DOCKER, verify_personal_token
 from ..services.audit_service import AuditService
 
 logger = logging.getLogger(__name__)
@@ -231,8 +231,11 @@ async def _authorize_registry_proxy(
         else:
             # Path B: PAT supplied as password field (docker login for OIDC users)
             # The token is self-contained (JWT) — we verify the signature and
-            # the bcrypt hash stored in personal_tokens.json.
-            pat_username = verify_personal_token(pwd, settings)
+            # the bcrypt hash stored in personal_tokens.json. Only docker-scoped
+            # tokens are accepted here; api-scoped keys cannot be used to log in.
+            pat_username = verify_personal_token(
+                pwd, settings, expected_scope=SCOPE_DOCKER
+            )
             if pat_username is not None and pat_username == user:
                 username = pat_username
             else:

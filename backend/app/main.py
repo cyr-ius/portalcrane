@@ -199,7 +199,11 @@ app.include_router(
     personal_tokens.router, prefix="/api/auth", tags=["Personal Access Tokens"]
 )
 app.include_router(registries.router, prefix="/api/registries", tags=["Registries"])
-app.include_router(registry_proxy.router, prefix="", tags=["Registry Proxy"])
+# Registry Proxy routes implement the Docker Registry HTTP API v2 and are only
+# meaningful to the docker CLI — hide them from the OpenAPI schema / Swagger UI.
+app.include_router(
+    registry_proxy.router, prefix="", tags=["Registry Proxy"], include_in_schema=False
+)
 app.include_router(staging.router, prefix="/api/staging", tags=["Staging"])
 app.include_router(system.router, prefix="/api/system", tags=["System"])
 app.include_router(transfer.router, prefix="/api/transfer", tags=["Transfer"])

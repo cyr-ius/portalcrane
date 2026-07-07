@@ -400,6 +400,13 @@
     "COPIED": "¡Copiado!",
     "COPY": "Copiar al portapapeles",
     "QUICK_LOGIN": "Token de inicio de sesión rápido (16 caracteres):",
+    "SWAGGER_HINT": "Use este token como clave API en Swagger: abra la documentación de la API, haga clic en Authorize y péguelo.",
+    "SWAGGER_LINK": "Abrir la documentación de la API",
+    "SCOPE": "Uso",
+    "SCOPE_DOCKER": "Docker",
+    "SCOPE_API": "API",
+    "SCOPE_DOCKER_HELP": "Contraseña para docker login (también proporciona un token corto de 16 caracteres).",
+    "SCOPE_API_HELP": "Clave API para la API REST / Swagger. No se puede usar para docker login.",
     "NEW_TOKEN": "Nuevo token de acceso personal",
     "NAME_PLACEHOLDER": "Mi portátil, pipeline CI/CD…",
     "EXPIRES_IN": "Caduca en",
@@ -416,7 +423,7 @@
     "EXPIRES": "Caduca el {{date}}",
     "LAST_USED": "Último uso el {{date}}",
     "REVOKE": "Revocar token",
-    "INFO_PRE": "Los tokens se almacenan de forma segura como hashes bcrypt. El valor sin procesar solo se muestra una vez en el momento de la creación. Puede usar el token completo o un token corto dedicado de 16 caracteres para",
+    "INFO_PRE": "El valor solo se muestra una vez en el momento de la creación. Puede usar el token completo o un token corto dedicado de 16 caracteres para",
     "INFO_POST": "."
   },
   "EXTREG": {

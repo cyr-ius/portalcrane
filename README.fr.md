@@ -27,6 +27,7 @@ Un modèle RBAC permet de contrôler l'utilisation des images.
 - [Variables d'environnement](#variables-denvironnement)
 - [Tableau de bord](#tableau-de-bord)
 - [Gestion des utilisateurs](#gestion-des-utilisateurs)
+- [Jetons d'accès personnels](#jetons-daccès-personnels)
 - [Contrôle d'accès par répertoire](#contrôle-daccès-par-répertoire)
 - [Pipeline de préparation](#pipeline-de-préparation)
 - [Registres externes et synchronisation](#registres-externes-et-synchronisation)
@@ -347,6 +348,43 @@ Portalcrane prend en charge deux types de comptes :
   - Le rôle admin (accès complet)
   - La permission pull (lire les images du registre)
   - La permission push (écrire / supprimer des images dans le registre)
+
+---
+
+## Jetons d'accès personnels
+
+Chaque utilisateur authentifié peut générer des **jetons d'accès personnels** depuis le panneau **menu du compte → Jetons d'accès personnels**. Ils sont particulièrement utiles pour les utilisateurs OIDC qui n'ont pas de mot de passe local. La valeur brute du jeton n'est affichée **qu'une seule fois** à la création (elle est stockée sous forme de hachage bcrypt et identifiée en interne par un `jti` unique et signé).
+
+Chaque jeton est créé avec **l'un des deux scopes mutuellement exclusifs** :
+
+| Scope      | `docker login` | API REST / Swagger | Jeton court 16 car. |
+| ---------- | :------------: | :----------------: | :-----------------: |
+| **Docker** |       ✅       |         ❌         |         ✅          |
+| **API**    |       ❌       |         ✅         |         ❌          |
+
+Un jeton créé pour un scope est refusé pour l'autre : ainsi une identité Docker de CI ne peut jamais atteindre l'API REST, et une clé API ne peut jamais servir à tirer/pousser des images.
+
+### Jetons de scope Docker
+
+Utilisez le jeton comme mot de passe pour `docker login` — soit le jeton complet, soit le jeton court de 16 caractères affiché à la création :
+
+```bash
+docker login <host>:8000 -u <username> -p <jeton>
+```
+
+### Jetons de scope API (Swagger / API REST)
+
+Utilisez le jeton comme clé API en l'envoyant dans l'en-tête `Authorization` :
+
+```bash
+curl -H "Authorization: Bearer <jeton>" http(s)://<host>:8000/api/auth/me
+```
+
+Dans **Swagger UI** (`/api/docs`, activé avec `SWAGGER_ENABLED=true`) : cliquez sur **Authorize**, choisissez **PersonalAccessToken**, collez le jeton, et toutes les requêtes sont alors authentifiées en votre nom.
+
+Les jetons peuvent être révoqués à tout moment depuis le même panneau ; les jetons expirés ou révoqués sont refusés immédiatement. La suppression d'un utilisateur révoque également tous ses jetons.
+
+> Les endpoints du proxy de registre (`/v2/...`) implémentent l'API HTTP du Docker Registry et sont volontairement masqués de Swagger, car ils ne sont pertinents que pour le CLI Docker.
 
 ---
 
