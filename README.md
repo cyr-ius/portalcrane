@@ -200,6 +200,33 @@ reverse proxy instead.
 | ----------------------------- | --------------------------------------------------- | ------- |
 | `REGISTRY_PROXY_AUTH_ENABLED` | Enforce authentication on the `/v2/` registry proxy | `true`  |
 
+### Reverse proxy & rate limiting
+
+| Variable                       | Description                                                               | Default |
+| ------------------------------ | ------------------------------------------------------------------------- | ------- |
+| `TRUSTED_PROXIES`              | Comma-separated CIDR ranges (or bare IPs) of the reverse proxies in front | —       |
+| `RATE_LIMIT_ENABLED`           | Enable the per-IP rate limiter on `/api/*` routes                         | `true`  |
+| `RATE_LIMIT_WINDOW_SECONDS`    | Sliding-window duration, in seconds                                       | `60`    |
+| `RATE_LIMIT_MAX_REQUESTS`      | Max requests per IP per window, all `/api/*` routes                       | `100`   |
+| `RATE_LIMIT_AUTH_MAX_REQUESTS` | Stricter budget per IP per window for login/token endpoints               | `5`     |
+
+`TRUSTED_PROXIES` sets the reverse-proxy trust boundary. Forwarded client IPs
+(`Forwarded` / `X-Forwarded-For` / `X-Real-IP`) are honoured **only** when the
+direct TCP peer matches one of these ranges; otherwise the headers are treated
+as spoofable and ignored, falling back to the real peer address. This resolved
+client IP feeds **both** the audit log and the per-IP rate limiter.
+
+> Leaving it empty (default) keys every request by the real TCP peer — safe, but
+> when the app sits behind a reverse proxy **all** clients then share the proxy's
+> IP and thus a single rate-limit bucket. Set it to your proxy's network
+> (e.g. `TRUSTED_PROXIES=10.0.0.0/8,172.16.0.0/12`) so per-client throttling and
+> audit logging see the real client address. Only list proxies you actually
+> control — trusting a range lets anything in it spoof client IPs.
+
+The rate-limit state lives in the process memory: it is adequate for the
+single-container deployment (one Uvicorn process) but is **not** shared across
+workers or replicas.
+
 ### OIDC (optional)
 
 | Variable                        | Description                                  | Default                |

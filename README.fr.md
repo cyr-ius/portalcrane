@@ -208,6 +208,35 @@ HTTP simple et terminer TLS au niveau d'un reverse proxy.
 | ----------------------------- | ---------------------------------------------------------- | ------ |
 | `REGISTRY_PROXY_AUTH_ENABLED` | Imposer l'authentification sur le proxy de registre `/v2/` | `true` |
 
+### Reverse proxy & limitation de débit
+
+| Variable                       | Description                                                                       | Défaut |
+| ------------------------------ | --------------------------------------------------------------------------------- | ------ |
+| `TRUSTED_PROXIES`              | Plages CIDR (ou IP simples), séparées par des virgules, des reverse proxies amont | —      |
+| `RATE_LIMIT_ENABLED`           | Activer la limitation de débit par IP sur les routes `/api/*`                     | `true` |
+| `RATE_LIMIT_WINDOW_SECONDS`    | Durée de la fenêtre glissante, en secondes                                        | `60`   |
+| `RATE_LIMIT_MAX_REQUESTS`      | Requêtes max par IP et par fenêtre, toutes routes `/api/*`                        | `100`  |
+| `RATE_LIMIT_AUTH_MAX_REQUESTS` | Budget plus strict par IP et par fenêtre pour les endpoints login/token           | `5`    |
+
+`TRUSTED_PROXIES` définit la frontière de confiance des reverse proxies. Les IP
+client transmises (`Forwarded` / `X-Forwarded-For` / `X-Real-IP`) ne sont prises
+en compte **que** si le pair TCP direct appartient à l'une de ces plages ; sinon
+les en-têtes sont considérés comme falsifiables et ignorés, avec repli sur
+l'adresse réelle du pair. Cette IP client résolue alimente **à la fois** le
+journal d'audit et le limiteur de débit par IP.
+
+> Laissée vide (défaut), chaque requête est indexée par le pair TCP réel — sûr,
+> mais lorsque l'application est derrière un reverse proxy **tous** les clients
+> partagent alors l'IP du proxy, donc un unique compteur de limitation. Réglez-la
+> sur le réseau de votre proxy (ex. `TRUSTED_PROXIES=10.0.0.0/8,172.16.0.0/12`)
+> pour que la limitation par client et l'audit voient l'adresse réelle du client.
+> Ne listez que les proxies que vous contrôlez réellement — faire confiance à une
+> plage permet à tout ce qui s'y trouve d'usurper les IP client.
+
+L'état de la limitation réside dans la mémoire du processus : adapté au
+déploiement mono-conteneur (un seul processus Uvicorn), il n'est **pas** partagé
+entre workers ou réplicas.
+
 ### OIDC (optionnel)
 
 | Variable                        | Description                                             | Défaut                 |

@@ -207,6 +207,35 @@ y terminar TLS en un reverse proxy.
 | ----------------------------- | ---------------------------------------------------- | ----------- |
 | `REGISTRY_PROXY_AUTH_ENABLED` | Imponer autenticación en el proxy de registro `/v2/` | `true`      |
 
+### Reverse proxy y limitación de tasa
+
+| Variable                       | Descripción                                                                        | Por defecto |
+| ------------------------------ | ---------------------------------------------------------------------------------- | ----------- |
+| `TRUSTED_PROXIES`              | Rangos CIDR (o IP sueltas), separados por comas, de los reverse proxies delanteros | —           |
+| `RATE_LIMIT_ENABLED`           | Activar el limitador de tasa por IP en las rutas `/api/*`                          | `true`      |
+| `RATE_LIMIT_WINDOW_SECONDS`    | Duración de la ventana deslizante, en segundos                                     | `60`        |
+| `RATE_LIMIT_MAX_REQUESTS`      | Máximo de solicitudes por IP y ventana, todas las rutas `/api/*`                   | `100`       |
+| `RATE_LIMIT_AUTH_MAX_REQUESTS` | Presupuesto más estricto por IP y ventana para los endpoints login/token           | `5`         |
+
+`TRUSTED_PROXIES` define la frontera de confianza de los reverse proxies. Las IP
+de cliente reenviadas (`Forwarded` / `X-Forwarded-For` / `X-Real-IP`) solo se
+tienen en cuenta **si** el par TCP directo pertenece a uno de estos rangos; de lo
+contrario las cabeceras se consideran falsificables y se ignoran, recurriendo a
+la dirección real del par. Esta IP de cliente resuelta alimenta **tanto** el
+registro de auditoría como el limitador de tasa por IP.
+
+> Dejarla vacía (por defecto) indexa cada solicitud por el par TCP real —
+> seguro, pero cuando la aplicación está detrás de un reverse proxy **todos** los
+> clientes comparten entonces la IP del proxy, y por tanto un único contador de
+> límite. Ajústela a la red de su proxy (p. ej. `TRUSTED_PROXIES=10.0.0.0/8,172.16.0.0/12`)
+> para que la limitación por cliente y la auditoría vean la dirección real del
+> cliente. Liste solo los proxies que controle realmente — confiar en un rango
+> permite que cualquier cosa dentro de él falsifique las IP de cliente.
+
+El estado de la limitación reside en la memoria del proceso: es adecuado para el
+despliegue de un solo contenedor (un único proceso Uvicorn), pero **no** se
+comparte entre workers ni réplicas.
+
 ### OIDC (opcional)
 
 | Variable                        | Descripción                                               | Por defecto            |
