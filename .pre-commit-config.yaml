@@ -27,7 +27,7 @@ repos:
       - id: codespell
         args:
           - --ignore-words-list=re-using,te
-          - --skip="./.*,*.csv,*.json",README.es.md,README.fr.md
+          - --skip="./.*,*.csv,*.json",README.es.md,README.fr.md,AGENTS.md
           - --quiet-level=2
         exclude_types: [csv, json]
         exclude: .devcontainer|.agents|.claude|.github|.vscode|node_modules|dist|build|i18n|locales

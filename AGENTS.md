@@ -73,3 +73,4 @@ npm start
 - Ne pas utiliser `pip install -r requirements.txt` : le projet Python est géré via `pyproject.toml` + `uv.lock`.
 - Préférer `npm ci` à `npm install` pour respecter le verrouillage de `package-lock.json`.
 - Si un outil manque (ex: `uv`, `node`), signaler clairement la limitation d’environnement dans le compte-rendu.
+- Utiliser le script release.sh pour mettre en production une nouvelle version.
