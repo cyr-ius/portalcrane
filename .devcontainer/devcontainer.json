@@ -67,7 +67,8 @@
       }
     }
   },
-  "postCreateCommand": "bash .devcontainer/scripts/install-trivy-registry.sh ${containerWorkspaceFolder} && bash .devcontainer/scripts/post-create.sh ${containerWorkspaceFolder}",
+  "onCreateCommand": "bash .devcontainer/scripts/install-trivy-registry.sh ${containerWorkspaceFolder}",
+  "postCreateCommand": "bash .devcontainer/scripts/post-create.sh ${containerWorkspaceFolder}",
   "appPort": ["0.0.0.0:4200:4200", "0.0.0.0:8000:8000"],
   "portsAttributes": {
     "4200": {
@@ -84,7 +85,8 @@
   "containerEnv": {
     "DATA_DIR": "${containerWorkspaceFolder}/.data_env", // (db, configuration files, etc...)
     "NG_FORCE_TTY": "false",
-    "UV_LINK_MODE": "copy"
+    "UV_LINK_MODE": "copy",
+    "REGISTRY_LOG_LEVEL": "info"
   },
 
   // Uncomment to connect as an existing user other than the container default. More info: https://aka.ms/dev-containers-non-root.

@@ -34,9 +34,9 @@ else
   install_binary "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" trivy
 fi
 
-if [ -n "$WORKSPACE" ] && [ -f "$WORKSPACE/.devcontainer/registry-config.yml.tpl" ]; then
+if [ -n "$WORKSPACE" ] && [ -f "$WORKSPACE/docker/registry-config.yml.tpl" ]; then
   ${SUDO} mkdir -p /etc/registry
-  ${SUDO} cp "$WORKSPACE/.devcontainer/registry-config.yml.tpl" /etc/registry/config.yml
+  envsubst < "$WORKSPACE/docker/registry-config.yml.tpl" | ${SUDO} tee /etc/registry/config.yml >/dev/null
   echo "✅ Template de configuration registry copié vers /etc/registry"
 fi
 
