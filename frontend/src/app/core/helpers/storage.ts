@@ -5,10 +5,6 @@ export function readBool(key: string, fallback: boolean): boolean {
   return v === null ? fallback : v === "true";
 }
 
-export function readStr(key: string, fallback: string): string {
-  return localStorage.getItem(key) ?? fallback;
-}
-
 export function formatBytes(bytes: number): string {
     if (!bytes) return "0 B";
     const units = ["B", "KB", "MB", "GB", "TB"];

@@ -130,15 +130,6 @@ def save_proxy_config(data: dict) -> None:
     _PROXY_CONFIG_FILE.write_text(json.dumps(data, indent=2))
 
 
-def clear_proxy_config() -> None:
-    """Remove the persisted override, reverting to container environment vars."""
-    try:
-        if _PROXY_CONFIG_FILE.exists():
-            _PROXY_CONFIG_FILE.unlink()
-    except Exception:
-        pass
-
-
 # ── OS environment injection ──────────────────────────────────────────────────
 
 

@@ -299,10 +299,6 @@ class V2Provider(BaseRegistryProvider):
             )
             return []
 
-    async def get_tags_for_import(self, repository: str) -> list[str]:
-        """Return tag list for import jobs (always a plain list[str])."""
-        return await self.browse_tags(repository=repository)
-
     async def get_manifest(self, repository: str, reference: str) -> dict[str, Any]:
         """Fetch a manifest by tag or digest."""
         try:

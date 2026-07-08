@@ -377,46 +377,6 @@ class GithubProvider(BaseRegistryProvider):
 
         return []
 
-    async def get_tag(self, package: str, version_id: str) -> dict[str, Any]:
-        """Get a specific version of a image."""
-        headers = self._github_api_headers()
-        last_error: str | None = None
-
-        async with httpx.AsyncClient(
-            timeout=self.tags_timeout, verify=self.verify, follow_redirects=True
-        ) as client:
-            for base_url in self._get_package_urls():
-                try:
-                    version_url = (
-                        f"{base_url}/container/{package}/versions/{version_id}"
-                    )
-                    resp = await client.get(version_url, headers=headers)
-                    if resp.status_code == 200:
-                        return resp.json()
-                    elif resp.status_code == 404:
-                        # Not a user, try org endpoint
-                        continue
-                    else:
-                        last_error = f"GitHub API returned HTTP {resp.status_code}"
-                except Exception as exc:
-                    logger.warning("Error to retrieve tag for %s (%s)", package, exc)
-                    last_error = "Error to retrieve tag, please view log."
-
-        return {"error": last_error}
-
-    async def get_tags_for_import(self, repository: str) -> list[str]:
-        """
-        Retrieve all tag names for a package, used by the import job.
-
-        This is a simplified wrapper around browse_github_tag() that always
-        returns a list (never a dict), safe to iterate in run_import_job().
-        """
-        repository = repository.split("/", 1)[-1] if "/" in repository else repository
-        result = await self.browse_tags(repository=repository)
-        if isinstance(result, list):
-            return result
-        return []
-
     async def get_manifest(self, repository: str, reference: str) -> dict[str, Any]:
         """Fetch a manifest from GHCR using the native OCI Distribution V2 API.
 

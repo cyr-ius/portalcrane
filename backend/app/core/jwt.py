@@ -51,12 +51,6 @@ class Token(BaseModel):
     expires_in: int
 
 
-class TokenData(BaseModel):
-    """Decoded JWT payload."""
-
-    username: str | None = None
-
-
 class UserInfo(BaseModel):
     """Authenticated user information returned by /me and used as dependency.
 

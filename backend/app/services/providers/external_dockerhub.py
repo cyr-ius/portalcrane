@@ -383,14 +383,6 @@ class DockerHubProvider(BaseRegistryProvider):
 
         return tags
 
-    async def get_tags_for_import(self, repository: str) -> list[str]:
-        """
-        Retrieve tag names for a Docker Hub repository, used by the import job.
-
-        Thin wrapper around browse_dockerhub_tags that guarantees a list return.
-        """
-        return await self.browse_tags(repository)
-
     async def get_manifest(self, repository: str, reference: str) -> dict[str, Any]:
         """Fetch a manifest from registry-1.docker.io using the native V2 API.
 

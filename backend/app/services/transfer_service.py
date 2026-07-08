@@ -105,24 +105,6 @@ class TransferRequest(BaseModel):
     vuln_severities_override: str | None = None
 
 
-class TransferJob(BaseModel):
-    """Single image transfer job state."""
-
-    job_id: str
-    status: TransferStatus
-    source_registry_id: str | None
-    dest_registry_id: str | None
-    repository: str
-    tag: str
-    dest_repository: str
-    dest_tag: str
-    progress: int = 0
-    message: str = ""
-    vuln_result: dict | None = None
-    error: str | None = None
-    created_at: str
-
-
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 
