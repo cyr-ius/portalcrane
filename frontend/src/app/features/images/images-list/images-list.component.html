@@ -703,7 +703,7 @@
     [sourceRegistryId]="selectedSource()"
     [preselectedImages]="transferPreselected()"
     [allImages]="data()?.items ?? []"
-    (closed)="transferModalOpen.set(false)"
+    (closed)="onTransferModalClosed()"
   />
 }
 

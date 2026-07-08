@@ -512,6 +512,15 @@ export class ImagesListComponent implements OnInit {
     this.transferModalOpen.set(true);
   }
 
+  /**
+   * Close the transfer modal and refresh the image list so any images
+   * transferred (or removed) during the session are reflected.
+   */
+  onTransferModalClosed(): void {
+    this.transferModalOpen.set(false);
+    this.loadImages();
+  }
+
   // ── Delete modal ───────────────────────────────────────────────────────────
 
   confirmDeleteImage(image: ImageInfo): void {
