@@ -34,6 +34,12 @@ else
   install_binary "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" trivy
 fi
 
+if command -v skopeo >/dev/null 2>&1; then
+  echo "✅ skopeo déjà installé : $(command -v skopeo)"
+else
+  ${SUDO} apt-get update && ${SUDO} apt-get install -y skopeo
+fi
+
 if [ -n "$WORKSPACE" ] && [ -f "$WORKSPACE/docker/registry-config.yml.tpl" ]; then
   ${SUDO} mkdir -p /etc/registry
   envsubst < "$WORKSPACE/docker/registry-config.yml.tpl" | ${SUDO} tee /etc/registry/config.yml >/dev/null
