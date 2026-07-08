@@ -34,16 +34,6 @@ export const TRANSFER_ACTIVE_STATUSES = new Set<TransferStatus>([
   "pushing",
 ]);
 
-// ── Terminal statuses (job is complete) ───────────────────────────────────────
-
-export const TRANSFER_TERMINAL_STATUSES = new Set<TransferStatus>([
-  "scan_clean",
-  "scan_skipped",
-  "scan_vulnerable",
-  "done",
-  "failed",
-]);
-
 // ── Interfaces ────────────────────────────────────────────────────────────────
 
 export interface TransferImageRef {

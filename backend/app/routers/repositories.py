@@ -11,39 +11,30 @@ import httpx
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 
-from ..config import REGISTRY_HOST, REGISTRY_URL, Settings, get_settings
+from ..config import REGISTRY_HOST, Settings, get_settings
 from ..core.jwt import (
     UserInfo,
     get_current_user,
     require_admin,
-    require_pull_access,
-    require_push_access,
 )
-from ..services.job_service import normalize_sync_job
 from ..services.registries_service import (
     LOCAL_REGISTRY_SYSTEM_ID,
     get_registry_by_id,
-    get_registry_for_user,
 )
 from ..services.repositories_service import (
     append_tag,
     browse_images,
     browse_tags,
     empty_tags,
-    list_sync_jobs,
     metadata_by_tag,
     purge_registry,
     remove_image,
     remove_tag,
-    run_export_job,
-    run_import_job,
     skopeo_copy_image_image,
-    validate_folder_path,
 )
 from .folders import (
     check_folder_access,
     has_external_pull_access,
-    has_external_push_access,
 )
 from .registries import resolve_owned_registry
 
@@ -66,22 +57,6 @@ class CopyImageRequest(BaseModel):
     source_tag: str
     dest_repository: str
     dest_tag: str | None = None
-
-
-class ImportRequest(BaseModel):
-    """Payload to trigger an import job (external -> local)."""
-
-    source_registry_id: str
-    source_image: str = "(all)"
-    dest_folder: str | None = None
-
-
-class SyncRequest(BaseModel):
-    """Payload to trigger a registry synchronisation job (local -> external)."""
-
-    source_image: str = "(all)"
-    dest_registry_id: str
-    dest_folder: str | None = None
 
 
 @router.get("/{registry_id}")
@@ -354,137 +329,6 @@ async def copy_image(
         )
 
     return {"message": message}
-
-
-# ── List Sync Jobs ─────────────────────────────────────────────────────────────
-
-
-@router.get("/sync/jobs")
-async def list_sync_jobs_endpoint(
-    _: UserInfo = Depends(require_pull_access),
-):
-    """List all sync/import jobs sorted by start time descending."""
-    return [normalize_sync_job(j) for j in list_sync_jobs()]
-
-
-# ── Export (local -> external) ────────────────────────────────────────────────
-
-
-@router.post("/export")
-async def start_sync(
-    request: SyncRequest,
-    current_user: UserInfo = Depends(require_push_access),
-    settings: Settings = Depends(get_settings),
-):
-    """Trigger a sync job (local -> external). Returns job_id immediately."""
-    _ensure_registry_access(current_user, request.dest_registry_id)
-
-    # Exporting a local image OUT to an external registry requires reading the
-    # local source (can_pull on its folder) plus the can_push_external capability
-    # (same invariant as the /transfer and staging push endpoints): a pull-only
-    # user must not be able to export images externally. Bulk "(all)" export
-    # spans every folder, so it is restricted to admins.
-    if not current_user.is_admin:
-        if request.source_image == "(all)":
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Exporting all images requires admin privileges",
-            )
-        _ensure_folder_permission(
-            current_user=current_user,
-            image_path=request.source_image,
-            is_pull=True,
-        )
-        if not has_external_push_access(current_user.username):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="External push permission denied",
-            )
-
-    try:
-        folder = validate_folder_path(request.dest_folder or "")
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
-
-    try:
-        job_id = await run_export_job(
-            source_image=request.source_image,
-            dest_registry_id=request.dest_registry_id,
-            dest_folder=folder,
-            local_registry_url=REGISTRY_URL,
-            settings=settings,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
-
-    return {"job_id": job_id, "status": "running"}
-
-
-# ── Import (external -> local) ────────────────────────────────────────────────
-
-
-@router.post("/import")
-async def start_import(
-    request: ImportRequest,
-    current_user: UserInfo = Depends(require_push_access),
-    settings: Settings = Depends(get_settings),
-):
-    """Trigger an import job (external -> local). Returns job_id immediately."""
-    _ensure_registry_access(current_user, request.source_registry_id)
-    try:
-        folder = validate_folder_path(request.dest_folder or "")
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
-
-    # Importing from an external registry INTO the local one requires the
-    # can_pull_external capability (reading a foreign source) plus can_push on the
-    # destination folder (writing locally). Bulk "(all)" import spans every
-    # folder, so it is restricted to admins.
-    if not current_user.is_admin:
-        if request.source_image == "(all)":
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Importing all images requires admin privileges",
-            )
-        if not has_external_pull_access(current_user.username):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="External pull permission denied",
-            )
-        dest_name = request.source_image.split("/")[-1]
-        dest_path = f"{folder}/{dest_name}" if folder else dest_name
-        _ensure_folder_permission(
-            current_user=current_user,
-            image_path=dest_path,
-            is_pull=False,
-        )
-
-    try:
-        job_id = await run_import_job(
-            source_registry_id=request.source_registry_id,
-            source_image=request.source_image,
-            dest_folder=folder,
-            local_registry_url=REGISTRY_URL,
-            settings=settings,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
-
-    return {"job_id": job_id, "status": "running"}
-
-
-def _ensure_registry_access(current_user: UserInfo, registry_id: str) -> None:
-    """Enforce registry ownership for a body-supplied registry_id.
-
-    Raises 404 when the registry does not exist or belongs to another user,
-    so a non-admin cannot use another user's stored credentials (e.g. to push
-    to or pull from their saved external registry).
-    """
-    registry = get_registry_for_user(
-        registry_id, current_user.username, current_user.is_admin
-    )
-    if not registry:
-        raise HTTPException(status_code=404, detail="Registry not found")
 
 
 def _ensure_folder_permission(

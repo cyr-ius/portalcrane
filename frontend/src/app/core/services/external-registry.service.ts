@@ -12,12 +12,9 @@
  *                                Used by External Registries settings panel.
  *   - browsableRegistries      : Registries with browsable !== false (includes system).
  *                                Used by images-list source selector.
- *   - browsableUserRegistries  : browsable + non-system registries only.
- *                                Used by sync panel (export/import destination).
  *
  * The local system registry (__local__) is shown in the Images source selector
- * and Staging pull source, but hidden from the External Registries settings panel
- * and sync destinations.
+ * and Staging pull source, but hidden from the External Registries settings panel.
  */
 import { HttpClient } from "@angular/common/http";
 import { computed, inject, Injectable, signal } from "@angular/core";
@@ -60,40 +57,9 @@ export interface UpdateRegistryPayload {
   tls_verify?: boolean;
 }
 
-export interface SyncJob {
-  id: string;
-  direction: "export" | "import";
-  source: string;
-  source_registry_id: string | null;
-  dest_registry_id: string | null;
-  dest_folder: string | null;
-  status: "running" | "done" | "done_with_errors" | "failed" | "partial" | "error";
-  started_at: string;
-  finished_at: string | null;
-  message: string;
-  error: string | null;
-  errors: string[];
-  progress: number;
-  images_total: number;
-  images_done: number;
-}
-
-export interface SyncRequest {
-  source_image: string;
-  dest_registry_id: string;
-  dest_folder?: string | null;
-}
-
-export interface ImportRequest {
-  source_registry_id: string;
-  source_image: string;
-  dest_folder?: string | null;
-}
-
 @Injectable({ providedIn: "root" })
 export class ExternalRegistryService {
   private readonly REGISTRIES = "/api/registries";
-  private readonly IMAGES = "/api/images";
   private http = inject(HttpClient);
 
   private _externalRegistries = signal<ExternalRegistry[]>([]);
@@ -104,9 +70,6 @@ export class ExternalRegistryService {
   );
   readonly browsableRegistries = computed<ExternalRegistry[]>(() =>
     this._externalRegistries().filter((r) => r.browsable !== false),
-  );
-  readonly browsableUserRegistries = computed<ExternalRegistry[]>(() =>
-    this._externalRegistries().filter((r) => r.browsable !== false && !r.system),
   );
 
   // ── Registry CRUD ──────────────────────────────────────────────────────────
@@ -171,32 +134,6 @@ export class ExternalRegistryService {
   checkCatalog(id: string): Observable<{ available: boolean; reason: string }> {
     return this.http.get<{ available: boolean; reason: string }>(
       `${this.REGISTRIES}/${id}/catalog-check`,
-    );
-  }
-
-  // ── List Sync Jobs ────────────────────────────────────────────────
-
-  listSyncJobs(): Observable<SyncJob[]> {
-    return this.http.get<SyncJob[]>(`${this.IMAGES}/sync/jobs`);
-  }
-
-  // ── Export (local -> external) ────────────────────────────────────────────────
-
-  startSync(request: SyncRequest): Observable<{ job_id: string; status: string }> {
-    return this.http.post<{ job_id: string; status: string }>(
-      `${this.IMAGES}/export`,
-      request,
-    );
-  }
-
-  // ── Import (external -> local) ────────────────────────────────────────────
-
-  startImport(
-    request: ImportRequest,
-  ): Observable<{ job_id: string; status: string }> {
-    return this.http.post<{ job_id: string; status: string }>(
-      `${this.IMAGES}/import`,
-      request,
     );
   }
 }

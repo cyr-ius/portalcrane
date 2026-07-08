@@ -179,21 +179,6 @@ class BaseRegistryProvider(ABC):
         """
         ...
 
-    @abstractmethod
-    async def get_tags_for_import(self, repository: str) -> list[str]:
-        """Retrieve tag names for a repository, used by import jobs.
-
-        Unlike browse_tags() this method ALWAYS returns a plain list[str],
-        never a dict, so import job loops can iterate safely without type checks.
-
-        Args:
-            repository: Repository path, e.g. "myorg/myimage".
-
-        Returns:
-            list[str]: Tag names; empty list on error.
-        """
-        ...
-
     async def browse_repositories(
         self,
         search: str | None,
@@ -454,7 +439,3 @@ class BaseRegistryProvider(ABC):
             "success": False,
             "message": "Tag creation is not supported for this registry type",
         }
-
-    def _log_prefix(self) -> str:
-        """Return a log-friendly provider identifier for debug messages."""
-        return f"{self.__class__.__name__}(host={self.host!r})"
