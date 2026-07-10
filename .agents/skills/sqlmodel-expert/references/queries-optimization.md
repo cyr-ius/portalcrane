@@ -1,6 +1,7 @@
 # SQLModel Query Patterns and Optimization
 
 ## Table of Contents
+
 1. Basic Query Patterns
 2. Advanced Queries
 3. N+1 Query Problem Solutions

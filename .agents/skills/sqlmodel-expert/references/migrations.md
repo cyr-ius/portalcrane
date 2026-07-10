@@ -1,6 +1,7 @@
 # Comprehensive Alembic Migrations Guide
 
 ## Table of Contents
+
 1. Alembic Setup and Configuration
 2. Creating Migrations
 3. Schema Changes Patterns
@@ -127,6 +128,7 @@ alembic revision --autogenerate -m "Add user table"
 ```
 
 **Generated migration file:**
+
 ```python
 """Add user table
 

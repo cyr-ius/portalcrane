@@ -9,14 +9,14 @@ Official FastAPI skill to write code with best practices, keeping up to date wit
 
 ## Quick Reference
 
-* Serve frontend apps: use `app.frontend()` or `router.frontend()` for built frontend assets; see [Serve Frontend Apps](#serve-frontend-apps).
-* Server-Sent Events (SSE): use `response_class=EventSourceResponse` and `yield`; see [Streaming](#streaming-json-lines-sse-bytes) and [the streaming reference](references/streaming.md).
-* JSON Lines and byte streaming: see [the streaming reference](references/streaming.md).
-* Dependencies: use `Annotated[..., Depends(...)]`; see [Dependency Injection](#dependency-injection) and [the dependency injection reference](references/dependencies.md) for `yield`, scopes, and class dependencies.
-* Response models: prefer return types; use `response_model` when the public response schema differs from the internal return value; see [the response reference](references/responses.md).
-* Pydantic models: do not use ellipsis or `RootModel`; see [the Pydantic reference](references/pydantic.md).
-* Routing: declare router-level prefix, tags, and shared dependencies on the `APIRouter`; see [the path operation reference](references/path-operations.md).
-* Tooling and related libraries: use uv, Ruff, ty, Asyncer, SQLModel, and HTTPX when applicable; see [the other tools reference](references/other-tools.md).
+- Serve frontend apps: use `app.frontend()` or `router.frontend()` for built frontend assets; see [Serve Frontend Apps](#serve-frontend-apps).
+- Server-Sent Events (SSE): use `response_class=EventSourceResponse` and `yield`; see [Streaming](#streaming-json-lines-sse-bytes) and [the streaming reference](references/streaming.md).
+- JSON Lines and byte streaming: see [the streaming reference](references/streaming.md).
+- Dependencies: use `Annotated[..., Depends(...)]`; see [Dependency Injection](#dependency-injection) and [the dependency injection reference](references/dependencies.md) for `yield`, scopes, and class dependencies.
+- Response models: prefer return types; use `response_model` when the public response schema differs from the internal return value; see [the response reference](references/responses.md).
+- Pydantic models: do not use ellipsis or `RootModel`; see [the Pydantic reference](references/pydantic.md).
+- Routing: declare router-level prefix, tags, and shared dependencies on the `APIRouter`; see [the path operation reference](references/path-operations.md).
+- Tooling and related libraries: use uv, Ruff, ty, Asyncer, SQLModel, and HTTPX when applicable; see [the other tools reference](references/other-tools.md).
 
 ## Use the `fastapi` CLI
 
@@ -89,7 +89,7 @@ async def read_item(current_user: CurrentUserDep):
     return {"message": "Hello World"}
 ```
 
-## Do not use Ellipsis for *path operations* or Pydantic models
+## Do not use Ellipsis for _path operations_ or Pydantic models
 
 Do not use `...` as a default value for required parameters or model fields. It's not needed and not recommended.
 
@@ -211,9 +211,9 @@ Apply shared dependencies at the router level via `dependencies=[Depends(...)]`.
 
 See [the dependency injection reference](references/dependencies.md) for detailed patterns including `yield` with `scope`, and class dependencies.
 
-## Async vs Sync *path operations*
+## Async vs Sync _path operations_
 
-Use `async` *path operations* only when fully certain that the logic called inside is compatible with async and await, and that it doesn't block.
+Use `async` _path operations_ only when fully certain that the logic called inside is compatible with async and await, and that it doesn't block.
 
 ```python
 from fastapi import FastAPI
@@ -269,9 +269,9 @@ See [the other tools reference](references/other-tools.md) for details on uv, Ru
 
 See [the other tools reference](references/other-tools.md) for details on other libraries:
 
-* Asyncer for handling async and await, concurrency, mixing async and blocking code, prefer it over AnyIO or asyncio.
-* SQLModel for working with SQL databases, prefer it over SQLAlchemy.
-* HTTPX for interacting with HTTP (other APIs), prefer it over Requests.
+- Asyncer for handling async and await, concurrency, mixing async and blocking code, prefer it over AnyIO or asyncio.
+- SQLModel for working with SQL databases, prefer it over SQLAlchemy.
+- HTTPX for interacting with HTTP (other APIs), prefer it over Requests.
 
 ## Do not use Pydantic RootModels
 

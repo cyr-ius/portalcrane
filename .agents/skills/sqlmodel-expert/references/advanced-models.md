@@ -1,6 +1,7 @@
 # Advanced SQLModel Patterns
 
 ## Table of Contents
+
 1. Model Definition Patterns
 2. Relationships (One-to-Many, Many-to-Many)
 3. Inheritance and Polymorphism
@@ -129,6 +130,7 @@ class Hero(SQLModel, table=True):
 ```
 
 **Querying with relationships:**
+
 ```python
 from sqlmodel import Session, select
 
@@ -480,6 +482,7 @@ class Task(SQLModel, table=True):
 ## Best Practices
 
 ### 1. Always Use Type Hints
+
 ```python
 # Good
 class User(SQLModel, table=True):
@@ -495,22 +498,26 @@ class User(SQLModel, table=True):
 ```
 
 ### 2. Use Indexes Wisely
+
 - Index foreign keys
 - Index columns used in WHERE clauses
 - Index columns used in ORDER BY
 - Don't over-index (slows down writes)
 
 ### 3. Separate Read/Write Models
+
 - Use different models for API input/output
 - Prevents accidental exposure of sensitive fields
 - Allows different validation rules
 
 ### 4. Use Relationships Carefully
+
 - Prefer lazy loading for large collections
 - Use `selectinload()` for eager loading to prevent N+1
 - Consider `back_populates` for bidirectional relationships
 
 ### 5. Naming Conventions
+
 ```python
 # Tables: plural, lowercase with underscores
 __tablename__ = "user_preferences"
