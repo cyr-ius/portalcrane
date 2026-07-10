@@ -1,4 +1,4 @@
-# 🐍 FastAPI — Spécificités Portalcrane
+# 🐍 FastAPI — Spécificités
 
 > **Best practices génériques FastAPI** (`Annotated`, `response_model`, DI, async vs sync, routers, streaming) : voir le skill **`fastapi`**.
 > **Couche base de données / ORM** (modèles, CRUD, sessions) : voir le skill **`sqlmodel`**.
