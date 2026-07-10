@@ -37,9 +37,7 @@ describe("MyButtonContainerComponent", () => {
 
   it("should find a button with specific text", async () => {
     // Load the harness for a MatButton with the text "Submit"
-    const submitButton = await loader.getHarness(
-      MatButtonHarness.with({ text: "Submit" }),
-    );
+    const submitButton = await loader.getHarness(MatButtonHarness.with({ text: "Submit" }));
 
     // Use the harness API to interact with the component
     expect(await submitButton.isDisabled()).toBe(false);

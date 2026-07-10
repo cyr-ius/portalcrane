@@ -23,11 +23,9 @@ export class MyService {
   private router = inject(Router);
 
   constructor() {
-    this.router.events
-      .pipe(filter((e) => e instanceof NavigationEnd))
-      .subscribe((event) => {
-        console.log("Navigated to:", event.url);
-      });
+    this.router.events.pipe(filter((e) => e instanceof NavigationEnd)).subscribe((event) => {
+      console.log("Navigated to:", event.url);
+    });
   }
 }
 ```

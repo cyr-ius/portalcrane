@@ -17,13 +17,7 @@ Import `ReactiveFormsModule` into your component.
 
 ```ts
 import { Component, inject } from "@angular/core";
-import {
-  ReactiveFormsModule,
-  FormGroup,
-  FormControl,
-  Validators,
-  FormBuilder,
-} from "@angular/forms";
+import { ReactiveFormsModule, FormGroup, FormControl, Validators, FormBuilder } from "@angular/forms";
 
 @Component({
   selector: "app-profile-editor",

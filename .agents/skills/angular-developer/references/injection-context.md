@@ -34,12 +34,7 @@ export class Example {
 If you need to run a function within an injection context (often needed for dynamic component creation or testing), use `runInInjectionContext`. This requires access to an existing injector (like `EnvironmentInjector` or `Injector`).
 
 ```ts
-import {
-  Injectable,
-  inject,
-  EnvironmentInjector,
-  runInInjectionContext,
-} from "@angular/core";
+import { Injectable, inject, EnvironmentInjector, runInInjectionContext } from "@angular/core";
 
 @Injectable({ providedIn: "root" })
 export class MyService {

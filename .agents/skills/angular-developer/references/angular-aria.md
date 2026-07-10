@@ -98,12 +98,7 @@ export class App {
 
 ```html
 <!-- horizontal or vertical orientation -->
-<ul
-  ngListbox
-  [(values)]="selectedItems"
-  orientation="horizontal"
-  [multi]="true"
->
+<ul ngListbox [(values)]="selectedItems" orientation="horizontal" [multi]="true">
   <li ngOption value="apple" class="option">Apple</li>
   <li ngOption value="banana" class="option">Banana</li>
 </ul>
@@ -151,9 +146,7 @@ These patterns combine `ngCombobox` with a popup containing an `ngListbox`.
 ```html
 <!-- Example: Standard Select -->
 <div ngCombobox [readonly]="true">
-  <button ngComboboxInput class="select-trigger">
-    {{ selectedValue() || 'Choose an option' }}
-  </button>
+  <button ngComboboxInput class="select-trigger">{{ selectedValue() || 'Choose an option' }}</button>
 
   <ng-template ngComboboxPopupContainer>
     <ul ngListbox [(values)]="selectedValue" class="dropdown-menu">

@@ -43,14 +43,7 @@ Use `[(ngModel)]` on input elements. **Every element using `[(ngModel)]` MUST ha
   <!-- Basic Input -->
   <div>
     <label for="name">Name:</label>
-    <input
-      type="text"
-      id="name"
-      required
-      [(ngModel)]="user.name"
-      name="name"
-      #nameCtrl="ngModel"
-    />
+    <input type="text" id="name" required [(ngModel)]="user.name" name="name" #nameCtrl="ngModel" />
   </div>
 
   <!-- Select Box -->
@@ -95,14 +88,7 @@ You can use these classes to provide visual feedback in your CSS:
 To display error messages conditionally, export the `ngModel` directive to a template reference variable (e.g., `#nameCtrl="ngModel"`).
 
 ```html
-<input
-  type="text"
-  id="name"
-  required
-  [(ngModel)]="user.name"
-  name="name"
-  #nameCtrl="ngModel"
-/>
+<input type="text" id="name" required [(ngModel)]="user.name" name="name" #nameCtrl="ngModel" />
 
 <!-- Show error only if the control is invalid AND (touched OR dirty) -->
 @if (nameCtrl.invalid && (nameCtrl.dirty || nameCtrl.touched)) {

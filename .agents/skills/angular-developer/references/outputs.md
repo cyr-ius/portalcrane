@@ -31,10 +31,7 @@ export class CustomSlider {
 Bind to the output event using parentheses `()`. If the event emits data, access it using the special `$event` variable.
 
 ```html
-<custom-slider
-  (panelClosed)="savePanelState()"
-  (valueChanged)="logValue($event)"
-/>
+<custom-slider (panelClosed)="savePanelState()" (valueChanged)="logValue($event)" />
 ```
 
 ## Configuration Options
