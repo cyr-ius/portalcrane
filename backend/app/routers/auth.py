@@ -1,7 +1,6 @@
 """
 Portalcrane - Authentication Router
 Handles local authentication and user management:
-  - POST /token           → OAuth2 password-flow token endpoint
   - POST /login           → JSON login endpoint
   - GET  /me              → current user information
   - GET/POST/PATCH/DELETE /users → local users CRUD
@@ -17,7 +16,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
-from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, field_validator
 
 from ..config import DATA_DIR, Settings, get_settings
@@ -202,31 +200,6 @@ def _ensure_local_auth_enabled(settings: Settings) -> None:
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Local authentication is disabled (OIDC-only mode).",
         )
-
-
-@router.post("/token", response_model=Token)
-async def login_for_access_token(
-    request: Request,
-    response: Response,
-    form_data: OAuth2PasswordRequestForm = Depends(),
-    settings: Settings = Depends(get_settings),
-):
-    """OAuth2 password-flow token endpoint used by the Swagger UI."""
-    _ensure_local_auth_enabled(settings)
-    if not verify_user(form_data.username, form_data.password, settings):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    access_token = create_access_token({"sub": form_data.username}, settings)
-    set_auth_cookie(response, request, access_token)
-    await log_web_login(request, form_data.username, settings, AUTH_SOURCE_LOCAL)
-    return Token(
-        access_token=access_token,
-        token_type="bearer",
-        expires_in=settings.access_token_expire_minutes * 60,
-    )
 
 
 @router.post("/login", response_model=Token)

@@ -228,7 +228,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     The health probe is exempt so container orchestration is never blocked.
     """
 
-    _AUTH_PATHS: frozenset[str] = frozenset({"/api/auth/login", "/api/auth/token"})
+    _AUTH_PATHS: frozenset[str] = frozenset({"/api/auth/login"})
     _EXEMPT_PATHS: frozenset[str] = frozenset({"/api/health"})
 
     def __init__(self, app) -> None:

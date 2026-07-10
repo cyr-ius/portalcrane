@@ -14,23 +14,18 @@ from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import (
     HTTPAuthorizationCredentials,
     HTTPBearer,
-    OAuth2PasswordBearer,
 )
 from jose import JWTError, jwt
 from pydantic import BaseModel
 
 from ..config import DATA_DIR, Settings, get_settings
 
-# auto_error=False so a missing Authorization header does not raise 401 on its
-# own — the token may instead be carried by the HttpOnly auth cookie.
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/token", auto_error=False)
-
-# Personal Access Token (API key) scheme. Rendered as a dedicated "Authorize"
-# entry in Swagger UI: paste a raw PAT (pct_…) and it is sent as
+# Personal Access Token (API key) scheme. Rendered as the "Authorize" entry in
+# Swagger UI: paste a raw PAT (pct_…) or a session JWT and it is sent as
 # `Authorization: Bearer <token>`. auto_error=False so it stays optional and can
-# co-exist with the OAuth2 password flow and the HttpOnly cookie.
+# co-exist with the HttpOnly auth cookie.
 api_key_scheme = HTTPBearer(
-    scheme_name="PersonalAccessToken",
+    scheme_name="Personal Access Token (PAT)",
     description="Paste a personal access token (pct_…) created from your account.",
     bearerFormat="pct",
     auto_error=False,
@@ -98,13 +93,12 @@ def create_access_token(data: dict, settings: Settings) -> str:
 
 async def get_current_user(
     request: Request,
-    token: str | None = Depends(oauth2_scheme),
     api_key: HTTPAuthorizationCredentials | None = Depends(api_key_scheme),
     settings: Settings = Depends(get_settings),
 ) -> UserInfo:
     """FastAPI dependency: validate the caller's credentials and return UserInfo.
 
-    Three credential sources are accepted, in order of preference:
+    Two credential sources are accepted, in order of preference:
       1. ``Authorization: Bearer`` header — either a short-lived session JWT or
          a personal access token / API key (``pct_…``) created by the user.
       2. The HttpOnly auth cookie (browser sessions set at login).
@@ -117,12 +111,10 @@ async def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
 
-    # Prefer an explicit Bearer header (OAuth2 flow or API key); fall back to
+    # Prefer an explicit Bearer header (session JWT or API key); fall back to
     # the HttpOnly cookie carried by browser sessions.
-    token = (
-        token
-        or (api_key.credentials if api_key else None)
-        or request.cookies.get(settings.auth_cookie_name)
+    token = (api_key.credentials if api_key else None) or request.cookies.get(
+        settings.auth_cookie_name
     )
     if not token:
         raise credentials_exception

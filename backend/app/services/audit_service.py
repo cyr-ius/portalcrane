@@ -218,7 +218,6 @@ def _extract_username_from_request(request: Request, settings: Settings) -> str 
 _AUTH_EVENT_PATHS = frozenset(
     {
         "/api/auth/login",
-        "/api/auth/token",
         "/api/oidc/callback",
         "/api/auth/logout",
     }
