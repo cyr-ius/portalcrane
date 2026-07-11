@@ -36,7 +36,7 @@ repos:
       - id: codespell
         args:
           # "te" is the RFC 7230 hop-by-hop HTTP header, not a typo.
-          - --ignore-words-list=mailserver,te
+          - --ignore-words-list=Portalcrane,redoc
           - --skip="./.*,*.csv,*.json,*.ambr"
           - --quiet-level=2
         exclude_types: [csv, json, html]
