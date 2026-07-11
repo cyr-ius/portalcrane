@@ -7,6 +7,7 @@ Instructions for AI agents operating in this repository.
 This document defines the rules and workflow that AI agents must follow when analyzing, modifying, testing, or deploying this repository.
 
 The objective is to:
+
 - quickly understand the project structure;
 - prepare a consistent local development environment;
 - apply the required development standards;
