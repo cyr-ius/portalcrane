@@ -19,7 +19,7 @@ Endpoints:
 import asyncio
 import logging
 import shutil
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from pydantic import BaseModel
@@ -151,7 +151,7 @@ async def _run_gc(dry_run: bool) -> None:
     global _gc_state
     _gc_state = GCStatus(
         status="running",
-        started_at=datetime.now(timezone.utc).isoformat(),
+        started_at=datetime.now(UTC).isoformat(),
         finished_at=None,
         output="Garbage collection started...",
         freed_bytes=0,
@@ -216,7 +216,7 @@ async def _run_gc(dry_run: bool) -> None:
         _gc_state["freed_human"] = bytes_to_human(freed)
         _gc_state["output"] = "\n".join(output_lines).strip()
         _gc_state["status"] = "done"
-        _gc_state["finished_at"] = datetime.now(timezone.utc).isoformat()
+        _gc_state["finished_at"] = datetime.now(UTC).isoformat()
         _gc_state = GCStatus.model_validate(_gc_state).model_dump()
 
     except Exception:
@@ -224,7 +224,7 @@ async def _run_gc(dry_run: bool) -> None:
         _gc_state["status"] = "failed"
         _gc_state["error"] = "Garbage collection failed — check server logs"
         _gc_state["output"] = "\n".join(output_lines).strip()
-        _gc_state["finished_at"] = datetime.now(timezone.utc).isoformat()
+        _gc_state["finished_at"] = datetime.now(UTC).isoformat()
         _gc_state = GCStatus.model_validate(_gc_state).model_dump()
 
 
@@ -243,7 +243,7 @@ async def start_garbage_collect(
     background_tasks.add_task(_run_gc, dry_run)
     return GCStatus(
         status="running",
-        started_at=datetime.now(timezone.utc).isoformat(),
+        started_at=datetime.now(UTC).isoformat(),
         finished_at=None,
         output="Garbage collection started...",
         freed_bytes=0,
