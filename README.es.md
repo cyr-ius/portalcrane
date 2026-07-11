@@ -220,13 +220,13 @@ rechazadas en la API REST y el panel de generación se oculta del perfil.
 
 ### Reverse proxy y limitación de tasa
 
-| Variable                       | Descripción                                                                        | Por defecto |
-| ------------------------------ | ---------------------------------------------------------------------------------- | ----------- |
-| `TRUSTED_PROXIES`              | Rangos CIDR (o IP sueltas), separados por comas, de los reverse proxies delanteros | —           |
-| `RATE_LIMIT_ENABLED`           | Activar el limitador de tasa por IP en las rutas `/api/*`                          | `true`      |
-| `RATE_LIMIT_WINDOW_SECONDS`    | Duración de la ventana deslizante, en segundos                                     | `60`        |
-| `RATE_LIMIT_MAX_REQUESTS`      | Máximo de solicitudes por IP y ventana, todas las rutas `/api/*`                   | `100`       |
-| `RATE_LIMIT_AUTH_MAX_REQUESTS` | Presupuesto más estricto por IP y ventana para los endpoints login/token           | `5`         |
+| Variable                        | Descripción                                                                        | Por defecto |
+| ------------------------------- | ---------------------------------------------------------------------------------- | ----------- |
+| `TRUSTED_PROXIES`               | Rangos CIDR (o IP sueltas), separados por comas, de los reverse proxies delanteros | —           |
+| `RATE_LIMIT_ENABLED`            | Activar el limitador de tasa por IP en las rutas `/api/*`                          | `true`      |
+| `RATE_LIMIT_WINDOW_SECONDS`     | Duración de la ventana deslizante, en segundos                                     | `60`        |
+| `RATE_LIMIT_MAX_REQUESTS`       | Máximo de solicitudes por IP y ventana, todas las rutas `/api/*`                   | `100`       |
+| `RATE_LIMIT_LOGIN_MAX_ATTEMPTS` | Presupuesto más estricto por IP y ventana para los endpoints login/token           | `5`         |
 
 `TRUSTED_PROXIES` define la frontera de confianza de los reverse proxies. Las IP
 de cliente reenviadas (`Forwarded` / `X-Forwarded-For` / `X-Real-IP`) solo se

@@ -248,7 +248,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         if path in self._AUTH_PATHS:
-            bucket, limit = "auth", settings.rate_limit_auth_max_requests
+            bucket, limit = "auth", settings.rate_limit_login_max_attempts
         else:
             bucket, limit = "global", settings.rate_limit_max_requests
 

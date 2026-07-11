@@ -213,13 +213,13 @@ generation panel is hidden from the account drawer.
 
 ### Reverse proxy & rate limiting
 
-| Variable                       | Description                                                               | Default |
-| ------------------------------ | ------------------------------------------------------------------------- | ------- |
-| `TRUSTED_PROXIES`              | Comma-separated CIDR ranges (or bare IPs) of the reverse proxies in front | —       |
-| `RATE_LIMIT_ENABLED`           | Enable the per-IP rate limiter on `/api/*` routes                         | `true`  |
-| `RATE_LIMIT_WINDOW_SECONDS`    | Sliding-window duration, in seconds                                       | `60`    |
-| `RATE_LIMIT_MAX_REQUESTS`      | Max requests per IP per window, all `/api/*` routes                       | `100`   |
-| `RATE_LIMIT_AUTH_MAX_REQUESTS` | Stricter budget per IP per window for login/token endpoints               | `5`     |
+| Variable                        | Description                                                               | Default |
+| ------------------------------- | ------------------------------------------------------------------------- | ------- |
+| `TRUSTED_PROXIES`               | Comma-separated CIDR ranges (or bare IPs) of the reverse proxies in front | —       |
+| `RATE_LIMIT_ENABLED`            | Enable the per-IP rate limiter on `/api/*` routes                         | `true`  |
+| `RATE_LIMIT_WINDOW_SECONDS`     | Sliding-window duration, in seconds                                       | `60`    |
+| `RATE_LIMIT_MAX_REQUESTS`       | Max requests per IP per window, all `/api/*` routes                       | `100`   |
+| `RATE_LIMIT_LOGIN_MAX_ATTEMPTS` | Stricter budget per IP per window for login/token endpoints               | `5`     |
 
 `TRUSTED_PROXIES` sets the reverse-proxy trust boundary. Forwarded client IPs
 (`Forwarded` / `X-Forwarded-For` / `X-Real-IP`) are honoured **only** when the
