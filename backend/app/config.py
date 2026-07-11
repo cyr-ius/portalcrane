@@ -9,7 +9,7 @@ from functools import lru_cache
 from pathlib import Path
 from urllib.parse import urlparse
 
-from pydantic import PrivateAttr
+from pydantic import Field, PrivateAttr
 from pydantic_settings import BaseSettings
 
 logger = logging.getLogger(__name__)
@@ -134,8 +134,6 @@ class Settings(BaseSettings):
     email_from_address: str = ""
     email_to_addresses: str = ""  # comma-separated recipients
     email_subject: str = "Portalcrane audit log"
-    # Automatic per-event email delivery (opt-in). notify_login covers web
-    # login/logout; notify_audit covers all other audited operations.
     email_notify_login: bool = False
     email_notify_audit: bool = False
 
@@ -158,10 +156,7 @@ class Settings(BaseSettings):
     # Swagger UI
     swagger_enabled: bool = False
 
-    # Personal Access Tokens (API keys). When False, the whole PAT feature is
-    # disabled: creation/listing endpoints return 403, existing API-scoped keys
-    # are rejected on the REST API, and the generation UI is hidden from users.
-    # Docker env var: API_KEYS_ENABLED.
+    # Personal Access Tokens (API keys).
     api_keys_enabled: bool = True
 
     # Reverse-proxy trust boundary. Comma-separated CIDR ranges (or bare IPs) of
@@ -185,6 +180,8 @@ class Settings(BaseSettings):
     rate_limit_window_seconds: int = 60
     rate_limit_max_requests: int = 100  # per IP per window, all /api/* routes
     rate_limit_auth_max_requests: int = 5  # per IP per window, login/token only
+
+    app_version: str = Field(default="Development", validation_alias="APP_VERSION")
 
     # ── Internal helpers ─────────────────────────────────────────────────────────
 
