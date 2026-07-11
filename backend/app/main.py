@@ -20,6 +20,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .config import DATA_DIR, STAGING_DIR, app_settings
 from .core.bootstrap import ensure_admin_credentials, ensure_secret_key
+from .helpers import resolve_safe_path
 from .routers import (
     about,
     auth,
@@ -55,42 +56,6 @@ logging.basicConfig(
     level=app_settings.log_level,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
-
-# Resolve once at module load — avoids repeated filesystem calls per request.
-project_root = Path(__file__).resolve().parents[2]
-frontend_dist = (project_root / "frontend").resolve()
-frontend_index = frontend_dist / "index.html"
-
-
-def _resolve_safe_path(full_path: str) -> Path | None:
-    """Resolve a URL path to a filesystem path safely."""
-    # Reject empty paths and dot-only segments immediately.
-    stripped = full_path.strip()
-    if not stripped or stripped in (".", ".."):
-        return None
-
-    # Resolve to absolute path — collapses all '..' and symlinks.
-    candidate = (frontend_dist / stripped).resolve()
-
-    # The candidate must be strictly inside frontend_dist (not equal to it).
-    # is_relative_to() returns True even when candidate == frontend_dist,
-    # so we add an explicit equality check to block directory root access.
-    if candidate == frontend_dist:
-        return None
-
-    if not candidate.is_relative_to(frontend_dist):
-        logger.warning(
-            "Path traversal attempt blocked: raw=%r resolved=%s",
-            full_path,
-            candidate,
-        )
-        return None
-
-    # Only serve regular files, never directories or special files.
-    if not candidate.is_file():
-        return None
-
-    return candidate
 
 
 # ── Lifespan ──────────────────────────────────────────────────────────────────
@@ -197,11 +162,16 @@ async def serve_spa(full_path: str) -> FileResponse:
     Unknown or unsafe paths also fall back to index.html rather than 404-ing,
     letting the Angular router handle the error page.
     """
+    # Resolve once at module load — avoids repeated filesystem calls per request.
+    project_root = Path(__file__).resolve().parents[2]
+    frontend_dist = (project_root / "frontend").resolve()
+    frontend_index = frontend_dist / "index.html"
+
     if not frontend_index.is_file():
         logger.error("SPA index.html not found at %s", frontend_index)
         raise HTTPException(status_code=503, detail="Frontend not available.")
 
-    safe = _resolve_safe_path(full_path)
+    safe = resolve_safe_path(full_path, frontend_dist)
     if safe is not None:
         return FileResponse(safe)
 
