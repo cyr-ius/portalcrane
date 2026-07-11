@@ -19,7 +19,7 @@ from fastapi import APIRouter, Request, Response, status
 from jose import JWTError, jwt
 
 from ..config import REGISTRY_URL, get_settings
-from ..core.jwt import ALGORITHM, is_admin_user
+from ..core.jwt import ALGORITHM, is_admin_user, is_user_disabled
 from ..core.security import verify_user
 from ..routers.folders import check_folder_access
 from ..routers.personal_tokens import SCOPE_DOCKER, verify_personal_token
@@ -204,6 +204,10 @@ async def _authorize_registry_proxy(
         audit.username = username
         if not username:
             return await _unauthorized_response("Invalid bearer token")
+
+    # Reject deactivated accounts regardless of the credential type used above.
+    if is_user_disabled(username, settings):
+        return await _unauthorized_response("Account disabled")
 
     # An authenticated /v2/ ping (empty path) is what `docker login` performs,
     # so we surface it as a distinct `registry_login` event. For actual

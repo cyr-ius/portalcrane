@@ -2,27 +2,21 @@
  * Portalcrane - Network Config Panel Component
  * Settings tab for proxy and syslog overrides.
  */
-import {
-  Component,
-  OnInit,
-  computed,
-  inject,
-  signal,
-} from '@angular/core';
-import { FormsModule } from '@angular/forms';
-import { TranslatePipe } from '@ngx-translate/core';
+import { Component, OnInit, computed, inject, signal } from "@angular/core";
+import { FormsModule } from "@angular/forms";
+import { TranslatePipe } from "@ngx-translate/core";
 import {
   EmailSettings,
   NetworkService,
   ProxySettings,
   SyslogSettings,
-} from '../../../core/services/network.service';
+} from "../../../core/services/network.service";
 
 @Component({
-  selector: 'app-network-config-panel',
+  selector: "app-network-config-panel",
   imports: [FormsModule, TranslatePipe],
-  templateUrl: './network-config-panel.component.html',
-  styleUrl: './network-config-panel.component.css',
+  templateUrl: "./network-config-panel.component.html",
+  styleUrl: "./network-config-panel.component.css",
 })
 export class NetworkConfigPanelComponent implements OnInit {
   private networkSvc = inject(NetworkService);
@@ -38,11 +32,11 @@ export class NetworkConfigPanelComponent implements OnInit {
 
   // ── Proxy form state ──────────────────────────────────────────────────────
   proxyForm = signal<ProxySettings>({
-    http_proxy: '',
-    https_proxy: '',
-    no_proxy: 'localhost,127.0.0.1',
-    proxy_username: '',
-    proxy_password: '',
+    http_proxy: "",
+    https_proxy: "",
+    no_proxy: "localhost,127.0.0.1",
+    proxy_username: "",
+    proxy_password: "",
     proxy_override: false,
   });
 
@@ -51,17 +45,17 @@ export class NetworkConfigPanelComponent implements OnInit {
   // ── Syslog form state ─────────────────────────────────────────────────────
   syslogForm = signal<SyslogSettings>({
     enabled: false,
-    host: '',
+    host: "",
     port: 514,
-    protocol: 'udp',
-    rfc: 'rfc5424',
+    protocol: "udp",
+    rfc: "rfc5424",
     forward_audit: true,
     forward_uvicorn: false,
     tls_verify: true,
-    tls_ca_cert: '',
+    tls_ca_cert: "",
     auth_enabled: false,
-    auth_username: '',
-    auth_password: '',
+    auth_username: "",
+    auth_password: "",
   });
 
   showSyslogPassword = signal(false);
@@ -69,21 +63,23 @@ export class NetworkConfigPanelComponent implements OnInit {
   // ── Email form state ──────────────────────────────────────────────────────
   emailForm = signal<EmailSettings>({
     enabled: false,
-    host: '',
+    host: "",
     port: 587,
-    security: 'starttls',
-    username: '',
-    password: '',
-    from_address: '',
-    to_addresses: '',
-    subject: 'Portalcrane audit log',
+    security: "starttls",
+    username: "",
+    password: "",
+    from_address: "",
+    to_addresses: "",
+    subject: "Portalcrane audit log",
+    notify_login: false,
+    notify_audit: false,
   });
 
   showEmailPassword = signal(false);
 
   /** True when the selected protocol supports TLS. */
   readonly tlsAvailable = computed(
-    () => this.syslogForm().protocol === 'tcp+tls'
+    () => this.syslogForm().protocol === "tcp+tls",
   );
 
   /**
@@ -92,8 +88,8 @@ export class NetworkConfigPanelComponent implements OnInit {
    */
   readonly authAvailable = computed(
     () =>
-      this.syslogForm().protocol === 'tcp' ||
-      this.syslogForm().protocol === 'tcp+tls'
+      this.syslogForm().protocol === "tcp" ||
+      this.syslogForm().protocol === "tcp+tls",
   );
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
@@ -153,12 +149,12 @@ export class NetworkConfigPanelComponent implements OnInit {
 
     // When switching away from TCP, disable auth (not available for UDP)
     const proto = this.syslogForm().protocol;
-    if (proto === 'udp' && this.syslogForm().auth_enabled) {
+    if (proto === "udp" && this.syslogForm().auth_enabled) {
       this.syslogForm.update((f) => ({ ...f, auth_enabled: false }));
     }
     // When switching away from TCP+TLS, reset TLS fields
-    if (proto !== 'tcp+tls') {
-      this.syslogForm.update((f) => ({ ...f, tls_ca_cert: '' }));
+    if (proto !== "tcp+tls") {
+      this.syslogForm.update((f) => ({ ...f, tls_ca_cert: "" }));
     }
   }
 

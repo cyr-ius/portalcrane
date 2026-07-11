@@ -12,21 +12,17 @@
 
 @if (loading()) {
   <div class="text-center py-5 text-muted">
-    <span class="spinner-border spinner-border-sm me-2"></span
-    >{{ "NETWORK.LOADING" | translate }}
+    <span class="spinner-border spinner-border-sm me-2"></span>{{ "NETWORK.LOADING" | translate }}
   </div>
 } @else {
   <!-- ══════════════════════════════════════════════════════════════════════ -->
   <!-- CARD 1 — HTTP/HTTPS Proxy                                              -->
   <!-- ══════════════════════════════════════════════════════════════════════ -->
   <div class="card border-0 mb-3">
-    <div
-      class="card-header border-0 d-flex align-items-center justify-content-between"
-    >
+    <div class="card-header border-0 d-flex align-items-center justify-content-between">
       <div>
         <h6 class="fw-semibold mb-0">
-          <i class="bi bi-hdd-network text-primary me-2"></i
-          >{{ "NETWORK.PROXY_TITLE" | translate }}
+          <i class="bi bi-hdd-network text-primary me-2"></i>{{ "NETWORK.PROXY_TITLE" | translate }}
         </h6>
         <div class="text-muted small mt-1">
           {{ "NETWORK.PROXY_DESC" | translate }}
@@ -35,16 +31,12 @@
 
       <!-- Active state badge -->
       @if (proxyForm().proxy_override) {
-        <span
-          class="badge bg-warning-subtle text-warning d-flex align-items-center gap-1 ms-auto"
-        >
+        <span class="badge bg-warning-subtle text-warning d-flex align-items-center gap-1 ms-auto">
           <i class="bi bi-pencil-fill" style="font-size: 0.6rem"></i>
           {{ "TRANSFER.CUSTOM" | translate }}
         </span>
       } @else {
-        <span
-          class="badge bg-secondary-subtle text-secondary d-flex align-items-center gap-1 ms-auto"
-        >
+        <span class="badge bg-secondary-subtle text-secondary d-flex align-items-center gap-1 ms-auto">
           <i class="bi bi-server" style="font-size: 0.6rem"></i>
           {{ "TRANSFER.FROM_ENV" | translate }}
         </span>
@@ -93,9 +85,7 @@
                 class="form-control form-control-sm font-monospace"
                 placeholder="http://proxy.corp:3128"
                 [value]="proxyForm().https_proxy"
-                (input)="
-                  updateProxy({ https_proxy: $any($event.target).value })
-                "
+                (input)="updateProxy({ https_proxy: $any($event.target).value })"
               />
             </div>
 
@@ -103,9 +93,7 @@
             <div class="col-12">
               <label class="form-label small fw-semibold" for="noProxy">
                 {{ "NETWORK.NO_PROXY" | translate }}
-                <span class="text-muted fw-normal">{{
-                  "NETWORK.COMMA_HOSTS" | translate
-                }}</span>
+                <span class="text-muted fw-normal">{{ "NETWORK.COMMA_HOSTS" | translate }}</span>
               </label>
               <input
                 id="noProxy"
@@ -121,8 +109,7 @@
             <div class="col-12">
               <div class="border rounded p-3 bg-body-tertiary">
                 <div class="small fw-semibold mb-2">
-                  <i class="bi bi-key me-1"></i
-                  >{{ "NETWORK.PROXY_AUTH" | translate }}
+                  <i class="bi bi-key me-1"></i>{{ "NETWORK.PROXY_AUTH" | translate }}
                   <span class="text-muted fw-normal">
                     {{ "NETWORK.PROXY_AUTH_HINT" | translate }}
                   </span>
@@ -160,12 +147,7 @@
                         class="btn btn-outline-secondary btn-sm"
                         type="button"
                         (click)="showProxyPassword.set(!showProxyPassword())"
-                        [title]="
-                          (showProxyPassword()
-                            ? 'NETWORK.HIDE_PASSWORD'
-                            : 'NETWORK.SHOW_PASSWORD'
-                          ) | translate
-                        "
+                        [title]="(showProxyPassword() ? 'NETWORK.HIDE_PASSWORD' : 'NETWORK.SHOW_PASSWORD') | translate"
                       >
                         <i
                           class="bi"
@@ -191,8 +173,7 @@
             @if (saving()) {
               <span class="spinner-border spinner-border-sm me-1"></span>
             }
-            <i class="bi bi-floppy me-1"></i
-            >{{ "NETWORK.SAVE_PROXY" | translate }}
+            <i class="bi bi-floppy me-1"></i>{{ "NETWORK.SAVE_PROXY" | translate }}
           </button>
         </div>
       </div>
@@ -203,13 +184,10 @@
   <!-- CARD 2 — Syslog Forwarding                                            -->
   <!-- ══════════════════════════════════════════════════════════════════════ -->
   <div class="card border-0 mb-3">
-    <div
-      class="card-header border-0 d-flex align-items-center justify-content-between"
-    >
+    <div class="card-header border-0 d-flex align-items-center justify-content-between">
       <div>
         <h6 class="fw-semibold mb-0">
-          <i class="bi bi-broadcast text-primary me-2"></i
-          >{{ "NETWORK.SYSLOG_TITLE" | translate }}
+          <i class="bi bi-broadcast text-primary me-2"></i>{{ "NETWORK.SYSLOG_TITLE" | translate }}
         </h6>
         <div class="text-muted small mt-1">
           {{ "NETWORK.SYSLOG_DESC" | translate }}
@@ -218,16 +196,12 @@
 
       <!-- Active state badge -->
       @if (syslogForm().enabled) {
-        <span
-          class="badge bg-warning-subtle text-warning d-flex align-items-center gap-1 ms-auto"
-        >
+        <span class="badge bg-warning-subtle text-warning d-flex align-items-center gap-1 ms-auto">
           <i class="bi bi-pencil-fill" style="font-size: 0.6rem"></i>
           {{ "TRANSFER.CUSTOM" | translate }}
         </span>
       } @else {
-        <span
-          class="badge bg-secondary-subtle text-secondary d-flex align-items-center gap-1 ms-auto"
-        >
+        <span class="badge bg-secondary-subtle text-secondary d-flex align-items-center gap-1 ms-auto">
           <i class="bi bi-server" style="font-size: 0.6rem"></i>
           {{ "TRANSFER.FROM_ENV" | translate }}
         </span>
@@ -343,8 +317,7 @@
                     "
                   />
                   <label class="form-check-label small" for="forwardAudit">
-                    <i class="bi bi-journal-text me-1"></i
-                    >{{ "NETWORK.AUDIT_LOGS" | translate }}
+                    <i class="bi bi-journal-text me-1"></i>{{ "NETWORK.AUDIT_LOGS" | translate }}
                   </label>
                 </div>
                 <div class="form-check">
@@ -360,8 +333,7 @@
                     "
                   />
                   <label class="form-check-label small" for="forwardUvicorn">
-                    <i class="bi bi-terminal me-1"></i
-                    >{{ "NETWORK.UVICORN_LOGS" | translate }}
+                    <i class="bi bi-terminal me-1"></i>{{ "NETWORK.UVICORN_LOGS" | translate }}
                   </label>
                 </div>
               </div>
@@ -372,11 +344,8 @@
               <div class="col-12">
                 <div class="border rounded p-3 bg-body-tertiary">
                   <div class="small fw-semibold mb-2">
-                    <i class="bi bi-shield-lock me-1"></i
-                    >{{ "NETWORK.TLS_OPTIONS" | translate }}
-                    <span class="badge bg-info-subtle text-info ms-1"
-                      >RFC 5425</span
-                    >
+                    <i class="bi bi-shield-lock me-1"></i>{{ "NETWORK.TLS_OPTIONS" | translate }}
+                    <span class="badge bg-info-subtle text-info ms-1">RFC 5425</span>
                   </div>
                   <div class="row g-2">
                     <div class="col-12">
@@ -400,9 +369,7 @@
                     <div class="col-12">
                       <label class="form-label small" for="tlsCaCert">
                         {{ "NETWORK.CA_CERT_PATH" | translate }}
-                        <span class="text-muted">{{
-                          "NETWORK.CA_CERT_HINT" | translate
-                        }}</span>
+                        <span class="text-muted">{{ "NETWORK.CA_CERT_HINT" | translate }}</span>
                       </label>
                       <input
                         id="tlsCaCert"
@@ -426,16 +393,10 @@
             @if (authAvailable()) {
               <div class="col-12">
                 <div class="border rounded p-3 bg-body-tertiary">
-                  <div
-                    class="d-flex align-items-center justify-content-between mb-2"
-                  >
+                  <div class="d-flex align-items-center justify-content-between mb-2">
                     <div class="small fw-semibold">
-                      <i class="bi bi-key me-1"></i
-                      >{{ "NETWORK.AUTHENTICATION" | translate }}
-                      <span
-                        class="badge bg-secondary-subtle text-secondary ms-1"
-                        >RFC 6587 / RELP</span
-                      >
+                      <i class="bi bi-key me-1"></i>{{ "NETWORK.AUTHENTICATION" | translate }}
+                      <span class="badge bg-secondary-subtle text-secondary ms-1">RFC 6587 / RELP</span>
                     </div>
                     <div class="form-check form-switch mb-0">
                       <input
@@ -449,9 +410,7 @@
                           })
                         "
                       />
-                      <label class="form-check-label small" for="authEnabled">{{
-                        "NETWORK.ENABLE" | translate
-                      }}</label>
+                      <label class="form-check-label small" for="authEnabled">{{ "NETWORK.ENABLE" | translate }}</label>
                     </div>
                   </div>
 
@@ -488,14 +447,9 @@
                           <button
                             class="btn btn-outline-secondary btn-sm"
                             type="button"
-                            (click)="
-                              showSyslogPassword.set(!showSyslogPassword())
-                            "
+                            (click)="showSyslogPassword.set(!showSyslogPassword())"
                             [title]="
-                              (showSyslogPassword()
-                                ? 'NETWORK.HIDE_PASSWORD'
-                                : 'NETWORK.SHOW_PASSWORD'
-                              ) | translate
+                              (showSyslogPassword() ? 'NETWORK.HIDE_PASSWORD' : 'NETWORK.SHOW_PASSWORD') | translate
                             "
                           >
                             <i
@@ -532,16 +486,11 @@
 
         <!-- Actions -->
         <div class="d-flex gap-2 mt-3 flex-wrap">
-          <button
-            class="btn btn-primary btn-sm"
-            (click)="saveSyslog()"
-            [disabled]="saving() || !syslogForm().enabled"
-          >
+          <button class="btn btn-primary btn-sm" (click)="saveSyslog()" [disabled]="saving() || !syslogForm().enabled">
             @if (saving()) {
               <span class="spinner-border spinner-border-sm me-1"></span>
             }
-            <i class="bi bi-floppy me-1"></i
-            >{{ "NETWORK.SAVE_SYSLOG" | translate }}
+            <i class="bi bi-floppy me-1"></i>{{ "NETWORK.SAVE_SYSLOG" | translate }}
           </button>
 
           <button
@@ -560,13 +509,10 @@
   <!-- CARD 3 — Audit log by email                                           -->
   <!-- ══════════════════════════════════════════════════════════════════════ -->
   <div class="card border-0 mb-3">
-    <div
-      class="card-header border-0 d-flex align-items-center justify-content-between"
-    >
+    <div class="card-header border-0 d-flex align-items-center justify-content-between">
       <div>
         <h6 class="fw-semibold mb-0">
-          <i class="bi bi-envelope-at text-primary me-2"></i
-          >{{ "NETWORK.EMAIL_TITLE" | translate }}
+          <i class="bi bi-envelope-at text-primary me-2"></i>{{ "NETWORK.EMAIL_TITLE" | translate }}
         </h6>
         <div class="text-muted small mt-1">
           {{ "NETWORK.EMAIL_DESC" | translate }}
@@ -575,16 +521,12 @@
 
       <!-- Active state badge -->
       @if (emailForm().enabled) {
-        <span
-          class="badge bg-warning-subtle text-warning d-flex align-items-center gap-1 ms-auto"
-        >
+        <span class="badge bg-warning-subtle text-warning d-flex align-items-center gap-1 ms-auto">
           <i class="bi bi-pencil-fill" style="font-size: 0.6rem"></i>
           {{ "TRANSFER.CUSTOM" | translate }}
         </span>
       } @else {
-        <span
-          class="badge bg-secondary-subtle text-secondary d-flex align-items-center gap-1 ms-auto"
-        >
+        <span class="badge bg-secondary-subtle text-secondary d-flex align-items-center gap-1 ms-auto">
           <i class="bi bi-server" style="font-size: 0.6rem"></i>
           {{ "TRANSFER.FROM_ENV" | translate }}
         </span>
@@ -684,9 +626,7 @@
                 class="form-control form-control-sm font-monospace"
                 placeholder="portalcrane@corp.example.com"
                 [value]="emailForm().from_address"
-                (input)="
-                  updateEmail({ from_address: $any($event.target).value })
-                "
+                (input)="updateEmail({ from_address: $any($event.target).value })"
               />
             </div>
 
@@ -694,9 +634,7 @@
             <div class="col-md-6">
               <label class="form-label small fw-semibold" for="emailTo">
                 {{ "NETWORK.TO_ADDRESSES" | translate }}
-                <span class="text-muted fw-normal">{{
-                  "NETWORK.COMMA_HOSTS" | translate
-                }}</span>
+                <span class="text-muted fw-normal">{{ "NETWORK.COMMA_HOSTS" | translate }}</span>
               </label>
               <input
                 id="emailTo"
@@ -704,18 +642,51 @@
                 class="form-control form-control-sm font-monospace"
                 placeholder="security@corp.example.com"
                 [value]="emailForm().to_addresses"
-                (input)="
-                  updateEmail({ to_addresses: $any($event.target).value })
-                "
+                (input)="updateEmail({ to_addresses: $any($event.target).value })"
               />
+            </div>
+
+            <!-- Automatic per-event notifications -->
+            <div class="col-12">
+              <div class="border rounded p-3 bg-body-tertiary">
+                <div class="small fw-semibold mb-2">
+                  <i class="bi bi-bell me-1"></i>{{ "NETWORK.EMAIL_NOTIFY" | translate }}
+                  <span class="text-muted fw-normal">
+                    {{ "NETWORK.EMAIL_NOTIFY_HINT" | translate }}
+                  </span>
+                </div>
+                <div class="form-check">
+                  <input
+                    id="emailNotifyLogin"
+                    type="checkbox"
+                    class="form-check-input"
+                    [checked]="emailForm().notify_login"
+                    (change)="updateEmail({ notify_login: $any($event.target).checked })"
+                  />
+                  <label class="form-check-label small" for="emailNotifyLogin">
+                    {{ "NETWORK.EMAIL_NOTIFY_LOGIN" | translate }}
+                  </label>
+                </div>
+                <div class="form-check">
+                  <input
+                    id="emailNotifyAudit"
+                    type="checkbox"
+                    class="form-check-input"
+                    [checked]="emailForm().notify_audit"
+                    (change)="updateEmail({ notify_audit: $any($event.target).checked })"
+                  />
+                  <label class="form-check-label small" for="emailNotifyAudit">
+                    {{ "NETWORK.EMAIL_NOTIFY_AUDIT" | translate }}
+                  </label>
+                </div>
+              </div>
             </div>
 
             <!-- SMTP credentials -->
             <div class="col-12">
               <div class="border rounded p-3 bg-body-tertiary">
                 <div class="small fw-semibold mb-2">
-                  <i class="bi bi-key me-1"></i
-                  >{{ "NETWORK.SMTP_AUTH" | translate }}
+                  <i class="bi bi-key me-1"></i>{{ "NETWORK.SMTP_AUTH" | translate }}
                   <span class="text-muted fw-normal">
                     {{ "NETWORK.SMTP_AUTH_HINT" | translate }}
                   </span>
@@ -728,9 +699,7 @@
                       [placeholder]="'AUTH.USERNAME' | translate"
                       autocomplete="off"
                       [value]="emailForm().username"
-                      (input)="
-                        updateEmail({ username: $any($event.target).value })
-                      "
+                      (input)="updateEmail({ username: $any($event.target).value })"
                     />
                   </div>
                   <div class="col-md-5">
@@ -741,20 +710,13 @@
                         [placeholder]="'AUTH.PASSWORD' | translate"
                         autocomplete="new-password"
                         [value]="emailForm().password"
-                        (input)="
-                          updateEmail({ password: $any($event.target).value })
-                        "
+                        (input)="updateEmail({ password: $any($event.target).value })"
                       />
                       <button
                         class="btn btn-outline-secondary btn-sm"
                         type="button"
                         (click)="showEmailPassword.set(!showEmailPassword())"
-                        [title]="
-                          (showEmailPassword()
-                            ? 'NETWORK.HIDE_PASSWORD'
-                            : 'NETWORK.SHOW_PASSWORD'
-                          ) | translate
-                        "
+                        [title]="(showEmailPassword() ? 'NETWORK.HIDE_PASSWORD' : 'NETWORK.SHOW_PASSWORD') | translate"
                       >
                         <i
                           class="bi"
@@ -788,16 +750,11 @@
 
         <!-- Actions -->
         <div class="d-flex gap-2 mt-3 flex-wrap">
-          <button
-            class="btn btn-primary btn-sm"
-            (click)="saveEmail()"
-            [disabled]="saving() || !emailForm().enabled"
-          >
+          <button class="btn btn-primary btn-sm" (click)="saveEmail()" [disabled]="saving() || !emailForm().enabled">
             @if (saving()) {
               <span class="spinner-border spinner-border-sm me-1"></span>
             }
-            <i class="bi bi-floppy me-1"></i
-            >{{ "NETWORK.SAVE_EMAIL" | translate }}
+            <i class="bi bi-floppy me-1"></i>{{ "NETWORK.SAVE_EMAIL" | translate }}
           </button>
 
           <button
@@ -813,8 +770,7 @@
             (click)="sendAuditLogEmail()"
             [disabled]="saving() || !emailForm().host"
           >
-            <i class="bi bi-envelope-arrow-up me-1"></i
-            >{{ "NETWORK.SEND_AUDIT_LOG" | translate }}
+            <i class="bi bi-envelope-arrow-up me-1"></i>{{ "NETWORK.SEND_AUDIT_LOG" | translate }}
           </button>
         </div>
       </div>

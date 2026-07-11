@@ -134,6 +134,10 @@ class Settings(BaseSettings):
     email_from_address: str = ""
     email_to_addresses: str = ""  # comma-separated recipients
     email_subject: str = "Portalcrane audit log"
+    # Automatic per-event email delivery (opt-in). notify_login covers web
+    # login/logout; notify_audit covers all other audited operations.
+    email_notify_login: bool = False
+    email_notify_audit: bool = False
 
     # Vulnerability scanning configuration
     # Master kill-switch: when TRIVY_ENABLED=false the embedded Trivy server is
@@ -153,6 +157,12 @@ class Settings(BaseSettings):
 
     # Swagger UI
     swagger_enabled: bool = False
+
+    # Personal Access Tokens (API keys). When False, the whole PAT feature is
+    # disabled: creation/listing endpoints return 403, existing API-scoped keys
+    # are rejected on the REST API, and the generation UI is hidden from users.
+    # Docker env var: API_KEYS_ENABLED.
+    api_keys_enabled: bool = True
 
     # Reverse-proxy trust boundary. Comma-separated CIDR ranges (or bare IPs) of
     # the reverse proxies in front of the app. Forwarded client IPs

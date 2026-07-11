@@ -2,17 +2,10 @@
 <div class="card border-0 mb-3">
   <div class="card-header border-0 d-flex align-items-center gap-2">
     <div>
-      <h6 class="fw-semibold mb-0">
-        <i class="bi bi-people text-primary me-2"></i>{{ "ACCOUNTS.TITLE" |
-        translate }}
-      </h6>
+      <h6 class="fw-semibold mb-0"><i class="bi bi-people text-primary me-2"></i>{{ "ACCOUNTS.TITLE" | translate }}</h6>
       <div class="text-muted small mt-1">{{ "ACCOUNTS.DESC" | translate }}</div>
     </div>
-    <button
-      class="btn btn-sm btn-outline-primary ms-auto"
-      (click)="openCreateForm()"
-      [disabled]="showCreateForm()"
-    >
+    <button class="btn btn-sm btn-outline-primary ms-auto" (click)="openCreateForm()" [disabled]="showCreateForm()">
       <i class="bi bi-person-plus-fill"></i>
       {{ "ACCOUNTS.ADD_USER" | translate }}
     </button>
@@ -26,21 +19,17 @@
     </div>
     } @if (loading()) {
     <div class="text-center py-5 text-muted">
-      <span class="spinner-border spinner-border-sm me-2"></span>{{
-      "ACCOUNTS.LOADING" | translate }}
+      <span class="spinner-border spinner-border-sm me-2"></span>{{ "ACCOUNTS.LOADING" | translate }}
     </div>
 
     } @else {
 
     <!-- ── Create form (local accounts only) ────────────────────────────── -->
     @if (showCreateForm()) {
-    <div
-      class="card border border-primary-subtle bg-primary-subtle bg-opacity-10 mb-4"
-    >
+    <div class="card border border-primary-subtle bg-primary-subtle bg-opacity-10 mb-4">
       <div class="card-body">
         <h6 class="fw-semibold mb-3">
-          <i class="bi bi-person-plus-fill me-2 text-primary"></i>{{
-          "ACCOUNTS.NEW_USER" | translate }}
+          <i class="bi bi-person-plus-fill me-2 text-primary"></i>{{ "ACCOUNTS.NEW_USER" | translate }}
         </h6>
 
         @if (createError()) {
@@ -83,21 +72,13 @@
                 autocomplete="new-password"
                 [formField]="createForm.password"
               />
-              <button
-                type="button"
-                class="btn btn-outline-secondary"
-                (click)="showNewPassword.set(!showNewPassword())"
-              >
-                <i
-                  [class]="showNewPassword() ? 'bi bi-eye-slash' : 'bi bi-eye'"
-                ></i>
+              <button type="button" class="btn btn-outline-secondary" (click)="showNewPassword.set(!showNewPassword())">
+                <i [class]="showNewPassword() ? 'bi bi-eye-slash' : 'bi bi-eye'"></i>
               </button>
             </div>
-            @if (createModel().password.length > 0 &&
-            createModel().password.length < 8) {
+            @if (createModel().password.length > 0 && createModel().password.length < 8) {
             <div class="text-danger" style="font-size: 0.75rem">
-              <i class="bi bi-x-circle me-1"></i>{{ "ACCOUNTS.AT_LEAST_8" |
-              translate }}
+              <i class="bi bi-x-circle me-1"></i>{{ "ACCOUNTS.AT_LEAST_8" | translate }}
             </div>
             }
           </div>
@@ -112,10 +93,7 @@
                 role="switch"
                 [formField]="createForm.isAdmin"
               />
-              <label
-                class="form-check-label small fw-semibold"
-                for="newIsAdmin"
-              >
+              <label class="form-check-label small fw-semibold" for="newIsAdmin">
                 {{ "ACCOUNTS.ADMIN" | translate }}
               </label>
             </div>
@@ -141,11 +119,7 @@
             <i class="bi bi-check-lg"></i>
             {{ "COMMON.CREATE" | translate }} }
           </button>
-          <button
-            class="btn btn-outline-secondary btn-sm"
-            (click)="cancelCreate()"
-            [disabled]="creating()"
-          >
+          <button class="btn btn-outline-secondary btn-sm" (click)="cancelCreate()" [disabled]="creating()">
             {{ "COMMON.CANCEL" | translate }}
           </button>
         </div>
@@ -187,9 +161,7 @@
                   <i class="bi bi-person-fill"></i>
                   }
                 </div>
-                <span class="fw-semibold font-monospace small"
-                  >{{ user.username }}</span
-                >
+                <span class="fw-semibold font-monospace small">{{ user.username }}</span>
                 @if (user.id === 'env-admin') {
                 <span
                   class="badge bg-secondary-subtle text-secondary"
@@ -228,13 +200,15 @@
             <td>
               @if (user.is_admin) {
               <span class="badge bg-warning-subtle text-warning">
-                <i class="bi bi-shield-fill me-1"></i>{{ "ACCOUNTS.ADMIN" |
-                translate }}
+                <i class="bi bi-shield-fill me-1"></i>{{ "ACCOUNTS.ADMIN" | translate }}
               </span>
               } @else {
               <span class="badge bg-body-secondary text-muted">
-                <i class="bi bi-person me-1"></i>{{ "NAV.ROLE_USER" | translate
-                }}
+                <i class="bi bi-person me-1"></i>{{ "NAV.ROLE_USER" | translate }}
+              </span>
+              } @if (user.disabled) {
+              <span class="badge bg-danger-subtle text-danger ms-1">
+                <i class="bi bi-slash-circle me-1"></i>{{ "ACCOUNTS.DISABLED" | translate }}
               </span>
               }
             </td>
@@ -252,6 +226,25 @@
                   [title]="'ACCOUNTS.EDIT_USER' | translate"
                 >
                   <i class="bi bi-pencil"></i>
+                </button>
+                <button
+                  class="btn btn-sm"
+                  [class.btn-outline-success]="user.disabled"
+                  [class.btn-outline-warning]="!user.disabled"
+                  (click)="toggleDisabled(user)"
+                  [disabled]="togglingId() === user.id"
+                  [title]="
+                    (user.disabled
+                      ? 'ACCOUNTS.ENABLE'
+                      : 'ACCOUNTS.DISABLE'
+                    ) | translate
+                  "
+                >
+                  @if (togglingId() === user.id) {
+                  <span class="spinner-border spinner-border-sm"></span>
+                  } @else {
+                  <i class="bi" [class.bi-check-circle]="user.disabled" [class.bi-slash-circle]="!user.disabled"></i>
+                  }
                 </button>
                 <button
                   class="btn btn-sm btn-outline-danger"
@@ -296,12 +289,8 @@
                   {{ "ACCOUNTS.EDITING" | translate }}
                   <span class="font-monospace">{{ user.username }}</span>
                   @if (isOidcUser(user)) {
-                  <span
-                    class="badge bg-primary-subtle text-primary ms-2"
-                    style="font-size: 0.65rem"
-                  >
-                    <i class="bi bi-shield-lock me-1"></i>{{
-                    "ACCOUNTS.OIDC_ACCOUNT" | translate }}
+                  <span class="badge bg-primary-subtle text-primary ms-2" style="font-size: 0.65rem">
+                    <i class="bi bi-shield-lock me-1"></i>{{ "ACCOUNTS.OIDC_ACCOUNT" | translate }}
                   </span>
                   }
                 </div>
@@ -332,13 +321,9 @@
                   <!-- New password — hidden for OIDC accounts -->
                   @if (!isOidcUser(user)) {
                   <div class="col-md-5">
-                    <label class="form-label small mb-1"
-                      >{{ "ACCOUNTS.NEW_PASSWORD" | translate }}</label
-                    >
+                    <label class="form-label small mb-1">{{ "ACCOUNTS.NEW_PASSWORD" | translate }}</label>
                     <div class="input-group input-group-sm">
-                      <span class="input-group-text"
-                        ><i class="bi bi-lock"></i
-                      ></span>
+                      <span class="input-group-text"><i class="bi bi-lock"></i></span>
                       <input
                         [type]="showEditPassword() ? 'text' : 'password'"
                         class="form-control"
@@ -351,9 +336,7 @@
                         class="btn btn-outline-secondary btn-sm"
                         (click)="showEditPassword.set(!showEditPassword())"
                       >
-                        <i
-                          [class]="showEditPassword() ? 'bi bi-eye-slash' : 'bi bi-eye'"
-                        ></i>
+                        <i [class]="showEditPassword() ? 'bi bi-eye-slash' : 'bi bi-eye'"></i>
                       </button>
                     </div>
                   </div>
@@ -370,10 +353,7 @@
                         role="switch"
                         [formField]="updateForm.isAdmin"
                       />
-                      <label
-                        class="form-check-label small"
-                        [for]="'editAdmin_' + user.id"
-                      >
+                      <label class="form-check-label small" [for]="'editAdmin_' + user.id">
                         {{ "ACCOUNTS.ADMIN_RIGHTS" | translate }}
                       </label>
                     </div>
@@ -393,11 +373,7 @@
                       <i class="bi bi-floppy-fill"></i>
                       } {{ "COMMON.SAVE" | translate }}
                     </button>
-                    <button
-                      class="btn btn-outline-secondary btn-sm"
-                      (click)="cancelEdit()"
-                      [disabled]="saving()"
-                    >
+                    <button class="btn btn-outline-secondary btn-sm" (click)="cancelEdit()" [disabled]="saving()">
                       {{ "COMMON.CANCEL" | translate }}
                     </button>
                   </div>
@@ -425,16 +401,11 @@
   <div class="card-header border-0 d-flex align-items-center gap-2">
     <div>
       <h6 class="fw-semibold mb-0">
-        <i class="bi bi-people-fill text-primary me-2"></i>{{ "GROUPS.TITLE" |
-        translate }}
+        <i class="bi bi-people-fill text-primary me-2"></i>{{ "GROUPS.TITLE" | translate }}
       </h6>
       <div class="text-muted small mt-1">{{ "GROUPS.DESC" | translate }}</div>
     </div>
-    <button
-      class="btn btn-sm btn-outline-primary ms-auto"
-      (click)="openGroupForm()"
-      [disabled]="showGroupForm()"
-    >
+    <button class="btn btn-sm btn-outline-primary ms-auto" (click)="openGroupForm()" [disabled]="showGroupForm()">
       <i class="bi bi-plus-lg"></i>
       {{ "GROUPS.ADD_GROUP" | translate }}
     </button>
@@ -450,13 +421,10 @@
 
     <!-- ── Create group form ──────────────────────────────────────────────── -->
     @if (showGroupForm()) {
-    <div
-      class="card border border-primary-subtle bg-primary-subtle bg-opacity-10 mb-4"
-    >
+    <div class="card border border-primary-subtle bg-primary-subtle bg-opacity-10 mb-4">
       <div class="card-body">
         <h6 class="fw-semibold mb-3">
-          <i class="bi bi-people-fill me-2 text-primary"></i>{{
-          "GROUPS.NEW_GROUP" | translate }}
+          <i class="bi bi-people-fill me-2 text-primary"></i>{{ "GROUPS.NEW_GROUP" | translate }}
         </h6>
 
         @if (groupCreateError()) {
@@ -480,9 +448,7 @@
             />
           </div>
           <div class="col-md-7">
-            <label class="form-label fw-semibold small">
-              {{ "COMMON.DESCRIPTION" | translate }}
-            </label>
+            <label class="form-label fw-semibold small"> {{ "COMMON.DESCRIPTION" | translate }} </label>
             <input
               type="text"
               class="form-control form-control-sm"
@@ -504,11 +470,7 @@
             <i class="bi bi-check-lg"></i>
             } {{ "COMMON.CREATE" | translate }}
           </button>
-          <button
-            class="btn btn-outline-secondary btn-sm"
-            (click)="cancelGroupForm()"
-            [disabled]="creatingGroup()"
-          >
+          <button class="btn btn-outline-secondary btn-sm" (click)="cancelGroupForm()" [disabled]="creatingGroup()">
             {{ "COMMON.CANCEL" | translate }}
           </button>
         </div>
@@ -541,8 +503,7 @@
         <span class="text-muted small">{{ group.description }}</span>
         }
         <span class="badge bg-secondary-subtle text-secondary ms-auto">
-          {{ "GROUPS.MEMBER_COUNT" | translate: { count: group.members.length }
-          }}
+          {{ "GROUPS.MEMBER_COUNT" | translate: { count: group.members.length } }}
         </span>
       </div>
 
@@ -552,9 +513,7 @@
         <!-- Add-member form -->
         <div class="d-flex gap-2 align-items-end mb-3 flex-wrap">
           <div>
-            <label class="form-label small fw-semibold mb-1">
-              {{ "GROUPS.ADD_MEMBER" | translate }}
-            </label>
+            <label class="form-label small fw-semibold mb-1"> {{ "GROUPS.ADD_MEMBER" | translate }} </label>
             <select
               class="form-select form-select-sm"
               [value]="memberToAdd()"
@@ -599,8 +558,7 @@
         <!-- Members list -->
         @if (group.members.length === 0) {
         <div class="text-muted small py-2">
-          <i class="bi bi-person-slash me-1"></i>{{ "GROUPS.NO_MEMBERS" |
-          translate }}
+          <i class="bi bi-person-slash me-1"></i>{{ "GROUPS.NO_MEMBERS" | translate }}
         </div>
         } @else {
         <div class="d-flex flex-wrap gap-2">

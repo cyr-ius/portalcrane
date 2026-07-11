@@ -101,6 +101,11 @@ class EmailSettings(BaseModel):
     # Comma-separated list of recipient addresses
     to_addresses: str = ""
     subject: str = "Portalcrane audit log"
+    # Automatic per-event delivery (independent of the on-demand log export):
+    #   notify_login → email each web login/logout
+    #   notify_audit → email each other audited operation
+    notify_login: bool = False
+    notify_audit: bool = False
 
 
 class NetworkConfig(BaseModel):
@@ -301,6 +306,8 @@ def resolve_email_settings(settings: Settings) -> EmailSettings:
         from_address=settings.email_from_address,
         to_addresses=settings.email_to_addresses,
         subject=settings.email_subject,
+        notify_login=settings.email_notify_login,
+        notify_audit=settings.email_notify_audit,
     )
 
 

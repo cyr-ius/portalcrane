@@ -200,6 +200,17 @@ reverse proxy instead.
 | ----------------------------- | --------------------------------------------------- | ------- |
 | `REGISTRY_PROXY_AUTH_ENABLED` | Enforce authentication on the `/v2/` registry proxy | `true`  |
 
+### API, Swagger & Personal Access Tokens
+
+| Variable           | Description                                    | Default |
+| ------------------ | ---------------------------------------------- | ------- |
+| `SWAGGER_ENABLED`  | Serve the Swagger UI on `/api/docs`            | `false` |
+| `API_KEYS_ENABLED` | Enable the Personal Access Token (PAT) feature | `true`  |
+
+Set `API_KEYS_ENABLED=false` to disarm PATs entirely: the token endpoints return
+`403`, existing API-scoped keys are rejected on the REST API, and the token
+generation panel is hidden from the account drawer.
+
 ### Reverse proxy & rate limiting
 
 | Variable                       | Description                                                               | Default |
@@ -326,6 +337,29 @@ These values ​​can be overridden by the UI.
 | ------------------ | ----------------------------------------------- | ------- |
 | `LOG_LEVEL`        | Log level (`DEBUG`, `INFO`, `WARNING`, `ERROR`) | `INFO`  |
 | `AUDIT_MAX_EVENTS` | Maximum number of audit events retained on disk | `100`   |
+
+### Email (optional)
+
+Delivers the audit log by email over SMTP. All values can be overridden from the
+UI (**Settings → Network → Email**), which also exposes a **test** button.
+
+| Variable             | Description                                     | Default                 |
+| -------------------- | ----------------------------------------------- | ----------------------- |
+| `EMAIL_ENABLED`      | Enable email delivery                           | `false`                 |
+| `EMAIL_HOST`         | SMTP server host                                | —                       |
+| `EMAIL_PORT`         | SMTP server port                                | `587`                   |
+| `EMAIL_SECURITY`     | Connection security (`none`, `starttls`, `ssl`) | `starttls`              |
+| `EMAIL_USERNAME`     | SMTP username (leave empty for anonymous)       | —                       |
+| `EMAIL_PASSWORD`     | SMTP password                                   | —                       |
+| `EMAIL_FROM_ADDRESS` | Sender address                                  | —                       |
+| `EMAIL_TO_ADDRESSES` | Comma-separated recipient addresses             | —                       |
+| `EMAIL_SUBJECT`      | Subject prefix                                  | `Portalcrane audit log` |
+| `EMAIL_NOTIFY_LOGIN` | Email each web login / logout event             | `false`                 |
+| `EMAIL_NOTIFY_AUDIT` | Email each other audited operation              | `false`                 |
+
+`EMAIL_NOTIFY_LOGIN` and `EMAIL_NOTIFY_AUDIT` are independent opt-ins for
+**automatic per-event** delivery; they are separate from the on-demand audit-log
+export, which stays available from the Network panel.
 
 ### Storage (debug)
 

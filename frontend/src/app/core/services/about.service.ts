@@ -10,6 +10,7 @@ export interface AboutInfo {
   ai_generator: string;
   github_url: string;
   github_error: string | null;
+  swagger_enabled: boolean;
 }
 
 /**

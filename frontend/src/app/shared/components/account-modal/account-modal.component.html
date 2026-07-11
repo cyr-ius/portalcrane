@@ -8,21 +8,16 @@
 <!-- ── Drawer ─────────────────────────────────────────────────────────────── -->
 <div class="account-drawer d-flex flex-column overflow-hidden">
   <!-- Header -->
-  <div
-    class="account-drawer-header p-3 border-bottom d-flex align-items-center gap-3"
-  >
+  <div class="account-drawer-header p-3 border-bottom d-flex align-items-center gap-3">
     <div class="avatar-lg d-flex align-items-center justify-content-center">
       <i class="bi bi-person-fill"></i>
     </div>
     <div class="flex-grow-1 overflow-hidden">
       <div class="fw-bold text-truncate">{{ currentUser()?.username }}</div>
-      <div
-        class="small text-muted d-flex align-items-center gap-1 flex-wrap mt-1"
-      >
+      <div class="small text-muted d-flex align-items-center gap-1 flex-wrap mt-1">
         @if (currentUser()?.is_admin) {
           <span class="badge bg-warning-subtle text-warning">
-            <i class="bi bi-shield-fill me-1"></i
-            >{{ "NAV.ROLE_ADMIN" | translate }}
+            <i class="bi bi-shield-fill me-1"></i>{{ "NAV.ROLE_ADMIN" | translate }}
           </span>
         } @else {
           <span class="badge bg-body-secondary text-muted">
@@ -31,19 +26,87 @@
         }
       </div>
     </div>
-    <button
-      class="btn btn-sm btn-outline-secondary"
-      (click)="close.emit()"
-      [title]="'COMMON.CLOSE' | translate"
-    >
+    <button class="btn btn-sm btn-outline-secondary" (click)="close.emit()" [title]="'COMMON.CLOSE' | translate">
       <i class="bi bi-x-lg"></i>
     </button>
   </div>
 
   <!-- Body -->
   <div class="account-drawer-body flex-grow-1 overflow-auto p-3">
-    <!-- Personal access tokens panel -->
-    <app-personal-tokens-panel />
+    <!-- ── Change password — local accounts only ────────────────────────── -->
+    @if (currentUser()?.can_change_password !== false) {
+      <div class="card section-card mb-3">
+        <div class="card-header border-0 pb-0">
+          <h6 class="fw-semibold mb-0">
+            <i class="bi bi-key-fill me-2 text-primary"></i>{{ "ACCOUNT.CHANGE_PASSWORD" | translate }}
+          </h6>
+          <p class="text-muted small mt-1 mb-0">
+            {{ "ACCOUNT.CHANGE_PASSWORD_DESC" | translate }}
+          </p>
+        </div>
+        <div class="card-body">
+          @if (passwordError()) {
+            <div class="alert alert-danger py-2 small mb-3">
+              <i class="bi bi-exclamation-triangle me-1"></i>{{ passwordError() }}
+            </div>
+          }
+          @if (passwordSuccess()) {
+            <div class="alert alert-success py-2 small mb-3">
+              <i class="bi bi-check-circle me-1"></i>{{ "ACCOUNT.PASSWORD_CHANGED" | translate }}
+            </div>
+          }
+          <div class="row g-2">
+            <div class="col-12">
+              <label class="form-label small fw-semibold">{{ "ACCOUNT.CURRENT_PASSWORD" | translate }}</label>
+              <input
+                type="password"
+                autocomplete="current-password"
+                class="form-control form-control-sm"
+                [formField]="passwordForm.currentPassword"
+              />
+            </div>
+            <div class="col-12 col-sm-6">
+              <label class="form-label small fw-semibold">{{ "ACCOUNT.NEW_PASSWORD" | translate }}</label>
+              <input
+                type="password"
+                autocomplete="new-password"
+                class="form-control form-control-sm"
+                [formField]="passwordForm.newPassword"
+              />
+            </div>
+            <div class="col-12 col-sm-6">
+              <label class="form-label small fw-semibold">{{ "ACCOUNT.CONFIRM_PASSWORD" | translate }}</label>
+              <input
+                type="password"
+                autocomplete="new-password"
+                class="form-control form-control-sm"
+                [formField]="passwordForm.confirmPassword"
+              />
+            </div>
+          </div>
+          <div class="d-flex mt-3">
+            <button
+              class="btn btn-primary btn-sm d-flex align-items-center gap-1"
+              (click)="submitPassword()"
+              [disabled]="changingPassword() || !passwordForm().valid()"
+            >
+              @if (changingPassword()) {
+                <span class="spinner-border spinner-border-sm"></span>
+                {{ "COMMON.SAVING" | translate }}
+              } @else {
+                <i class="bi bi-check-lg"></i>
+                {{ "ACCOUNT.CHANGE_PASSWORD" | translate }}
+              }
+            </button>
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- Personal access tokens panel — hidden when API keys are disabled -->
+    @if (currentUser()?.api_keys_enabled !== false) {
+      <app-personal-tokens-panel />
+    }
 
     <!-- ── Preferences: language + theme side by side ───────────────────── -->
     <div class="row g-3 mb-3">
@@ -52,8 +115,7 @@
         <div class="card section-card h-100">
           <div class="card-header border-0 pb-0">
             <h6 class="fw-semibold mb-0">
-              <i class="bi bi-translate me-2 text-primary"></i
-              >{{ "ACCOUNT.LANGUAGE" | translate }}
+              <i class="bi bi-translate me-2 text-primary"></i>{{ "ACCOUNT.LANGUAGE" | translate }}
             </h6>
             <p class="text-muted small mt-1 mb-0">
               {{ "ACCOUNT.LANGUAGE_DESC" | translate }}
@@ -66,9 +128,7 @@
                   type="button"
                   class="btn btn-sm px-3"
                   [class.btn-primary]="languageService.language() === l.value"
-                  [class.btn-outline-secondary]="
-                    languageService.language() !== l.value
-                  "
+                  [class.btn-outline-secondary]="languageService.language() !== l.value"
                   (click)="setLanguage(l.value)"
                 >
                   <span class="lang-flag me-1">{{ l.flag }}</span
@@ -85,8 +145,7 @@
         <div class="card section-card h-100">
           <div class="card-header border-0 pb-0">
             <h6 class="fw-semibold mb-0">
-              <i class="bi bi-palette me-2 text-primary"></i
-              >{{ "ACCOUNT.THEME" | translate }}
+              <i class="bi bi-palette me-2 text-primary"></i>{{ "ACCOUNT.THEME" | translate }}
             </h6>
             <p class="text-muted small mt-1 mb-0">
               {{ "ACCOUNT.THEME_DESC" | translate }}
@@ -99,9 +158,7 @@
                   type="button"
                   class="btn btn-sm px-3"
                   [class.btn-primary]="themeService.theme() === t.value"
-                  [class.btn-outline-secondary]="
-                    themeService.theme() !== t.value
-                  "
+                  [class.btn-outline-secondary]="themeService.theme() !== t.value"
                   (click)="setTheme(t.value)"
                 >
                   <i class="bi {{ t.icon }} me-1"></i>{{ t.label | translate }}

@@ -80,6 +80,21 @@ def is_admin_user(username: str, settings: Settings) -> bool:
     return False
 
 
+def is_user_disabled(username: str, settings: Settings) -> bool:
+    """Return True when the account has been deactivated by an admin.
+
+    The built-in env-admin can never be disabled. Local and OIDC accounts carry
+    a ``disabled`` flag toggled from the users panel; a disabled account is
+    rejected everywhere (login, session cookie, PAT, registry proxy).
+    """
+    if username == settings.admin_username:
+        return False
+    for user in _load_users():
+        if user["username"] == username:
+            return bool(user.get("disabled", False))
+    return False
+
+
 # ─── Public API ───────────────────────────────────────────────────────────────
 
 
@@ -136,11 +151,15 @@ async def get_current_user(
 
     is_pat = token.startswith(_TOKEN_PREFIX) or bool(payload and payload.get("pat"))
     if is_pat:
+        # When PATs are disabled, reject API keys outright regardless of whether
+        # the stored record still exists.
+        if not settings.api_keys_enabled:
+            raise credentials_exception
         # Reconstruct the prefixed form so verify_personal_token can decode and
         # locate the record even when only the inner JWT was supplied.
         raw = token if token.startswith(_TOKEN_PREFIX) else _TOKEN_PREFIX + token
         username = verify_personal_token(raw, settings, expected_scope=SCOPE_API)
-        if not username:
+        if not username or is_user_disabled(username, settings):
             raise credentials_exception
         return UserInfo(username=username, is_admin=is_admin_user(username, settings))
 
@@ -148,7 +167,7 @@ async def get_current_user(
     if payload is None:
         raise credentials_exception
     username = payload.get("sub")
-    if username is None:
+    if username is None or is_user_disabled(username, settings):
         raise credentials_exception
 
     return UserInfo(

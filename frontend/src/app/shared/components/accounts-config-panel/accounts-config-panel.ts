@@ -57,6 +57,9 @@ export class AccountsConfigPanel implements OnInit {
   // ── Delete state ───────────────────────────────────────────────────────────
   readonly deletingId = signal<string | null>(null);
 
+  // ── Enable/disable state ─────────────────────────────────────────────────────
+  readonly togglingId = signal<string | null>(null);
+
   // ── Create form model (username + password + isAdmin) ─────────────────────
   createModel = signal({
     username: "",
@@ -257,6 +260,30 @@ export class AccountsConfigPanel implements OnInit {
           err?.error?.detail ?? this.translate.instant("ACCOUNTS.ERR_DELETE"),
         );
         this.deletingId.set(null);
+      },
+    });
+  }
+
+  /**
+   * Enable or disable an account (local or OIDC). A disabled account keeps its
+   * data but can no longer authenticate. The env-admin cannot be disabled.
+   */
+  toggleDisabled(user: LocalUser): void {
+    if (this.isEnvAdmin(user)) return;
+    this.togglingId.set(user.id);
+    this.error.set(null);
+    this.usersSvc.updateUser(user.id, { disabled: !user.disabled }).subscribe({
+      next: (updated) => {
+        this.users.update((list) =>
+          list.map((u) => (u.id === user.id ? updated : u)),
+        );
+        this.togglingId.set(null);
+      },
+      error: (err) => {
+        this.error.set(
+          err?.error?.detail ?? this.translate.instant("ACCOUNTS.ERR_SAVE"),
+        );
+        this.togglingId.set(null);
       },
     });
   }

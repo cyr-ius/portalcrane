@@ -2,9 +2,9 @@
  * Portalcrane - Network Settings Service
  * Manages proxy and syslog configuration via the /api/network/* endpoints.
  */
-import { HttpClient } from '@angular/common/http';
-import { Injectable, inject, signal } from '@angular/core';
-import { firstValueFrom } from 'rxjs';
+import { HttpClient } from "@angular/common/http";
+import { Injectable, inject, signal } from "@angular/core";
+import { firstValueFrom } from "rxjs";
 
 // ── Interfaces ────────────────────────────────────────────────────────────────
 
@@ -46,6 +46,10 @@ export interface EmailSettings {
   /** Comma-separated recipient addresses */
   to_addresses: string;
   subject: string;
+  /** Email each web login/logout event. */
+  notify_login: boolean;
+  /** Email each other audited operation. */
+  notify_audit: boolean;
 }
 
 export interface NetworkConfig {
@@ -56,10 +60,10 @@ export interface NetworkConfig {
 
 // ── Service ───────────────────────────────────────────────────────────────────
 
-@Injectable({ providedIn: 'root' })
+@Injectable({ providedIn: "root" })
 export class NetworkService {
   private http = inject(HttpClient);
-  private readonly BASE = '/api/network';
+  private readonly BASE = "/api/network";
 
   // ── Reactive state ────────────────────────────────────────────────────────
 
@@ -68,8 +72,12 @@ export class NetworkService {
   readonly saving = signal(false);
   readonly saved = signal(false);
   readonly error = signal<string | null>(null);
-  readonly testResult = signal<{ success: boolean; message: string } | null>(null);
-  readonly emailResult = signal<{ success: boolean; message: string } | null>(null);
+  readonly testResult = signal<{ success: boolean; message: string } | null>(
+    null,
+  );
+  readonly emailResult = signal<{ success: boolean; message: string } | null>(
+    null,
+  );
 
   // ── Load ──────────────────────────────────────────────────────────────────
 
@@ -78,11 +86,11 @@ export class NetworkService {
     this.error.set(null);
     try {
       const cfg = await firstValueFrom(
-        this.http.get<NetworkConfig>(`${this.BASE}/config`)
+        this.http.get<NetworkConfig>(`${this.BASE}/config`),
       );
       this.config.set(cfg);
     } catch {
-      this.error.set('Unable to load network configuration.');
+      this.error.set("Unable to load network configuration.");
     } finally {
       this.loading.set(false);
     }
@@ -95,12 +103,12 @@ export class NetworkService {
     this.error.set(null);
     try {
       const cfg = await firstValueFrom(
-        this.http.put<NetworkConfig>(`${this.BASE}/proxy`, payload)
+        this.http.put<NetworkConfig>(`${this.BASE}/proxy`, payload),
       );
       this.config.set(cfg);
       this._flashSaved();
     } catch (err: any) {
-      this.error.set(err?.error?.detail ?? 'Failed to save proxy settings.');
+      this.error.set(err?.error?.detail ?? "Failed to save proxy settings.");
     } finally {
       this.saving.set(false);
     }
@@ -111,12 +119,12 @@ export class NetworkService {
     this.error.set(null);
     try {
       const cfg = await firstValueFrom(
-        this.http.delete<NetworkConfig>(`${this.BASE}/proxy`)
+        this.http.delete<NetworkConfig>(`${this.BASE}/proxy`),
       );
       this.config.set(cfg);
       this._flashSaved();
     } catch (err: any) {
-      this.error.set(err?.error?.detail ?? 'Failed to reset proxy settings.');
+      this.error.set(err?.error?.detail ?? "Failed to reset proxy settings.");
     } finally {
       this.saving.set(false);
     }
@@ -129,12 +137,12 @@ export class NetworkService {
     this.error.set(null);
     try {
       const cfg = await firstValueFrom(
-        this.http.put<NetworkConfig>(`${this.BASE}/syslog`, payload)
+        this.http.put<NetworkConfig>(`${this.BASE}/syslog`, payload),
       );
       this.config.set(cfg);
       this._flashSaved();
     } catch (err: any) {
-      this.error.set(err?.error?.detail ?? 'Failed to save syslog settings.');
+      this.error.set(err?.error?.detail ?? "Failed to save syslog settings.");
     } finally {
       this.saving.set(false);
     }
@@ -145,12 +153,12 @@ export class NetworkService {
     this.error.set(null);
     try {
       const cfg = await firstValueFrom(
-        this.http.delete<NetworkConfig>(`${this.BASE}/syslog`)
+        this.http.delete<NetworkConfig>(`${this.BASE}/syslog`),
       );
       this.config.set(cfg);
       this._flashSaved();
     } catch (err: any) {
-      this.error.set(err?.error?.detail ?? 'Failed to disable syslog.');
+      this.error.set(err?.error?.detail ?? "Failed to disable syslog.");
     } finally {
       this.saving.set(false);
     }
@@ -162,12 +170,12 @@ export class NetworkService {
       const result = await firstValueFrom(
         this.http.post<{ success: boolean; message: string }>(
           `${this.BASE}/syslog/test`,
-          {}
-        )
+          {},
+        ),
       );
       this.testResult.set(result);
     } catch {
-      this.testResult.set({ success: false, message: 'Test request failed.' });
+      this.testResult.set({ success: false, message: "Test request failed." });
     }
   }
 
@@ -178,12 +186,12 @@ export class NetworkService {
     this.error.set(null);
     try {
       const cfg = await firstValueFrom(
-        this.http.put<NetworkConfig>(`${this.BASE}/email`, payload)
+        this.http.put<NetworkConfig>(`${this.BASE}/email`, payload),
       );
       this.config.set(cfg);
       this._flashSaved();
     } catch (err: any) {
-      this.error.set(err?.error?.detail ?? 'Failed to save email settings.');
+      this.error.set(err?.error?.detail ?? "Failed to save email settings.");
     } finally {
       this.saving.set(false);
     }
@@ -194,12 +202,12 @@ export class NetworkService {
     this.error.set(null);
     try {
       const cfg = await firstValueFrom(
-        this.http.delete<NetworkConfig>(`${this.BASE}/email`)
+        this.http.delete<NetworkConfig>(`${this.BASE}/email`),
       );
       this.config.set(cfg);
       this._flashSaved();
     } catch (err: any) {
-      this.error.set(err?.error?.detail ?? 'Failed to disable email.');
+      this.error.set(err?.error?.detail ?? "Failed to disable email.");
     } finally {
       this.saving.set(false);
     }
@@ -211,12 +219,12 @@ export class NetworkService {
       const result = await firstValueFrom(
         this.http.post<{ success: boolean; message: string }>(
           `${this.BASE}/email/test`,
-          {}
-        )
+          {},
+        ),
       );
       this.emailResult.set(result);
     } catch {
-      this.emailResult.set({ success: false, message: 'Test request failed.' });
+      this.emailResult.set({ success: false, message: "Test request failed." });
     }
   }
 
@@ -226,12 +234,12 @@ export class NetworkService {
       const result = await firstValueFrom(
         this.http.post<{ success: boolean; message: string }>(
           `${this.BASE}/email/send`,
-          {}
-        )
+          {},
+        ),
       );
       this.emailResult.set(result);
     } catch {
-      this.emailResult.set({ success: false, message: 'Send request failed.' });
+      this.emailResult.set({ success: false, message: "Send request failed." });
     }
   }
 

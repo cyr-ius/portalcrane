@@ -76,6 +76,19 @@ export class AuthService {
     await this.loadUserInfo();
   }
 
+  /** Change the current user's own password (local accounts only). */
+  async changePassword(
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<void> {
+    await firstValueFrom(
+      this.http.post("/api/auth/me/password", {
+        current_password: currentPassword,
+        new_password: newPassword,
+      }),
+    );
+  }
+
   /** Fetch /api/auth/me and refresh the user signal. */
   async loadUserInfo(): Promise<void> {
     this._user.set(

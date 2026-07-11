@@ -3,10 +3,7 @@
 <!-- ══════════════════════════════════════════════════════════════════════ -->
 <div class="card border-0 mb-3">
   <div class="card-header border-0">
-    <h6 class="fw-semibold mb-0">
-      <i class="bi bi-info-circle text-primary me-2"></i>{{ "ABOUT.TITLE" |
-      translate }}
-    </h6>
+    <h6 class="fw-semibold mb-0"><i class="bi bi-info-circle text-primary me-2"></i>{{ "ABOUT.TITLE" | translate }}</h6>
   </div>
   <div class="card-body">
     <div class="d-flex align-items-center gap-3 mb-3">
@@ -14,36 +11,64 @@
       <div>
         <div class="fw-bold fs-5">Portalcrane</div>
         <div class="text-muted small">
-          {{ "AUTH.TAGLINE" | translate }} {{
-          aboutService.info()?.current_version ?? "v1.0.0" }}
+          {{ "AUTH.TAGLINE" | translate }} {{ aboutService.info()?.current_version ?? "v1.0.0" }}
         </div>
       </div>
     </div>
     <p class="text-muted small mb-2">{{ "ABOUT.BUILT_WITH" | translate }}</p>
     <p class="text-muted small mb-3">{{ "ABOUT.FEATURES" | translate }}</p>
 
-    <a
-      href="/api/docs"
-      target="_blank"
-      rel="noopener noreferrer"
-      class="btn btn-sm btn-outline-warning d-inline-flex align-items-center gap-2 me-3"
-    >
-      <i class="bi bi-info-square"></i>
-      {{ "ABOUT.OPEN_API_DOCS" | translate }}
-      <i class="bi bi-box-arrow-up-right" style="font-size: 0.7rem"></i>
-    </a>
+    <div class="d-flex flex-wrap gap-2">
+      <!-- Swagger UI — only when enabled server-side (SWAGGER_ENABLED) -->
+      @if (aboutService.info()?.swagger_enabled) {
+      <a
+        href="/api/docs"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="btn btn-sm btn-outline-warning d-inline-flex align-items-center gap-2"
+      >
+        <i class="bi bi-info-square"></i>
+        {{ "ABOUT.OPEN_API_DOCS" | translate }}
+        <i class="bi bi-box-arrow-up-right" style="font-size: 0.7rem"></i>
+      </a>
+      }
 
-    <!-- Link to open a GitHub issue for bug reports or feature requests -->
-    <a
-      href="https://github.com/cyr-ius/portalcrane/issues/new"
-      target="_blank"
-      rel="noopener noreferrer"
-      class="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-2"
-    >
-      <i class="bi bi-github"></i>
-      {{ "ABOUT.OPEN_ISSUE" | translate }}
-      <i class="bi bi-box-arrow-up-right" style="font-size: 0.7rem"></i>
-    </a>
+      <!-- Health / status endpoint -->
+      <a
+        href="/api/health"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="btn btn-sm btn-outline-success d-inline-flex align-items-center gap-2"
+      >
+        <i class="bi bi-heart-pulse"></i>
+        {{ "ABOUT.OPEN_HEALTH" | translate }}
+        <i class="bi bi-box-arrow-up-right" style="font-size: 0.7rem"></i>
+      </a>
+
+      <!-- Link to the GitHub repository -->
+      <a
+        href="https://github.com/cyr-ius/portalcrane"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="btn btn-sm btn-outline-primary d-inline-flex align-items-center gap-2"
+      >
+        <i class="bi bi-github"></i>
+        {{ "ABOUT.OPEN_REPO" | translate }}
+        <i class="bi bi-box-arrow-up-right" style="font-size: 0.7rem"></i>
+      </a>
+
+      <!-- Link to open a GitHub issue for bug reports or feature requests -->
+      <a
+        href="https://github.com/cyr-ius/portalcrane/issues/new"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-2"
+      >
+        <i class="bi bi-github"></i>
+        {{ "ABOUT.OPEN_ISSUE" | translate }}
+        <i class="bi bi-box-arrow-up-right" style="font-size: 0.7rem"></i>
+      </a>
+    </div>
   </div>
 </div>
 
@@ -52,10 +77,7 @@
 <!-- ══════════════════════════════════════════════════════════════════════ -->
 <div class="card border-0 mb-3">
   <div class="card-header border-0">
-    <h6 class="fw-semibold mb-0">
-      <i class="bi bi-git text-primary me-2"></i>{{ "ABOUT.RELEASE_INFO" |
-      translate }}
-    </h6>
+    <h6 class="fw-semibold mb-0"><i class="bi bi-git text-primary me-2"></i>{{ "ABOUT.RELEASE_INFO" | translate }}</h6>
   </div>
   <div class="card-body">
     <!-- Loading state -->
@@ -83,9 +105,7 @@
       <!-- Current version -->
       <div class="col-12 col-sm-6">
         <div class="about-label">{{ "ABOUT.CURRENT_VERSION" | translate }}</div>
-        <span class="badge bg-secondary font-monospace">
-          v{{ info.current_version }}
-        </span>
+        <span class="badge bg-secondary font-monospace"> v{{ info.current_version }} </span>
       </div>
 
       <!-- Latest GitHub release -->
@@ -95,8 +115,7 @@
         @if (info.github_error) {
         <!-- GitHub API could not be reached -->
         <span class="badge bg-warning text-dark" [title]="info.github_error">
-          <i class="bi bi-exclamation-triangle me-1"></i>{{ "ABOUT.UNAVAILABLE"
-          | translate }}
+          <i class="bi bi-exclamation-triangle me-1"></i>{{ "ABOUT.UNAVAILABLE" | translate }}
         </span>
         } @else if (info.latest_version) {
         <span
@@ -107,11 +126,7 @@
           v{{ info.latest_version }}
         </span>
         @if (info.update_available) {
-        <a
-          [href]="info.github_url + '/releases'"
-          target="_blank"
-          rel="noopener"
-        >
+        <a [href]="info.github_url + '/releases'" target="_blank" rel="noopener">
           {{ "ABOUT.VIEW_RELEASE_NOTES" | translate }}
           <i class="bi bi-box-arrow-up-right ms-1"></i>
         </a>
@@ -120,11 +135,8 @@
     </div>
 
     <!-- Up-to-date banner -->
-    @if ( !info.update_available && !info.github_error && info.latest_version )
-    {
-    <div
-      class="alert alert-success py-2 small d-flex align-items-center gap-2 mb-3"
-    >
+    @if ( !info.update_available && !info.github_error && info.latest_version ) {
+    <div class="alert alert-success py-2 small d-flex align-items-center gap-2 mb-3">
       <i class="bi bi-check-circle-fill fs-5 flex-shrink-0"></i>
       {{ "ABOUT.UP_TO_DATE" | translate }}
     </div>

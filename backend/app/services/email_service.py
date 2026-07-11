@@ -14,17 +14,24 @@ Only the Python standard library (``smtplib`` / ``email``) is used, so no
 extra dependency is required.
 """
 
+import asyncio
 import json
 import logging
 import smtplib
 import ssl
 from datetime import UTC, datetime
 from email.message import EmailMessage
+from typing import Any
 
+from ..config import Settings
 from .audit_service import get_recent_audit_events
-from .proxy_service import EmailSettings
+from .proxy_service import EmailSettings, resolve_email_settings
 
 logger = logging.getLogger(__name__)
+
+# Audit subjects treated as connection/disconnection events (notify_login).
+# Everything else is a generic audited operation (notify_audit).
+_LOGIN_EVENTS = frozenset({"web_login", "web_logout"})
 
 
 def _recipients(cfg: EmailSettings) -> list[str]:
@@ -126,3 +133,53 @@ def send_audit_log_email(cfg: EmailSettings) -> tuple[bool, str]:
     except Exception as exc:  # noqa: BLE001 — surface any SMTP error to the admin
         logger.warning("Audit log email failed: %s", exc)
         return False, str(exc)
+
+
+def _send_event_email(cfg: EmailSettings, event: dict[str, Any]) -> None:
+    """Send a single audit event as a plain-text email (blocking)."""
+    subject = event.get("event", "event")
+    message = EmailMessage()
+    message["Subject"] = f"{cfg.subject} — {subject}"
+    message["From"] = cfg.from_address
+    message["To"] = ", ".join(_recipients(cfg))
+
+    lines = [f"Portalcrane {subject} event:", ""]
+    for key in (
+        "timestamp",
+        "username",
+        "auth_source",
+        "client_ip",
+        "method",
+        "path",
+        "http_status",
+    ):
+        value = event.get(key)
+        if value not in (None, ""):
+            lines.append(f"  {key}: {value}")
+    message.set_content("\n".join(lines))
+
+    _send(cfg, message)
+
+
+async def notify_event(settings: Settings, event: dict[str, Any]) -> None:
+    """Email a single audit event when per-event delivery is enabled.
+
+    Best-effort: honours the notify_login / notify_audit toggles and swallows
+    any SMTP error so audit logging is never disrupted by mail delivery.
+    """
+    cfg = resolve_email_settings(settings)
+    if not cfg.enabled:
+        return
+
+    is_login = event.get("event") in _LOGIN_EVENTS
+    if is_login and not cfg.notify_login:
+        return
+    if not is_login and not cfg.notify_audit:
+        return
+    if _validate(cfg):
+        return
+
+    try:
+        await asyncio.to_thread(_send_event_email, cfg, event)
+    except Exception as exc:  # noqa: BLE001 — notifications are best-effort
+        logger.warning("Event email notification failed: %s", exc)

@@ -208,6 +208,17 @@ HTTP simple et terminer TLS au niveau d'un reverse proxy.
 | ----------------------------- | ---------------------------------------------------------- | ------ |
 | `REGISTRY_PROXY_AUTH_ENABLED` | Imposer l'authentification sur le proxy de registre `/v2/` | `true` |
 
+### API, Swagger & jetons d'accès personnels
+
+| Variable           | Description                                          | Défaut  |
+| ------------------ | ---------------------------------------------------- | ------- |
+| `SWAGGER_ENABLED`  | Exposer l'interface Swagger sur `/api/docs`          | `false` |
+| `API_KEYS_ENABLED` | Activer la fonctionnalité de jetons personnels (PAT) | `true`  |
+
+Avec `API_KEYS_ENABLED=false`, les PAT sont entièrement désarmés : les endpoints
+de jetons renvoient `403`, les clés existantes de scope API sont rejetées sur
+l'API REST, et le panneau de génération est masqué dans le profil utilisateur.
+
 ### Reverse proxy & limitation de débit
 
 | Variable                       | Description                                                                       | Défaut |
@@ -342,6 +353,30 @@ Ces valeurs peuvent être surchargées par l'interface.
 | ------------------ | -------------------------------------------------------- | ------ |
 | `LOG_LEVEL`        | Niveau de log (`DEBUG`, `INFO`, `WARNING`, `ERROR`)      | `INFO` |
 | `AUDIT_MAX_EVENTS` | Nombre maximal d'événements d'audit conservés sur disque | `100`  |
+
+### E-mail (optionnel)
+
+Envoie le journal d'audit par e-mail via SMTP. Toutes ces valeurs sont
+surchargeables depuis l'interface (**Paramètres → Réseau → E-mail**), qui expose
+également un bouton de **test**.
+
+| Variable             | Description                                          | Défaut                  |
+| -------------------- | ---------------------------------------------------- | ----------------------- |
+| `EMAIL_ENABLED`      | Activer l'envoi d'e-mails                            | `false`                 |
+| `EMAIL_HOST`         | Hôte du serveur SMTP                                 | —                       |
+| `EMAIL_PORT`         | Port du serveur SMTP                                 | `587`                   |
+| `EMAIL_SECURITY`     | Sécurité de la connexion (`none`, `starttls`, `ssl`) | `starttls`              |
+| `EMAIL_USERNAME`     | Identifiant SMTP (vide pour anonyme)                 | —                       |
+| `EMAIL_PASSWORD`     | Mot de passe SMTP                                    | —                       |
+| `EMAIL_FROM_ADDRESS` | Adresse d'expédition                                 | —                       |
+| `EMAIL_TO_ADDRESSES` | Destinataires séparés par des virgules               | —                       |
+| `EMAIL_SUBJECT`      | Préfixe de l'objet                                   | `Portalcrane audit log` |
+| `EMAIL_NOTIFY_LOGIN` | Envoyer un e-mail à chaque connexion / déconnexion   | `false`                 |
+| `EMAIL_NOTIFY_AUDIT` | Envoyer un e-mail à chaque autre événement d'audit   | `false`                 |
+
+`EMAIL_NOTIFY_LOGIN` et `EMAIL_NOTIFY_AUDIT` sont deux options indépendantes
+d'envoi **automatique par événement** ; elles sont distinctes de l'export du
+journal d'audit à la demande, qui reste disponible depuis le panneau Réseau.
 
 ### Stockage (debug)
 

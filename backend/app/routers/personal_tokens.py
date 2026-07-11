@@ -53,6 +53,16 @@ router = APIRouter()
 
 _TOKENS_FILE = Path(f"{DATA_DIR}/personal_tokens.json")
 
+
+def require_api_keys_enabled(settings: Settings = Depends(get_settings)) -> None:
+    """Reject PAT management when the feature is disabled (API_KEYS_ENABLED=false)."""
+    if not settings.api_keys_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Personal access tokens are disabled",
+        )
+
+
 # Raw token prefix — makes it recognisable in logs and easy to grep.
 _TOKEN_PREFIX = "pct_"
 _SHORT_TOKEN_LENGTH = 16
@@ -272,6 +282,7 @@ def revoke_tokens_for_username(username: str) -> int:
 @router.get("/tokens", response_model=list[PersonalTokenPublic])
 async def list_tokens(
     current_user: UserInfo = Depends(get_current_user),
+    _: None = Depends(require_api_keys_enabled),
 ) -> list[PersonalTokenPublic]:
     """Return all personal access tokens owned by the current user."""
     tokens = _load_tokens()
@@ -289,6 +300,7 @@ async def create_token(
     payload: CreateTokenRequest,
     current_user: UserInfo = Depends(get_current_user),
     settings: Settings = Depends(get_settings),
+    _: None = Depends(require_api_keys_enabled),
 ) -> PersonalTokenCreated:
     """Create a personal access token for the current user.
 
@@ -374,6 +386,7 @@ async def create_token(
 async def revoke_token(
     token_id: str,
     current_user: UserInfo = Depends(get_current_user),
+    _: None = Depends(require_api_keys_enabled),
 ) -> None:
     """Revoke a personal access token.
 

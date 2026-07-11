@@ -10,36 +10,41 @@ export interface LocalUser {
   is_admin: boolean;
   created_at: string;
   auth_source: AuthSource;
+  disabled: boolean;
 }
 
 export interface UpdateUser {
-    password?: string;
-    is_admin: boolean;
+  password?: string;
+  is_admin?: boolean;
+  disabled?: boolean;
 }
 
 @Injectable({ providedIn: "root" })
 export class UsersService {
-    private http = inject(HttpClient);
+  private http = inject(HttpClient);
 
-    /** Fetch user */
-    getUser(): Observable<LocalUser[]> {
-        return this.http.get<LocalUser[]>("/api/auth/users")
-    }
+  /** Fetch user */
+  getUser(): Observable<LocalUser[]> {
+    return this.http.get<LocalUser[]>("/api/auth/users");
+  }
 
-    createUser(username: string, password: string, is_admin:boolean): Observable<LocalUser> {
-        return this.http.post<LocalUser>("/api/auth/users", {
-            username: username.trim(),
-            password: password,
-            is_admin: is_admin,
-        })
-    }
+  createUser(
+    username: string,
+    password: string,
+    is_admin: boolean,
+  ): Observable<LocalUser> {
+    return this.http.post<LocalUser>("/api/auth/users", {
+      username: username.trim(),
+      password: password,
+      is_admin: is_admin,
+    });
+  }
 
-    updateUser(userId: string, body: UpdateUser): Observable<LocalUser> {
-        return this.http.patch<LocalUser>(`/api/auth/users/${userId}`, body)
-    }
+  updateUser(userId: string, body: UpdateUser): Observable<LocalUser> {
+    return this.http.patch<LocalUser>(`/api/auth/users/${userId}`, body);
+  }
 
-    deleteUser(userId: string): Observable<void> {
-        return this.http.delete<void>(`/api/auth/users/${userId}`)
-    }
-
+  deleteUser(userId: string): Observable<void> {
+    return this.http.delete<void>(`/api/auth/users/${userId}`);
+  }
 }

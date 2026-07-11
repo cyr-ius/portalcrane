@@ -123,6 +123,15 @@ def _provision_oidc_user(identity: OidcIdentity, settings: Settings) -> None:
             ),
         )
 
+    # Deactivated OIDC account: reject the login without re-enabling the record.
+    if existing is not None and existing.get("disabled"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "Your account has been disabled. Please contact your administrator."
+            ),
+        )
+
     merged = resolve_oidc_settings(settings)
     admin_mapping = has_admin_mapping(merged)
     is_admin = is_oidc_admin(identity, merged)

@@ -17,8 +17,10 @@ export interface LoginResponse {
 export interface UserInfo {
   username: string;
   is_admin: boolean;
-  can_pull_images: boolean;
-  can_push_images: boolean;
+  /** Whether the Personal Access Token feature is enabled (API_KEYS_ENABLED). */
+  api_keys_enabled?: boolean;
+  /** Whether this account has a local password it can change (false for OIDC). */
+  can_change_password?: boolean;
 }
 
 // ── OIDC ──────────────────────────────────────────────────────────────────────

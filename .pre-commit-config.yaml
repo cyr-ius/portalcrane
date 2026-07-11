@@ -35,11 +35,14 @@ repos:
     hooks:
       - id: codespell
         args:
-          - --ignore-words-list=mailserver
+          # "te" is the RFC 7230 hop-by-hop HTTP header, not a typo.
+          - --ignore-words-list=mailserver,te
           - --skip="./.*,*.csv,*.json,*.ambr"
           - --quiet-level=2
         exclude_types: [csv, json, html]
-        exclude: .devcontainer|.agents|swagger
+        # codespell only knows English: the translated READMEs are excluded,
+        # otherwise every French/Spanish word is reported as a misspelling.
+        exclude: .devcontainer|.agents|swagger|README\.(fr|es)\.md
 
   # ── TypeScript / Angular: Prettier ───────────────────────────────────────
   - repo: https://github.com/pre-commit/mirrors-prettier

@@ -28,6 +28,7 @@ your logging configuration:
   formatter=jsonFormatter
 """
 
+import asyncio
 import json
 import logging
 from collections import deque
@@ -44,6 +45,10 @@ from ..config import DATA_DIR, Settings
 from ..core.jwt import ALGORITHM
 
 audit_logger = logging.getLogger("portalcrane.audit")
+
+# Fire-and-forget email notification tasks. A module-level set keeps a strong
+# reference so the event loop does not garbage-collect the pending task.
+_email_notify_tasks: set[asyncio.Task] = set()
 
 _audit_max_events = 100
 _recent_audit_events: deque[dict[str, Any]] = deque(maxlen=_audit_max_events)
@@ -188,6 +193,26 @@ class AuditService:
 
         _store_recent_event(event)
         audit_logger.info(json.dumps(event))
+        _dispatch_email_notification(event, self.settings)
+
+
+def _dispatch_email_notification(event: dict[str, Any], settings: Settings) -> None:
+    """Fire-and-forget an email notification for this event when enabled.
+
+    Scheduled as a background task so SMTP latency never blocks the request.
+    The email_service import is lazy to avoid a circular import (email_service
+    imports get_recent_audit_events from this module).
+    """
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        return
+
+    from .email_service import notify_event
+
+    task = loop.create_task(notify_event(settings, event))
+    _email_notify_tasks.add(task)
+    task.add_done_callback(_email_notify_tasks.discard)
 
 
 def _extract_username_from_request(request: Request, settings: Settings) -> str | None:

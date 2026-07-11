@@ -26,6 +26,7 @@ from ..core.jwt import (
     UserInfo,
     create_access_token,
     get_current_user,
+    is_user_disabled,
     require_admin,
 )
 from ..core.security import hash_password, verify_user
@@ -67,6 +68,7 @@ class LocalUserPublic(BaseModel):
     is_admin: bool
     created_at: str
     auth_source: str = AUTH_SOURCE_LOCAL
+    disabled: bool = False
 
 
 class CreateUserRequest(BaseModel):
@@ -109,6 +111,7 @@ class UpdateUserRequest(BaseModel):
 
     password: str | None = None
     is_admin: bool | None = None
+    disabled: bool | None = None
 
 
 class DockerHubAccountSettings(BaseModel):
@@ -175,6 +178,18 @@ def is_oidc_revoked(username: str) -> bool:
     return username in _load_revoked()
 
 
+def _active_admin_exists(users: list[dict], settings: Settings) -> bool:
+    """Return True when at least one administrator can still authenticate.
+
+    The built-in env-admin always counts as an active admin unless OIDC-only mode
+    disables local login; in that case an enabled admin account (local or OIDC)
+    must remain. Guards demote/disable operations against a full admin lockout.
+    """
+    if not resolve_oidc_settings(settings).oidc_only:
+        return True
+    return any(u.get("is_admin") and not u.get("disabled") for u in users)
+
+
 def _user_to_public(u: dict) -> LocalUserPublic:
     """Convert a raw user dict to LocalUserPublic, preserving auth_source."""
     return LocalUserPublic(
@@ -183,6 +198,7 @@ def _user_to_public(u: dict) -> LocalUserPublic:
         is_admin=u.get("is_admin", False),
         created_at=u.get("created_at", ""),
         auth_source=u.get("auth_source", AUTH_SOURCE_LOCAL),
+        disabled=u.get("disabled", False),
     )
 
 
@@ -220,6 +236,11 @@ async def login(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
         )
+    if is_user_disabled(payload.username, settings):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This account has been disabled",
+        )
     access_token = create_access_token({"sub": payload.username}, settings)
     set_auth_cookie(response, request, access_token)
     await log_web_login(request, payload.username, settings, AUTH_SOURCE_LOCAL)
@@ -249,10 +270,100 @@ async def logout(
     clear_auth_cookie(response)
 
 
-@router.get("/me", response_model=UserInfo)
-async def read_current_user(current_user: UserInfo = Depends(get_current_user)):
+class ChangePasswordRequest(BaseModel):
+    """Payload for a user changing their own password."""
+
+    current_password: str
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def new_password_min_length(cls, v: str) -> str:
+        """Ensure the new password is at least 8 characters long."""
+        if len(v) < 8:
+            raise ValueError("Password must be at least 8 characters")
+        return v
+
+
+@router.post("/me/password", status_code=status.HTTP_204_NO_CONTENT)
+async def change_own_password(
+    payload: ChangePasswordRequest,
+    current_user: UserInfo = Depends(get_current_user),
+    settings: Settings = Depends(get_settings),
+) -> None:
+    """Let the authenticated user change their own password.
+
+    OIDC accounts have no local password (authentication is delegated to the
+    provider) and are therefore rejected. The current password is always
+    re-verified before the change is applied.
+    """
+    # Verify the current password against the same source used at login.
+    if not verify_user(current_user.username, payload.current_password, settings):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Current password is incorrect",
+        )
+
+    # Built-in env-admin: persist the new hash via the bootstrap helper.
+    if current_user.username == settings.admin_username:
+        if not set_admin_password(settings, payload.new_password):
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Could not persist the new admin password",
+            )
+        return
+
+    users = _load_users()
+    for user in users:
+        if user["username"] == current_user.username:
+            if user.get("auth_source") == AUTH_SOURCE_OIDC:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        "Password cannot be changed for OIDC accounts. "
+                        "Authentication is managed by the external provider."
+                    ),
+                )
+            user["password_hash"] = hash_password(payload.new_password)
+            _save_users(users)
+            return
+
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+
+class CurrentUserResponse(UserInfo):
+    """/me payload: the authenticated user plus feature flags the UI needs."""
+
+    # Whether the Personal Access Token feature is enabled (API_KEYS_ENABLED).
+    # The account panel hides token generation when False.
+    api_keys_enabled: bool = True
+
+    # Whether this account has a local password it can change from its profile.
+    # False for OIDC-provisioned accounts (managed by the external provider).
+    can_change_password: bool = True
+
+
+@router.get("/me", response_model=CurrentUserResponse)
+async def read_current_user(
+    current_user: UserInfo = Depends(get_current_user),
+    settings: Settings = Depends(get_settings),
+) -> CurrentUserResponse:
     """Return information about the currently authenticated user."""
-    return current_user
+    can_change_password = True
+    if current_user.username != settings.admin_username:
+        record = next(
+            (u for u in _load_users() if u["username"] == current_user.username),
+            None,
+        )
+        # A local record with an OIDC source (or no local password) cannot self-
+        # change; an authenticated user with no local record is OIDC-only too.
+        if record is None or record.get("auth_source") == AUTH_SOURCE_OIDC:
+            can_change_password = False
+    return CurrentUserResponse(
+        **current_user.model_dump(),
+        api_keys_enabled=settings.api_keys_enabled,
+        can_change_password=can_change_password,
+    )
 
 
 @router.get("/users", response_model=list[LocalUserPublic])
@@ -374,6 +485,14 @@ async def update_local_user(
                 user["password_hash"] = hash_password(payload.password)
             if payload.is_admin is not None:
                 user["is_admin"] = payload.is_admin
+            if payload.disabled is not None:
+                user["disabled"] = payload.disabled
+            # Guard: demoting or disabling must never remove the last active admin.
+            if not _active_admin_exists(users, settings):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="At least one active administrator account is required",
+                )
             _save_users(users)
             return _user_to_public(user)
 

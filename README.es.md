@@ -207,6 +207,17 @@ y terminar TLS en un reverse proxy.
 | ----------------------------- | ---------------------------------------------------- | ----------- |
 | `REGISTRY_PROXY_AUTH_ENABLED` | Imponer autenticación en el proxy de registro `/v2/` | `true`      |
 
+### API, Swagger y tokens de acceso personal
+
+| Variable           | Descripción                                           | Por defecto |
+| ------------------ | ----------------------------------------------------- | ----------- |
+| `SWAGGER_ENABLED`  | Exponer la interfaz Swagger en `/api/docs`            | `false`     |
+| `API_KEYS_ENABLED` | Habilitar la funcionalidad de tokens personales (PAT) | `true`      |
+
+Con `API_KEYS_ENABLED=false`, los PAT quedan totalmente desactivados: los
+endpoints de tokens devuelven `403`, las claves existentes con scope API son
+rechazadas en la API REST y el panel de generación se oculta del perfil.
+
 ### Reverse proxy y limitación de tasa
 
 | Variable                       | Descripción                                                                        | Por defecto |
@@ -340,6 +351,30 @@ Estos valores pueden sobrescribirse desde la interfaz.
 | ------------------ | ---------------------------------------------------------- | ----------- |
 | `LOG_LEVEL`        | Nivel de log (`DEBUG`, `INFO`, `WARNING`, `ERROR`)         | `INFO`      |
 | `AUDIT_MAX_EVENTS` | Número máximo de eventos de auditoría conservados en disco | `100`       |
+
+### Correo electrónico (opcional)
+
+Envía el registro de auditoría por correo mediante SMTP. Todos estos valores se
+pueden sobrescribir desde la interfaz (**Ajustes → Red → Correo**), que también
+ofrece un botón de **prueba**.
+
+| Variable             | Descripción                                          | Por defecto             |
+| -------------------- | ---------------------------------------------------- | ----------------------- |
+| `EMAIL_ENABLED`      | Habilitar el envío de correos                        | `false`                 |
+| `EMAIL_HOST`         | Host del servidor SMTP                               | —                       |
+| `EMAIL_PORT`         | Puerto del servidor SMTP                             | `587`                   |
+| `EMAIL_SECURITY`     | Seguridad de la conexión (`none`, `starttls`, `ssl`) | `starttls`              |
+| `EMAIL_USERNAME`     | Usuario SMTP (vacío para anónimo)                    | —                       |
+| `EMAIL_PASSWORD`     | Contraseña SMTP                                      | —                       |
+| `EMAIL_FROM_ADDRESS` | Dirección del remitente                              | —                       |
+| `EMAIL_TO_ADDRESSES` | Destinatarios separados por comas                    | —                       |
+| `EMAIL_SUBJECT`      | Prefijo del asunto                                   | `Portalcrane audit log` |
+| `EMAIL_NOTIFY_LOGIN` | Enviar un correo en cada conexión / desconexión      | `false`                 |
+| `EMAIL_NOTIFY_AUDIT` | Enviar un correo en cada otro evento de auditoría    | `false`                 |
+
+`EMAIL_NOTIFY_LOGIN` y `EMAIL_NOTIFY_AUDIT` son dos opciones independientes de
+envío **automático por evento**; son distintas de la exportación bajo demanda del
+registro de auditoría, que sigue disponible desde el panel de Red.
 
 ### Almacenamiento (debug)
 

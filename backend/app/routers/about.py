@@ -40,6 +40,7 @@ class AboutResponse(BaseModel):
     ai_generator: str
     github_url: str
     github_error: str | None
+    swagger_enabled: bool
 
 
 # ── Endpoint ──────────────────────────────────────────────────────────────────
@@ -58,6 +59,7 @@ async def get_about(settings: Settings = Depends(get_settings)) -> dict:
     - ai_generator      : AI tool used to generate the code
     - github_url        : link to the GitHub repository
     - github_error      : error message when the GitHub check fails (None otherwise)
+    - swagger_enabled   : whether the Swagger UI (/api/docs) is served
     """
     current_version = os.getenv("APP_VERSION", "1.0.0")
 
@@ -107,4 +109,5 @@ async def get_about(settings: Settings = Depends(get_settings)) -> dict:
         "ai_generator": APP_AI_GENERATOR,
         "github_url": GITHUB_REPO_URL,
         "github_error": github_error,
+        "swagger_enabled": settings.swagger_enabled,
     }
