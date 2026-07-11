@@ -12,7 +12,6 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
-from time import perf_counter
 
 from fastapi import FastAPI, HTTPException
 from fastapi.openapi.docs import get_swagger_ui_html
@@ -42,8 +41,7 @@ from .routers.folders import (
     ensure_root_folder_exists,
     migrate_folder_permissions_to_groups,
 )
-from .security import RateLimitMiddleware, SecurityHeadersMiddleware
-from .services.audit_service import log_web_ui_action
+from .security import AuditMiddleware, RateLimitMiddleware, SecurityHeadersMiddleware
 from .services.proxy_service import (
     apply_proxy_to_os_environ,
     apply_syslog_config,
@@ -126,7 +124,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Portalcrane API",
     description="Docker Registry Management API",
-    version="1.0.0",
+    version=app_settings.app_version,
     lifespan=lifespan,
     docs_url=None,
     redoc_url=None,
@@ -135,27 +133,7 @@ app = FastAPI(
 
 # ── Middleware ───────────────────────────────────────────────────────────────
 app.add_middleware(SecurityHeadersMiddleware)
-
-
-@app.middleware("http")
-async def audit_web_ui_actions(request, call_next):
-    """Audit middleware: log all non-GET API requests."""
-    start = perf_counter()
-    response = await call_next(request)
-    elapsed = perf_counter() - start
-
-    await log_web_ui_action(
-        request=request,
-        status_code=response.status_code,
-        settings=app_settings,
-        elapsed_s=elapsed,
-    )
-    return response
-
-
-# Registered last so it wraps the stack as the outermost layer: throttled
-# requests are rejected before the audit middleware runs, keeping brute-force
-# floods out of the bounded audit ring buffer.
+app.middleware(AuditMiddleware)
 app.add_middleware(RateLimitMiddleware)
 
 
@@ -172,16 +150,15 @@ app.include_router(
     personal_tokens.router, prefix="/api/auth", tags=["Personal Access Tokens"]
 )
 app.include_router(registries.router, prefix="/api/registries", tags=["Registries"])
+app.include_router(staging.router, prefix="/api/staging", tags=["Staging"])
+app.include_router(system.router, prefix="/api/system", tags=["System"])
+app.include_router(transfer.router, prefix="/api/transfer", tags=["Transfer"])
+app.include_router(trivy.router, prefix="/api/trivy", tags=["Trivy"])
 # Registry Proxy routes implement the Docker Registry HTTP API v2 and are only
 # meaningful to the docker CLI — hide them from the OpenAPI schema / Swagger UI.
 app.include_router(
     registry_proxy.router, prefix="", tags=["Registry Proxy"], include_in_schema=False
 )
-app.include_router(staging.router, prefix="/api/staging", tags=["Staging"])
-app.include_router(system.router, prefix="/api/system", tags=["System"])
-app.include_router(transfer.router, prefix="/api/transfer", tags=["Transfer"])
-app.include_router(trivy.router, prefix="/api/trivy", tags=["Trivy"])
-
 
 # ── Self-hosted static assets (Swagger UI, no Internet dependency) ─────────────
 static_dir = Path(__file__).resolve().parent / "static"
@@ -194,7 +171,7 @@ async def swagger_ui():
         raise HTTPException(status_code=404, detail="Not Found")
     return get_swagger_ui_html(
         openapi_url="/api/openapi.json",
-        title="Portalcrane API",
+        title=f"{app.title} - Swagger UI",
         swagger_js_url="/api/static/swagger/swagger-ui-bundle.js",
         swagger_css_url="/api/static/swagger/swagger-ui.css",
         swagger_favicon_url="/favicon.ico",
@@ -204,7 +181,7 @@ async def swagger_ui():
 @app.get("/api/health")
 async def health_check():
     """Health check endpoint."""
-    return {"status": "healthy", "app": "Portalcrane"}
+    return {"status": "healthy", "app": app.title, "version": app.version}
 
 
 # ── Angular SPA fallback ──────────────────────────────────────────────────────

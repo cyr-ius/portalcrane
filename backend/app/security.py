@@ -4,12 +4,14 @@ import time
 from collections import defaultdict, deque
 from functools import lru_cache
 from threading import Lock
+from time import perf_counter
 
 from fastapi import Request
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from .config import app_settings
+from .services.audit_service import log_web_ui_action
 
 logger = logging.getLogger(__name__)
 
@@ -270,3 +272,27 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             )
 
         return await call_next(request)
+
+
+class AuditMiddleware(BaseHTTPMiddleware):
+    """Log every request to the audit log with a bounded ring buffer.
+
+    The audit log is a fixed-size in-memory ring buffer of the most recent
+    requests. It is not persisted, so it is only useful for short-term
+    investigation of recent activity. The audit log is not a security control:
+    it does not prevent abuse, and it can be trivially bypassed by an attacker
+    who can flood the buffer with noise.
+    """
+
+    async def dispatch(self, request: Request, call_next):
+        start = perf_counter()
+        response = await call_next(request)
+        elapsed = perf_counter() - start
+
+        await log_web_ui_action(
+            request=request,
+            status_code=response.status_code,
+            settings=app_settings,
+            elapsed_s=elapsed,
+        )
+        return response
