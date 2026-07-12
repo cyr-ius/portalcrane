@@ -9,7 +9,7 @@ once in the logs so the operator can perform the initial login. On every
 subsequent start the persisted hash is reused — the password is therefore *not*
 rotated across restarts and is no longer configurable through the environment.
 
-Secret key: when SECRET_KEY is left at its default, a random value is generated
+Secret key: when SECRET_KEY is left empty, a random value is generated
 and persisted under DATA_DIR so JWTs survive restarts. In the container the
 entrypoint generates and exports the same file before any process starts (the
 embedded registry needs it too); this Python-side resolution is the fallback
@@ -25,7 +25,7 @@ import string
 from pathlib import Path
 
 from ..config import DATA_DIR, Settings
-from .security import hash_password
+from .security import hash_password, set_admin_password_hash
 
 logger = logging.getLogger(__name__)
 
@@ -34,9 +34,6 @@ _ADMIN_HASH_FILE = Path(f"{DATA_DIR}/admin_password.hash")
 
 # Persisted JWT signing secret (shared with the container entrypoint).
 _SECRET_KEY_FILE = Path(f"{DATA_DIR}/secret_key")
-
-# Placeholder shipped in config.py — treated as "no secret configured".
-_DEFAULT_SECRET_KEY = "change-this-secret-key-in-production"
 
 # Length of the generated one-time admin password (alphanumeric).
 _GENERATED_PASSWORD_LENGTH = 24
@@ -85,14 +82,14 @@ def ensure_secret_key(settings: Settings) -> None:
     """Resolve the JWT signing secret, generating & persisting one on first run.
 
     Precedence:
-      1. SECRET_KEY set to a non-default value → used as-is.
+      1. SECRET_KEY set in the environment → used as-is.
       2. A persisted secret exists under DATA_DIR → reused.
       3. Neither → generate, persist, and continue.
 
     In the container the entrypoint already writes the persisted file and
     exports SECRET_KEY, so case 1 normally applies; this covers direct runs.
     """
-    if settings.secret_key and settings.secret_key != _DEFAULT_SECRET_KEY:
+    if settings.secret_key:
         return
 
     try:
@@ -125,16 +122,16 @@ def ensure_admin_credentials(settings: Settings) -> None:
       1. A persisted hash exists under DATA_DIR → reused as-is.
       2. None                                  → generate, persist, log once.
 
-    The resulting bcrypt hash is stored on ``settings.admin_password_hash`` so
-    that ``verify_user`` can authenticate the built-in admin. The password is
-    never read from the environment.
+    The resulting bcrypt hash is handed to core/security.py so that
+    ``verify_user`` can authenticate the built-in admin. The password is never
+    read from the environment.
     """
     # 1. Reuse a previously persisted hash (stable across restarts).
     try:
         if _ADMIN_HASH_FILE.exists():
             stored = _ADMIN_HASH_FILE.read_text().strip()
             if stored:
-                settings.set_admin_password_hash(stored)
+                set_admin_password_hash(stored)
                 logger.info("Admin password loaded from %s.", _ADMIN_HASH_FILE)
                 return
     except OSError as exc:
@@ -143,7 +140,7 @@ def ensure_admin_credentials(settings: Settings) -> None:
     # 2. First launch — generate a one-time password, persist its hash, log it.
     password = _generate_password()
     hashed = hash_password(password)
-    settings.set_admin_password_hash(hashed)
+    set_admin_password_hash(hashed)
 
     if not _write_secret_file(_ADMIN_HASH_FILE, hashed):
         logger.error(
@@ -154,17 +151,16 @@ def ensure_admin_credentials(settings: Settings) -> None:
     _log_generated_password(settings.admin_username, password)
 
 
-def set_admin_password(settings: Settings, password: str) -> bool:
+def set_admin_password(password: str) -> bool:
     """Change the built-in admin password from an authenticated request.
 
-    Hashes *password*, updates the in-memory ``settings.admin_password_hash`` so
-    the new credential takes effect immediately, and persists the hash under
-    DATA_DIR so it survives restarts.
+    Hashes *password*, updates the in-memory hash so the new credential takes
+    effect immediately, and persists it under DATA_DIR so it survives restarts.
 
     Returns True on success, False when the hash could not be persisted (e.g. a
     read-only volume) — the caller should surface this as an error rather than
     silently accept a change that will be lost on the next restart.
     """
     hashed = hash_password(password)
-    settings.set_admin_password_hash(hashed)
+    set_admin_password_hash(hashed)
     return _write_secret_file(_ADMIN_HASH_FILE, hashed)

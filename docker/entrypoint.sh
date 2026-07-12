@@ -12,7 +12,7 @@ mkdir -p "${DATA_DIR}"
 # left at the default, generate a random secret once and persist it under
 # DATA_DIR so JWTs and registry signatures survive restarts.
 SECRET_KEY_FILE="${DATA_DIR}/secret_key"
-if [ -z "${SECRET_KEY}" ] || [ "${SECRET_KEY}" = "change-this-secret-key-in-production" ]; then
+if [ -z "${SECRET_KEY}" ]; then
     if [ ! -s "${SECRET_KEY_FILE}" ]; then
         head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n' > "${SECRET_KEY_FILE}"
         chmod 600 "${SECRET_KEY_FILE}"

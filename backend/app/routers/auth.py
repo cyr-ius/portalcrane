@@ -306,7 +306,7 @@ async def change_own_password(
 
     # Built-in env-admin: persist the new hash via the bootstrap helper.
     if current_user.username == settings.admin_username:
-        if not set_admin_password(settings, payload.new_password):
+        if not set_admin_password(payload.new_password):
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Could not persist the new admin password",
@@ -451,7 +451,7 @@ async def update_local_user(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="Password must be at least 8 characters",
             )
-        if not set_admin_password(settings, payload.password):
+        if not set_admin_password(payload.password):
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Could not persist the new admin password",

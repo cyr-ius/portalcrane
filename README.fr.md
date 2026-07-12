@@ -221,13 +221,15 @@ l'API REST, et le panneau de génération est masqué dans le profil utilisateur
 
 ### Reverse proxy & limitation de débit
 
-| Variable                        | Description                                                                       | Défaut |
-| ------------------------------- | --------------------------------------------------------------------------------- | ------ |
-| `TRUSTED_PROXIES`               | Plages CIDR (ou IP simples), séparées par des virgules, des reverse proxies amont | —      |
-| `RATE_LIMIT_ENABLED`            | Activer la limitation de débit par IP sur les routes `/api/*`                     | `true` |
-| `RATE_LIMIT_WINDOW_SECONDS`     | Durée de la fenêtre glissante, en secondes                                        | `60`   |
-| `RATE_LIMIT_MAX_REQUESTS`       | Requêtes max par IP et par fenêtre, toutes routes `/api/*`                        | `100`  |
-| `RATE_LIMIT_LOGIN_MAX_ATTEMPTS` | Budget plus strict par IP et par fenêtre pour les endpoints login/token           | `5`    |
+| Variable                          | Description                                                                       | Défaut            |
+| --------------------------------- | --------------------------------------------------------------------------------- | ----------------- |
+| `TRUSTED_PROXIES`                 | Plages CIDR (ou IP simples), séparées par des virgules, des reverse proxies amont | —                 |
+| `RATE_LIMIT_ENABLED`              | Activer la limitation de débit par IP sur les routes `/api/*`                     | `true`            |
+| `RATE_LIMIT_WINDOW_SECONDS`       | Durée de la fenêtre glissante, en secondes                                        | `60`              |
+| `RATE_LIMIT_MAX_REQUESTS`         | Requêtes max par IP et par fenêtre, toutes routes `/api/*`                        | `100`             |
+| `RATE_LIMIT_LOGIN_PATH`           | Chemin de l'endpoint de login, limité dans son propre compteur                    | `/api/auth/login` |
+| `RATE_LIMIT_LOGIN_WINDOW_SECONDS` | Durée de la fenêtre glissante du compteur login, en secondes                      | `300`             |
+| `RATE_LIMIT_LOGIN_MAX_ATTEMPTS`   | Budget plus strict par IP et par fenêtre de login                                 | `5`               |
 
 `TRUSTED_PROXIES` définit la frontière de confiance des reverse proxies. Les IP
 client transmises (`Forwarded` / `X-Forwarded-For` / `X-Real-IP`) ne sont prises

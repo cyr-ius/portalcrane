@@ -225,12 +225,12 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     """Throttle requests per client IP with an in-memory sliding window.
 
     Only ``/api/*`` routes are limited (static SPA assets are served
-    elsewhere). Authentication endpoints share a separate, stricter budget so a
-    password brute-force is throttled without starving the general API budget.
-    The health probe is exempt so container orchestration is never blocked.
+    elsewhere). The login endpoint (RATE_LIMIT_LOGIN_PATH) gets its own bucket,
+    with a stricter budget over its own window, so a password brute-force is
+    throttled without starving the general API budget. The health probe is
+    exempt so container orchestration is never blocked.
     """
 
-    _AUTH_PATHS: frozenset[str] = frozenset({"/api/auth/login"})
     _EXEMPT_PATHS: frozenset[str] = frozenset({"/api/health"})
 
     def __init__(self, app) -> None:
@@ -247,15 +247,17 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         ):
             return await call_next(request)
 
-        if path in self._AUTH_PATHS:
-            bucket, limit = "auth", settings.rate_limit_login_max_attempts
+        if path == settings.rate_limit_login_path:
+            bucket = "auth"
+            limit = settings.rate_limit_login_max_attempts
+            window = settings.rate_limit_login_window_seconds
         else:
-            bucket, limit = "global", settings.rate_limit_max_requests
+            bucket = "global"
+            limit = settings.rate_limit_max_requests
+            window = settings.rate_limit_window_seconds
 
         ip = client_ip(request)
-        allowed, retry_after = self._limiter.check(
-            f"{bucket}:{ip}", limit, settings.rate_limit_window_seconds
-        )
+        allowed, retry_after = self._limiter.check(f"{bucket}:{ip}", limit, window)
         if not allowed:
             logger.warning(
                 "Rate limit exceeded: ip=%s path=%s bucket=%s limit=%d/%ds",
@@ -263,7 +265,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 path,
                 bucket,
                 limit,
-                settings.rate_limit_window_seconds,
+                window,
             )
             return JSONResponse(
                 status_code=429,

@@ -14,6 +14,10 @@ from ..config import DATA_DIR, Settings
 
 _USERS_FILE = Path(f"{DATA_DIR}/local_users.json")
 
+# Bcrypt hash of the built-in admin password, resolved at startup by
+# core/bootstrap.py. Never read from the environment.
+_admin_password_hash: str = ""
+
 
 # ─── Internal helpers ─────────────────────────────────────────────────────────
 
@@ -29,6 +33,17 @@ def _load_users() -> list[dict]:
 
 
 # ─── Public API ───────────────────────────────────────────────────────────────
+
+
+def set_admin_password_hash(hashed: str) -> None:
+    """Set the resolved admin password hash (called by core/bootstrap.py)."""
+    global _admin_password_hash
+    _admin_password_hash = hashed
+
+
+def get_admin_password_hash() -> str:
+    """Return the bcrypt hash of the built-in admin password."""
+    return _admin_password_hash
 
 
 def hash_password(password: str) -> str:
@@ -65,11 +80,10 @@ def verify_user(username: str, password: str, settings: Settings) -> bool:
 
     Used by both the login endpoint and the registry proxy Basic Auth handler.
     """
-    # Primary: built-in admin — verified against the bootstrapped bcrypt hash.
-    # The hash comes from ADMIN_PASSWORD (if set) or the auto-generated
-    # first-launch password (see core/bootstrap.py).
+    # Primary: built-in admin — verified against the bootstrapped bcrypt hash
+    # of the auto-generated first-launch password (see core/bootstrap.py).
     if username == settings.admin_username:
-        return verify_password(password, settings.admin_password_hash)
+        return verify_password(password, get_admin_password_hash())
     # Secondary: local users stored as bcrypt hashes
     for user in _load_users():
         if user["username"] == username:

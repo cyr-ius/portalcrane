@@ -9,7 +9,6 @@ from functools import lru_cache
 from pathlib import Path
 from urllib.parse import urlparse
 
-from pydantic import PrivateAttr
 from pydantic_settings import BaseSettings
 
 logger = logging.getLogger(__name__)
@@ -32,14 +31,15 @@ DEFAULT_TIMEOUT: float = 10.0
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
-    _admin_password_hash: str = PrivateAttr(default="")
     access_token_expire_minutes: int = 480  # 8 hours
     admin_username: str = "admin"
     api_keys_enabled: bool = True
     app_version: str = "Development"
     auth_cookie_name: str = "pc_token"
     log_level: str = "INFO"
-    secret_key: str = "change-this-secret-key-in-production"
+    # Left empty on purpose: core/bootstrap.py then generates and persists a
+    # random secret under DATA_DIR on first launch.
+    secret_key: str = ""
     swagger_enabled: bool = False
 
     # Audit log configuration
@@ -122,26 +122,18 @@ class Settings(BaseSettings):
     rate_limit_enabled: bool = True
     rate_limit_window_seconds: int = 60
     rate_limit_max_requests: int = 100  # per IP per window, all /api/* routes
-    rate_limit_login_max_attempts: int = 5  # per IP per window, login/token only
+    # The login endpoint gets its own bucket: a stricter budget over a longer
+    # window, so a password brute-force is throttled without starving the
+    # general API budget.
+    rate_limit_login_path: str = "/api/auth/login"
+    rate_limit_login_window_seconds: int = 300
+    rate_limit_login_max_attempts: int = 5  # per IP per login window
 
     # ── Internal helpers ─────────────────────────────────────────────────────────
 
     class Config:
         env_file = ".env"
         case_sensitive = False
-
-    @property
-    def admin_password_hash(self) -> str:
-        """Bcrypt hash of the admin password, resolved at startup.
-
-        Read-only public accessor. The value is set by core/bootstrap.py via
-        set_admin_password_hash(); it is never read from the environment.
-        """
-        return self._admin_password_hash
-
-    def set_admin_password_hash(self, hashed: str) -> None:
-        """Set the resolved admin password hash (called once at startup)."""
-        self._admin_password_hash = hashed
 
     @property
     def httpx_proxy(self) -> str | None:
