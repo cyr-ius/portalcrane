@@ -5,10 +5,10 @@ outside the single production container — useful for contributing or
 debugging.
 
 !!! info "This differs from the top-level README"
-The backend is managed with [`uv`](https://docs.astral.sh/uv/) and
-`pyproject.toml`/`uv.lock`, not `pip` and a `requirements.txt`. This
-page follows the project's own [`AGENTS.md`](https://github.com/cyr-ius/portalcrane/blob/main/AGENTS.md),
-which is the authoritative source for local tooling.
+    The backend is managed with [`uv`](https://docs.astral.sh/uv/) and
+    `pyproject.toml`/`uv.lock`, not `pip` and a `requirements.txt`. This
+    page follows the project's own [`AGENTS.md`](https://github.com/cyr-ius/portalcrane/blob/main/AGENTS.md),
+    which is the authoritative source for local tooling.
 
 ## System requirements
 

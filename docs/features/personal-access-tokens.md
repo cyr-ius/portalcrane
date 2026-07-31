@@ -2,9 +2,17 @@
 
 Every authenticated user — local or OIDC-provisioned — can generate their
 own **Personal Access Tokens (PATs)** from the account menu
-(**account avatar → Personal Access Tokens**). They're especially useful
-for OIDC users, who have no local password to hand to `docker login` or
-a CI system.
+(**account avatar → Personal Access Tokens**).
+
+!!! note "A PAT is required for `docker login`"
+    The registry proxy's Basic Auth only accepts a **Docker-scoped PAT** as
+    the password — a real account password (including the built-in admin's)
+    is rejected there. This isn't just a convenience for OIDC users, who
+    have no local password to begin with: every account, local or OIDC,
+    must generate a Docker-scoped token before it can `docker login`,
+    `pull`, or `push` against Portalcrane's registry proxy. See the
+    [Docker CLI Walkthrough](../getting-started/docker-cli-walkthrough.md)
+    for a full example.
 
 The raw token value is shown **only once**, at creation time. Internally it
 is stored as a bcrypt hash and identified by a unique signed `jti` claim —
@@ -79,9 +87,9 @@ In **Swagger UI** (`/api/docs`, enabled with `SWAGGER_ENABLED=true`): click
 request in that session is authenticated as you.
 
 !!! info "The registry proxy isn't in Swagger"
-The `/v2/...` registry proxy endpoints implement the Docker Registry
-HTTP API and are intentionally hidden from Swagger — they're only
-meaningful to a Docker client, not a REST API consumer.
+    The `/v2/...` registry proxy endpoints implement the Docker Registry
+    HTTP API and are intentionally hidden from Swagger — they're only
+    meaningful to a Docker client, not a REST API consumer.
 
 ## Revoking a token
 
@@ -98,6 +106,12 @@ Deleting a user account also revokes every one of their tokens.
 
 Set `API_KEYS_ENABLED=false` to disarm PATs system-wide: token endpoints
 return `403`, existing API-scoped keys stop working against the REST API,
-and the token-generation panel disappears from the account menu. Existing
-Docker-scoped tokens used for `docker login` are also rejected once the
-feature is disabled.
+and the token-generation panel disappears from the account menu.
+
+!!! danger "This also disables `docker login` entirely"
+    Since a Docker-scoped PAT is the _only_ accepted credential for the
+    registry proxy, disabling PATs removes every account's ability to
+    `docker login`, `pull`, or `push` — the proxy returns `403` for every
+    Basic Auth attempt regardless of whether a token was already issued.
+    Only turn this off if you don't need Docker CLI access to Portalcrane's
+    registry at all (e.g. the UI is your only client).

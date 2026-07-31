@@ -42,9 +42,9 @@ curl -X POST http://<host>:8000/api/auth/users \
 ```
 
 !!! note "Admins always bypass folder checks"
-An account with `is_admin: true` has unconditional pull/push access to
-every folder and every external registry. Folder permissions only
-matter for non-admin accounts.
+    An account with `is_admin: true` has unconditional pull/push access to
+    every folder and every external registry. Folder permissions only
+    matter for non-admin accounts.
 
 ## Groups
 
@@ -75,10 +75,10 @@ removes them from every group, which is enough to fully revoke their
 inherited access without touching folder configuration.
 
 !!! tip "Why groups instead of per-user grants?"
-Modeling permissions on groups means onboarding a new team member is
-"add them to a group," not "recreate five folder grants." It also means
-a folder's permission list stays small and legible even as headcount
-changes.
+    Modeling permissions on groups means onboarding a new team member is
+    "add them to a group," not "recreate five folder grants." It also means
+    a folder's permission list stays small and legible even as headcount
+    changes.
 
 ## Roles at a glance
 

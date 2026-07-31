@@ -32,15 +32,15 @@ docker push <image>:<tag>
 docker logout
 ```
 
-Authenticate with either your local username/password, or a
-[Personal Access Token](../features/personal-access-tokens.md) scoped for
-Docker (recommended for CI pipelines, since it avoids storing a real
-account's password).
+`docker login` requires a [Personal Access Token](../features/personal-access-tokens.md)
+scoped for Docker as the password — your account's real password (even the
+built-in admin's) is rejected by the registry proxy. Generate one from the
+account menu → Personal Access Tokens first.
 
 !!! tip "Anonymous access"
-Set `REGISTRY_PROXY_AUTH_ENABLED=false` to allow unauthenticated
-`pull`/`push` against the proxy — useful for fully trusted internal
-networks. See [Environment Variables](../configuration/environment-variables.md#registry).
+    Set `REGISTRY_PROXY_AUTH_ENABLED=false` to allow unauthenticated
+    `pull`/`push` against the proxy — useful for fully trusted internal
+    networks. See [Environment Variables](../configuration/environment-variables.md#registry).
 
 For a full step-by-step example — login, pull, tag, push, pull back, run,
 and logout, using the tiny `traefik/whoami` image, plus a side-by-side look

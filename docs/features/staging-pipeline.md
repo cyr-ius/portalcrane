@@ -127,12 +127,12 @@ repository names to an account/organization.
   ownership is recorded at pull time.
 
 !!! warning "External push can't become a backdoor to the local registry"
-If an "external" destination actually resolves to Portalcrane's own
-registry (the hidden `__local__` system entry, or an ad-hoc host that
-happens to point at `localhost:5000`), Portalcrane enforces the
-**local** `can_push` check instead of the external one — otherwise a
-pull-only user could push simply by picking "External → Local
-Registry" in the destination selector.
+    If an "external" destination actually resolves to Portalcrane's own
+    registry (the hidden `__local__` system entry, or an ad-hoc host that
+    happens to point at `localhost:5000`), Portalcrane enforces the
+    **local** `can_push` check instead of the external one — otherwise a
+    pull-only user could push simply by picking "External → Local
+    Registry" in the destination selector.
 
 ## Managing jobs
 

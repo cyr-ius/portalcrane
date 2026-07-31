@@ -26,16 +26,27 @@ equivalent) and restart once — from then on both values persist.
 
 ## `docker login` fails against Portalcrane — where do I start?
 
-1. Confirm `REGISTRY_PROXY_AUTH_ENABLED` isn't unexpectedly `false`
-   (anonymous mode) or `true` when you expected open access.
-2. Make sure you're authenticating against port `8000` (the proxy), not
+1. **Are you using a real account password?** That's the most common
+   cause: the registry proxy only accepts a **Docker-scoped
+   [Personal Access Token](features/personal-access-tokens.md)** as the
+   password — a real account password (even the built-in admin's) is
+   always rejected with `401`, on purpose. Generate a token with the
+   `docker` scope and use that instead.
+2. If you're already using a PAT, confirm it was created with the
+   **`docker`** scope specifically — an `api`-scoped token is rejected by
+   design, for the same reason a Docker-scoped one can't authenticate
+   against the REST API.
+3. Confirm `API_KEYS_ENABLED` isn't `false` — with PATs disabled system-wide,
+   `docker login` is unavailable for every account, since there's no other
+   accepted credential.
+4. Confirm `REGISTRY_PROXY_AUTH_ENABLED` isn't unexpectedly `false`
+   (anonymous mode, no login needed at all) or `true` when you expected
+   open access.
+5. Make sure you're authenticating against port `8000` (the proxy), not
    `5000` — port `5000` is only exposed directly in the
    [dev Compose stack](development.md#full-stack-dev-compose-stack) and has
    no authentication of its own.
-3. If using a [Personal Access Token](features/personal-access-tokens.md),
-   confirm it was created with the **`docker`** scope — an `api`-scoped
-   token is rejected by design.
-4. Check `GET /api/system/processes` — if the embedded `registry` process
+6. Check `GET /api/system/processes` — if the embedded `registry` process
    isn't running, the proxy has nothing to forward to.
 
 ## Why can't a user push even though they're not disabled?

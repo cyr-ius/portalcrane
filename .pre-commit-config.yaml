@@ -36,7 +36,7 @@ repos:
       - id: codespell
         args:
           # "te" is the RFC 7230 hop-by-hop HTTP header, not a typo.
-          - --ignore-words-list=Portalcrane,redoc
+          - --ignore-words-list=Portalcrane,redoc,te
           - --skip="./.*,*.csv,*.json,*.ambr"
           - --quiet-level=2
         exclude_types: [csv, json, html]
@@ -51,4 +51,9 @@ repos:
       - id: prettier
         args: ["--print-width=120"]
         types_or: [javascript, html, css, scss, json, yaml, markdown]
-        exclude: node_modules|.agents|swagger
+        # docs/** relies on MkDocs' admonition syntax (`!!! note` + a 4-space
+        # indented body with no preceding blank line), which is significant
+        # to python-markdown but not to CommonMark — prettier's markdown
+        # formatter doesn't know the extension and strips that indentation,
+        # silently breaking the callout boxes on every run.
+        exclude: node_modules|.agents|swagger|^docs/

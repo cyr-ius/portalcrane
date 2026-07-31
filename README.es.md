@@ -105,6 +105,10 @@ docker push <image>:<tag>
 docker logout
 ```
 
+> **Nota:** `docker login` requiere un token de acceso personal (scope
+> Docker) como contraseña — la contraseña real de la cuenta se rechaza.
+> Genere uno desde el menú de la cuenta → Tokens de acceso personal.
+
 Para la guía de instalación completa (TLS, reverse proxy, stack de desarrollo,
 notas de seguridad), véase **[Getting Started](https://cyr-ius.github.io/portalcrane/getting-started/installation/)**
 (en inglés).

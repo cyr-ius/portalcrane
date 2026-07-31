@@ -59,9 +59,9 @@ Behind the scenes, Portalcrane:
 5. Reports bytes freed.
 
 !!! warning "Brief registry downtime"
-`docker pull`/`push` against Portalcrane will fail for the few seconds
-the registry process is stopped. Schedule GC runs during a maintenance
-window if the registry sees continuous traffic.
+    `docker pull`/`push` against Portalcrane will fail for the few seconds
+    the registry process is stopped. Schedule GC runs during a maintenance
+    window if the registry sees continuous traffic.
 
 Only one GC job runs at a time — starting a new one while another is
 `running` returns `409 Conflict`. Poll `GET /api/system/gc` for

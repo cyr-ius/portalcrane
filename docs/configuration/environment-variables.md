@@ -14,9 +14,9 @@ the environment variable, as explained in
 | `SECRET_KEY`     | JWT signing secret — auto-generated & persisted under `DATA_DIR` if unset | _(generated)_ |
 
 !!! note
-The admin **password** is not an environment variable: it is
-auto-generated on first launch and printed once in the container logs.
-See [Installation → Security notes](../getting-started/installation.md#security-notes).
+    The admin **password** is not an environment variable: it is
+    auto-generated on first launch and printed once in the container logs.
+    See [Installation → Security notes](../getting-started/installation.md#security-notes).
 
 ## TLS / SSL (optional)
 
@@ -48,8 +48,14 @@ both options.
 
 Set `API_KEYS_ENABLED=false` to disarm PATs entirely: the token endpoints
 return `403`, existing API-scoped keys are rejected on the REST API, and the
-token generation panel is hidden from the account drawer. See
-[Personal Access Tokens](../features/personal-access-tokens.md).
+token generation panel is hidden from the account drawer.
+
+!!! warning "This also disables `docker login`"
+    The registry proxy only accepts a Docker-scoped PAT as the `docker
+    login` password — real account passwords are rejected there. Disabling
+    `API_KEYS_ENABLED` therefore removes Docker CLI access to Portalcrane's
+    registry entirely, for every account. See
+    [Personal Access Tokens](../features/personal-access-tokens.md).
 
 ## Reverse proxy & rate limiting
 
@@ -71,14 +77,14 @@ This resolved client IP feeds **both** the audit log and the per-IP rate
 limiter.
 
 !!! warning
-Leaving `TRUSTED_PROXIES` empty (default) keys every request by the real
-TCP peer — safe, but when the app sits behind a reverse proxy **all**
-clients then share the proxy's IP and thus a single rate-limit bucket.
-Set it to your proxy's network, e.g.
-`TRUSTED_PROXIES=10.0.0.0/8,172.16.0.0/12`, so per-client throttling and
-audit logging see the real client address. Only list proxies you
-actually control — trusting a range lets anything inside it spoof
-client IPs.
+    Leaving `TRUSTED_PROXIES` empty (default) keys every request by the real
+    TCP peer — safe, but when the app sits behind a reverse proxy **all**
+    clients then share the proxy's IP and thus a single rate-limit bucket.
+    Set it to your proxy's network, e.g.
+    `TRUSTED_PROXIES=10.0.0.0/8,172.16.0.0/12`, so per-client throttling and
+    audit logging see the real client address. Only list proxies you
+    actually control — trusting a range lets anything inside it spoof
+    client IPs.
 
 The rate-limit state lives in process memory: adequate for the
 single-container deployment (one Uvicorn process) but **not** shared across

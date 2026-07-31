@@ -4,9 +4,10 @@ Proxies all Docker Registry v2 API calls, enforces per-user access control,
 and audit-logs every pull and push operation.
 
 Authentication accepted:
-  - Basic Auth with username + password  (local accounts)
-  - Basic Auth with username + PAT       (OIDC and local accounts via docker login)
-  - Bearer JWT                           (web UI session token)
+  - Basic Auth with username + a Docker-scoped Personal Access Token
+    (all accounts, local or OIDC — a real account password is never
+    accepted here, only via the web login endpoint)
+  - Bearer JWT (web UI session token)
 """
 
 import base64
@@ -20,7 +21,6 @@ from jose import JWTError, jwt
 
 from ..config import REGISTRY_URL, get_settings
 from ..core.jwt import ALGORITHM, is_admin_user, is_user_disabled
-from ..core.security import verify_user
 from ..routers.folders import check_folder_access
 from ..routers.personal_tokens import SCOPE_DOCKER, verify_personal_token
 from ..security import client_ip
@@ -157,9 +157,8 @@ async def _authorize_registry_proxy(
     1. Auth disabled globally → allow.
     2. No credentials → 401.
     3. Credentials present — try in order:
-       a. Basic Auth  with username + password   (local accounts / env-admin)
-       b. Basic Auth  with username + PAT        (OIDC + local via docker login)
-       c. Bearer JWT                             (web UI session token)
+       a. Basic Auth  with username + a Docker-scoped PAT (all accounts)
+       b. Bearer JWT                                      (web UI session token)
        → None of the above match → 401.
     4. Admin user → allow.
     5. Folder check:
@@ -183,23 +182,31 @@ async def _authorize_registry_proxy(
         user, pwd = basic
         audit.username = user
 
-        # Path A: classic password-based login (local accounts + env-admin)
-        if verify_user(user, pwd, settings):
-            username = user
-        else:
-            # Path B: PAT supplied as password field (docker login for OIDC users)
-            # The token is self-contained (JWT) — we verify the signature and
-            # the bcrypt hash stored in personal_tokens.json. Only docker-scoped
-            # tokens are accepted here; api-scoped keys cannot be used to log in.
-            pat_username = verify_personal_token(
-                pwd, settings, expected_scope=SCOPE_DOCKER
+        # Only a Docker-scoped Personal Access Token is accepted as the
+        # password for `docker login` — a real account password is
+        # deliberately rejected here, so a credential exposed to a CLI/CI
+        # environment can never be the same secret that unlocks the web UI,
+        # and can be revoked independently without touching the account
+        # password. The token is self-contained (JWT); we verify the
+        # signature and the matching record in personal_tokens.json.
+        #
+        # Since this is now the *only* way to authenticate `docker login`,
+        # disabling the PAT feature altogether would otherwise silently lock
+        # every account out of the registry proxy — fail with a clear 403
+        # instead of a confusing 401.
+        if not settings.api_keys_enabled:
+            return await _forbidden_response(
+                "Personal access tokens are disabled (API_KEYS_ENABLED=false); "
+                "docker login is unavailable"
             )
-            if pat_username is not None and pat_username == user:
-                username = pat_username
-            else:
-                return await _unauthorized_response("Invalid credentials")
+
+        pat_username = verify_personal_token(pwd, settings, expected_scope=SCOPE_DOCKER)
+        if pat_username is not None and pat_username == user:
+            username = pat_username
+        else:
+            return await _unauthorized_response("Invalid credentials")
     else:
-        # Path C: Bearer JWT issued by the web UI login flow
+        # Path B: Bearer JWT issued by the web UI login flow
         username = _decode_bearer_username(auth_header)
         audit.username = username
         if not username:

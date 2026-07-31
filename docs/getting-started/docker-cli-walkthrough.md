@@ -20,9 +20,11 @@ The two scenarios below show exactly what changes when
   make sure your account (or a group it belongs to) has both permissions
   granted there. See [Folder-Based Access Control](../features/folders.md)
   if you need to set that up first.
-- Optionally, a [Personal Access Token](../features/personal-access-tokens.md)
-  with the **Docker** scope — recommended over a real password, especially
-  for OIDC accounts that have none.
+- A [Personal Access Token](../features/personal-access-tokens.md) with the
+  **Docker** scope. This is not optional: the registry proxy's `docker
+login` only accepts a Docker-scoped PAT as the password — your account's
+  real password is rejected there, even for the built-in admin. Generate
+  one from the account menu → Personal Access Tokens before continuing.
 
 ## Scenario A — Authentication enabled (default)
 
@@ -30,24 +32,29 @@ This is the out-of-the-box behavior (`REGISTRY_PROXY_AUTH_ENABLED=true`).
 
 ### 1. Log in
 
+Use your Docker-scoped Personal Access Token as the password — **not**
+your account's real password:
+
+```console
+$ docker login <host>:8000 -u alice -p <docker-scoped-token>
+Login Succeeded
+```
+
+If you try your real account password instead, the proxy rejects it
+outright, even for the built-in admin:
+
 ```console
 $ docker login <host>:8000
 Username: alice
 Password:
-Login Succeeded
-```
-
-Or, non-interactively with a Docker-scoped Personal Access Token:
-
-```bash
-docker login <host>:8000 -u alice -p <docker-scoped-token>
+Error response from daemon: login attempt to https://<host>:8000/v2/ failed with status: 401 Unauthorized
 ```
 
 !!! note "Login succeeding isn't the same as having access"
-`docker login` only checks that your credentials are valid. Whether a
-given `pull` or `push` is actually allowed is decided **per request**,
-against the folder permissions of the image path you're touching — see
-step 3 for what a denied push looks like.
+    A valid PAT only proves your **identity**. Whether a given `pull` or
+    `push` is actually allowed is decided **per request**, against the
+    folder permissions of the image path you're touching — see step 3 for
+    what a denied push looks like.
 
 ### 2. Pull `whoami` from Docker Hub
 
@@ -152,20 +159,20 @@ docker pull <host>:8000/whoami:latest    # anyone can pull, no credentials neede
 authenticated in the first place.
 
 !!! danger "Only for fully trusted networks"
-This isn't "anonymous read access with folder rules still enforced" —
-it's a genuinely open registry: **any** client that can reach port
-`8000` can push or pull **any** image, regardless of folders, groups, or
-admin status. Only use this on a network you fully control, and never
-expose that port to the internet while it's set this way.
+    This isn't "anonymous read access with folder rules still enforced" —
+    it's a genuinely open registry: **any** client that can reach port
+    `8000` can push or pull **any** image, regardless of folders, groups, or
+    admin status. Only use this on a network you fully control, and never
+    expose that port to the internet while it's set this way.
 
 ## At a glance
 
-|                             | Auth enabled (default)                            | Auth disabled              |
-| --------------------------- | ------------------------------------------------- | -------------------------- |
-| `docker login` required     | Yes                                               | No                         |
-| Credentials checked         | Password, Docker-scoped PAT, or web session token | Not checked at all         |
-| Folder permissions enforced | Yes, per pull/push, per folder                    | **No — bypassed entirely** |
-| `docker logout` effect      | Clears local credentials; next request gets `401` | No-op                      |
+|                             | Auth enabled (default)                               | Auth disabled              |
+| --------------------------- | ---------------------------------------------------- | -------------------------- |
+| `docker login` required     | Yes                                                  | No                         |
+| Credentials checked         | Docker-scoped PAT only (a real password is rejected) | Not checked at all         |
+| Folder permissions enforced | Yes, per pull/push, per folder                       | **No — bypassed entirely** |
+| `docker logout` effect      | Clears local credentials; next request gets `401`    | No-op                      |
 
 See [Environment Variables → Registry](../configuration/environment-variables.md#registry)
 for the underlying setting, and

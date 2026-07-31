@@ -2,9 +2,16 @@
 
 Portalcrane supports three ways to authenticate: the built-in admin
 account, local username/password accounts, and OpenID Connect (OIDC / SSO).
-All three can coexist, and a Personal Access Token can substitute for a
-password once an account exists (see
-[Personal Access Tokens](../features/personal-access-tokens.md)).
+All three can coexist.
+
+!!! note "Real passwords work for the web UI, never for `docker login`"
+    A local account's password (below) and OIDC both authenticate the
+    **web UI and REST API**. The **registry proxy** (`docker login` /
+    `pull` / `push`) is a separate surface with its own rule: only a
+    Docker-scoped [Personal Access Token](../features/personal-access-tokens.md)
+    is accepted there — a real password is always rejected, even for the
+    built-in admin. See the
+    [Docker CLI Walkthrough](../getting-started/docker-cli-walkthrough.md).
 
 ## Local authentication
 

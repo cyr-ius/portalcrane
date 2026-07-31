@@ -49,10 +49,10 @@ DELETE /api/registries/{id}                   # remove (owner or admin only)
 ```
 
 !!! note "Access is never leaked"
-Fetching, updating, or deleting a registry you don't own returns
-`404 Not Found`, not `403 Forbidden` — this prevents a non-admin from
-even confirming that another user's registry (and its stored
-credentials) exists.
+    Fetching, updating, or deleting a registry you don't own returns
+    `404 Not Found`, not `403 Forbidden` — this prevents a non-admin from
+    even confirming that another user's registry (and its stored
+    credentials) exists.
 
 ### Browsing an external registry
 

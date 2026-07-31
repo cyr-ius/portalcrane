@@ -61,9 +61,9 @@ TRUSTED_PROXIES=10.0.0.0/8,172.16.0.0/12
 ```
 
 !!! danger "Only list proxies you actually control"
-Trusting a CIDR range means anything inside it can spoof a client IP by
-setting `X-Forwarded-For` itself. Never set this to `0.0.0.0/0` or a
-public range.
+    Trusting a CIDR range means anything inside it can spoof a client IP by
+    setting `X-Forwarded-For` itself. Never set this to `0.0.0.0/0` or a
+    public range.
 
 If you leave `TRUSTED_PROXIES` empty (the default), every request is keyed
 by the real TCP peer — safe, but if Portalcrane sits behind an untrusted-by-config

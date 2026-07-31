@@ -106,6 +106,10 @@ docker push <image>:<tag>
 docker logout
 ```
 
+> **Note :** `docker login` nécessite un jeton d'accès personnel (scope
+> Docker) comme mot de passe — le vrai mot de passe du compte est refusé.
+> Générez-en un depuis le menu du compte → Jetons d'accès personnels.
+
 Pour le guide d'installation complet (TLS, reverse proxy, stack de dev, notes
 de sécurité), voir **[Getting Started](https://cyr-ius.github.io/portalcrane/getting-started/installation/)**
 (en anglais).

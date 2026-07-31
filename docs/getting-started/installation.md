@@ -33,10 +33,10 @@ docker logs portalcrane | grep -A5 "initial admin account"
 Then open **http://localhost:8000** and log in as `admin` with that password.
 
 !!! warning "Mount a persistent volume"
-Without a volume on `/var/lib/portalcrane`, the generated admin password
-and JWT secret key are **regenerated on every container restart** — you
-would be locked out and every previously issued session/token would be
-invalidated. See [Security Notes](#security-notes) for details.
+    Without a volume on `/var/lib/portalcrane`, the generated admin password
+    and JWT secret key are **regenerated on every container restart** — you
+    would be locked out and every previously issued session/token would be
+    invalidated. See [Security Notes](#security-notes) for details.
 
 ## Docker Compose
 
