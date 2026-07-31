@@ -26,3 +26,6 @@ venv/
 
 # Temporary data
 .data_env/
+
+# MkDocs build output
+site/

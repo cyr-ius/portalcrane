@@ -1,0 +1,112 @@
+site_name: Portalcrane
+site_description: Self-hosted Docker registry manager with staging, vulnerability scanning, folder-based RBAC and multi-registry sync.
+site_author: cyr-ius
+site_url: https://cyr-ius.github.io/portalcrane/
+repo_name: cyr-ius/portalcrane
+repo_url: https://github.com/cyr-ius/portalcrane
+edit_uri: edit/main/docs/
+copyright: Copyright &copy; cyr-ius — MIT License
+
+theme:
+  name: material
+  logo: assets/favicon.svg
+  favicon: assets/favicon.svg
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.indexes
+    - navigation.top
+    - navigation.footer
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+    - content.tabs.link
+    - content.action.edit
+  icon:
+    repo: fontawesome/brands/github
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - def_list
+  - footnotes
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.tasklist:
+      custom_checkbox: true
+
+plugins:
+  - search
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/cyr-ius/portalcrane
+    - icon: fontawesome/brands/docker
+      link: https://hub.docker.com/r/cyrius44/portalcrane
+    - icon: fontawesome/brands/github
+      link: https://github.com/sponsors/cyr-ius
+      name: Sponsor this project
+
+nav:
+  - Home: index.md
+  - Getting Started:
+      - Installation: getting-started/installation.md
+      - Quick Start: getting-started/quick-start.md
+      - "Docker CLI Walkthrough (whoami example)": getting-started/docker-cli-walkthrough.md
+  - Architecture: architecture.md
+  - Configuration:
+      - Environment Variables: configuration/environment-variables.md
+      - Authentication & OIDC: configuration/authentication.md
+      - TLS & Reverse Proxy: configuration/tls-reverse-proxy.md
+      - Vulnerability Scanning: configuration/vulnerability-scanning.md
+      - Notifications (Email & Syslog): configuration/notifications.md
+  - Features:
+      - Dashboard: features/dashboard.md
+      - Users, Groups & Permissions: features/users-groups-permissions.md
+      - Folder-Based Access Control: features/folders.md
+      - Personal Access Tokens: features/personal-access-tokens.md
+      - Staging Pipeline: features/staging-pipeline.md
+      - External Registries & Transfers: features/external-registries.md
+      - Image & Tag Management: features/image-management.md
+      - System Maintenance & Audit Logs: features/system-maintenance.md
+  - API Reference: api-reference.md
+  - Development: development.md
+  - FAQ & Troubleshooting: faq.md
