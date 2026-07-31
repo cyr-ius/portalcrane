@@ -1,5 +1,20 @@
 # 🐳 Portalcrane
 
+![License](https://img.shields.io/badge/License-MIT-blue)
+![Python](https://img.shields.io/badge/Python-3.12%2B-blue)
+![Angular](https://img.shields.io/badge/Angular-22-green)
+[![ci::status]][ci::github]
+[![docker::pulls]][docker::hub]
+[![documentation::badge]][documentation::web]
+
+[ci::status]: https://img.shields.io/github/actions/workflow/status/cyr-ius/portalcrane/docker-publish.yml?color=blue&logo=github
+[ci::github]: https://github.com/cyr-ius/portalcrane/actions
+[docker::pulls]: https://img.shields.io/docker/pulls/cyrius44/portalcrane.svg?logo=docker
+[docker::hub]: https://hub.docker.com/r/cyrius44/portalcrane
+[documentation::badge]: https://img.shields.io/badge/DOCUMENTATION-GH%20PAGES-0078D4?logo=googledocs
+[documentation::web]: https://cyr-ius.github.io/portalcrane/
+
+
 **English** · [Français](README.fr.md) · [Español](README.es.md)
 
 **Portalcrane** is a self-hosted Docker registry manager.
