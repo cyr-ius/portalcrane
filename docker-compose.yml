@@ -1,9 +1,7 @@
 services:
   # ── Portalcrane Application ──────────────────────────────────────────────
   portalcrane:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ghcr.io/portalcrane/portalcrane:latest
     container_name: portalcrane
     ports:
       - "8000:8000"
