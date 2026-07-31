@@ -1,7 +1,3 @@
-# ─── Portalcrane Development Stack ─────────────────────────────────────────
-# Includes: Portalcrane app, Docker Registry
-# Usage: docker compose up -d
-
 services:
   # ── Portalcrane Application ──────────────────────────────────────────────
   portalcrane:
@@ -11,72 +7,19 @@ services:
     container_name: portalcrane
     ports:
       - "8000:8000"
+    restart: unless-stopped
     environment:
       # ── Registry configuration ────────────────────────────────────────────
       - REGISTRY_PROXY_AUTH_ENABLED=${REGISTRY_PROXY_AUTH_ENABLED:-true}
 
       # ── Admin credentials ─────────────────────────────────────────────────
       - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
+      # The admin password is always auto-generated: a one-time password is
+      # printed in the logs on first start.
 
       # ── JWT (optional) ────────────────────────────────────────────────────
       # Leave SECRET_KEY unset to auto-generate and persist one under DATA_DIR.
       - SECRET_KEY=${SECRET_KEY:-}
-
-      # ── OIDC (optional) ───────────────────────────────────────────────────
-      - OIDC_ENABLED=${OIDC_ENABLED:-false}
-      - OIDC_ISSUER=${OIDC_ISSUER:-}
-      - OIDC_CLIENT_ID=${OIDC_CLIENT_ID:-}
-      - OIDC_CLIENT_SECRET=${OIDC_CLIENT_SECRET:-}
-      - OIDC_REDIRECT_URI=${OIDC_REDIRECT_URI:-http://localhost:8000/auth/callback}
-
-      # ── Docker Hub (optional, for staging pulls) ──────────────────────────
-      - DOCKERHUB_USERNAME=${DOCKERHUB_USERNAME:-}
-      - DOCKERHUB_PASSWORD=${DOCKERHUB_PASSWORD:-}
-
-      # ── Vulnerability scanning (Trivy) ────────────────────────────────────
-      - VULN_SCAN_ENABLED=${VULN_SCAN_ENABLED:-true}
-      - VULN_SCAN_SEVERITIES=${VULN_SCAN_SEVERITIES:-CRITICAL,HIGH}
-      - VULN_IGNORE_UNFIXED=${VULN_IGNORE_UNFIXED:-false}
-      - VULN_SCAN_TIMEOUT=${VULN_SCAN_TIMEOUT:-5m}
-
-      # ── Reverse proxy / rate limiting (optional) ──────────────────────────
-      # CIDR(s) of the reverse proxy in front of the app. Only when the request
-      # arrives from one of these ranges are X-Forwarded-For / Forwarded headers
-      # trusted to resolve the real client IP (used by the audit log and the
-      # per-IP rate limiter). Leave empty when the app is exposed directly.
-      # - TRUSTED_PROXIES=10.0.0.0/8,172.16.0.0/12
-      - RATE_LIMIT_ENABLED=${RATE_LIMIT_ENABLED:-true}
-      - RATE_LIMIT_MAX_REQUESTS=${RATE_LIMIT_MAX_REQUESTS:-100}
-      - RATE_LIMIT_WINDOW_SECONDS=${RATE_LIMIT_WINDOW_SECONDS:-60}
-      - RATE_LIMIT_LOGIN_PATH=${RATE_LIMIT_LOGIN_PATH:-/api/auth/login}
-      - RATE_LIMIT_LOGIN_MAX_ATTEMPTS=${RATE_LIMIT_LOGIN_MAX_ATTEMPTS:-5}
-      - RATE_LIMIT_LOGIN_WINDOW_SECONDS=${RATE_LIMIT_LOGIN_WINDOW_SECONDS:-300}
-
-      # ── HTTP Proxy (optional) ─────────────────────────────────────────────
-      # - HTTP_PROXY=http://proxy.corp:3128
-      # - HTTPS_PROXY=http://proxy.corp:3128
-      # - NO_PROXY=localhost,127.0.0.1
-
-      # ── Syslog forwarding (optional) ──────────────────────────────────────
-      # Defaults; a persisted override from the Network UI takes precedence.
-      # - SYSLOG_ENABLED=true
-      # - SYSLOG_HOST=syslog.corp.example.com
-      # - SYSLOG_PORT=6514
-      # - SYSLOG_PROTOCOL=tcp+tls        # udp | tcp | tcp+tls
-      # - SYSLOG_RFC=rfc5424             # rfc5424 | rfc3164
-      # - SYSLOG_FORWARD_AUDIT=true
-      # - SYSLOG_FORWARD_UVICORN=false
-
-      # ── Audit log by email (optional) ─────────────────────────────────────
-      # Defaults; a persisted override from the Network UI takes precedence.
-      # - EMAIL_ENABLED=true
-      # - EMAIL_HOST=smtp.corp.example.com
-      # - EMAIL_PORT=587
-      # - EMAIL_SECURITY=starttls        # none | starttls | ssl
-      # - EMAIL_USERNAME=portalcrane
-      # - EMAIL_PASSWORD=change-me
-      # - EMAIL_FROM_ADDRESS=portalcrane@corp.example.com
-      # - EMAIL_TO_ADDRESSES=security@corp.example.com
 
       # ── Logging ───────────────────────────────────────────────────────────
       - SWAGGER_ENABLED=${SWAGGER_ENABLED:-false}
@@ -84,41 +27,12 @@ services:
 
     volumes:
       - portalcrane_data:/var/lib/portalcrane
-    restart: unless-stopped
+
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
 
-  # registry:
-  #   image: registry:3
-  #   container_name: portalcrane-registry
-  #   ports:
-  #     - "5000:5000"
-  #   environment:
-  #     - REGISTRY_STORAGE_DELETE_ENABLED=true
-  #     - REGISTRY_HTTP_SECRET=${REGISTRY_HTTP_SECRET:-registry-secret}
-  #     - OTEL_TRACES_EXPORTER=none
-  #     - OTEL_METRICS_EXPORTER=none
-  #     - OTEL_LOGS_EXPORTER=none
-  #   volumes:
-  #     - registry_data:/var/lib/registry
-  #   restart: unless-stopped
-  #   healthcheck:
-  #     test:
-  #       [
-  #         "CMD",
-  #         "wget",
-  #         "--quiet",
-  #         "--tries=1",
-  #         "--spider",
-  #         "http://localhost:5000/v2/",
-  #       ]
-  #     interval: 10s
-  #     timeout: 5s
-  #     retries: 5
-
 volumes:
-  # registry_data:
   portalcrane_data:
