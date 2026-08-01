@@ -24,11 +24,7 @@
       </div>
 
       <!-- Refresh button: spins and is disabled while refreshing() is true -->
-      <button
-        class="btn btn-sm btn-outline-secondary"
-        (click)="refresh()"
-        [disabled]="refreshing()"
-      >
+      <button class="btn btn-sm btn-outline-secondary" (click)="refresh()" [disabled]="refreshing()">
         <i class="bi bi-arrow-clockwise me-1" [class.spin]="refreshing()"></i>
       </button>
     </div>
@@ -39,9 +35,7 @@
         <div class="stat-card card border-0 h-100">
           <div class="card-body">
             <div class="d-flex align-items-center justify-content-between mb-2">
-              <span class="text-muted small">{{
-                "DASHBOARD.TOTAL_IMAGES" | translate
-              }}</span>
+              <span class="text-muted small">{{ "DASHBOARD.TOTAL_IMAGES" | translate }}</span>
               <div class="stat-icon bg-primary-subtle text-primary">
                 <i class="bi bi-layers"></i>
               </div>
@@ -58,9 +52,7 @@
         <div class="stat-card card border-0 h-100">
           <div class="card-body">
             <div class="d-flex align-items-center justify-content-between mb-2">
-              <span class="text-muted small">{{
-                "DASHBOARD.REGISTRY_SIZE" | translate
-              }}</span>
+              <span class="text-muted small">{{ "DASHBOARD.REGISTRY_SIZE" | translate }}</span>
               <div class="stat-icon bg-success-subtle text-success">
                 <i class="bi bi-hdd"></i>
               </div>
@@ -77,9 +69,7 @@
         <div class="stat-card card border-0 h-100">
           <div class="card-body">
             <div class="d-flex align-items-center justify-content-between mb-2">
-              <span class="text-muted small">{{
-                "DASHBOARD.DISK_USAGE" | translate
-              }}</span>
+              <span class="text-muted small">{{ "DASHBOARD.DISK_USAGE" | translate }}</span>
               <div class="stat-icon bg-warning-subtle text-warning">
                 <i class="bi bi-pie-chart"></i>
               </div>
@@ -96,9 +86,7 @@
               <div
                 class="progress-bar"
                 [class.bg-success]="s.disk_usage_percent < 70"
-                [class.bg-warning]="
-                  s.disk_usage_percent >= 70 && s.disk_usage_percent < 90
-                "
+                [class.bg-warning]="s.disk_usage_percent >= 70 && s.disk_usage_percent < 90"
                 [class.bg-danger]="s.disk_usage_percent >= 90"
                 [style.width.%]="s.disk_usage_percent"
               ></div>
@@ -111,9 +99,7 @@
         <div class="stat-card card border-0 h-100">
           <div class="card-body">
             <div class="d-flex align-items-center justify-content-between mb-2">
-              <span class="text-muted small">{{
-                "DASHBOARD.LARGEST_IMAGE" | translate
-              }}</span>
+              <span class="text-muted small">{{ "DASHBOARD.LARGEST_IMAGE" | translate }}</span>
               <div class="stat-icon bg-info-subtle text-info">
                 <i class="bi bi-box-seam"></i>
               </div>
@@ -121,10 +107,7 @@
             <div class="stat-value small">
               {{ s.largest_image.size_human }}
             </div>
-            <div
-              class="text-muted small text-truncate"
-              [title]="s.largest_image.name"
-            >
+            <div class="text-muted small text-truncate" [title]="s.largest_image.name">
               {{ s.largest_image.name || ("COMMON.NA" | translate) }}
             </div>
           </div>
@@ -138,27 +121,17 @@
         <div class="stat-card card border-0 h-100">
           <div class="card-body">
             <div class="d-flex align-items-center justify-content-between mb-2">
-              <span class="text-muted small">{{
-                "DASHBOARD.TRIVY_SCANNER" | translate
-              }}</span>
+              <span class="text-muted small">{{ "DASHBOARD.TRIVY_SCANNER" | translate }}</span>
               <div class="stat-icon bg-primary-subtle text-primary">
                 <i class="bi bi-shield-check"></i>
               </div>
             </div>
             <div class="stat-value">
-              {{
-                s.trivy_version
-                  ? "v" + s.trivy_version
-                  : ("COMMON.NA" | translate)
-              }}
+              {{ s.trivy_version ? "v" + s.trivy_version : ("COMMON.NA" | translate) }}
             </div>
             <div class="text-muted small">
               @if (s.trivy_db_last_update) {
-                {{
-                  "DASHBOARD.DB_UPDATED"
-                    | translate
-                      : { date: s.trivy_db_last_update | date: "mediumDate" }
-                }}
+                {{ "DASHBOARD.DB_UPDATED" | translate: { date: s.trivy_db_last_update | date: "mediumDate" } }}
               } @else {
                 {{ "DASHBOARD.DB_NEVER_UPDATED" | translate }}
               }
@@ -175,12 +148,8 @@
         <div class="col-sm-6 col-lg-4">
           <div class="stat-card card border-0 h-100">
             <div class="card-body">
-              <div
-                class="d-flex align-items-center justify-content-between mb-2"
-              >
-                <span class="text-muted small">{{
-                  "DASHBOARD.USERS" | translate
-                }}</span>
+              <div class="d-flex align-items-center justify-content-between mb-2">
+                <span class="text-muted small">{{ "DASHBOARD.USERS" | translate }}</span>
                 <div class="stat-icon bg-info-subtle text-info">
                   <i class="bi bi-people"></i>
                 </div>
@@ -201,10 +170,7 @@
                   [class.text-muted]="s.total_admins <= 5"
                 >
                   {{
-                    (s.total_admins > 1
-                      ? "DASHBOARD.ADMINS"
-                      : "DASHBOARD.ADMIN"
-                    ) | translate: { count: s.total_admins }
+                    (s.total_admins > 1 ? "DASHBOARD.ADMINS" : "DASHBOARD.ADMIN") | translate: { count: s.total_admins }
                   }}
                 </span>
               </div>
@@ -217,17 +183,11 @@
           <div
             class="stat-card card border-0 h-100"
             style="border-left: 3px solid transparent !important"
-            [style.border-left-color]="
-              ghostCount() > 0 ? 'var(--bs-warning)' : 'var(--bs-success)'
-            "
+            [style.border-left-color]="ghostCount() > 0 ? 'var(--bs-warning)' : 'var(--bs-success)'"
           >
             <div class="card-body">
-              <div
-                class="d-flex align-items-center justify-content-between mb-2"
-              >
-                <span class="text-muted small">{{
-                  "DASHBOARD.GHOST_REPOS" | translate
-                }}</span>
+              <div class="d-flex align-items-center justify-content-between mb-2">
+                <span class="text-muted small">{{ "DASHBOARD.GHOST_REPOS" | translate }}</span>
                 <!-- Icon color reflects health: grey while loading, green if clean, amber if issues -->
                 <div
                   [class]="
@@ -248,13 +208,7 @@
                   <span class="spinner-border spinner-border-sm"></span>
                 </div>
               } @else {
-                <div
-                  [class]="
-                    ghostCount() > 0
-                      ? 'stat-value text-warning'
-                      : 'stat-value text-success'
-                  "
-                >
+                <div [class]="ghostCount() > 0 ? 'stat-value text-warning' : 'stat-value text-success'">
                   {{ ghostCount() }}
                 </div>
               }
@@ -277,17 +231,11 @@
           <div
             class="stat-card card border-0 h-100"
             style="border-left: 3px solid transparent !important"
-            [style.border-left-color]="
-              orphanOciCount() > 0 ? 'var(--bs-warning)' : 'var(--bs-success)'
-            "
+            [style.border-left-color]="orphanOciCount() > 0 ? 'var(--bs-warning)' : 'var(--bs-success)'"
           >
             <div class="card-body">
-              <div
-                class="d-flex align-items-center justify-content-between mb-2"
-              >
-                <span class="text-muted small">{{
-                  "DASHBOARD.ORPHAN_OCI" | translate
-                }}</span>
+              <div class="d-flex align-items-center justify-content-between mb-2">
+                <span class="text-muted small">{{ "DASHBOARD.ORPHAN_OCI" | translate }}</span>
                 <div
                   [class]="
                     !orphanOciChecked()
@@ -306,13 +254,7 @@
                   <span class="spinner-border spinner-border-sm"></span>
                 </div>
               } @else {
-                <div
-                  [class]="
-                    orphanOciCount() > 0
-                      ? 'stat-value text-warning'
-                      : 'stat-value text-success'
-                  "
-                >
+                <div [class]="orphanOciCount() > 0 ? 'stat-value text-warning' : 'stat-value text-success'">
                   {{ orphanOciCount() }}
                 </div>
               }
@@ -323,10 +265,7 @@
                 } @else if (orphanOciCount() > 0) {
                   {{ "DASHBOARD.ORPHAN_LEFTOVER" | translate }}
                   @if (orphanOciSize()) {
-                    {{
-                      "DASHBOARD.ORPHAN_WASTED"
-                        | translate: { size: orphanOciSize() }
-                    }}
+                    {{ "DASHBOARD.ORPHAN_WASTED" | translate: { size: orphanOciSize() } }}
                   }
                 } @else {
                   {{ "DASHBOARD.STAGING_CLEAN" | translate }}
@@ -389,9 +328,7 @@
                   <td class="text-muted small">
                     {{ "DASHBOARD.DISK_FREE" | translate }}
                   </td>
-                  <td class="fw-semibold">
-                    {{ (s.disk_free_bytes / 1073741824).toFixed(1) }} GB
-                  </td>
+                  <td class="fw-semibold">{{ (s.disk_free_bytes / 1073741824).toFixed(1) }} GB</td>
                 </tr>
               </tbody>
             </table>
@@ -408,25 +345,14 @@
             </h6>
           </div>
           <div class="card-body d-flex flex-column gap-2">
-            <a
-              routerLink="/images"
-              class="btn btn-outline-primary btn-sm text-start"
-            >
-              <i class="bi bi-layers me-2"></i
-              >{{ "DASHBOARD.BROWSE_IMAGES" | translate }}
+            <a routerLink="/images" class="btn btn-outline-primary btn-sm text-start">
+              <i class="bi bi-layers me-2"></i>{{ "DASHBOARD.BROWSE_IMAGES" | translate }}
             </a>
-            <a
-              routerLink="/staging"
-              class="btn btn-outline-secondary btn-sm text-start"
-            >
-              <i class="bi bi-cloud-download me-2"></i
-              >{{ "DASHBOARD.STAGING_PIPELINE" | translate }}
+            <a routerLink="/staging" class="btn btn-outline-secondary btn-sm text-start">
+              <i class="bi bi-cloud-download me-2"></i>{{ "DASHBOARD.STAGING_PIPELINE" | translate }}
             </a>
             @if (authService.currentUser()?.is_admin) {
-              <a
-                routerLink="/settings"
-                class="btn btn-outline-secondary btn-sm text-start"
-              >
+              <a routerLink="/settings" class="btn btn-outline-secondary btn-sm text-start">
                 <i class="bi bi-gear me-2"></i>{{ "NAV.SETTINGS" | translate }}
               </a>
             }
@@ -442,20 +368,15 @@
           <div class="card border-0">
             <div class="card-header border-0 pb-0">
               <h6 class="fw-semibold mb-0">
-                <i class="bi bi-tools me-2 text-warning"></i
-                >{{ "DASHBOARD.MAINTENANCE" | translate }}
+                <i class="bi bi-tools me-2 text-warning"></i>{{ "DASHBOARD.MAINTENANCE" | translate }}
               </h6>
             </div>
             <div class="card-body d-flex flex-column gap-2">
               <!-- ── Garbage Collect ── -->
               <div class="gc-panel rounded p-3 mt-1">
-                <div
-                  class="d-flex align-items-center justify-content-between mb-2"
-                >
+                <div class="d-flex align-items-center justify-content-between mb-2">
                   <div>
-                    <div
-                      class="fw-semibold small d-flex align-items-center gap-2"
-                    >
+                    <div class="fw-semibold small d-flex align-items-center gap-2">
                       <i class="bi bi-trash3-fill text-warning"></i>
                       {{ "DASHBOARD.GC_TITLE" | translate }}
                     </div>
@@ -470,9 +391,7 @@
                     [disabled]="gcStatus()?.status === 'running'"
                   >
                     @if (gcDryStatus() && gcStatus()?.status === "running") {
-                      <span
-                        class="spinner-border spinner-border-sm me-1"
-                      ></span>
+                      <span class="spinner-border spinner-border-sm me-1"></span>
                       {{ "DASHBOARD.GC_DRY_RUNNING" | translate }}
                     } @else {
                       <i class="bi bi-eye me-1"></i>
@@ -485,9 +404,7 @@
                     [disabled]="gcStatus()?.status === 'running'"
                   >
                     @if (!gcDryStatus() && gcStatus()?.status === "running") {
-                      <span
-                        class="spinner-border spinner-border-sm me-1"
-                      ></span>
+                      <span class="spinner-border spinner-border-sm me-1"></span>
                       {{ "DASHBOARD.GC_RUNNING" | translate }}
                     } @else {
                       <i class="bi bi-recycle me-1"></i>
@@ -502,25 +419,14 @@
                     <span [class]="getGCBadgeClass(gcStatus()!.status)">
                       {{ gcStatus()!.status }}
                     </span>
-                    @if (
-                      gcStatus()!.status === "done" &&
-                      gcStatus()!.freed_bytes > 0
-                    ) {
+                    @if (gcStatus()!.status === "done" && gcStatus()!.freed_bytes > 0) {
                       <span class="text-success small fw-semibold">
                         <i class="bi bi-arrow-down-circle-fill me-1"></i>
-                        {{
-                          "DASHBOARD.GC_FREED"
-                            | translate: { size: gcStatus()!.freed_human }
-                        }}
+                        {{ "DASHBOARD.GC_FREED" | translate: { size: gcStatus()!.freed_human } }}
                       </span>
                     }
-                    @if (
-                      gcStatus()!.status === "done" &&
-                      gcStatus()!.freed_bytes === 0
-                    ) {
-                      <span class="text-muted small">{{
-                        "DASHBOARD.GC_NOTHING" | translate
-                      }}</span>
+                    @if (gcStatus()!.status === "done" && gcStatus()!.freed_bytes === 0) {
+                      <span class="text-muted small">{{ "DASHBOARD.GC_NOTHING" | translate }}</span>
                     }
                   </div>
 
@@ -535,11 +441,7 @@
                   <!-- GC timestamps -->
                   @if (gcStatus()!.finished_at) {
                     <div class="text-muted mt-1" style="font-size: 0.68rem">
-                      {{
-                        "DASHBOARD.FINISHED"
-                          | translate
-                            : { date: gcStatus()!.finished_at | date: "medium" }
-                      }}
+                      {{ "DASHBOARD.FINISHED" | translate: { date: gcStatus()!.finished_at | date: "medium" } }}
                     </div>
                   }
                 }
@@ -549,15 +451,11 @@
               <div class="gc-panel rounded p-3">
                 <div class="d-flex align-items-center justify-content-between">
                   <div>
-                    <div
-                      class="fw-semibold small d-flex align-items-center gap-2"
-                    >
+                    <div class="fw-semibold small d-flex align-items-center gap-2">
                       <i class="bi bi-shadows text-secondary"></i>
                       {{ "DASHBOARD.GHOST_REPOS" | translate }}
                       @if (ghostCount() > 0) {
-                        <span class="badge bg-warning-subtle text-warning">{{
-                          ghostCount()
-                        }}</span>
+                        <span class="badge bg-warning-subtle text-warning">{{ ghostCount() }}</span>
                       }
                     </div>
                     <div class="text-muted" style="font-size: 0.72rem">
@@ -570,9 +468,7 @@
                     [disabled]="purgingGhosts() || ghostCount() === 0"
                   >
                     @if (purgingGhosts()) {
-                      <span
-                        class="spinner-border spinner-border-sm me-1"
-                      ></span>
+                      <span class="spinner-border spinner-border-sm me-1"></span>
                     } @else {
                       <i class="bi bi-eraser me-1"></i>
                     }
@@ -582,18 +478,14 @@
                 @if (ghostRepos().length > 0) {
                   <div class="d-flex flex-wrap gap-1 mt-2">
                     @for (repo of ghostRepos(); track repo) {
-                      <span
-                        class="badge bg-secondary-subtle text-secondary font-monospace"
-                        style="font-size: 0.68rem"
-                      >
+                      <span class="badge bg-secondary-subtle text-secondary font-monospace" style="font-size: 0.68rem">
                         <i class="bi bi-ghost me-1"></i>{{ repo }}
                       </span>
                     }
                   </div>
                 } @else if (ghostsChecked()) {
                   <div class="text-success small mt-1">
-                    <i class="bi bi-check-circle me-1"></i
-                    >{{ "DASHBOARD.NO_GHOST" | translate }}
+                    <i class="bi bi-check-circle me-1"></i>{{ "DASHBOARD.NO_GHOST" | translate }}
                   </div>
                 }
               </div>
@@ -602,15 +494,11 @@
               <div class="gc-panel rounded p-3">
                 <div class="d-flex align-items-center justify-content-between">
                   <div>
-                    <div
-                      class="fw-semibold small d-flex align-items-center gap-2"
-                    >
+                    <div class="fw-semibold small d-flex align-items-center gap-2">
                       <i class="bi bi-folder-x text-warning"></i>
                       {{ "DASHBOARD.ORPHAN_OCI_STAGING" | translate }}
                       @if (orphanOciCount() > 0) {
-                        <span class="badge bg-warning-subtle text-warning">{{
-                          orphanOciCount()
-                        }}</span>
+                        <span class="badge bg-warning-subtle text-warning">{{ orphanOciCount() }}</span>
                       }
                     </div>
                     <div class="text-muted" style="font-size: 0.72rem">
@@ -624,10 +512,7 @@
                       [disabled]="orphanOciRefreshing()"
                       [title]="'COMMON.REFRESH' | translate"
                     >
-                      <i
-                        class="bi bi-arrow-clockwise"
-                        [class.spin]="orphanOciRefreshing()"
-                      ></i>
+                      <i class="bi bi-arrow-clockwise" [class.spin]="orphanOciRefreshing()"></i>
                     </button>
                     <button
                       class="btn btn-sm btn-outline-warning"
@@ -635,14 +520,9 @@
                       [disabled]="purgingOrphanOci() || orphanOciCount() === 0"
                     >
                       @if (purgingOrphanOci()) {
-                        <span
-                          class="spinner-border spinner-border-sm me-1"
-                        ></span>
+                        <span class="spinner-border spinner-border-sm me-1"></span>
                       } @else {
-                        <i
-                          class="bi bi-eraser me-1"
-                          [class.spin]="purgingOrphanOci()"
-                        ></i>
+                        <i class="bi bi-eraser me-1" [class.spin]="purgingOrphanOci()"></i>
                       }
                       {{ "DASHBOARD.PURGE" | translate }}
                     </button>
@@ -651,19 +531,14 @@
                 @if (orphanOciDirs().length > 0) {
                   <div class="d-flex flex-wrap gap-1 mt-2">
                     @for (f of orphanOciDirs(); track f) {
-                      <span
-                        class="badge bg-warning-subtle text-warning font-monospace"
-                        style="font-size: 0.68rem"
-                      >
-                        <i class="bi bi-folder-x me-1"></i>{{ f | slice: 0 : 20
-                        }}{{ f.length > 20 ? "…" : "" }}
+                      <span class="badge bg-warning-subtle text-warning font-monospace" style="font-size: 0.68rem">
+                        <i class="bi bi-folder-x me-1"></i>{{ f | slice: 0 : 20 }}{{ f.length > 20 ? "…" : "" }}
                       </span>
                     }
                   </div>
                 } @else if (orphanOciChecked()) {
                   <div class="text-success small mt-1">
-                    <i class="bi bi-check-circle me-1"></i
-                    >{{ "DASHBOARD.NO_ORPHAN_OCI" | translate }}
+                    <i class="bi bi-check-circle me-1"></i>{{ "DASHBOARD.NO_ORPHAN_OCI" | translate }}
                   </div>
                 }
               </div>

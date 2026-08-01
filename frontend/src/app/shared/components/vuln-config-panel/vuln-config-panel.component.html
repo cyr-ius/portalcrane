@@ -3,10 +3,7 @@
 <!-- ══════════════════════════════════════════════════════════════════════ -->
 <div class="card border-0 mb-3">
   <div class="card-header border-0">
-    <h6 class="fw-semibold mb-0">
-      <i class="bi bi-database text-primary me-2"></i
-      >{{ "VULN.DB_TITLE" | translate }}
-    </h6>
+    <h6 class="fw-semibold mb-0"><i class="bi bi-database text-primary me-2"></i>{{ "VULN.DB_TITLE" | translate }}</h6>
   </div>
   <div class="card-body">
     @if (trivyDb()) {
@@ -37,31 +34,19 @@
           <div class="small text-muted">{{ "COMMON.STATUS" | translate }}</div>
           <div>
             @if (trivyDb()!.up_to_date) {
-              <span class="badge bg-success-subtle text-success">{{
-                "VULN.UP_TO_DATE" | translate
-              }}</span>
+              <span class="badge bg-success-subtle text-success">{{ "VULN.UP_TO_DATE" | translate }}</span>
             } @else {
-              <span class="badge bg-warning-subtle text-warning">{{
-                "VULN.REFRESH_RECOMMENDED" | translate
-              }}</span>
+              <span class="badge bg-warning-subtle text-warning">{{ "VULN.REFRESH_RECOMMENDED" | translate }}</span>
             }
           </div>
         </div>
         <div class="ms-auto">
-          <button
-            class="btn btn-sm btn-outline-primary"
-            (click)="updateDb()"
-            [disabled]="updatingDb()"
-          >
+          <button class="btn btn-sm btn-outline-primary" (click)="updateDb()" [disabled]="updatingDb()">
             @if (updatingDb()) {
               <span class="spinner-border spinner-border-sm me-1"></span>
               {{ "VULN.UPDATING" | translate }}
             } @else {
-              <i
-                class="bi bi-arrow-clockwise me-1"
-                [class.spin]="updatingDb()"
-              ></i
-              >{{ "VULN.UPDATE_DB" | translate }}
+              <i class="bi bi-arrow-clockwise me-1" [class.spin]="updatingDb()"></i>{{ "VULN.UPDATE_DB" | translate }}
             }
           </button>
         </div>
@@ -85,17 +70,14 @@
 <div class="card border-0 mb-3">
   <div class="card-header border-0">
     <h6 class="fw-semibold mb-0">
-      <i class="bi bi-shield-check text-primary me-2"></i
-      >{{ "VULN.MANUAL_SCAN" | translate }}
+      <i class="bi bi-shield-check text-primary me-2"></i>{{ "VULN.MANUAL_SCAN" | translate }}
     </h6>
   </div>
   <div class="card-body">
     <div class="row g-3 mb-3">
       <!-- Image selector -->
       <div class="col-sm-4">
-        <label class="form-label small fw-semibold">{{
-          "VULN.IMAGE_TO_SCAN" | translate
-        }}</label>
+        <label class="form-label small fw-semibold">{{ "VULN.IMAGE_TO_SCAN" | translate }}</label>
         @if (loadingImages()) {
           <div class="form-control form-control-sm placeholder-glow">
             <span class="placeholder w-75"></span>
@@ -115,17 +97,14 @@
             {{ "VULN.NO_IMAGES" | translate }}
           </div>
           <div class="text-muted mt-1" style="font-size: 0.72rem">
-            <i class="bi bi-exclamation-circle me-1"></i
-            >{{ "VULN.NO_IMAGES_REGISTRY" | translate }}
+            <i class="bi bi-exclamation-circle me-1"></i>{{ "VULN.NO_IMAGES_REGISTRY" | translate }}
           </div>
         }
       </div>
 
       <!-- Tag selector -->
       <div class="col-sm-2">
-        <label class="form-label small fw-semibold">{{
-          "STAGING.TAG" | translate
-        }}</label>
+        <label class="form-label small fw-semibold">{{ "STAGING.TAG" | translate }}</label>
         @if (loadingTags()) {
           <div class="form-control form-control-sm placeholder-glow">
             <span class="placeholder w-50"></span>
@@ -149,9 +128,7 @@
 
       <!-- Severity toggles -->
       <div class="col-sm-4">
-        <label class="form-label small fw-semibold">{{
-          "VULN.SEVERITIES" | translate
-        }}</label>
+        <label class="form-label small fw-semibold">{{ "VULN.SEVERITIES" | translate }}</label>
         <div class="d-flex flex-wrap gap-1">
           @for (sev of allSeverities; track sev) {
             <button
@@ -160,11 +137,13 @@
               [class]="severityBadgeClass(sev)"
               [class.opacity-50]="!severityFilter().includes(sev)"
               style="font-size: 0.7rem; padding: 2px 8px"
-              (click)="severityFilter.set(
-                severityFilter().includes(sev)
-                  ? severityFilter().filter(s => s !== sev)
-                  : [...severityFilter(), sev]
-              )"
+              (click)="
+                severityFilter.set(
+                  severityFilter().includes(sev)
+                    ? severityFilter().filter((s) => s !== sev)
+                    : [...severityFilter(), sev]
+                )
+              "
             >
               {{ sev }}
             </button>
@@ -194,14 +173,9 @@
       <code>{{ imagePreview() || "—" }}</code>
     </div>
 
-    <button
-      class="btn btn-primary btn-sm"
-      (click)="runScan()"
-      [disabled]="!imageToScan() || scanning()"
-    >
+    <button class="btn btn-primary btn-sm" (click)="runScan()" [disabled]="!imageToScan() || scanning()">
       @if (scanning()) {
-        <span class="spinner-border spinner-border-sm me-1"></span
-        >{{ "VULN.SCANNING" | translate }}
+        <span class="spinner-border spinner-border-sm me-1"></span>{{ "VULN.SCANNING" | translate }}
       } @else {
         <i class="bi bi-search me-1"></i>{{ "VULN.SCAN_IMAGE" | translate }}
       }
@@ -216,28 +190,18 @@
           </span>
           @for (sev of allSeverities; track sev) {
             @if (getSeverityCount(sev) > 0) {
-              <span [class]="severityBadgeClass(sev)">
-                {{ sev }}: {{ getSeverityCount(sev) }}
-              </span>
+              <span [class]="severityBadgeClass(sev)"> {{ sev }}: {{ getSeverityCount(sev) }} </span>
             }
           }
           @if (scanResult()!.total === 0) {
-            <span class="badge bg-success"
-              >✅ {{ "VULN.NO_VULNS" | translate }}</span
-            >
+            <span class="badge bg-success">✅ {{ "VULN.NO_VULNS" | translate }}</span>
           }
         </div>
 
         <!-- Vulnerability table -->
         @if (scanResult()!.vulnerabilities.length > 0) {
-          <div
-            class="table-responsive"
-            style="max-height: 350px; overflow-y: auto"
-          >
-            <table
-              class="table table-sm table-hover mb-0"
-              style="font-size: 0.78rem"
-            >
+          <div class="table-responsive" style="max-height: 350px; overflow-y: auto">
+            <table class="table table-sm table-hover mb-0" style="font-size: 0.78rem">
               <thead class="sticky-top table-light">
                 <tr>
                   <th>{{ "TRANSFER.CVE_ID" | translate }}</th>
@@ -284,39 +248,27 @@
 <!-- CARD 3 — Vulnerability Scanner override                                -->
 <!-- ══════════════════════════════════════════════════════════════════════ -->
 <div class="card border-0 mb-3">
-  <div
-    class="card-header border-0 d-flex align-items-center justify-content-between"
-  >
+  <div class="card-header border-0 d-flex align-items-center justify-content-between">
     <h6 class="fw-semibold mb-0">
-      <i class="bi bi-shield-exclamation text-primary me-2"></i
-      >{{ "VULN.SCANNER_TITLE" | translate }}
+      <i class="bi bi-shield-exclamation text-primary me-2"></i>{{ "VULN.SCANNER_TITLE" | translate }}
     </h6>
 
     <!-- Saving spinner: visible while PUT/DELETE /override is in-flight -->
     @if (trivySvc.saving()) {
-      <span
-        class="badge bg-secondary-subtle text-secondary d-flex align-items-center gap-1 ms-auto me-2"
-      >
-        <span
-          class="spinner-border spinner-border-sm"
-          style="width: 0.65rem; height: 0.65rem"
-        ></span>
+      <span class="badge bg-secondary-subtle text-secondary d-flex align-items-center gap-1 ms-auto me-2">
+        <span class="spinner-border spinner-border-sm" style="width: 0.65rem; height: 0.65rem"></span>
         {{ "COMMON.SAVING" | translate }}
       </span>
     }
 
     <!-- Active state badge -->
     @if (trivySvc.vulnOverride()) {
-      <span
-        class="badge bg-warning-subtle text-warning d-flex align-items-center gap-1 ms-auto"
-      >
+      <span class="badge bg-warning-subtle text-warning d-flex align-items-center gap-1 ms-auto">
         <i class="bi bi-pencil-fill" style="font-size: 0.6rem"></i>
         {{ "TRANSFER.CUSTOM" | translate }}
       </span>
     } @else {
-      <span
-        class="badge bg-secondary-subtle text-secondary d-flex align-items-center gap-1 ms-auto"
-      >
+      <span class="badge bg-secondary-subtle text-secondary d-flex align-items-center gap-1 ms-auto">
         <i class="bi bi-server" style="font-size: 0.6rem"></i>
         {{ "TRANSFER.FROM_ENV" | translate }}
       </span>
@@ -338,9 +290,7 @@
   <div class="card-body">
     <!-- Save error alert -->
     @if (trivySvc.saveError()) {
-      <div
-        class="alert alert-danger d-flex align-items-center gap-2 py-2 small mb-3"
-      >
+      <div class="alert alert-danger d-flex align-items-center gap-2 py-2 small mb-3">
         <i class="bi bi-exclamation-triangle-fill"></i>
         {{ trivySvc.saveError() }}
       </div>
@@ -377,9 +327,7 @@
         <div class="mb-3">
           <label class="form-label small fw-semibold">
             {{ "VULN.BLOCKING_SEVERITIES" | translate }}
-            <span class="text-muted fw-normal ms-1">{{
-              "VULN.AT_LEAST_ONE" | translate
-            }}</span>
+            <span class="text-muted fw-normal ms-1">{{ "VULN.AT_LEAST_ONE" | translate }}</span>
           </label>
           <div class="d-flex flex-wrap gap-2">
             @for (sev of allSeverities; track sev) {
@@ -420,18 +368,14 @@
               id="vulnIgnoreUnfixed"
               [checked]="trivySvc.vulnIgnoreUnfixed()"
               [disabled]="trivySvc.saving()"
-              (change)="
-                trivySvc.setVulnIgnoreUnfixed($any($event.target).checked)
-              "
+              (change)="trivySvc.setVulnIgnoreUnfixed($any($event.target).checked)"
             />
           </div>
         </div>
 
         <!-- Timeout -->
         <div class="mb-3">
-          <label class="form-label small fw-semibold">{{
-            "VULN.SCAN_TIMEOUT" | translate
-          }}</label>
+          <label class="form-label small fw-semibold">{{ "VULN.SCAN_TIMEOUT" | translate }}</label>
           <div class="d-flex gap-2">
             @for (t of timeoutOptions; track t) {
               <button
@@ -455,25 +399,14 @@
         <i class="bi bi-server me-1 text-muted"></i>
         <span class="text-muted">{{ "VULN.ENV_DEFAULTS" | translate }} </span>
         <span class="text-muted">
-          {{
-            (cfg.vuln_scan_enabled
-              ? "TRANSFER.SCAN_ENABLED"
-              : "TRANSFER.SCAN_DISABLED"
-            ) | translate
-          }}
+          {{ (cfg.vuln_scan_enabled ? "TRANSFER.SCAN_ENABLED" : "TRANSFER.SCAN_DISABLED") | translate }}
           ·
-          {{ cfg.vuln_scan_severities }} ·
-          {{ "VULN.IGNORE_UNFIXED_SHORT" | translate }}:
-          {{
-            (cfg.vuln_ignore_unfixed ? "COMMON.YES" : "COMMON.NO") | translate
-          }}
+          {{ cfg.vuln_scan_severities }} · {{ "VULN.IGNORE_UNFIXED_SHORT" | translate }}:
+          {{ (cfg.vuln_ignore_unfixed ? "COMMON.YES" : "COMMON.NO") | translate }}
           · {{ "VULN.TIMEOUT_SHORT" | translate }}: {{ cfg.vuln_scan_timeout }}
         </span>
         @if (cfg.vuln_scan_override) {
-          <span
-            class="badge bg-warning-subtle text-warning ms-2"
-            style="font-size: 0.65rem"
-          >
+          <span class="badge bg-warning-subtle text-warning ms-2" style="font-size: 0.65rem">
             {{ "VULN.OVERRIDDEN" | translate }}
           </span>
         }

@@ -37,8 +37,8 @@ export class AppComponent {
   readonly backendAvailability = inject(BackendAvailabilityService);
 
   /**
-   * Instancié dès le démarrage pour appliquer la langue persistée (ou celle du
-   * navigateur) avant l'affichage des premiers écrans.
+   * Instantiated at startup to apply the persisted language (or the browser's)
+   * before the first screens are rendered.
    */
   private readonly language = inject(LanguageService);
 }

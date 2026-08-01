@@ -1,9 +1,6 @@
 <div class="app-shell d-flex">
   <!-- Sidebar -->
-  <nav
-    class="sidebar d-flex flex-column"
-    [class.collapsed]="sidebarCollapsed()"
-  >
+  <nav class="sidebar d-flex flex-column" [class.collapsed]="sidebarCollapsed()">
     <!-- Logo -->
     <div
       class="sidebar-brand d-flex flex-column align-items-center px-3 py-4"
@@ -12,9 +9,7 @@
       <!-- Portalcrane SVG logo — redesigned for better clarity -->
       <app-logo
         [size]="sidebarCollapsed() ? 36 : 64"
-        [style]="
-          'transition: width 0.25s ease, height 0.25s ease; flex-shrink: 0;'
-        "
+        [style]="'transition: width 0.25s ease, height 0.25s ease; flex-shrink: 0;'"
       />
 
       <!-- Brand name — only visible when sidebar is expanded -->
@@ -116,9 +111,7 @@
                 <!-- Account entry -->
                 <button
                   class="theme-option"
-                  (click)="
-                    accountModalOpen.set(true); themePickerOpen.set(false)
-                  "
+                  (click)="accountModalOpen.set(true); themePickerOpen.set(false)"
                   [title]="'NAV.MY_ACCOUNT' | translate"
                 >
                   <i class="bi bi-person-circle"></i>
@@ -126,11 +119,7 @@
                 <!-- Divider -->
                 <div class="border-top my-1 mx-1"></div>
                 <!-- Logout -->
-                <button
-                  class="theme-option text-danger"
-                  (click)="auth.logout()"
-                  [title]="'NAV.LOGOUT' | translate"
-                >
+                <button class="theme-option text-danger" (click)="auth.logout()" [title]="'NAV.LOGOUT' | translate">
                   <i class="bi bi-box-arrow-right"></i>
                 </button>
               </div>
@@ -154,12 +143,7 @@
                   {{ auth.currentUser()?.username }}
                 </div>
                 <div class="x-small text-muted">
-                  {{
-                    (auth.currentUser()?.is_admin
-                      ? "NAV.ROLE_ADMIN"
-                      : "NAV.ROLE_USER"
-                    ) | translate
-                  }}
+                  {{ (auth.currentUser()?.is_admin ? "NAV.ROLE_ADMIN" : "NAV.ROLE_USER") | translate }}
                 </div>
               </div>
             </div>
@@ -185,18 +169,9 @@
       class="sidebar-toggle"
       [class.is-collapsed]="sidebarCollapsed()"
       (click)="toggleSidebar()"
-      [title]="
-        (sidebarCollapsed() ? 'NAV.EXPAND_SIDEBAR' : 'NAV.COLLAPSE_SIDEBAR')
-          | translate
-      "
+      [title]="(sidebarCollapsed() ? 'NAV.EXPAND_SIDEBAR' : 'NAV.COLLAPSE_SIDEBAR') | translate"
     >
-      <i
-        [class]="
-          sidebarCollapsed()
-            ? 'bi bi-chevron-double-right'
-            : 'bi bi-chevron-double-left'
-        "
-      ></i>
+      <i [class]="sidebarCollapsed() ? 'bi bi-chevron-double-right' : 'bi bi-chevron-double-left'"></i>
     </button>
   </nav>
   <!-- Add inside app.component.html, at the root level -->

@@ -39,10 +39,7 @@
                 "input": "public"
               }
             ],
-            "styles": [
-              "node_modules/swagger-ui-dist/swagger-ui.css",
-              "src/styles.css"
-            ],
+            "styles": ["node_modules/swagger-ui-dist/swagger-ui.css", "src/styles.css"],
             "scripts": ["node_modules/swagger-ui-dist/swagger-ui-bundle.js"]
           },
           "configurations": {

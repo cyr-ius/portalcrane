@@ -17,16 +17,8 @@
   fields that are never null/undefined in the ImageDetail interface:
   layers, env, cmd, entrypoint (all typed as non-nullable arrays).
 -->
-<div
-  class="modal fade show d-block"
-  tabindex="-1"
-  style="background: rgba(0, 0, 0, 0.45)"
-  (click)="close()"
->
-  <div
-    class="modal-dialog modal-xl modal-dialog-scrollable"
-    (click)="$event.stopPropagation()"
-  >
+<div class="modal fade show d-block" tabindex="-1" style="background: rgba(0, 0, 0, 0.45)" (click)="close()">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable" (click)="$event.stopPropagation()">
     <div class="modal-content border-0 shadow-lg">
       <!-- ── Header ─────────────────────────────────────────────────────── -->
       <div class="modal-header border-0 pb-0">
@@ -46,12 +38,9 @@
           <!-- ══ Left: tag selector ═══════════════════════════════════════ -->
           <div class="col-12 col-md-4">
             <div class="card border-0 bg-body-secondary h-100">
-              <div
-                class="card-header border-0 bg-transparent d-flex align-items-center justify-content-between py-2"
-              >
+              <div class="card-header border-0 bg-transparent d-flex align-items-center justify-content-between py-2">
                 <span class="fw-semibold small">
-                  <i class="bi bi-tags me-1"></i
-                  >{{ "IMG_DETAIL.TAGS" | translate }}
+                  <i class="bi bi-tags me-1"></i>{{ "IMG_DETAIL.TAGS" | translate }}
                   <span class="badge bg-primary-subtle text-primary ms-1">
                     {{ sortedTags().length }}
                   </span>
@@ -63,8 +52,7 @@
                     (click)="openAddForm()"
                     [title]="'IMG_DETAIL.ADD_TAG_TITLE' | translate"
                   >
-                    <i class="bi bi-plus-lg me-1"></i
-                    >{{ "IMG_DETAIL.ADD_TAG" | translate }}
+                    <i class="bi bi-plus-lg me-1"></i>{{ "IMG_DETAIL.ADD_TAG" | translate }}
                   </button>
                 }
               </div>
@@ -78,9 +66,7 @@
 
                   <!-- Source tag selector -->
                   <div class="mb-2">
-                    <label class="form-label small mb-1">{{
-                      "IMG_DETAIL.SOURCE_TAG" | translate
-                    }}</label>
+                    <label class="form-label small mb-1">{{ "IMG_DETAIL.SOURCE_TAG" | translate }}</label>
                     <select
                       class="form-select form-select-sm"
                       [value]="addSourceTag()"
@@ -94,15 +80,11 @@
 
                   <!-- New tag name input -->
                   <div class="mb-2">
-                    <label class="form-label small mb-1">{{
-                      "IMG_DETAIL.NEW_TAG_NAME" | translate
-                    }}</label>
+                    <label class="form-label small mb-1">{{ "IMG_DETAIL.NEW_TAG_NAME" | translate }}</label>
                     <input
                       type="text"
                       class="form-control form-control-sm font-monospace"
-                      [placeholder]="
-                        'IMG_DETAIL.NEW_TAG_PLACEHOLDER' | translate
-                      "
+                      [placeholder]="'IMG_DETAIL.NEW_TAG_PLACEHOLDER' | translate"
                       [value]="addNewTag()"
                       (input)="addNewTag.set($any($event.target).value)"
                     />
@@ -127,16 +109,11 @@
                       [disabled]="adding() || !addSourceTag() || !addNewTag()"
                     >
                       @if (adding()) {
-                        <span
-                          class="spinner-border spinner-border-sm me-1"
-                        ></span>
+                        <span class="spinner-border spinner-border-sm me-1"></span>
                       }
                       {{ "COMMON.ADD" | translate }}
                     </button>
-                    <button
-                      class="btn btn-sm btn-outline-secondary"
-                      (click)="cancelAddForm()"
-                    >
+                    <button class="btn btn-sm btn-outline-secondary" (click)="cancelAddForm()">
                       {{ "COMMON.CANCEL" | translate }}
                     </button>
                   </div>
@@ -144,10 +121,7 @@
               }
 
               <!-- ── Tag list ────────────────────────────────────────── -->
-              <ul
-                class="list-group list-group-flush overflow-auto"
-                style="max-height: 520px"
-              >
+              <ul class="list-group list-group-flush overflow-auto" style="max-height: 520px">
                 @for (tag of sortedTags(); track tag) {
                   <!-- Delete confirmation row -->
                   @if (deleteTarget() === tag) {
@@ -173,16 +147,11 @@
                           [disabled]="deleting()"
                         >
                           @if (deleting()) {
-                            <span
-                              class="spinner-border spinner-border-sm me-1"
-                            ></span>
+                            <span class="spinner-border spinner-border-sm me-1"></span>
                           }
                           {{ "COMMON.DELETE" | translate }}
                         </button>
-                        <button
-                          class="btn btn-sm btn-outline-secondary"
-                          (click)="cancelDelete()"
-                        >
+                        <button class="btn btn-sm btn-outline-secondary" (click)="cancelDelete()">
                           {{ "COMMON.CANCEL" | translate }}
                         </button>
                       </div>
@@ -197,15 +166,9 @@
                     >
                       <span class="font-monospace small text-truncate me-2">
                         @if (tag === "latest") {
-                          <i
-                            class="bi bi-star-fill text-warning me-1"
-                            style="font-size: 0.65rem"
-                          ></i>
+                          <i class="bi bi-star-fill text-warning me-1" style="font-size: 0.65rem"></i>
                         } @else {
-                          <i
-                            class="bi bi-tag-fill text-primary me-1"
-                            style="font-size: 0.65rem"
-                          ></i>
+                          <i class="bi bi-tag-fill text-primary me-1" style="font-size: 0.65rem"></i>
                         }
                         {{ tag }}
                       </span>
@@ -215,9 +178,7 @@
                         <button
                           class="btn btn-sm btn-outline-secondary border-0"
                           [title]="'IMG_DETAIL.COPY_PULL' | translate"
-                          (click)="
-                            copyToClipboard(tag); $event.stopPropagation()
-                          "
+                          (click)="copyToClipboard(tag); $event.stopPropagation()"
                         >
                           @if (copyingTag() === tag) {
                             <i class="bi bi-check-lg text-success"></i>
@@ -231,9 +192,7 @@
                           <button
                             class="btn btn-sm btn-outline-danger border-0"
                             [title]="'IMG_DETAIL.DELETE_THIS_TAG' | translate"
-                            (click)="
-                              confirmDeleteTag(tag); $event.stopPropagation()
-                            "
+                            (click)="confirmDeleteTag(tag); $event.stopPropagation()"
                           >
                             <i class="bi bi-trash"></i>
                           </button>
@@ -257,28 +216,18 @@
           <div class="col-12 col-md-8">
             @if (!selectedTag()) {
               <!-- No tag selected placeholder -->
-              <div
-                class="d-flex align-items-center justify-content-center h-100 text-muted"
-              >
+              <div class="d-flex align-items-center justify-content-center h-100 text-muted">
                 <div class="text-center">
                   <i class="bi bi-cursor-fill display-5 d-block mb-2"></i>
-                  <span class="small">{{
-                    "IMG_DETAIL.SELECT_TAG" | translate
-                  }}</span>
+                  <span class="small">{{ "IMG_DETAIL.SELECT_TAG" | translate }}</span>
                 </div>
               </div>
             } @else if (loadingDetail()) {
               <!-- Loading spinner -->
-              <div
-                class="d-flex align-items-center justify-content-center h-100 text-muted"
-              >
+              <div class="d-flex align-items-center justify-content-center h-100 text-muted">
                 <div class="text-center">
-                  <span
-                    class="spinner-border text-primary mb-2 d-block mx-auto"
-                  ></span>
-                  <span class="small">{{
-                    "IMG_DETAIL.LOADING_META" | translate
-                  }}</span>
+                  <span class="spinner-border text-primary mb-2 d-block mx-auto"></span>
+                  <span class="small">{{ "IMG_DETAIL.LOADING_META" | translate }}</span>
                 </div>
               </div>
             } @else if (detailError()) {
@@ -291,9 +240,7 @@
               <!-- ── Summary cards ──────────────────────────────────── -->
               <div class="row g-3 mb-3">
                 <div class="col-6 col-lg-3">
-                  <div
-                    class="card border-0 bg-body-secondary text-center py-2 px-1"
-                  >
+                  <div class="card border-0 bg-body-secondary text-center py-2 px-1">
                     <div class="text-muted small">
                       {{ "IMG_DETAIL.SIZE" | translate }}
                     </div>
@@ -303,9 +250,7 @@
                   </div>
                 </div>
                 <div class="col-6 col-lg-3">
-                  <div
-                    class="card border-0 bg-body-secondary text-center py-2 px-1"
-                  >
+                  <div class="card border-0 bg-body-secondary text-center py-2 px-1">
                     <div class="text-muted small">
                       {{ "IMG_DETAIL.LAYERS" | translate }}
                     </div>
@@ -315,9 +260,7 @@
                   </div>
                 </div>
                 <div class="col-6 col-lg-3">
-                  <div
-                    class="card border-0 bg-body-secondary text-center py-2 px-1"
-                  >
+                  <div class="card border-0 bg-body-secondary text-center py-2 px-1">
                     <div class="text-muted small">
                       {{ "IMG_DETAIL.ARCHITECTURE" | translate }}
                     </div>
@@ -327,9 +270,7 @@
                   </div>
                 </div>
                 <div class="col-6 col-lg-3">
-                  <div
-                    class="card border-0 bg-body-secondary text-center py-2 px-1"
-                  >
+                  <div class="card border-0 bg-body-secondary text-center py-2 px-1">
                     <div class="text-muted small">
                       {{ "IMG_DETAIL.OS" | translate }}
                     </div>
@@ -342,12 +283,8 @@
 
               <!-- Digest -->
               <div class="mb-3">
-                <label class="text-muted small d-block mb-1">{{
-                  "IMG_DETAIL.DIGEST" | translate
-                }}</label>
-                <code
-                  class="small text-break d-block p-2 bg-body-secondary rounded"
-                >
+                <label class="text-muted small d-block mb-1">{{ "IMG_DETAIL.DIGEST" | translate }}</label>
+                <code class="small text-break d-block p-2 bg-body-secondary rounded">
                   {{ tagDetail()!.digest }}
                 </code>
               </div>
@@ -355,26 +292,18 @@
               <!-- Created date -->
               @if (tagDetail()!.created) {
                 <div class="mb-3">
-                  <label class="text-muted small d-block mb-1">{{
-                    "IMG_DETAIL.CREATED" | translate
-                  }}</label>
-                  <span class="small">{{
-                    tagDetail()!.created | date: "medium"
-                  }}</span>
+                  <label class="text-muted small d-block mb-1">{{ "IMG_DETAIL.CREATED" | translate }}</label>
+                  <span class="small">{{ tagDetail()!.created | date: "medium" }}</span>
                 </div>
               }
 
               <!-- Labels -->
               @if (objectKeys(tagDetail()!.labels).length > 0) {
                 <div class="mb-3">
-                  <label class="text-muted small d-block mb-1">{{
-                    "IMG_DETAIL.LABELS" | translate
-                  }}</label>
+                  <label class="text-muted small d-block mb-1">{{ "IMG_DETAIL.LABELS" | translate }}</label>
                   <div class="d-flex flex-wrap gap-1">
                     @for (key of objectKeys(tagDetail()!.labels); track key) {
-                      <span
-                        class="badge bg-info-subtle text-info small font-monospace"
-                      >
+                      <span class="badge bg-info-subtle text-info small font-monospace">
                         {{ key }}={{ tagDetail()!.labels[key] }}
                       </span>
                     }
@@ -385,9 +314,7 @@
               <!-- Environment variables -->
               @if (tagDetail()!.env.length > 0) {
                 <div class="mb-3">
-                  <label class="text-muted small d-block mb-1">{{
-                    "IMG_DETAIL.ENV_VARS" | translate
-                  }}</label>
+                  <label class="text-muted small d-block mb-1">{{ "IMG_DETAIL.ENV_VARS" | translate }}</label>
                   <div class="p-2 bg-body-secondary rounded">
                     @for (env of tagDetail()!.env; track env) {
                       <div class="small font-monospace text-break">
@@ -399,17 +326,10 @@
               }
 
               <!-- CMD / Entrypoint -->
-              @if (
-                tagDetail()!.entrypoint.length > 0 ||
-                tagDetail()!.cmd.length > 0
-              ) {
+              @if (tagDetail()!.entrypoint.length > 0 || tagDetail()!.cmd.length > 0) {
                 <div class="mb-3">
-                  <label class="text-muted small d-block mb-1">{{
-                    "IMG_DETAIL.COMMAND" | translate
-                  }}</label>
-                  <code
-                    class="small text-break d-block p-2 bg-body-secondary rounded"
-                  >
+                  <label class="text-muted small d-block mb-1">{{ "IMG_DETAIL.COMMAND" | translate }}</label>
+                  <code class="small text-break d-block p-2 bg-body-secondary rounded">
                     @if (tagDetail()!.entrypoint.length > 0) {
                       <span class="text-warning">ENTRYPOINT</span>
                       {{ tagDetail()!.entrypoint.join(" ") }}
@@ -428,16 +348,11 @@
               <!-- Advanced: layer list toggle -->
               @if (tagDetail()!.layers.length > 0) {
                 <div class="mb-2">
-                  <button
-                    class="btn btn-sm btn-outline-secondary"
-                    (click)="showAdvanced.set(!showAdvanced())"
-                  >
+                  <button class="btn btn-sm btn-outline-secondary" (click)="showAdvanced.set(!showAdvanced())">
                     <i class="bi bi-stack me-1"></i>
                     {{
-                      (showAdvanced()
-                        ? "IMG_DETAIL.HIDE_LAYERS"
-                        : "IMG_DETAIL.SHOW_LAYERS"
-                      ) | translate: { count: tagDetail()!.layers.length }
+                      (showAdvanced() ? "IMG_DETAIL.HIDE_LAYERS" : "IMG_DETAIL.SHOW_LAYERS")
+                        | translate: { count: tagDetail()!.layers.length }
                     }}
                   </button>
                 </div>
@@ -449,10 +364,7 @@
                         class="d-flex justify-content-between align-items-center py-1 border-bottom border-secondary-subtle small font-monospace"
                       >
                         <span class="small text-truncate me-3">
-                          <i
-                            class="bi bi-stack text-muted"
-                            style="font-size: 0.75rem"
-                          ></i>
+                          <i class="bi bi-stack text-muted" style="font-size: 0.75rem"></i>
                           {{ layer.digest }}
                         </span>
                         <span class="text-muted flex-shrink-0">

@@ -21,7 +21,7 @@ import os
 import shutil
 import uuid
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 
 from pydantic import BaseModel
@@ -42,7 +42,7 @@ logger = logging.getLogger(__name__)
 _transfer_jobs: dict[str, dict] = {}
 
 
-class TransferStatus(str, Enum):
+class TransferStatus(StrEnum):
     """Transfer job status values."""
 
     PENDING = "pending"

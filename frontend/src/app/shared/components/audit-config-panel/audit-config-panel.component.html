@@ -1,32 +1,21 @@
 <div class="card border-0 mb-3">
-  <div
-    class="card-header border-0 d-flex align-items-center justify-content-between"
-  >
+  <div class="card-header border-0 d-flex align-items-center justify-content-between">
     <div>
       <h6 class="fw-semibold mb-0">
-        <i class="bi bi-journal-text text-primary me-2"></i
-        >{{ "AUDIT.TITLE" | translate }}
+        <i class="bi bi-journal-text text-primary me-2"></i>{{ "AUDIT.TITLE" | translate }}
       </h6>
       <div class="text-muted small mt-1">
         {{ "AUDIT.DESC" | translate }}
       </div>
     </div>
-    <button
-      class="btn btn-sm btn-outline-primary"
-      (click)="loadAuditLogs()"
-      [disabled]="loadingAuditLogs()"
-    >
-      <i
-        class="bi bi-arrow-clockwise me-1"
-        [class.spin]="loadingAuditLogs()"
-      ></i>
+    <button class="btn btn-sm btn-outline-primary" (click)="loadAuditLogs()" [disabled]="loadingAuditLogs()">
+      <i class="bi bi-arrow-clockwise me-1" [class.spin]="loadingAuditLogs()"></i>
     </button>
   </div>
   <div class="card-body">
     @if (loadingAuditLogs()) {
       <div class="text-center py-5 text-muted">
-        <span class="spinner-border spinner-border-sm me-2"></span
-        >{{ "AUDIT.FETCHING" | translate }}
+        <span class="spinner-border spinner-border-sm me-2"></span>{{ "AUDIT.FETCHING" | translate }}
       </div>
     } @else {
       @if (auditLogError()) {
@@ -73,15 +62,9 @@
               />
             }
           </div>
-          @for (
-            group of displayedGroups();
-            track group.timestamp + group.image + group.event + $index
-          ) {
+          @for (group of displayedGroups(); track group.timestamp + group.image + group.event + $index) {
             <details class="audit-log-item border-top px-3 py-2">
-              <summary
-                class="audit-row py-1"
-                style="cursor: pointer; list-style: none"
-              >
+              <summary class="audit-row py-1" style="cursor: pointer; list-style: none">
                 <span class="text-muted small text-nowrap">
                   {{ formatAuditTimestamp(group.timestamp) }}
                 </span>
@@ -106,16 +89,11 @@
                   }
                 </span>
                 <span>
-                  <span
-                    class="badge bg-secondary-subtle text-secondary"
-                    style="font-size: 0.7rem"
-                  >
+                  <span class="badge bg-secondary-subtle text-secondary" style="font-size: 0.7rem">
                     {{ eventLabel(group.event) }}
                   </span>
                 </span>
-                <span class="small text-muted text-truncate">{{
-                  group.image
-                }}</span>
+                <span class="small text-muted text-truncate">{{ group.image }}</span>
                 <span class="text-center">
                   @if (group.count > 1) {
                     <span
@@ -138,9 +116,7 @@
                   {{ group.httpStatus }}
                 </span>
               </summary>
-              <pre class="small mb-0 mt-2 audit-log-payload">{{
-                prettyAuditPayload(group)
-              }}</pre>
+              <pre class="small mb-0 mt-2 audit-log-payload">{{ prettyAuditPayload(group) }}</pre>
             </details>
           } @empty {
             <div class="text-center py-4 text-muted small border-top">

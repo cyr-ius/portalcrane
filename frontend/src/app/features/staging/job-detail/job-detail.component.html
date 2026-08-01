@@ -14,9 +14,7 @@
       }
     </div>
     <div class="d-flex align-items-center gap-1 flex-shrink-0">
-      <span [class]="getStatusBadgeClass(job()!.status)">{{
-        job()!.status
-      }}</span>
+      <span [class]="getStatusBadgeClass(job()!.status)">{{ job()!.status }}</span>
       <!-- cross icon -->
       <button
         class="btn btn-sm btn-outline-danger p-0"
@@ -34,12 +32,8 @@
   <div class="progress mb-2" style="height: 4px">
     <div
       class="progress-bar"
-      [class.bg-danger]="
-        job()!.status === 'failed' || job()!.status === 'scan_vulnerable'
-      "
-      [class.bg-success]="
-        job()!.status === 'done' || job()!.status === 'scan_clean'
-      "
+      [class.bg-danger]="job()!.status === 'failed' || job()!.status === 'scan_vulnerable'"
+      [class.bg-success]="job()!.status === 'done' || job()!.status === 'scan_clean'"
       [class.progress-bar-animated]="ACTIVE_STATUSES.has(job()!.status)"
       [class.progress-bar-striped]="ACTIVE_STATUSES.has(job()!.status)"
       [style.width.%]="displayProgress(job()!)"
@@ -55,8 +49,7 @@
       <!-- Header: blocked notice + severity badges -->
       <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
         <span class="small fw-semibold text-danger">
-          <i class="bi bi-shield-x me-1"></i
-          >{{ "STAGING.VULN_PUSH_BLOCKED" | translate }}
+          <i class="bi bi-shield-x me-1"></i>{{ "STAGING.VULN_PUSH_BLOCKED" | translate }}
         </span>
         @for (sev of ["CRITICAL", "HIGH", "MEDIUM", "LOW"]; track sev) {
           @if (getCveCount(job()!, sev) > 0) {
@@ -74,18 +67,9 @@
       </div>
 
       <!-- CVE detail table -->
-      @if (
-        job()!.vuln_result!.vulnerabilities &&
-        job()!.vuln_result!.vulnerabilities!.length > 0
-      ) {
-        <div
-          class="table-responsive"
-          style="max-height: 260px; overflow-y: auto"
-        >
-          <table
-            class="table table-sm table-hover mb-0"
-            style="font-size: 0.75rem"
-          >
+      @if (job()!.vuln_result!.vulnerabilities && job()!.vuln_result!.vulnerabilities!.length > 0) {
+        <div class="table-responsive" style="max-height: 260px; overflow-y: auto">
+          <table class="table table-sm table-hover mb-0" style="font-size: 0.75rem">
             <thead class="sticky-top table-light">
               <tr>
                 <th>{{ "TRANSFER.CVE_ID" | translate }}</th>
@@ -97,10 +81,7 @@
               </tr>
             </thead>
             <tbody>
-              @for (
-                vuln of job()!.vuln_result!.vulnerabilities;
-                track vuln.id
-              ) {
+              @for (vuln of job()!.vuln_result!.vulnerabilities; track vuln.id) {
                 <tr>
                   <td>
                     <a
@@ -118,9 +99,7 @@
                       [class.bg-danger]="vuln.severity === 'CRITICAL'"
                       [class.bg-warning]="vuln.severity === 'HIGH'"
                       [class.text-dark]="vuln.severity === 'HIGH'"
-                      [class.bg-secondary]="
-                        vuln.severity === 'MEDIUM' || vuln.severity === 'LOW'
-                      "
+                      [class.bg-secondary]="vuln.severity === 'MEDIUM' || vuln.severity === 'LOW'"
                       style="font-size: 0.65rem"
                       >{{ vuln.severity }}</span
                     >
@@ -146,9 +125,7 @@
     <div class="mt-2 pt-2 border-top">
       <!-- Push mode toggle -->
       <div class="d-flex align-items-center gap-2 mb-2">
-        <span class="small text-muted">{{
-          "STAGING.PUSH_TO" | translate
-        }}</span>
+        <span class="small text-muted">{{ "STAGING.PUSH_TO" | translate }}</span>
         <div class="btn-group btn-group-sm" role="group">
           <button
             type="button"
@@ -167,8 +144,7 @@
               [class.btn-outline-secondary]="getPushMode(job()!) !== 'external'"
               (click)="setPushMode(job()!, 'external')"
             >
-              <i class="bi bi-cloud-upload me-1"></i
-              >{{ "STAGING.EXTERNAL" | translate }}
+              <i class="bi bi-cloud-upload me-1"></i>{{ "STAGING.EXTERNAL" | translate }}
             </button>
           }
         </div>
@@ -187,9 +163,7 @@
                 {{ "STAGING.ADHOC_BELOW" | translate }}
               </option>
               @for (reg of pushableRegistries(); track reg.id) {
-                <option [value]="reg.id">
-                  {{ reg.name }} ({{ reg.host }})
-                </option>
+                <option [value]="reg.id">{{ reg.name }} ({{ reg.host }})</option>
               }
             </select>
           }
@@ -201,13 +175,7 @@
                   class="form-control form-control-sm font-monospace"
                   [placeholder]="'STAGING.EXT_HOST_PLACEHOLDER' | translate"
                   [value]="getPushTarget(job()!, 'ext_host')"
-                  (input)="
-                    updatePushTarget(
-                      job()!,
-                      'ext_host',
-                      $any($event.target).value
-                    )
-                  "
+                  (input)="updatePushTarget(job()!, 'ext_host', $any($event.target).value)"
                 />
               </div>
               <div class="col-6">
@@ -216,13 +184,7 @@
                   class="form-control form-control-sm"
                   [placeholder]="'STAGING.USERNAME_OPTIONAL' | translate"
                   [value]="getPushTarget(job()!, 'ext_user')"
-                  (input)="
-                    updatePushTarget(
-                      job()!,
-                      'ext_user',
-                      $any($event.target).value
-                    )
-                  "
+                  (input)="updatePushTarget(job()!, 'ext_user', $any($event.target).value)"
                 />
               </div>
               <div class="col-6">
@@ -231,13 +193,7 @@
                   class="form-control form-control-sm"
                   [placeholder]="'STAGING.PASSWORD_OPTIONAL' | translate"
                   [value]="getPushTarget(job()!, 'ext_pass')"
-                  (input)="
-                    updatePushTarget(
-                      job()!,
-                      'ext_pass',
-                      $any($event.target).value
-                    )
-                  "
+                  (input)="updatePushTarget(job()!, 'ext_pass', $any($event.target).value)"
                 />
               </div>
             </div>
@@ -268,9 +224,7 @@
             <select
               class="form-select form-select-sm"
               [value]="getPushTarget(job()!, 'folder')"
-              (change)="
-                updatePushTarget(job()!, 'folder', $any($event.target).value)
-              "
+              (change)="updatePushTarget(job()!, 'folder', $any($event.target).value)"
             >
               <option value="">{{ "STAGING.ROOT" | translate }}</option>
               @for (f of pushFolderOptions(); track f) {
@@ -283,18 +237,14 @@
               class="form-control form-control-sm font-monospace"
               [placeholder]="'STAGING.FOLDER_PLACEHOLDER' | translate"
               [value]="getPushTarget(job()!, 'folder')"
-              (input)="
-                updatePushTarget(job()!, 'folder', $any($event.target).value)
-              "
+              (input)="updatePushTarget(job()!, 'folder', $any($event.target).value)"
             />
           }
         </div>
         <div class="col">
-          <label
-            class="form-label small text-muted"
-            style="font-size: 0.7rem"
-            >{{ "STAGING.IMAGE_NAME" | translate }}</label
-          >
+          <label class="form-label small text-muted" style="font-size: 0.7rem">{{
+            "STAGING.IMAGE_NAME" | translate
+          }}</label>
           <input
             type="text"
             class="form-control form-control-sm font-monospace"
@@ -304,11 +254,7 @@
           />
         </div>
         <div class="col-auto" style="min-width: 90px">
-          <label
-            class="form-label small text-muted"
-            style="font-size: 0.7rem"
-            >{{ "STAGING.TAG" | translate }}</label
-          >
+          <label class="form-label small text-muted" style="font-size: 0.7rem">{{ "STAGING.TAG" | translate }}</label>
           <input
             type="text"
             class="form-control form-control-sm font-monospace"
@@ -320,12 +266,8 @@
       </div>
 
       <!-- Preview + push button -->
-      <div
-        class="d-flex align-items-center gap-2 justify-content-between flex-wrap"
-      >
-        <code class="small text-muted text-truncate" style="max-width: 60%">
-          → {{ pushPreview(job()!) }}
-        </code>
+      <div class="d-flex align-items-center gap-2 justify-content-between flex-wrap">
+        <code class="small text-muted text-truncate" style="max-width: 60%"> → {{ pushPreview(job()!) }} </code>
         <button
           class="btn btn-sm btn-success"
           (click)="pushImage(job()!)"
@@ -334,9 +276,7 @@
             (getPushMode(job()!) === 'local' &&
               ((!isAdmin() &&
                 pushFolderOptions().length > 0 &&
-                !pushFolderOptions().includes(
-                  getPushTarget(job()!, 'folder') || job()!.folder || ''
-                )) ||
+                !pushFolderOptions().includes(getPushTarget(job()!, 'folder') || job()!.folder || '')) ||
                 (!isAdmin() && pushFolderOptions().length === 0)))
           "
           type="button"
@@ -345,8 +285,7 @@
             <span class="spinner-border spinner-border-sm me-1"></span>
             {{ "STAGING.PUSHING" | translate }}
           } @else {
-            <i class="bi bi-cloud-upload me-1"></i
-            >{{ "STAGING.PUSH" | translate }}
+            <i class="bi bi-cloud-upload me-1"></i>{{ "STAGING.PUSH" | translate }}
           }
         </button>
       </div>
@@ -356,13 +295,8 @@
   <!-- Re-push button for completed jobs -->
   @if (job()!.status === "done") {
     <div class="mt-2 pt-2 border-top d-flex justify-content-end">
-      <button
-        class="btn btn-sm btn-outline-secondary"
-        (click)="allowRePush(job()!)"
-        type="button"
-      >
-        <i class="bi bi-arrow-repeat me-1"></i
-        >{{ "STAGING.PUSH_AGAIN" | translate }}
+      <button class="btn btn-sm btn-outline-secondary" (click)="allowRePush(job()!)" type="button">
+        <i class="bi bi-arrow-repeat me-1"></i>{{ "STAGING.PUSH_AGAIN" | translate }}
       </button>
     </div>
   }

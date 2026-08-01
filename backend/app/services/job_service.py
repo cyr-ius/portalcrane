@@ -2,7 +2,7 @@ import asyncio
 import logging
 import os
 import shutil
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict
@@ -22,7 +22,7 @@ _logger = logging.getLogger(__name__)
 jobs_list: dict[str, dict] = {}
 
 
-class JobStatus(str, Enum):
+class JobStatus(StrEnum):
     PENDING = "pending"
     PULLING = "pulling"
     SCAN_SKIPPED = "scan_skipped"

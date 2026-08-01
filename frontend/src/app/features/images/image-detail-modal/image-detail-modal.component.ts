@@ -176,7 +176,7 @@ export class ImageDetailModalComponent implements OnInit {
 
   // ── Add tag ────────────────────────────────────────────────────────────────
 
-  /** Open the add-tag inline form, pre-selecting the currently viewed tag. */
+  /** Open the add-tag inline form, preselecting the currently viewed tag. */
   openAddForm(): void {
     this.showAddForm.set(true);
     this.addSourceTag.set(this.selectedTag());

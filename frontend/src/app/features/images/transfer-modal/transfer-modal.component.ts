@@ -16,7 +16,7 @@
  *
  * Inputs:
  *  @input sourceRegistryId   ID of the source registry ('__local__' for local)
- *  @input preselectedImages  Images pre-selected when opening the modal
+ *  @input preselectedImages  Images preselected when opening the modal
  *  @input allImages          All images from the current view (for selection)
  *
  * Outputs:
@@ -266,7 +266,7 @@ export class TransferModalComponent implements OnInit, AfterViewInit, OnDestroy 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
 
   ngOnInit(): void {
-    // Pre-select all tags of preselected images
+    // Preselect all tags of preselected images
     const keys = new Set<string>();
     for (const img of this.preselectedImages()) {
       for (const tag of img.tags) {

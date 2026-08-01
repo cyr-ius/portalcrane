@@ -2,23 +2,14 @@
 <!-- Cross-registry image transfer with integrated Trivy scan (server policy). -->
 <!-- The vulnerability scan section has been removed: the server policy from   -->
 <!-- Settings → Vulnerabilities is always applied, no per-transfer override.   -->
-<div
-  class="modal fade show d-block"
-  tabindex="-1"
-  style="background: rgba(0, 0, 0, 0.45)"
-  (click)="close()"
->
-  <div
-    class="modal-dialog modal-xl modal-dialog-scrollable"
-    (click)="$event.stopPropagation()"
-  >
+<div class="modal fade show d-block" tabindex="-1" style="background: rgba(0, 0, 0, 0.45)" (click)="close()">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable" (click)="$event.stopPropagation()">
     <div class="modal-content border-0 shadow-lg">
       <!-- ── Header ──────────────────────────────────────────────────────── -->
       <div class="modal-header border-0 pb-0">
         <div>
           <h5 class="modal-title fw-semibold">
-            <i class="bi bi-arrow-left-right me-2 text-primary"></i
-            >{{ "TRANSFER.TITLE" | translate }}
+            <i class="bi bi-arrow-left-right me-2 text-primary"></i>{{ "TRANSFER.TITLE" | translate }}
           </h5>
           <p class="text-muted small mb-0">
             {{ "TRANSFER.SUBTITLE_PRE" | translate }}
@@ -34,8 +25,7 @@
         @if (activeJobs().length > 0) {
           <div class="mb-3">
             <h6 class="fw-semibold mb-2">
-              <i class="bi bi-list-task me-1"></i
-              >{{ "TRANSFER.JOBS" | translate }}
+              <i class="bi bi-list-task me-1"></i>{{ "TRANSFER.JOBS" | translate }}
               <span class="badge bg-secondary-subtle text-secondary ms-1">
                 {{ activeJobs().length }}
               </span>
@@ -45,13 +35,9 @@
               @for (job of activeJobs(); track job.job_id) {
                 <div class="border rounded p-3">
                   <!-- Job header -->
-                  <div
-                    class="d-flex align-items-center justify-content-between gap-2 mb-2"
-                  >
+                  <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
                     <div class="min-w-0">
-                      <div
-                        class="fw-semibold small font-monospace text-truncate"
-                      >
+                      <div class="fw-semibold small font-monospace text-truncate">
                         {{ job.repository }}:{{ job.tag }}
                         <i class="bi bi-arrow-right mx-1 text-muted"></i>
                         {{ job.dest_repository }}:{{ job.dest_tag }}
@@ -77,13 +63,8 @@
                   <div class="progress mb-2" style="height: 4px">
                     <div
                       class="progress-bar"
-                      [class.bg-danger]="
-                        job.status === 'failed' ||
-                        job.status === 'scan_vulnerable'
-                      "
-                      [class.bg-success]="
-                        job.status === 'done' || job.status === 'scan_clean'
-                      "
+                      [class.bg-danger]="job.status === 'failed' || job.status === 'scan_vulnerable'"
+                      [class.bg-success]="job.status === 'done' || job.status === 'scan_clean'"
                       [class.progress-bar-animated]="isActive(job.status)"
                       [class.progress-bar-striped]="isActive(job.status)"
                       [style.width.%]="job.progress"
@@ -96,31 +77,20 @@
                   <!-- CVE table shown when the scan blocked the transfer -->
                   @if (job.status === "scan_vulnerable" && job.vuln_result) {
                     <div class="mt-2 pt-2 border-top">
-                      <div
-                        class="d-flex align-items-center gap-2 flex-wrap mb-2"
-                      >
+                      <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
                         <span class="small fw-semibold text-danger">
-                          <i class="bi bi-shield-x me-1"></i
-                          >{{ "TRANSFER.VULN_BLOCKED" | translate }}
+                          <i class="bi bi-shield-x me-1"></i>{{ "TRANSFER.VULN_BLOCKED" | translate }}
                         </span>
                         @for (sev of SEVERITY_ORDER; track sev) {
                           @if (getCveCount(job, sev) > 0) {
-                            <span [class]="severityBadgeClass(sev)">
-                              {{ sev }}: {{ getCveCount(job, sev) }}
-                            </span>
+                            <span [class]="severityBadgeClass(sev)"> {{ sev }}: {{ getCveCount(job, sev) }} </span>
                           }
                         }
                       </div>
 
                       @if (getVulnerabilities(job).length > 0) {
-                        <div
-                          class="table-responsive"
-                          style="max-height: 200px; overflow-y: auto"
-                        >
-                          <table
-                            class="table table-sm table-hover mb-0"
-                            style="font-size: 0.75rem"
-                          >
+                        <div class="table-responsive" style="max-height: 200px; overflow-y: auto">
+                          <table class="table table-sm table-hover mb-0" style="font-size: 0.75rem">
                             <thead class="sticky-top table-light">
                               <tr>
                                 <th>{{ "TRANSFER.CVE_ID" | translate }}</th>
@@ -132,17 +102,11 @@
                               </tr>
                             </thead>
                             <tbody>
-                              @for (
-                                vuln of getVulnerabilities(job);
-                                track vuln.id
-                              ) {
+                              @for (vuln of getVulnerabilities(job); track vuln.id) {
                                 <tr>
                                   <td>
                                     <a
-                                      [href]="
-                                        'https://nvd.nist.gov/vuln/detail/' +
-                                        vuln.id
-                                      "
+                                      [href]="'https://nvd.nist.gov/vuln/detail/' + vuln.id"
                                       target="_blank"
                                       rel="noopener noreferrer"
                                       class="text-decoration-none font-monospace"
@@ -151,13 +115,9 @@
                                     >
                                   </td>
                                   <td>
-                                    <span
-                                      [class]="
-                                        severityBadgeClass(vuln.severity)
-                                      "
-                                      style="font-size: 0.65rem"
-                                      >{{ vuln.severity }}</span
-                                    >
+                                    <span [class]="severityBadgeClass(vuln.severity)" style="font-size: 0.65rem">{{
+                                      vuln.severity
+                                    }}</span>
                                   </td>
                                   <td class="font-monospace">
                                     {{ vuln.package }}
@@ -188,41 +148,25 @@
           <div class="row g-3">
             <!-- ── Left column: image + tag selection ──────────────────── -->
             <div class="col-12 col-md-5">
-              <div
-                class="d-flex align-items-center justify-content-between mb-2"
-              >
+              <div class="d-flex align-items-center justify-content-between mb-2">
                 <h6 class="fw-semibold mb-0">
-                  <i class="bi bi-layers me-1"></i
-                  >{{ "TRANSFER.SELECT_IMAGES" | translate }}
+                  <i class="bi bi-layers me-1"></i>{{ "TRANSFER.SELECT_IMAGES" | translate }}
                 </h6>
                 <div class="d-flex gap-1">
-                  <button
-                    class="btn btn-sm btn-outline-secondary"
-                    (click)="selectAll()"
-                    type="button"
-                  >
+                  <button class="btn btn-sm btn-outline-secondary" (click)="selectAll()" type="button">
                     {{ "TRANSFER.ALL" | translate }}
                   </button>
-                  <button
-                    class="btn btn-sm btn-outline-secondary"
-                    (click)="clearAll()"
-                    type="button"
-                  >
+                  <button class="btn btn-sm btn-outline-secondary" (click)="clearAll()" type="button">
                     {{ "TRANSFER.NONE" | translate }}
                   </button>
                 </div>
               </div>
 
               <!-- Scrollable image + tag tree -->
-              <div
-                class="border rounded image-selection-list"
-                style="max-height: 420px; overflow-y: auto"
-              >
+              <div class="border rounded image-selection-list" style="max-height: 420px; overflow-y: auto">
                 @for (img of allImages(); track img.name; let i = $index) {
                   <!-- Image row — checkbox selects / deselects all its tags -->
-                  <div
-                    class="px-3 py-2 border-bottom bg-body-tertiary d-flex align-items-center gap-2"
-                  >
+                  <div class="px-3 py-2 border-bottom bg-body-tertiary d-flex align-items-center gap-2">
                     <!--
                       #imgCheckbox template ref is used by ViewChildren to collect
                       all image-level checkboxes so we can set .indeterminate
@@ -267,15 +211,9 @@
                         [htmlFor]="tagCheckboxId(img.name, tag)"
                       >
                         @if (tag === "latest") {
-                          <i
-                            class="bi bi-star-fill text-warning me-1"
-                            style="font-size: 0.65rem"
-                          ></i>
+                          <i class="bi bi-star-fill text-warning me-1" style="font-size: 0.65rem"></i>
                         } @else {
-                          <i
-                            class="bi bi-tag me-1 text-muted"
-                            style="font-size: 0.65rem"
-                          ></i>
+                          <i class="bi bi-tag me-1 text-muted" style="font-size: 0.65rem"></i>
                         }
                         {{ tag }}
                       </label>
@@ -287,10 +225,7 @@
               <!-- Selection summary -->
               <div class="text-muted small mt-1">
                 <i class="bi bi-check2-square me-1"></i>
-                {{
-                  "TRANSFER.SELECTED_COUNT"
-                    | translate: { count: selectedImageRefs().length }
-                }}
+                {{ "TRANSFER.SELECTED_COUNT" | translate: { count: selectedImageRefs().length } }}
               </div>
             </div>
 
@@ -316,12 +251,7 @@
                     [class.text-muted]="!scanOverrideActive()"
                   >
                     {{ "TRANSFER.SCAN" | translate }}:
-                    {{
-                      (scanEnabled()
-                        ? "TRANSFER.SCAN_ENABLED"
-                        : "TRANSFER.SCAN_DISABLED"
-                      ) | translate
-                    }}
+                    {{ (scanEnabled() ? "TRANSFER.SCAN_ENABLED" : "TRANSFER.SCAN_DISABLED") | translate }}
                   </span>
                   @if (scanEnabled()) {
                     <span class="text-muted ms-1">
@@ -338,12 +268,7 @@
                   [class.text-secondary]="!scanOverrideActive()"
                   style="font-size: 0.65rem"
                 >
-                  {{
-                    (scanOverrideActive()
-                      ? "TRANSFER.CUSTOM"
-                      : "TRANSFER.FROM_ENV"
-                    ) | translate
-                  }}
+                  {{ (scanOverrideActive() ? "TRANSFER.CUSTOM" : "TRANSFER.FROM_ENV") | translate }}
                 </span>
                 <a
                   routerLink="/settings"
@@ -352,8 +277,7 @@
                   [title]="'TRANSFER.CONFIGURE_TITLE' | translate"
                   (click)="close()"
                 >
-                  <i class="bi bi-gear me-1"></i
-                  >{{ "TRANSFER.CONFIGURE" | translate }}
+                  <i class="bi bi-gear me-1"></i>{{ "TRANSFER.CONFIGURE" | translate }}
                 </a>
               </div>
 
@@ -372,9 +296,7 @@
                   </option>
                   @if (canExternalPush()) {
                     @for (reg of externalRegistries(); track reg.id) {
-                      <option [value]="reg.id">
-                        {{ reg.name }} ({{ reg.host }})
-                      </option>
+                      <option [value]="reg.id">{{ reg.name }} ({{ reg.host }})</option>
                     }
                   }
                 </select>
@@ -384,9 +306,7 @@
               <div class="mb-3">
                 <label class="form-label small fw-semibold">
                   {{ "TRANSFER.DEST_FOLDER" | translate }}
-                  <span class="text-muted fw-normal">{{
-                    "TRANSFER.OPTIONAL" | translate
-                  }}</span>
+                  <span class="text-muted fw-normal">{{ "TRANSFER.OPTIONAL" | translate }}</span>
                 </label>
                 <input
                   type="text"
@@ -408,14 +328,9 @@
                 <div class="mb-3">
                   <label class="form-label small fw-semibold mb-1">
                     {{ "TRANSFER.DEST_NAME" | translate }}
-                    <span class="text-muted fw-normal">{{
-                      "TRANSFER.OPTIONAL" | translate
-                    }}</span>
+                    <span class="text-muted fw-normal">{{ "TRANSFER.OPTIONAL" | translate }}</span>
                   </label>
-                  <div
-                    class="border rounded"
-                    style="max-height: 240px; overflow-y: auto"
-                  >
+                  <div class="border rounded" style="max-height: 240px; overflow-y: auto">
                     @for (repo of selectedRepositories(); track repo) {
                       <div class="px-2 py-2 border-bottom">
                         <div
@@ -430,9 +345,7 @@
                           class="form-control form-control-sm font-monospace"
                           [placeholder]="repo"
                           [value]="nameOverride(repo)"
-                          (input)="
-                            setNameOverride(repo, $any($event.target).value)
-                          "
+                          (input)="setNameOverride(repo, $any($event.target).value)"
                         />
                       </div>
                     }
@@ -447,14 +360,9 @@
                     <i class="bi bi-arrow-right me-1"></i>
                     {{ "TRANSFER.PREVIEW" | translate }}
                   </div>
-                  <div
-                    class="d-flex flex-column gap-1"
-                    style="max-height: 160px; overflow-y: auto"
-                  >
+                  <div class="d-flex flex-column gap-1" style="max-height: 160px; overflow-y: auto">
                     @for (p of destPreviews(); track p.source) {
-                      <code class="d-block text-truncate" [title]="p.dest">{{
-                        p.dest
-                      }}</code>
+                      <code class="d-block text-truncate" [title]="p.dest">{{ p.dest }}</code>
                     }
                   </div>
                 </div>

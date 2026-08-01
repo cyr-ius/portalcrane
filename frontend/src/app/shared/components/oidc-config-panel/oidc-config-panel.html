@@ -9,8 +9,7 @@
 </div>
 } @if (loading()) {
 <div class="text-center py-5 text-muted">
-  <span class="spinner-border spinner-border-sm me-2"></span>{{ "OIDC.LOADING" |
-  translate }}
+  <span class="spinner-border spinner-border-sm me-2"></span>{{ "OIDC.LOADING" | translate }}
 </div>
 } @else {
 
@@ -19,29 +18,22 @@
 <!-- ══════════════════════════════════════════════════════════════════════ -->
 
 <div class="card border-0 mb-3">
-  <div
-    class="card-header border-0 d-flex align-items-center justify-content-between"
-  >
+  <div class="card-header border-0 d-flex align-items-center justify-content-between">
     <div>
       <h6 class="fw-semibold mb-0">
-        <i class="bi bi-shield-lock text-primary me-2"></i>{{ "OIDC.TITLE" |
-        translate }}
+        <i class="bi bi-shield-lock text-primary me-2"></i>{{ "OIDC.TITLE" | translate }}
       </h6>
       <div class="text-muted small mt-1">{{ "OIDC.INTRO" | translate }}</div>
     </div>
 
     <!-- Active state badge -->
     @if (oidcForm.enabled().value()) {
-    <span
-      class="badge bg-warning-subtle text-warning d-flex align-items-center gap-1 ms-auto"
-    >
+    <span class="badge bg-warning-subtle text-warning d-flex align-items-center gap-1 ms-auto">
       <i class="bi bi-pencil-fill" style="font-size: 0.6rem"></i>
       {{ "TRANSFER.CUSTOM" | translate }}
     </span>
     } @else {
-    <span
-      class="badge bg-secondary-subtle text-secondary d-flex align-items-center gap-1 ms-auto"
-    >
+    <span class="badge bg-secondary-subtle text-secondary d-flex align-items-center gap-1 ms-auto">
       <i class="bi bi-server" style="font-size: 0.6rem"></i>
       {{ "TRANSFER.FROM_ENV" | translate }}
     </span>
@@ -93,9 +85,7 @@
           <span class="text-danger">*</span>
         </label>
         <div class="input-group">
-          <span class="input-group-text"
-            ><i class="bi bi-person-badge"></i
-          ></span>
+          <span class="input-group-text"><i class="bi bi-person-badge"></i></span>
           <input
             type="text"
             class="form-control font-monospace"
@@ -107,9 +97,7 @@
 
       <!-- Client Secret -->
       <div class="col-md-6">
-        <label class="form-label fw-semibold small"
-          >{{ "OIDC.CLIENT_SECRET" | translate }}</label
-        >
+        <label class="form-label fw-semibold small">{{ "OIDC.CLIENT_SECRET" | translate }}</label>
         <div class="input-group">
           <span class="input-group-text"><i class="bi bi-key-fill"></i></span>
           <input
@@ -140,9 +128,7 @@
           <span class="text-danger">*</span>
         </label>
         <div class="input-group">
-          <span class="input-group-text"
-            ><i class="bi bi-arrow-return-right"></i
-          ></span>
+          <span class="input-group-text"><i class="bi bi-arrow-return-right"></i></span>
           <input
             type="url"
             class="form-control font-monospace"
@@ -155,13 +141,9 @@
 
       <!-- Post-logout Redirect URI -->
       <div class="col-12">
-        <label class="form-label fw-semibold small"
-          >{{ "OIDC.POST_LOGOUT_URI" | translate }}</label
-        >
+        <label class="form-label fw-semibold small">{{ "OIDC.POST_LOGOUT_URI" | translate }}</label>
         <div class="input-group">
-          <span class="input-group-text"
-            ><i class="bi bi-box-arrow-left"></i
-          ></span>
+          <span class="input-group-text"><i class="bi bi-box-arrow-left"></i></span>
           <input
             type="url"
             class="form-control font-monospace"
@@ -173,39 +155,20 @@
 
       <!-- Response type + Scope -->
       <div class="col-md-4">
-        <label class="form-label fw-semibold small"
-          >{{ "OIDC.RESPONSE_TYPE" | translate }}</label
-        >
-        <input
-          type="text"
-          class="form-control font-monospace"
-          [formField]="oidcForm.response_type"
-        />
+        <label class="form-label fw-semibold small">{{ "OIDC.RESPONSE_TYPE" | translate }}</label>
+        <input type="text" class="form-control font-monospace" [formField]="oidcForm.response_type" />
       </div>
       <div class="col-md-8">
-        <label class="form-label fw-semibold small"
-          >{{ "OIDC.SCOPE" | translate }}</label
-        >
-        <input
-          type="text"
-          class="form-control font-monospace"
-          [formField]="oidcForm.scope"
-        />
+        <label class="form-label fw-semibold small">{{ "OIDC.SCOPE" | translate }}</label>
+        <input type="text" class="form-control font-monospace" [formField]="oidcForm.scope" />
       </div>
 
       <!-- OIDC-only mode -->
       <div class="col-12">
         <hr class="my-2" />
         <div class="form-check form-switch">
-          <input
-            class="form-check-input"
-            type="checkbox"
-            id="oidcOnly"
-            [formField]="oidcForm.oidc_only"
-          />
-          <label class="form-check-label small fw-semibold" for="oidcOnly">
-            {{ "OIDC.OIDC_ONLY" | translate }}
-          </label>
+          <input class="form-check-input" type="checkbox" id="oidcOnly" [formField]="oidcForm.oidc_only" />
+          <label class="form-check-label small fw-semibold" for="oidcOnly"> {{ "OIDC.OIDC_ONLY" | translate }} </label>
         </div>
         <div class="form-text">{{ "OIDC.OIDC_ONLY_HELP" | translate }}</div>
         @if (oidcOnlyMissingAdmin()) {
@@ -231,8 +194,7 @@
         @if (oidcForm().submitting()) {
         <span class="spinner-border spinner-border-sm me-1"></span>
         {{ "COMMON.SAVING" | translate }} }
-        <i class="bi bi-floppy-fill me-1"></i>{{ "OIDC.SAVE_SETTINGS" |
-        translate }}
+        <i class="bi bi-floppy-fill me-1"></i>{{ "OIDC.SAVE_SETTINGS" | translate }}
       </button>
 
       <button
@@ -245,8 +207,7 @@
         @if (testing()) {
         <span class="spinner-border spinner-border-sm me-1"></span>
         {{ "OIDC.TESTING" | translate }} } @else {
-        <i class="bi bi-plug-fill me-1"></i>{{ "EXTREG.TEST_CONNECTION" |
-        translate }} }
+        <i class="bi bi-plug-fill me-1"></i>{{ "EXTREG.TEST_CONNECTION" | translate }} }
       </button>
     </div>
 
@@ -259,9 +220,8 @@
     >
       <div class="fw-semibold">
         @if (result.success) {
-        <i class="bi bi-check-circle-fill me-1"></i>{{ "OIDC.TEST_SUCCESS" |
-        translate }} } @else { <i class="bi bi-x-octagon-fill me-1"></i>{{
-        "OIDC.TEST_FAILED" | translate }} }
+        <i class="bi bi-check-circle-fill me-1"></i>{{ "OIDC.TEST_SUCCESS" | translate }} } @else {
+        <i class="bi bi-x-octagon-fill me-1"></i>{{ "OIDC.TEST_FAILED" | translate }} }
       </div>
       <ul class="list-unstyled mb-0">
         @for (step of result.steps; track step.name) {
@@ -286,8 +246,7 @@
       <div>
         {{ "OIDC.INFO_PRE" | translate }}
         <code>/var/lib/portalcrane/oidc_config.json</code>
-        {{ "OIDC.INFO_MID" | translate }} (<code>OIDC_*</code>) {{
-        "OIDC.INFO_POST" | translate }}
+        {{ "OIDC.INFO_MID" | translate }} (<code>OIDC_*</code>) {{ "OIDC.INFO_POST" | translate }}
       </div>
     </div>
   </div>
@@ -299,31 +258,22 @@
 
 @if (oidcForm.enabled().value()) {
 <div class="card border-0 mb-3">
-  <div
-    class="card-header border-0 d-flex align-items-center justify-content-between"
-  >
+  <div class="card-header border-0 d-flex align-items-center justify-content-between">
     <div>
       <h6 class="fw-semibold mb-0">
-        <i class="bi bi-person-gear text-primary me-2"></i>{{
-        "OIDC.ACCESS_CONTROL" | translate }}
+        <i class="bi bi-person-gear text-primary me-2"></i>{{ "OIDC.ACCESS_CONTROL" | translate }}
       </h6>
-      <div class="text-muted small mt-1">
-        {{ "OIDC.ACCESS_CONTROL_INTRO" | translate }}
-      </div>
+      <div class="text-muted small mt-1">{{ "OIDC.ACCESS_CONTROL_INTRO" | translate }}</div>
     </div>
 
     <!-- Active state badge -->
     @if (groupMappingEnabled()) {
-    <span
-      class="badge bg-warning-subtle text-warning d-flex align-items-center gap-1 ms-auto"
-    >
+    <span class="badge bg-warning-subtle text-warning d-flex align-items-center gap-1 ms-auto">
       <i class="bi bi-pencil-fill" style="font-size: 0.6rem"></i>
       {{ "TRANSFER.CUSTOM" | translate }}
     </span>
     } @else {
-    <span
-      class="badge bg-secondary-subtle text-secondary d-flex align-items-center gap-1 ms-auto"
-    >
+    <span class="badge bg-secondary-subtle text-secondary d-flex align-items-center gap-1 ms-auto">
       <i class="bi bi-server" style="font-size: 0.6rem"></i>
       {{ "TRANSFER.FROM_ENV" | translate }}
     </span>
@@ -354,16 +304,13 @@
       <!-- Admins subsection -->
       <div class="col-12">
         <span class="badge bg-primary-subtle text-primary">
-          <i class="bi bi-shield-fill-check me-1"></i>{{ "OIDC.ADMINS" |
-          translate }}
+          <i class="bi bi-shield-fill-check me-1"></i>{{ "OIDC.ADMINS" | translate }}
         </span>
       </div>
 
       <!-- Admin group claim + value -->
       <div class="col-md-6">
-        <label class="form-label fw-semibold small"
-          >{{ "OIDC.ADMIN_GROUP_CLAIM" | translate }}</label
-        >
+        <label class="form-label fw-semibold small">{{ "OIDC.ADMIN_GROUP_CLAIM" | translate }}</label>
         <input
           type="text"
           class="form-control font-monospace"
@@ -372,9 +319,7 @@
         />
       </div>
       <div class="col-md-6">
-        <label class="form-label fw-semibold small"
-          >{{ "OIDC.ADMIN_GROUP" | translate }}</label
-        >
+        <label class="form-label fw-semibold small">{{ "OIDC.ADMIN_GROUP" | translate }}</label>
         <input
           type="text"
           class="form-control font-monospace"
@@ -390,19 +335,14 @@
       <div class="col-12">
         <hr class="my-2" />
         <span class="badge bg-info-subtle text-info">
-          <i class="bi bi-person-check-fill me-1"></i>{{ "OIDC.REGULAR_USERS" |
-          translate }}
+          <i class="bi bi-person-check-fill me-1"></i>{{ "OIDC.REGULAR_USERS" | translate }}
         </span>
-        <div class="form-text mt-1 mb-0">
-          {{ "OIDC.REGULAR_USERS_HELP" | translate }}
-        </div>
+        <div class="form-text mt-1 mb-0">{{ "OIDC.REGULAR_USERS_HELP" | translate }}</div>
       </div>
 
       <!-- User group claim + value -->
       <div class="col-md-6">
-        <label class="form-label fw-semibold small"
-          >{{ "OIDC.USER_GROUP_CLAIM" | translate }}</label
-        >
+        <label class="form-label fw-semibold small">{{ "OIDC.USER_GROUP_CLAIM" | translate }}</label>
         <input
           type="text"
           class="form-control font-monospace"
@@ -411,9 +351,7 @@
         />
       </div>
       <div class="col-md-6">
-        <label class="form-label fw-semibold small"
-          >{{ "OIDC.USER_GROUP" | translate }}</label
-        >
+        <label class="form-label fw-semibold small">{{ "OIDC.USER_GROUP" | translate }}</label>
         <input
           type="text"
           class="form-control font-monospace"
@@ -434,16 +372,11 @@
             id="oidcRestrictToGroups"
             [formField]="oidcForm.restrict_to_groups"
           />
-          <label
-            class="form-check-label small fw-semibold"
-            for="oidcRestrictToGroups"
-          >
+          <label class="form-check-label small fw-semibold" for="oidcRestrictToGroups">
             {{ "OIDC.RESTRICT_GROUPS" | translate }}
           </label>
         </div>
-        <div class="form-text">
-          {{ "OIDC.RESTRICT_GROUPS_HELP" | translate }}
-        </div>
+        <div class="form-text">{{ "OIDC.RESTRICT_GROUPS_HELP" | translate }}</div>
       </div>
       }
     </div>
@@ -459,8 +392,7 @@
         @if (oidcForm().submitting()) {
         <span class="spinner-border spinner-border-sm me-1"></span>
         {{ "COMMON.SAVING" | translate }} }
-        <i class="bi bi-floppy-fill me-1"></i>{{ "OIDC.SAVE_SETTINGS" |
-        translate }}
+        <i class="bi bi-floppy-fill me-1"></i>{{ "OIDC.SAVE_SETTINGS" | translate }}
       </button>
     </div>
     }

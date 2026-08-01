@@ -1,6 +1,4 @@
-<div
-  class="login-page d-flex align-items-center justify-content-center min-vh-100"
->
+<div class="login-page d-flex align-items-center justify-content-center min-vh-100">
   <!-- Theme toggle -->
   <div class="theme-switcher position-fixed top-0 end-0 m-3">
     <div class="btn-group" role="group">
@@ -54,17 +52,11 @@
             (click)="loginWithOidc()"
           >
             <i class="bi bi-person-badge-fill"></i>
-            {{
-              "AUTH.SIGN_IN_WITH"
-                | translate: { provider: oidcConfig()?.issuer | slice: 8 : 40 }
-            }}...
+            {{ "AUTH.SIGN_IN_WITH" | translate: { provider: oidcConfig()?.issuer | slice: 8 : 40 } }}...
           </button>
         </div>
         @if (oidcAuthorizationUnavailable()) {
-          <div
-            class="alert alert-warning d-flex align-items-center gap-2 py-2"
-            role="alert"
-          >
+          <div class="alert alert-warning d-flex align-items-center gap-2 py-2" role="alert">
             <i class="bi bi-exclamation-triangle-fill"></i>
             <small>{{ "AUTH.OIDC_DISCOVERY_FAILED" | translate }}</small>
           </div>
@@ -72,19 +64,14 @@
         @if (localLoginEnabled()) {
           <div class="divider d-flex align-items-center my-3">
             <span class="divider-line"></span>
-            <span class="text-muted small px-2">{{
-              "AUTH.OR_ADMIN_LOGIN" | translate
-            }}</span>
+            <span class="text-muted small px-2">{{ "AUTH.OR_ADMIN_LOGIN" | translate }}</span>
             <span class="divider-line"></span>
           </div>
         }
       }
 
       @if (error()) {
-        <div
-          class="alert alert-danger d-flex align-items-center gap-2 py-2"
-          role="alert"
-        >
+        <div class="alert alert-danger d-flex align-items-center gap-2 py-2" role="alert">
           <i class="bi bi-exclamation-triangle-fill"></i>
           <small>{{ error() }}</small>
         </div>
@@ -94,13 +81,9 @@
       @if (localLoginEnabled()) {
         <form (submit)="onSubmit($event)">
           <div class="mb-3">
-            <label class="form-label fw-semibold small">{{
-              "AUTH.USERNAME" | translate
-            }}</label>
+            <label class="form-label fw-semibold small">{{ "AUTH.USERNAME" | translate }}</label>
             <div class="input-group">
-              <span class="input-group-text"
-                ><i class="bi bi-person-fill"></i
-              ></span>
+              <span class="input-group-text"><i class="bi bi-person-fill"></i></span>
               <input
                 type="text"
                 class="form-control"
@@ -112,13 +95,9 @@
           </div>
 
           <div class="mb-3">
-            <label class="form-label fw-semibold small">{{
-              "AUTH.PASSWORD" | translate
-            }}</label>
+            <label class="form-label fw-semibold small">{{ "AUTH.PASSWORD" | translate }}</label>
             <div class="input-group">
-              <span class="input-group-text"
-                ><i class="bi bi-lock-fill"></i
-              ></span>
+              <span class="input-group-text"><i class="bi bi-lock-fill"></i></span>
               <input
                 [type]="showPassword() ? 'text' : 'password'"
                 class="form-control"
@@ -126,14 +105,8 @@
                 placeholder="••••••••"
                 autocomplete="current-password"
               />
-              <button
-                type="button"
-                class="btn btn-outline-secondary"
-                (click)="showPassword.set(!showPassword())"
-              >
-                <i
-                  [class]="showPassword() ? 'bi bi-eye-slash' : 'bi bi-eye'"
-                ></i>
+              <button type="button" class="btn btn-outline-secondary" (click)="showPassword.set(!showPassword())">
+                <i [class]="showPassword() ? 'bi bi-eye-slash' : 'bi bi-eye'"></i>
               </button>
             </div>
           </div>

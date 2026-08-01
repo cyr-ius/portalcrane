@@ -2,14 +2,9 @@
 <!-- MIGRATION: Token creation form now uses [formField] bindings -->
 
 <div class="card section-card mb-3">
-  <div
-    class="card-header border-0 d-flex align-items-center justify-content-between pb-0"
-  >
+  <div class="card-header border-0 d-flex align-items-center justify-content-between pb-0">
     <div>
-      <h6 class="fw-semibold mb-0">
-        <i class="bi bi-key-fill me-2 text-primary"></i
-        >{{ "TOKENS.TITLE" | translate }}
-      </h6>
+      <h6 class="fw-semibold mb-0"><i class="bi bi-key-fill me-2 text-primary"></i>{{ "TOKENS.TITLE" | translate }}</h6>
       <p class="text-muted small mt-1 mb-0">
         {{ "TOKENS.SUBTITLE_PRE" | translate }} <code>docker login</code>
         {{ "TOKENS.SUBTITLE_POST" | translate }}
@@ -34,9 +29,7 @@
     <!-- ── Newly created token banner (shown once) ───────────────────────── -->
     @if (createdToken()) {
       <div class="alert alert-success mb-3 p-3">
-        <div
-          class="d-flex align-items-start justify-content-between gap-2 mb-2"
-        >
+        <div class="d-flex align-items-start justify-content-between gap-2 mb-2">
           <div class="fw-semibold small">
             <i class="bi bi-check-circle-fill me-1"></i>
             {{ "TOKENS.CREATED_PRE" | translate }}
@@ -102,12 +95,7 @@
             <i class="bi bi-braces-asterisk flex-shrink-0 mt-1"></i>
             <div>
               {{ "TOKENS.SWAGGER_HINT" | translate }}
-              <a
-                href="/api/docs"
-                target="_blank"
-                rel="noopener"
-                class="fw-semibold"
-              >
+              <a href="/api/docs" target="_blank" rel="noopener" class="fw-semibold">
                 {{ "TOKENS.SWAGGER_LINK" | translate }}
                 <i class="bi bi-box-arrow-up-right ms-1"></i>
               </a>
@@ -119,9 +107,7 @@
 
     <!-- ── Create form ───────────────────────────────────────────────────── -->
     @if (showCreateForm()) {
-      <div
-        class="border border-primary-subtle rounded p-3 mb-3 bg-primary-subtle bg-opacity-10"
-      >
+      <div class="border border-primary-subtle rounded p-3 mb-3 bg-primary-subtle bg-opacity-10">
         <h6 class="fw-semibold mb-3 text-primary small">
           {{ "TOKENS.NEW_TOKEN" | translate }}
         </h6>
@@ -135,13 +121,11 @@
         <div class="row g-2 mb-3">
           <!-- Token scope (Docker vs API) — manual binding: DOM returns strings -->
           <div class="col-12">
-            <label class="form-label small fw-semibold">{{
-              "TOKENS.SCOPE" | translate
-            }}</label>
+            <label class="form-label small fw-semibold">{{ "TOKENS.SCOPE" | translate }}</label>
             <select
               class="form-select form-select-sm"
               [value]="tokenModel().scope"
-              (change)="tokenModel.update(m => ({ ...m, scope: $any($event.target).value }))"
+              (change)="tokenModel.update((m) => ({ ...m, scope: $any($event.target).value }))"
             >
               <option value="docker">
                 {{ "TOKENS.SCOPE_DOCKER" | translate }}
@@ -159,9 +143,7 @@
 
           <!-- Token name -->
           <div class="col-12">
-            <label class="form-label small fw-semibold">{{
-              "COMMON.NAME" | translate
-            }}</label>
+            <label class="form-label small fw-semibold">{{ "COMMON.NAME" | translate }}</label>
             <input
               type="text"
               class="form-control form-control-sm"
@@ -173,13 +155,11 @@
           <!-- Expiry selector — uses manual binding because the DOM always returns strings,
                which is incompatible with the number type expected by the Signal Form model -->
           <div class="col-12">
-            <label class="form-label small fw-semibold">{{
-              "TOKENS.EXPIRES_IN" | translate
-            }}</label>
+            <label class="form-label small fw-semibold">{{ "TOKENS.EXPIRES_IN" | translate }}</label>
             <select
               class="form-select form-select-sm"
               [value]="tokenModel().expiresInDays"
-              (change)="tokenModel.update(m => ({ ...m, expiresInDays: +$any($event.target).value }))"
+              (change)="tokenModel.update((m) => ({ ...m, expiresInDays: +$any($event.target).value }))"
             >
               <option [value]="30">{{ "TOKENS.DAYS_30" | translate }}</option>
               <option [value]="90">{{ "TOKENS.DAYS_90" | translate }}</option>
@@ -203,11 +183,7 @@
               {{ "TOKENS.GENERATE" | translate }}
             }
           </button>
-          <button
-            class="btn btn-outline-secondary btn-sm"
-            (click)="cancelCreate()"
-            [disabled]="creating()"
-          >
+          <button class="btn btn-outline-secondary btn-sm" (click)="cancelCreate()" [disabled]="creating()">
             {{ "COMMON.CANCEL" | translate }}
           </button>
         </div>
@@ -234,10 +210,7 @@
     @if (!loading() && tokens().length > 0) {
       <div class="token-list">
         @for (token of tokens(); track token.id) {
-          <div
-            class="d-flex align-items-center gap-3 py-2 border-bottom"
-            [class.opacity-50]="isExpired(token)"
-          >
+          <div class="d-flex align-items-center gap-3 py-2 border-bottom" [class.opacity-50]="isExpired(token)">
             <!-- Icon -->
             <div
               class="token-icon d-flex align-items-center justify-content-center rounded-2 bg-body-tertiary flex-shrink-0"
@@ -251,51 +224,36 @@
 
             <!-- Info -->
             <div class="flex-grow-1 min-w-0">
-              <div
-                class="fw-semibold small text-truncate d-flex align-items-center gap-2"
-              >
+              <div class="fw-semibold small text-truncate d-flex align-items-center gap-2">
                 <span class="text-truncate">{{ token.name }}</span>
                 @if (token.scope === "api") {
                   <span class="badge text-bg-info flex-shrink-0">
-                    <i class="bi bi-braces-asterisk me-1"></i
-                    >{{ "TOKENS.SCOPE_API" | translate }}
+                    <i class="bi bi-braces-asterisk me-1"></i>{{ "TOKENS.SCOPE_API" | translate }}
                   </span>
                 } @else {
                   <span class="badge text-bg-secondary flex-shrink-0">
-                    <i class="bi bi-box-seam me-1"></i
-                    >{{ "TOKENS.SCOPE_DOCKER" | translate }}
+                    <i class="bi bi-box-seam me-1"></i>{{ "TOKENS.SCOPE_DOCKER" | translate }}
                   </span>
                 }
               </div>
               <div class="text-muted" style="font-size: 0.7rem">
                 @if (token.short_token_hint) {
                   <span
-                    >{{ "TOKENS.SHORT_TOKEN" | translate }}
-                    <code>{{ token.short_token_hint }}</code></span
+                    >{{ "TOKENS.SHORT_TOKEN" | translate }} <code>{{ token.short_token_hint }}</code></span
                   >
                   <span class="mx-1">·</span>
                 }
                 @if (isExpired(token)) {
                   <span class="text-danger">
                     <i class="bi bi-exclamation-triangle me-1"></i
-                    >{{
-                      "TOKENS.EXPIRED"
-                        | translate: { date: formatDate(token.expires_at) }
-                    }}
+                    >{{ "TOKENS.EXPIRED" | translate: { date: formatDate(token.expires_at) } }}
                   </span>
                 } @else {
-                  <span>{{
-                    "TOKENS.EXPIRES"
-                      | translate: { date: formatDate(token.expires_at) }
-                  }}</span>
+                  <span>{{ "TOKENS.EXPIRES" | translate: { date: formatDate(token.expires_at) } }}</span>
                 }
                 @if (token.last_used_at) {
                   <span class="ms-2 text-muted"
-                    >·
-                    {{
-                      "TOKENS.LAST_USED"
-                        | translate: { date: formatDate(token.last_used_at) }
-                    }}</span
+                    >· {{ "TOKENS.LAST_USED" | translate: { date: formatDate(token.last_used_at) } }}</span
                   >
                 }
               </div>
@@ -322,10 +280,7 @@
     <!-- ── Info note ─────────────────────────────────────────────────────── -->
     <div class="alert alert-info d-flex gap-2 mt-3 py-2 small mb-0">
       <i class="bi bi-info-circle-fill flex-shrink-0 mt-1"></i>
-      <div>
-        {{ "TOKENS.INFO_PRE" | translate }} <code>docker login</code
-        >{{ "TOKENS.INFO_POST" | translate }}
-      </div>
+      <div>{{ "TOKENS.INFO_PRE" | translate }} <code>docker login</code>{{ "TOKENS.INFO_POST" | translate }}</div>
     </div>
   </div>
 </div>

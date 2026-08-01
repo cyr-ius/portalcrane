@@ -24,9 +24,7 @@
 
     <!-- External-mode badge -->
     @if (isExternalSource() && !isDockerHubMode()) {
-      <span
-        class="badge bg-info-subtle text-info px-3 py-2 d-flex align-items-center gap-2"
-      >
+      <span class="badge bg-info-subtle text-info px-3 py-2 d-flex align-items-center gap-2">
         <i class="bi bi-github"></i>
         {{ activeSourceLabel() }} — {{ "IMAGES.READ_ONLY" | translate }}
       </span>
@@ -38,11 +36,7 @@
     <div class="card border-0 mb-3">
       <div class="card-body py-2">
         <div class="d-flex align-items-center gap-2 text-muted small">
-          <span
-            class="spinner-border spinner-border-sm"
-            role="status"
-            aria-hidden="true"
-          ></span>
+          <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
           <span>{{ "IMAGES.CHECKING_SOURCES" | translate }}</span>
         </div>
       </div>
@@ -52,8 +46,7 @@
       <div class="card-body py-2">
         <div class="d-flex align-items-center gap-2 flex-wrap">
           <span class="text-muted small fw-semibold me-1">
-            <i class="bi bi-hdd-network me-1"></i
-            >{{ "IMAGES.SOURCE" | translate }}
+            <i class="bi bi-hdd-network me-1"></i>{{ "IMAGES.SOURCE" | translate }}
           </span>
           @for (reg of externalRegistries(); track reg.id) {
             <button
@@ -65,14 +58,10 @@
             >
               @if (reg.id === "__local__") {
                 <i class="bi bi-hdd me-1"></i>
-              } @else if (
-                reg.host === "ghcr.io" || reg.host.includes("ghcr.io")
-              ) {
+              } @else if (reg.host === "ghcr.io" || reg.host.includes("ghcr.io")) {
                 <i class="bi bi-github me-1"></i>
               } @else if (
-                reg.host === "docker.io" ||
-                reg.host === "index.docker.io" ||
-                reg.host === "registry-1.docker.io"
+                reg.host === "docker.io" || reg.host === "index.docker.io" || reg.host === "registry-1.docker.io"
               ) {
                 <span class="me-1">🐳</span>
               } @else {
@@ -158,8 +147,7 @@
                 (click)="setViewMode('flat')"
                 [title]="'IMAGES.VIEW_LIST_TITLE' | translate"
               >
-                <i class="bi bi-list-ul me-1"></i
-                >{{ "IMAGES.VIEW_LIST" | translate }}
+                <i class="bi bi-list-ul me-1"></i>{{ "IMAGES.VIEW_LIST" | translate }}
               </button>
               <button
                 class="btn"
@@ -168,8 +156,7 @@
                 (click)="setViewMode('tree')"
                 [title]="'IMAGES.VIEW_FOLDER_TITLE' | translate"
               >
-                <i class="bi bi-folder2-open me-1"></i
-                >{{ "IMAGES.VIEW_FOLDERS" | translate }}
+                <i class="bi bi-folder2-open me-1"></i>{{ "IMAGES.VIEW_FOLDERS" | translate }}
               </button>
             </div>
           </div>
@@ -189,11 +176,7 @@
 
         <!-- Page size -->
         <div class="col-auto">
-          <select
-            class="form-select form-select-sm"
-            [(ngModel)]="pageSize"
-            (ngModelChange)="onPageSizeChange()"
-          >
+          <select class="form-select form-select-sm" [(ngModel)]="pageSize" (ngModelChange)="onPageSizeChange()">
             <option [value]="10">
               {{ "IMAGES.PER_PAGE" | translate: { count: 10 } }}
             </option>
@@ -236,10 +219,7 @@
                     }
             }}
           </span>
-          <button
-            class="btn btn-link btn-sm p-0 text-muted"
-            (click)="setTagFilter('all')"
-          >
+          <button class="btn btn-link btn-sm p-0 text-muted" (click)="setTagFilter('all')">
             {{ "IMAGES.CLEAR_FILTER" | translate }}
           </button>
         </div>
@@ -253,9 +233,7 @@
       <div class="d-flex justify-content-center py-5">
         <div class="spinner-border text-primary"></div>
       </div>
-    } @else if (
-      viewMode() === "flat" || (isExternalSource() && isGithubMode())
-    ) {
+    } @else if (viewMode() === "flat" || (isExternalSource() && isGithubMode())) {
       <!-- ════════════════════════════════════════════ FLAT LIST ═══════════ -->
       @if (filteredItems().length === 0) {
         <div class="text-center py-5 text-muted">
@@ -283,19 +261,11 @@
               <tr>
                 <th
                   class="border-0 py-2"
-                  style="
-                    font-size: 0.75rem;
-                    font-weight: 600;
-                    color: var(--bs-secondary-color);
-                  "
+                  style="font-size: 0.75rem; font-weight: 600; color: var(--bs-secondary-color)"
                 >
                   <button
                     class="btn btn-link p-0 text-decoration-none d-flex align-items-center gap-1"
-                    style="
-                      font-size: 0.75rem;
-                      font-weight: 600;
-                      color: var(--bs-secondary-color);
-                    "
+                    style="font-size: 0.75rem; font-weight: 600; color: var(--bs-secondary-color)"
                     (click)="toggleSort('name')"
                   >
                     @if (isExternalSource() && isGithubMode()) {
@@ -308,19 +278,11 @@
                 </th>
                 <th
                   class="border-0 py-2"
-                  style="
-                    font-size: 0.75rem;
-                    font-weight: 600;
-                    color: var(--bs-secondary-color);
-                  "
+                  style="font-size: 0.75rem; font-weight: 600; color: var(--bs-secondary-color)"
                 >
                   <button
                     class="btn btn-link p-0 text-decoration-none d-flex align-items-center gap-1"
-                    style="
-                      font-size: 0.75rem;
-                      font-weight: 600;
-                      color: var(--bs-secondary-color);
-                    "
+                    style="font-size: 0.75rem; font-weight: 600; color: var(--bs-secondary-color)"
                     (click)="toggleSort('tag_count')"
                   >
                     {{ "IMAGES.COL_TAGS" | translate }}
@@ -329,21 +291,13 @@
                 </th>
                 <th
                   class="border-0 py-2"
-                  style="
-                    font-size: 0.75rem;
-                    font-weight: 600;
-                    color: var(--bs-secondary-color);
-                  "
+                  style="font-size: 0.75rem; font-weight: 600; color: var(--bs-secondary-color)"
                 >
                   {{ "IMAGES.COL_TAG_LIST" | translate }}
                 </th>
                 <th
                   class="border-0 py-2 text-end"
-                  style="
-                    font-size: 0.75rem;
-                    font-weight: 600;
-                    color: var(--bs-secondary-color);
-                  "
+                  style="font-size: 0.75rem; font-weight: 600; color: var(--bs-secondary-color)"
                 >
                   {{ "COMMON.ACTIONS" | translate }}
                 </th>
@@ -367,10 +321,7 @@
                         style="font-size: 0.875rem"
                         (click)="goToDetail(image.name)"
                         [title]="
-                          (isExternalSource()
-                            ? 'IMAGES.VIEW_EXTERNAL_DETAILS'
-                            : 'IMAGES.VIEW_DETAILS'
-                          ) | translate
+                          (isExternalSource() ? 'IMAGES.VIEW_EXTERNAL_DETAILS' : 'IMAGES.VIEW_DETAILS') | translate
                         "
                       >
                         {{ image.name }}
@@ -397,9 +348,7 @@
                           [class]="
                             tag === 'latest'
                               ? 'badge bg-success-subtle text-success font-monospace'
-                              : tag === 'main' ||
-                                  tag === 'master' ||
-                                  tag === 'edge'
+                              : tag === 'main' || tag === 'master' || tag === 'edge'
                                 ? 'badge bg-primary-subtle text-primary font-monospace'
                                 : 'badge bg-secondary-subtle text-secondary font-monospace'
                           "
@@ -409,10 +358,7 @@
                       }
                       @if (image.tags.length > 4) {
                         <span class="badge bg-secondary-subtle text-muted">
-                          {{
-                            "IMAGES.MORE"
-                              | translate: { count: image.tags.length - 4 }
-                          }}
+                          {{ "IMAGES.MORE" | translate: { count: image.tags.length - 4 } }}
                         </span>
                       }
                     </div>
@@ -430,13 +376,8 @@
                       <!-- Transfer button (replaces Copy) -->
                       <button
                         class="btn btn-sm btn-outline-secondary"
-                        (click)="
-                          openTransferModal([image]); $event.stopPropagation()
-                        "
-                        [title]="
-                          'IMAGES.TRANSFER_ONE'
-                            | translate: { name: image.name }
-                        "
+                        (click)="openTransferModal([image]); $event.stopPropagation()"
+                        [title]="'IMAGES.TRANSFER_ONE' | translate: { name: image.name }"
                       >
                         <i class="bi bi-arrow-left-right"></i>
                       </button>
@@ -447,13 +388,10 @@
                         [title]="
                           canDeleteImage(image)
                             ? isExternalSource() && isGithubMode()
-                              ? ('IMAGES.DELETE_GH_PKG_TITLE'
-                                | translate: { name: image.name })
+                              ? ('IMAGES.DELETE_GH_PKG_TITLE' | translate: { name: image.name })
                               : isExternalSource()
-                                ? ('IMAGES.DELETE_EXTERNAL_TITLE'
-                                  | translate: { name: image.name })
-                                : ('IMAGES.DELETE_LOCAL_TITLE'
-                                  | translate: { name: image.name })
+                                ? ('IMAGES.DELETE_EXTERNAL_TITLE' | translate: { name: image.name })
+                                : ('IMAGES.DELETE_LOCAL_TITLE' | translate: { name: image.name })
                             : ('IMAGES.NO_PUSH_PERMISSION' | translate)
                         "
                       >
@@ -468,9 +406,7 @@
         </div>
 
         <!-- Flat list pagination -->
-        <div
-          class="card-footer border-0 d-flex align-items-center justify-content-between py-2"
-        >
+        <div class="card-footer border-0 d-flex align-items-center justify-content-between py-2">
           <span class="text-muted small">
             {{
               "IMAGES.SHOWING_RANGE"
@@ -496,10 +432,7 @@
                   </button>
                 </li>
               }
-              <li
-                class="page-item"
-                [class.disabled]="currentPage() === data()?.total_pages"
-              >
+              <li class="page-item" [class.disabled]="currentPage() === data()?.total_pages">
                 <button class="page-link" (click)="goToPage(currentPage() + 1)">
                   <i class="bi bi-chevron-right"></i>
                 </button>
@@ -530,19 +463,11 @@
             >
               <i
                 class="bi bi-chevron-right text-muted"
-                [style.transform]="
-                  isFolderExpanded(folder.name)
-                    ? 'rotate(90deg)'
-                    : 'rotate(0deg)'
-                "
+                [style.transform]="isFolderExpanded(folder.name) ? 'rotate(90deg)' : 'rotate(0deg)'"
                 style="transition: transform 0.15s"
               ></i>
               <i
-                [class]="
-                  isFolderExpanded(folder.name)
-                    ? 'bi bi-folder2-open text-primary'
-                    : 'bi bi-folder2 text-muted'
-                "
+                [class]="isFolderExpanded(folder.name) ? 'bi bi-folder2-open text-primary' : 'bi bi-folder2 text-muted'"
               ></i>
               <span class="fw-semibold small font-monospace">
                 {{ folder.name }}
@@ -582,14 +507,8 @@
                         </span>
                       }
                       @if (image.tags.length > 5) {
-                        <span
-                          class="badge bg-secondary-subtle text-muted"
-                          style="font-size: 0.65rem"
-                        >
-                          {{
-                            "IMAGES.MORE"
-                              | translate: { count: image.tags.length - 5 }
-                          }}
+                        <span class="badge bg-secondary-subtle text-muted" style="font-size: 0.65rem">
+                          {{ "IMAGES.MORE" | translate: { count: image.tags.length - 5 } }}
                         </span>
                       }
                     </div>
@@ -602,10 +521,7 @@
                       class="btn btn-sm btn-outline-primary"
                       (click)="goToDetail(image.name)"
                       [title]="
-                        (isExternalSource()
-                          ? 'IMAGES.VIEW_EXTERNAL_DETAILS'
-                          : 'IMAGES.VIEW_DETAILS'
-                        ) | translate
+                        (isExternalSource() ? 'IMAGES.VIEW_EXTERNAL_DETAILS' : 'IMAGES.VIEW_DETAILS') | translate
                       "
                     >
                       <i class="bi bi-eye"></i>
@@ -613,12 +529,8 @@
                     <!-- Transfer button (replaces Copy in tree view) -->
                     <button
                       class="btn btn-sm btn-outline-secondary"
-                      (click)="
-                        openTransferModal([image]); $event.stopPropagation()
-                      "
-                      [title]="
-                        'IMAGES.TRANSFER_ONE' | translate: { name: image.name }
-                      "
+                      (click)="openTransferModal([image]); $event.stopPropagation()"
+                      [title]="'IMAGES.TRANSFER_ONE' | translate: { name: image.name }"
                     >
                       <i class="bi bi-arrow-left-right"></i>
                     </button>
@@ -629,10 +541,8 @@
                       [title]="
                         canDeleteImage(image)
                           ? isExternalSource()
-                            ? ('IMAGES.DELETE_EXTERNAL_TITLE'
-                              | translate: { name: image.name })
-                            : ('IMAGES.DELETE_LOCAL_TITLE'
-                              | translate: { name: image.name })
+                            ? ('IMAGES.DELETE_EXTERNAL_TITLE' | translate: { name: image.name })
+                            : ('IMAGES.DELETE_LOCAL_TITLE' | translate: { name: image.name })
                           : ('IMAGES.NO_PUSH_PERMISSION' | translate)
                       "
                     >
@@ -646,9 +556,7 @@
         </div>
 
         <!-- Tree view pagination -->
-        <div
-          class="card-footer border-0 d-flex align-items-center justify-content-between py-2"
-        >
+        <div class="card-footer border-0 d-flex align-items-center justify-content-between py-2">
           <span class="text-muted small">
             {{
               "IMAGES.SHOWING_RANGE"
@@ -674,10 +582,7 @@
                   </button>
                 </li>
               }
-              <li
-                class="page-item"
-                [class.disabled]="currentPage() === data()?.total_pages"
-              >
+              <li class="page-item" [class.disabled]="currentPage() === data()?.total_pages">
                 <button class="page-link" (click)="goToPage(currentPage() + 1)">
                   <i class="bi bi-chevron-right"></i>
                 </button>
@@ -715,11 +620,7 @@
     <app-image-detail-modal
       [source]="selectedSource()"
       [image]="viewTarget()!"
-      [canPush]="
-        isExternalSource()
-          ? canPushExternal()
-          : canPushOnLocalImage(viewTarget()!)
-      "
+      [canPush]="isExternalSource() ? canPushExternal() : canPushOnLocalImage(viewTarget()!)"
       (closed)="viewTarget.set(null)"
       (tagsChanged)="reloadImages()"
     />
@@ -735,56 +636,32 @@
         <div class="modal-content">
           <div class="modal-header">
             @if (isExternalSource() && isGithubMode()) {
-              <h5 class="modal-title">
-                <i class="bi bi-github me-2"></i
-                >{{ "IMAGES.GH_PKG_DETAILS" | translate }}
-              </h5>
+              <h5 class="modal-title"><i class="bi bi-github me-2"></i>{{ "IMAGES.GH_PKG_DETAILS" | translate }}</h5>
             } @else {
-              <h5 class="modal-title">
-                <i class="bi bi-eye me-2"></i
-                >{{ "IMAGES.IMAGE_DETAILS" | translate }}
-              </h5>
+              <h5 class="modal-title"><i class="bi bi-eye me-2"></i>{{ "IMAGES.IMAGE_DETAILS" | translate }}</h5>
             }
             <button class="btn-close" (click)="viewTarget.set(null)"></button>
           </div>
           <div class="modal-body">
             <div class="mb-2 d-flex align-items-center gap-2">
               <span class="text-muted small fw-semibold">
-                {{
-                  (isExternalSource() && isGithubMode()
-                    ? "IMAGES.PACKAGE"
-                    : "IMAGES.REPOSITORY"
-                  ) | translate
-                }}:
+                {{ (isExternalSource() && isGithubMode() ? "IMAGES.PACKAGE" : "IMAGES.REPOSITORY") | translate }}:
               </span>
               <code class="small">{{ viewTarget()?.name }}</code>
             </div>
             <div class="mb-3">
-              <span class="text-muted small fw-semibold"
-                >{{ "IMAGES.TAGS_LABEL" | translate }}
-              </span>
+              <span class="text-muted small fw-semibold">{{ "IMAGES.TAGS_LABEL" | translate }} </span>
               <strong>{{ viewTarget()?.tag_count }}</strong>
             </div>
             <div class="d-flex flex-wrap gap-1">
-              @for (
-                tag of viewTarget()?.tags
-                  ? viewTarget()!.tags.slice(0, 20)
-                  : [];
-                track tag
-              ) {
-                <span
-                  class="badge bg-secondary-subtle text-secondary font-monospace"
-                >
+              @for (tag of viewTarget()?.tags ? viewTarget()!.tags.slice(0, 20) : []; track tag) {
+                <span class="badge bg-secondary-subtle text-secondary font-monospace">
                   {{ tag }}
                 </span>
               }
               @if ((viewTarget()?.tags?.length ?? 0) > 20) {
                 <span class="badge bg-secondary-subtle text-muted">
-                  {{
-                    "IMAGES.MORE"
-                      | translate
-                        : { count: (viewTarget()?.tags?.length ?? 0) - 20 }
-                  }}
+                  {{ "IMAGES.MORE" | translate: { count: (viewTarget()?.tags?.length ?? 0) - 20 } }}
                 </span>
               }
             </div>
@@ -798,19 +675,13 @@
                 >
                   <i class="bi bi-github"></i>
                   {{ "IMAGES.VIEW_ON_GHCR" | translate }}
-                  <i
-                    class="bi bi-box-arrow-up-right"
-                    style="font-size: 0.7rem"
-                  ></i>
+                  <i class="bi bi-box-arrow-up-right" style="font-size: 0.7rem"></i>
                 </a>
               </div>
             }
           </div>
           <div class="modal-footer">
-            <button
-              class="btn btn-secondary btn-sm"
-              (click)="viewTarget.set(null)"
-            >
+            <button class="btn btn-secondary btn-sm" (click)="viewTarget.set(null)">
               {{ "COMMON.CLOSE" | translate }}
             </button>
           </div>
@@ -832,8 +703,7 @@
       <div class="modal-content">
         <div class="modal-header">
           <h5 class="modal-title text-danger">
-            <i class="bi bi-trash me-2"></i
-            >{{ "IMAGES.DELETE_IMAGE_TITLE" | translate }}
+            <i class="bi bi-trash me-2"></i>{{ "IMAGES.DELETE_IMAGE_TITLE" | translate }}
           </h5>
           <button class="btn-close" (click)="deleteTarget.set(null)"></button>
         </div>
@@ -864,17 +734,10 @@
           </p>
         </div>
         <div class="modal-footer">
-          <button
-            class="btn btn-secondary btn-sm"
-            (click)="deleteTarget.set(null)"
-          >
+          <button class="btn btn-secondary btn-sm" (click)="deleteTarget.set(null)">
             {{ "COMMON.CANCEL" | translate }}
           </button>
-          <button
-            class="btn btn-danger btn-sm"
-            (click)="deleteImage()"
-            [disabled]="deleting()"
-          >
+          <button class="btn btn-danger btn-sm" (click)="deleteImage()" [disabled]="deleting()">
             @if (deleting()) {
               <span class="spinner-border spinner-border-sm me-1"></span>
             } @else {

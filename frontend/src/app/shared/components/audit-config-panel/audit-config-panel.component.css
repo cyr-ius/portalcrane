@@ -1,8 +1,8 @@
 /* Shared column template so header, filters and every row stay aligned.
    Columns: date | user | ip | event | image (flexible) | count | status. */
 .audit-table {
-  --audit-cols: max-content minmax(6rem, max-content) minmax(6rem, max-content)
-    max-content minmax(6rem, 1fr) max-content max-content;
+  --audit-cols: max-content minmax(6rem, max-content) minmax(6rem, max-content) max-content minmax(6rem, 1fr)
+    max-content max-content;
   overflow-x: auto;
 }
 
