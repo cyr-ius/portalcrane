@@ -10,13 +10,18 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
 
 jobs:
-  deploy:
-    name: Build & deploy (MkDocs → gh-pages)
+  build:
+    name: Build (MkDocs)
     runs-on: ubuntu-latest
-
     steps:
       - name: 📥 Checkout the repository
         uses: actions/checkout@v7
@@ -31,5 +36,22 @@ jobs:
       - name: 📦 Install dependencies
         run: pip install -r docs/requirements.txt
 
-      - name: 🚀 Build and deploy to gh-pages
-        run: mkdocs gh-deploy --force --clean
+      - name: 🏗️ Build site
+        run: mkdocs build --strict
+
+      - name: 📤 Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: 🚀 Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
