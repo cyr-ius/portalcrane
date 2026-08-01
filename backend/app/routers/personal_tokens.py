@@ -40,6 +40,7 @@ import string
 import uuid
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any, cast
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from jose import jwt
@@ -113,23 +114,23 @@ class CreateTokenRequest(BaseModel):
 # ─── Storage helpers ──────────────────────────────────────────────────────────
 
 
-def _load_tokens() -> list[dict]:
+def _load_tokens() -> list[dict[str, Any]]:
     """Load all personal tokens from disk."""
     try:
         if _TOKENS_FILE.exists():
-            return json.loads(_TOKENS_FILE.read_text())
+            return cast(list[dict[str, Any]], json.loads(_TOKENS_FILE.read_text()))
     except Exception:
         pass
     return []
 
 
-def _save_tokens(tokens: list[dict]) -> None:
+def _save_tokens(tokens: list[dict[str, Any]]) -> None:
     """Persist the tokens list to disk."""
     _TOKENS_FILE.parent.mkdir(parents=True, exist_ok=True)
     _TOKENS_FILE.write_text(json.dumps(tokens, indent=2))
 
 
-def _token_to_public(t: dict) -> PersonalTokenPublic:
+def _token_to_public(t: dict[str, Any]) -> PersonalTokenPublic:
     """Convert a raw token dict to the public representation."""
     return PersonalTokenPublic(
         id=t["id"],
@@ -195,7 +196,7 @@ def verify_personal_token(
     tokens = _load_tokens()
     now = datetime.now(UTC)
 
-    def _not_expired(token: dict) -> bool:
+    def _not_expired(token: dict[str, Any]) -> bool:
         # Belt-and-suspenders with the JWT `exp` claim already checked at decode.
         if token.get("expires_at"):
             return now <= datetime.fromisoformat(token["expires_at"])
@@ -261,7 +262,7 @@ def verify_personal_token(
             continue
         token["last_used_at"] = now.isoformat()
         _save_tokens(tokens)
-        return token["username"]
+        return str(token["username"])
 
     return None
 

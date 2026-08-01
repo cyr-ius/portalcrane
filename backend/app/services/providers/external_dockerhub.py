@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from typing import Any
+from typing import Any, cast
 
 import httpx
 
@@ -89,7 +89,8 @@ class DockerHubProvider(BaseRegistryProvider):
                     json={"username": self.username, "password": self.password},
                 )
                 if resp.status_code == 200:
-                    return resp.json().get("token")
+                    data: dict[str, Any] = resp.json()
+                    return cast("str | None", data.get("token"))
                 logger.warning(
                     "Docker Hub login failed for user=%s status=%s",
                     self.username,
@@ -130,8 +131,10 @@ class DockerHubProvider(BaseRegistryProvider):
             ) as client:
                 resp = await client.get(_AUTH_URL, params=params, auth=auth)
                 if resp.status_code == 200:
-                    data = resp.json()
-                    return data.get("token") or data.get("access_token")
+                    data: dict[str, Any] = resp.json()
+                    return cast(
+                        "str | None", data.get("token") or data.get("access_token")
+                    )
                 logger.warning(
                     "_get_v2_token: status=%s repo=%s", resp.status_code, repository
                 )
@@ -426,7 +429,7 @@ class DockerHubProvider(BaseRegistryProvider):
                     return {}
                 resp.raise_for_status()
 
-                manifest = resp.json()
+                manifest: dict[str, Any] = resp.json()
                 manifest["_digest"] = resp.headers.get("Docker-Content-Digest", "")
                 manifest["_content_type"] = resp.headers.get("Content-Type", "")
                 manifest["_content_length"] = int(resp.headers.get("Content-Length", 0))
@@ -471,7 +474,7 @@ class DockerHubProvider(BaseRegistryProvider):
                 if resp.status_code == 404:
                     return {}
                 resp.raise_for_status()
-                return resp.json()
+                return cast("dict[str, Any]", resp.json())
 
         except Exception as exc:
             logger.warning(

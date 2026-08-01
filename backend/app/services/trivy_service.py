@@ -14,6 +14,7 @@ import os
 import re
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 from ..config import DATA_DIR, TRIVY_SERVER_URL, Settings, get_settings
 
@@ -29,20 +30,21 @@ logger = logging.getLogger(__name__)
 # ── Override persistence ──────────────────────────────────────────────────────
 
 
-def load_vuln_override() -> dict | None:
+def load_vuln_override() -> dict[str, Any] | None:
     """
     Load the persisted vuln override from disk.
     Returns None when no override file exists.
     """
     try:
         if _OVERRIDE_FILE.exists():
-            return json.loads(_OVERRIDE_FILE.read_text())
+            result: dict[str, Any] = json.loads(_OVERRIDE_FILE.read_text())
+            return result
     except Exception:
         pass
     return None
 
 
-def save_vuln_override(data: dict) -> None:
+def save_vuln_override(data: dict[str, Any]) -> None:
     """Persist admin vuln override to disk so all users pick it up."""
     _OVERRIDE_FILE.parent.mkdir(parents=True, exist_ok=True)
     _OVERRIDE_FILE.write_text(json.dumps(data, indent=2))
@@ -57,7 +59,7 @@ def clear_vuln_override() -> None:
         pass
 
 
-def resolve_vuln_config(settings: Settings) -> dict:
+def resolve_vuln_config(settings: Settings) -> dict[str, Any]:
     """
     Return the effective vuln configuration dict.
 
@@ -132,12 +134,12 @@ async def get_trivy_version() -> str | None:
         return None
 
 
-async def get_trivy_db_info() -> dict:
+async def get_trivy_db_info() -> dict[str, Any]:
     """Return Trivy vulnerability database metadata and freshness status."""
     import json as _json
     from datetime import datetime, timedelta
 
-    info: dict = {
+    info: dict[str, Any] = {
         "last_update": None,
         "next_update": None,
         "version": None,
@@ -161,7 +163,7 @@ async def get_trivy_db_info() -> dict:
     return info
 
 
-async def update_trivy_db() -> dict:
+async def update_trivy_db() -> dict[str, Any]:
     """Force an immediate Trivy DB update."""
     proc = await asyncio.create_subprocess_exec(
         _TRIVY_BINARY,
@@ -179,7 +181,7 @@ async def update_trivy_db() -> dict:
     }
 
 
-def parse_trivy_output(raw: bytes, severities: list[str]) -> dict:
+def parse_trivy_output(raw: bytes, severities: list[str]) -> dict[str, Any]:
     """Parse Trivy JSON output and return a structured vuln_result dict."""
     try:
         data = json.loads(raw.decode())
@@ -193,7 +195,7 @@ def parse_trivy_output(raw: bytes, severities: list[str]) -> dict:
             "total": 0,
         }
 
-    vulns: list[dict] = []
+    vulns: list[dict[str, Any]] = []
     counts: dict[str, int] = {}
 
     for result in data.get("Results", []):
@@ -254,7 +256,7 @@ async def scan_image(
     image: str,
     severity: list[str] | None = None,
     ignore_unfixed: bool = False,
-) -> dict:
+) -> dict[str, Any]:
     """
     Scan a local registry image with Trivy.
     Returns a structured result dict compatible with the ScanResult model.
@@ -272,6 +274,9 @@ async def scan_image(
             "vulnerabilities": [],
             "error": stderr.decode(),
         }
+
+    if severity is None:
+        severity = ["HIGH", "CRITICAL"]
 
     parsed = parse_trivy_output(stdout, severity)
     return {
@@ -381,14 +386,19 @@ async def trivy_raw_scan(
     )
     stdout, stderr = await proc.communicate()
 
+    # communicate() waits for the process to exit before returning, so
+    # returncode is guaranteed to be set (not None) at this point.
+    returncode = proc.returncode
+    assert returncode is not None
+
     logger.debug(
         "trivy scan returncode=%s stdout=%r stderr=%r",
-        proc.returncode,
+        returncode,
         stdout.decode()[:500],
         stderr.decode()[:500],
     )
 
-    return stdout, stderr, proc.returncode
+    return stdout, stderr, returncode
 
 
 # ── Trivy DB background task ──────────────────────────────────────────────────

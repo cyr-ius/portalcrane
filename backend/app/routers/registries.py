@@ -1,6 +1,7 @@
 """Portalcrane - Registries Router."""
 
 import logging
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
@@ -28,7 +29,7 @@ logger = logging.getLogger(__name__)
 async def resolve_owned_registry(
     registry_id: str,
     current_user: UserInfo = Depends(get_current_user),
-) -> dict:
+) -> dict[str, Any]:
     """FastAPI dependency: resolve a path ``registry_id`` enforcing ownership.
 
     Non-admin users may only access global / system registries or registries
@@ -84,7 +85,7 @@ class TestConnectionRequest(BaseModel):
 @router.get("")
 async def list_registries(
     current_user: UserInfo = Depends(get_current_user),
-):
+) -> list[dict[str, Any]]:
     """
     List external registries visible to the current user.
     Admins see all; regular users see global + their own.
@@ -98,7 +99,7 @@ async def list_registries(
 async def create_registry_endpoint(
     request: CreateRegistryRequest,
     current_user: UserInfo = Depends(get_current_user),
-):
+) -> None:
     """
     Create a new external registry entry.
 
@@ -142,7 +143,7 @@ async def update_registry_endpoint(
     registry_id: str,
     request: UpdateRegistryRequest,
     current_user: UserInfo = Depends(get_current_user),
-):
+) -> dict[str, Any]:
     """
     Update an external registry entry. Owner or admin only.
 
@@ -211,7 +212,7 @@ async def update_registry_endpoint(
 async def delete_registry_endpoint(
     registry_id: str,
     current_user: UserInfo = Depends(get_current_user),
-):
+) -> None:
     """Delete a registry entry. Owner or admin only."""
     registry = get_registry_by_id(registry_id)
     if not registry:
@@ -231,7 +232,7 @@ async def delete_registry_endpoint(
 async def test_connection(
     request: TestConnectionRequest,
     _: UserInfo = Depends(get_current_user),
-):
+) -> dict[str, Any]:
     """Test connectivity to a registry using ad-hoc credentials."""
     return await test(
         host=request.host,
@@ -245,8 +246,8 @@ async def test_connection(
 @router.post("/{registry_id}/test")
 async def test_saved_connection(
     registry_id: str,
-    registry: dict = Depends(resolve_owned_registry),
-):
+    registry: dict[str, Any] = Depends(resolve_owned_registry),
+) -> None:
     """Test connectivity to a saved registry using stored credentials."""
     checks = await test(
         host=registry["host"],
@@ -265,8 +266,8 @@ async def test_saved_connection(
 
 @router.get("/{registry_id}/catalog-check")
 async def catalog_check(
-    registry: dict = Depends(resolve_owned_registry),
-):
+    registry: dict[str, Any] = Depends(resolve_owned_registry),
+) -> dict[str, Any]:
     """Check catalog for a specific repository in an external registry."""
     check = await check_catalog_browsable(
         host=registry["host"],
@@ -282,8 +283,8 @@ async def catalog_check(
 @router.get("/{registry_id}/ping")
 async def ping(
     registry_id: str,
-    registry: dict = Depends(resolve_owned_registry),
-):
+    registry: dict[str, Any] = Depends(resolve_owned_registry),
+) -> dict[str, Any]:
     """Check local registry connectivity."""
     is_up = await ping_catalog(registry_id=registry_id)
     return {

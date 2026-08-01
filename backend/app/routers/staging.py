@@ -7,6 +7,7 @@ import logging
 import shutil
 import uuid
 from datetime import UTC, datetime
+from typing import Any
 
 import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
@@ -166,7 +167,7 @@ async def pull_image(
     background_tasks: BackgroundTasks,
     settings: Settings = Depends(get_settings),
     current_user: UserInfo = Depends(require_pull_access),
-):
+) -> StagingJob:
     """
     Start a pull+scan pipeline for an image.
 
@@ -245,7 +246,7 @@ async def push_image(
     background_tasks: BackgroundTasks,
     settings: Settings = Depends(get_settings),
     current_user: UserInfo = Depends(require_push_access),
-):
+) -> dict[str, Any]:
     """
     Push a scanned image to the local registry or to an external registry.
     Non-admin users can only push their own jobs.
@@ -394,11 +395,16 @@ async def search_dockerhub(
     q: str,
     page: int = 1,
     _: UserInfo = Depends(require_pull_access),
-):
+) -> dict[str, Any]:
     """Search Docker Hub images (only anonymous)."""
     # Docker Hub search has used both `q` and `query` over time depending on
     # endpoint generation and account context. Send both keys for compatibility.
-    params = {"q": q, "query": q, "page": page, "page_size": 25}
+    params: dict[str, str | int | float | bool | None] = {
+        "q": q,
+        "query": q,
+        "page": page,
+        "page_size": 25,
+    }
     try:
         async with httpx.AsyncClient(
             timeout=DEFAULT_TIMEOUT, follow_redirects=True
@@ -446,7 +452,7 @@ async def search_dockerhub(
 async def get_dockerhub_tags(
     image: str,
     _: UserInfo = Depends(require_pull_access),
-):
+) -> dict[str, Any]:
     """Fetch available tags for a Docker Hub image."""
     namespace, name = image.split("/", 1) if "/" in image else ("library", image)
     url = f"{_DOCKERHUB_API_URL}/v2/repositories/{namespace}/{name}/tags/"
@@ -471,7 +477,9 @@ async def get_dockerhub_tags(
 
 
 @router.get("/jobs", response_model=list[StagingJob])
-async def list_jobs(current_user: UserInfo = Depends(require_pull_access)):
+async def list_jobs(
+    current_user: UserInfo = Depends(require_pull_access),
+) -> list[StagingJob]:
     """Return all staging jobs visible to the current user."""
     if current_user.is_admin:
         return [StagingJob(**j) for j in jobs_list.values()]
@@ -483,7 +491,9 @@ async def list_jobs(current_user: UserInfo = Depends(require_pull_access)):
 
 
 @router.get("/jobs/{job_id}", response_model=StagingJob)
-async def get_job(job_id: str, current_user: UserInfo = Depends(require_pull_access)):
+async def get_job(
+    job_id: str, current_user: UserInfo = Depends(require_pull_access)
+) -> StagingJob:
     """Return a specific staging job."""
     if job_id not in jobs_list:
         raise HTTPException(
@@ -500,7 +510,7 @@ async def get_job(job_id: str, current_user: UserInfo = Depends(require_pull_acc
 @router.delete("/jobs/{job_id}")
 async def delete_job(
     job_id: str, current_user: UserInfo = Depends(require_pull_access)
-):
+) -> dict[str, str]:
     """Delete a staging job and its OCI layout directory."""
     if job_id not in jobs_list:
         raise HTTPException(

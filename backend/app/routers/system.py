@@ -20,6 +20,7 @@ import asyncio
 import logging
 import shutil
 from datetime import UTC, datetime
+from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from pydantic import BaseModel
@@ -75,7 +76,7 @@ class GCStatus(BaseModel):
 
 # ── In-memory GC state ────────────────────────────────────────────────────────
 
-_gc_state: dict = GCStatus(
+_gc_state: dict[str, Any] = GCStatus(
     status="idle",
     started_at=None,
     finished_at=None,
@@ -90,7 +91,9 @@ _gc_state: dict = GCStatus(
 
 
 @router.get("/processes")
-async def list_processes(_: UserInfo = Depends(require_admin)):
+async def list_processes(
+    _: UserInfo = Depends(require_admin),
+) -> list[dict[str, Any]]:
     """Return runtime status of all supervised processes."""
     return await get_all_process_statuses()
 
@@ -102,7 +105,7 @@ async def list_processes(_: UserInfo = Depends(require_admin)):
 async def get_audit_logs(
     limit: int = Query(default=200, ge=1, le=500, description="Max number of events"),
     _: UserInfo = Depends(require_admin),
-):
+) -> dict[str, Any]:
     """Return the most recent in-memory audit log events (newest first)."""
     return {"events": get_recent_audit_events(limit=limit)}
 
@@ -111,7 +114,7 @@ async def get_audit_logs(
 
 
 @router.get("/orphan-oci", response_model=OrphanOCIResult)
-async def get_orphan_oci(_: UserInfo = Depends(require_admin)):
+async def get_orphan_oci(_: UserInfo = Depends(require_admin)) -> OrphanOCIResult:
     """List OCI layout directories in the staging area with no matching job."""
     root = staging_root()
     orphans = []
@@ -130,7 +133,7 @@ async def get_orphan_oci(_: UserInfo = Depends(require_admin)):
 
 
 @router.delete("/orphan-oci")
-async def purge_orphan_oci(_: UserInfo = Depends(require_admin)):
+async def purge_orphan_oci(_: UserInfo = Depends(require_admin)) -> dict[str, Any]:
     """Delete all orphan OCI layout directories."""
     root = staging_root()
     purged = []
@@ -233,7 +236,7 @@ async def start_garbage_collect(
     background_tasks: BackgroundTasks,
     dry_run: bool = False,
     _: UserInfo = Depends(require_admin),
-):
+) -> GCStatus:
     """Trigger a registry garbage-collect run (one job at a time)."""
     if _gc_state["status"] == "running":
         raise HTTPException(
@@ -253,7 +256,7 @@ async def start_garbage_collect(
 
 
 @router.get("/gc", response_model=GCStatus)
-async def get_gc_status(_: UserInfo = Depends(require_admin)):
+async def get_gc_status(_: UserInfo = Depends(require_admin)) -> GCStatus:
     """Get the current or last garbage-collect job status."""
     return GCStatus(
         status=_gc_state["status"],

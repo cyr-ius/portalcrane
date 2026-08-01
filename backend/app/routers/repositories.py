@@ -6,6 +6,7 @@ a proper HTTP 503 instead of crashing the ASGI application with a 500.
 """
 
 import logging
+from typing import Any
 
 import httpx
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
@@ -66,8 +67,8 @@ async def list_images(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=5, le=200),
     current_user: UserInfo = Depends(get_current_user),
-    _: dict = Depends(resolve_owned_registry),
-):
+    _: dict[str, Any] = Depends(resolve_owned_registry),
+) -> dict[str, Any]:
     """List repositories available in an external registry via /v2/_catalog."""
     # Visibility rules for non-admins (applied before pagination inside the
     # provider so total / total_pages stay consistent with the visible items):
@@ -109,8 +110,8 @@ async def delete_image(
     registry_id: str,
     repository: str = Query(..., description="Repository name, e.g. myorg/myimage"),
     current_user: UserInfo = Depends(get_current_user),
-    _: dict = Depends(resolve_owned_registry),
-):
+    _: dict[str, Any] = Depends(resolve_owned_registry),
+) -> dict[str, Any]:
     """Delete all tags of a repository in an external registry."""
     _ensure_folder_permission(
         current_user=current_user, image_path=repository, is_pull=False
@@ -137,8 +138,8 @@ async def get_tag_detail(
     repository: str = Query(..., description="Repository name, e.g. myorg/myimage"),
     tag: str = Query(..., description="Tag name, e.g. latest"),
     current_user: UserInfo = Depends(get_current_user),
-    _: dict = Depends(resolve_owned_registry),
-):
+    _: dict[str, Any] = Depends(resolve_owned_registry),
+) -> dict[str, Any]:
     """Return detailed metadata for a specific tag in an external V2 registry."""
     _ensure_read_access(
         current_user=current_user, registry_id=registry_id, repository=repository
@@ -168,8 +169,8 @@ async def get_tags(
     registry_id: str,
     repository: str = Query(..., description="Repository name, e.g. myorg/myimage"),
     current_user: UserInfo = Depends(get_current_user),
-    _: dict = Depends(resolve_owned_registry),
-):
+    _: dict[str, Any] = Depends(resolve_owned_registry),
+) -> dict[str, Any]:
     """List tags for a specific repository in an external registry."""
     _ensure_read_access(
         current_user=current_user, registry_id=registry_id, repository=repository
@@ -190,8 +191,8 @@ async def delete_tag(
     repository: str = Query(..., description="Repository name, e.g. myorg/myimage"),
     tag: str = Query(..., description="Tag name to delete"),
     current_user: UserInfo = Depends(get_current_user),
-    _: dict = Depends(resolve_owned_registry),
-):
+    _: dict[str, Any] = Depends(resolve_owned_registry),
+) -> dict[str, Any]:
     """Delete a single tag from an external V2 registry."""
     _ensure_folder_permission(
         current_user=current_user, image_path=repository, is_pull=False
@@ -220,8 +221,8 @@ async def add_tag(
     repository: str = Query(..., description="Repository name, e.g. myorg/myimage"),
     request: AddExternalTagRequest = Body(...),
     current_user: UserInfo = Depends(get_current_user),
-    _: dict = Depends(resolve_owned_registry),
-):
+    _: dict[str, Any] = Depends(resolve_owned_registry),
+) -> dict[str, Any]:
     """Create a new tag by copying a manifest in an external V2 registry."""
     _ensure_folder_permission(
         current_user=current_user, image_path=repository, is_pull=False
@@ -248,7 +249,9 @@ async def add_tag(
 
 
 @router.get("/{registry_id}/empty")
-async def list_empty(registry_id: str, _: UserInfo = Depends(require_admin)):
+async def list_empty(
+    registry_id: str, _: UserInfo = Depends(require_admin)
+) -> dict[str, Any]:
     """List repositories that have no tags (ghost entries)."""
     registry = get_registry_by_id(registry_id)
     if not registry:
@@ -267,7 +270,9 @@ async def list_empty(registry_id: str, _: UserInfo = Depends(require_admin)):
 
 
 @router.delete("/{registry_id}/empty")
-async def purge_empty(registry_id: str, _: UserInfo = Depends(require_admin)):
+async def purge_empty(
+    registry_id: str, _: UserInfo = Depends(require_admin)
+) -> dict[str, Any]:
     """Purge ghost repositories directly from the local filesystem."""
     registry = get_registry_by_id(registry_id)
     if not registry:
@@ -294,7 +299,7 @@ async def copy_image(
     request: CopyImageRequest,
     current_user: UserInfo = Depends(get_current_user),
     settings: Settings = Depends(get_settings),
-):
+) -> dict[str, Any]:
     """Copy an image to a new repository path within the local registry via skopeo."""
     _ensure_folder_permission(
         current_user=current_user,

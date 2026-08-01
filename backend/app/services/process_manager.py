@@ -1,4 +1,5 @@
 import xmlrpc.client
+from typing import Any, cast
 
 SUPERVISOR_RPC_URL = "http://127.0.0.1:9001/RPC2"
 MONITORED_PROCESSES = ["registry", "trivy-db-updater", "portalcrane"]
@@ -9,13 +10,13 @@ def _get_proxy() -> xmlrpc.client.ServerProxy:
     return xmlrpc.client.ServerProxy(SUPERVISOR_RPC_URL)
 
 
-async def get_all_process_statuses() -> list[dict]:
+async def get_all_process_statuses() -> list[dict[str, Any]]:
     """Returns the status of all monitored supervised processes."""
     proxy = _get_proxy()
-    statuses = []
+    statuses: list[dict[str, Any]] = []
     for name in MONITORED_PROCESSES:
         try:
-            info = proxy.supervisor.getProcessInfo(name)
+            info = cast(dict[str, Any], proxy.supervisor.getProcessInfo(name))
             statuses.append(
                 {
                     "name": info["name"],

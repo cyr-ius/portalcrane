@@ -165,12 +165,12 @@ class Settings(BaseSettings):
         return True
 
     @property
-    def env_proxy(self) -> dict:
+    def env_proxy(self) -> dict[str, str]:
         """
         Build environment variables injected into every skopeo subprocess.
         skopeo reads the standard HTTP_PROXY / HTTPS_PROXY variables.
         """
-        env: dict = {}
+        env: dict[str, str] = {}
         proxy = self.http_proxy
         if proxy:
             env["HTTP_PROXY"] = proxy

@@ -11,6 +11,7 @@ codebase which routes all registry operations through the unified provider layer
 import asyncio
 import logging
 import shutil
+from typing import Any
 
 import httpx
 from fastapi import APIRouter, Depends
@@ -38,7 +39,7 @@ class DashboardStats(BaseModel):
     total_tags: int
     total_size_bytes: int
     total_size_human: str
-    largest_image: dict
+    largest_image: dict[str, Any]
     disk_total_bytes: int
     disk_used_bytes: int
     disk_free_bytes: int
@@ -54,7 +55,7 @@ class DashboardStats(BaseModel):
 # ── Registry stats helpers ────────────────────────────────────────────────────
 
 
-async def _get_repo_stats(provider: V2Provider, repo: str) -> dict:
+async def _get_repo_stats(provider: V2Provider, repo: str) -> dict[str, Any]:
     """Fetch all tag sizes for a single repository in parallel."""
     tags = await provider.browse_tags(repo)
     if not tags:
@@ -86,7 +87,7 @@ async def _get_repo_stats(provider: V2Provider, repo: str) -> dict:
     }
 
 
-async def _get_registry_stats(provider: V2Provider) -> dict:
+async def _get_registry_stats(provider: V2Provider) -> dict[str, Any]:
     """Compute registry-wide statistics using the V2 provider directly.
 
     Returns empty stats dict when the registry is unreachable instead of
@@ -113,7 +114,7 @@ async def _get_registry_stats(provider: V2Provider) -> dict:
         }
 
     try:
-        repo_results: list[dict] = await asyncio.gather(
+        repo_results: list[dict[str, Any]] = await asyncio.gather(
             *[_get_repo_stats(provider, repo) for repo in repositories],
             return_exceptions=False,
         )
@@ -128,7 +129,7 @@ async def _get_registry_stats(provider: V2Provider) -> dict:
 
     total_size = 0
     total_tags = 0
-    largest_image: dict = {"name": "", "size": 0}
+    largest_image: dict[str, Any] = {"name": "", "size": 0}
 
     for result in repo_results:
         total_size += result["total_size"]
@@ -151,7 +152,7 @@ async def _get_registry_stats(provider: V2Provider) -> dict:
 async def get_dashboard_stats(
     settings: Settings = Depends(get_settings),
     _: UserInfo = Depends(get_current_user),
-):
+) -> DashboardStats:
     """Return all dashboard statistics.
 
     Handles registry connectivity errors gracefully: when the embedded registry

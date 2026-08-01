@@ -20,6 +20,7 @@ import logging
 import shutil
 import uuid
 from pathlib import Path
+from typing import Any
 
 from ..config import DATA_DIR, REGISTRY_HOST
 from ..core.crypto import decrypt, encrypt
@@ -39,7 +40,7 @@ REGISTRIES_FILE = Path(f"{DATA_DIR}/external_registries.json")
 LOCAL_REGISTRY_SYSTEM_ID = "__local__"
 
 
-def _get_local_registry_entry() -> dict:
+def _get_local_registry_entry() -> dict[str, Any]:
     """Return the embedded local registry as a hidden system registry entry.
 
     This entry is marked with system=True so the frontend can filter it out
@@ -66,7 +67,7 @@ def _get_local_registry_entry() -> dict:
 # ── Registry CRUD helpers ─────────────────────────────────────────────────────
 
 
-def _load_registries() -> list[dict]:
+def _load_registries() -> list[dict[str, Any]]:
     """Load registry list from disk, decrypting stored passwords in place.
 
     Returns an empty list if the file is missing. Legacy plaintext passwords
@@ -75,7 +76,7 @@ def _load_registries() -> list[dict]:
     """
     try:
         if REGISTRIES_FILE.exists():
-            registries = json.loads(REGISTRIES_FILE.read_text())
+            registries: list[dict[str, Any]] = json.loads(REGISTRIES_FILE.read_text())
             for r in registries:
                 if r.get("password"):
                     r["password"] = decrypt(r["password"])
@@ -85,7 +86,7 @@ def _load_registries() -> list[dict]:
     return []
 
 
-def _save_registries(registries: list[dict]) -> None:
+def _save_registries(registries: list[dict[str, Any]]) -> None:
     """Persist registry list to disk with passwords encrypted at rest.
 
     Passwords are encrypted (Fernet, key derived from SECRET_KEY) before being
@@ -107,7 +108,7 @@ def _save_registries(registries: list[dict]) -> None:
         logger.error("Failed to save external registries: %s", exc)
 
 
-def _redact(r: dict) -> dict:
+def _redact(r: dict[str, Any]) -> dict[str, Any]:
     """Return a copy of the registry dict with the password redacted.
 
     tls_verify, use_tls, browsable and system fields are preserved as-is;
@@ -130,7 +131,9 @@ def _redact(r: dict) -> dict:
 # ── Registry store public API ─────────────────────────────────────────────────
 
 
-def get_registries(owner: str | None = None, include_system: bool = True) -> list[dict]:
+def get_registries(
+    owner: str | None = None, include_system: bool = True
+) -> list[dict[str, Any]]:
     """Return saved external registries (passwords redacted).
 
     When *owner* is provided only global + owner registries are returned.
@@ -148,7 +151,7 @@ def get_registries(owner: str | None = None, include_system: bool = True) -> lis
         "External registry list requested (owner=%s, total=%d)", owner, len(registries)
     )
 
-    result: list[dict] = []
+    result: list[dict[str, Any]] = []
 
     # Prepend the hidden local system registry entry
     if include_system:
@@ -166,7 +169,7 @@ def get_registries(owner: str | None = None, include_system: bool = True) -> lis
     return result
 
 
-def get_registry_by_id(registry_id: str) -> dict | None:
+def get_registry_by_id(registry_id: str) -> dict[str, Any] | None:
     """Return a registry by ID (with real password for internal use).
 
     The special LOCAL_REGISTRY_SYSTEM_ID returns the local system entry
@@ -187,7 +190,7 @@ def get_registry_by_id(registry_id: str) -> dict | None:
 
 
 def user_can_access_registry(
-    registry: dict, username: str | None, is_admin: bool
+    registry: dict[str, Any], username: str | None, is_admin: bool
 ) -> bool:
     """Return True when *username* is allowed to use *registry*.
 
@@ -203,7 +206,7 @@ def user_can_access_registry(
 
 def get_registry_for_user(
     registry_id: str, username: str | None, is_admin: bool
-) -> dict | None:
+) -> dict[str, Any] | None:
     """Resolve a registry by ID enforcing ownership for non-admins.
 
     Returns the registry (with real credentials, for internal use) only when
@@ -244,7 +247,7 @@ def delete_registries_for_owner(owner: str) -> int:
     return deleted_count
 
 
-async def purge_registry(registry_id: str) -> tuple[list[str], list[dict]]:
+async def purge_registry(registry_id: str) -> tuple[list[str], list[dict[str, Any]]]:
     """Purge ghost repositories directly from the local filesystem.
 
     Returns a tuple (purged, errors)
@@ -254,7 +257,7 @@ async def purge_registry(registry_id: str) -> tuple[list[str], list[dict]]:
         raise ValueError(f"Registry {registry_id} not found")
 
     purged: list[str] = []
-    errors: list[dict] = []
+    errors: list[dict[str, Any]] = []
 
     provider = resolve_provider_from_registry(registry)
     empty = await provider.list_empty_repositories()
@@ -293,7 +296,7 @@ async def create_registry(
     owner: str = "global",
     use_tls: bool = True,
     tls_verify: bool = True,
-) -> dict:
+) -> dict[str, Any]:
     """Create and persist a new external registry entry.
 
     *use_tls*    — when False, all HTTP connections use plain http://.
@@ -356,7 +359,7 @@ async def update_registry(
     owner: str | None = None,
     use_tls: bool | None = None,
     tls_verify: bool | None = None,
-) -> dict | None:
+) -> dict[str, Any] | None:
     """Update a registry entry (partial update — only supplied fields are changed).
 
     The local system registry cannot be updated via this function.
@@ -436,7 +439,7 @@ async def test(
     password: str,
     use_tls: bool = True,
     tls_verify: bool = True,
-) -> dict:
+) -> dict[str, Any]:
     """Probe the registry to check reachability and validate credentials.
 
     Delegates to external_v2.test_v2_connection for all registry types

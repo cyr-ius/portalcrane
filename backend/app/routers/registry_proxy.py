@@ -57,12 +57,14 @@ _OCI_ACCEPT_TYPES = (
 # ─── Internal helpers ─────────────────────────────────────────────────────────
 
 
-def _filter_headers(headers: dict) -> dict:
+def _filter_headers(headers: dict[str, str]) -> dict[str, str]:
     """Remove HTTP hop-by-hop headers before forwarding."""
     return {k: v for k, v in headers.items() if k.lower() not in _HOP_BY_HOP}
 
 
-def _ensure_oci_accept_for_manifests(v2_path: str, method: str, headers: dict) -> None:
+def _ensure_oci_accept_for_manifests(
+    v2_path: str, method: str, headers: dict[str, str]
+) -> None:
     """Ensure manifest requests advertise OCI media types to the upstream registry."""
     if method not in _PULL_METHODS or "/manifests/" not in v2_path:
         return
@@ -113,7 +115,8 @@ def _decode_bearer_username(auth_header: str) -> str | None:
     token = auth_header.split(" ", 1)[1].strip()
     try:
         payload = jwt.decode(token, settings.secret_key, algorithms=[ALGORITHM])
-        return payload.get("sub")
+        sub = payload.get("sub")
+        return str(sub) if sub is not None else None
     except JWTError:
         return None
 

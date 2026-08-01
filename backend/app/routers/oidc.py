@@ -174,7 +174,9 @@ def _provision_oidc_user(identity: OidcIdentity, settings: Settings) -> None:
 
 
 @router.get("/config", response_model=OidcPublicConfig)
-async def get_oidc_public_config(settings: Settings = Depends(get_settings)):
+async def get_oidc_public_config(
+    settings: Settings = Depends(get_settings),
+) -> OidcPublicConfig:
     """Return OIDC configuration for the frontend login page.
 
     Merges env-var defaults with persisted overrides and enriches the payload
@@ -193,7 +195,7 @@ async def oidc_callback(
     request: Request,
     response: Response,
     settings: Settings = Depends(get_settings),
-):
+) -> Token:
     """Exchange an OIDC authorization code for a Portalcrane JWT.
 
     Flow:
@@ -233,7 +235,7 @@ async def oidc_callback(
 async def get_oidc_settings(
     settings: Settings = Depends(get_settings),
     _: UserInfo = Depends(require_admin),
-):
+) -> OidcAdminSettings:
     """Return full OIDC settings including client_secret (admin only).
 
     The client_secret is a sensitive credential and must never be exposed to
@@ -247,7 +249,7 @@ async def update_oidc_settings(
     payload: OidcAdminSettings,
     settings: Settings = Depends(get_settings),
     _: UserInfo = Depends(require_admin),
-):
+) -> OidcAdminSettings:
     """Persist OIDC configuration overrides (admin only).
 
     Saved values take precedence over environment variables on next request.
@@ -291,7 +293,7 @@ async def test_oidc_settings(
     payload: OidcAdminSettings,
     settings: Settings = Depends(get_settings),
     _: UserInfo = Depends(require_admin),
-):
+) -> OidcTestResult:
     """Run a live connectivity test against the OIDC provider (admin only).
 
     Validates that the provider is reachable, publishes the required endpoints,

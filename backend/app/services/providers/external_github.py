@@ -3,7 +3,7 @@
 import asyncio
 import logging
 from collections.abc import Callable
-from typing import Any
+from typing import Any, cast
 
 import httpx
 
@@ -69,11 +69,11 @@ class GithubProvider(BaseRegistryProvider):
         return "gihub"
 
     @property
-    def owner(self):
+    def owner(self) -> str:
         return self.username
 
     @property
-    def token(self):
+    def token(self) -> str:
         return self.password
 
     def _github_api_headers(self) -> dict[str, str]:
@@ -235,7 +235,10 @@ class GithubProvider(BaseRegistryProvider):
         async with httpx.AsyncClient(
             timeout=self.catalog_timeout, verify=self.verify, follow_redirects=True
         ) as client:
-            params = {"package_type": "container", "per_page": page_size}
+            params: dict[str, str | int] = {
+                "package_type": "container",
+                "per_page": page_size,
+            }
             for url in urls_to_try:
                 try:
                     resp = await client.get(url, headers=headers, params=params)
@@ -266,10 +269,10 @@ class GithubProvider(BaseRegistryProvider):
     async def browse_repositories(
         self,
         search: str | None,
-        page: int,
+        page: int = 1,
         page_size: int = 20,
         repo_filter: Callable[[str], bool] | None = None,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """
         List container packages for a GitHub user or organisation via the
         GitHub REST API (GET /users/{owner}/packages or /orgs/{owner}/packages).
@@ -409,7 +412,7 @@ class GithubProvider(BaseRegistryProvider):
                     return {}
                 resp.raise_for_status()
 
-                manifest = resp.json()
+                manifest: dict[str, Any] = resp.json()
                 manifest["_digest"] = resp.headers.get("Docker-Content-Digest", "")
                 manifest["_content_type"] = resp.headers.get("Content-Type", "")
                 manifest["_content_length"] = int(resp.headers.get("Content-Length", 0))
@@ -445,7 +448,7 @@ class GithubProvider(BaseRegistryProvider):
                 if resp.status_code == 404:
                     return {}
                 resp.raise_for_status()
-                return resp.json()
+                return cast("dict[str, Any]", resp.json())
 
         except Exception as exc:
             logger.warning(

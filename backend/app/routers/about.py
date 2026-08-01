@@ -4,6 +4,7 @@ Provides application metadata: current version, latest GitHub release, author an
 """
 
 import os
+from typing import Any
 
 import httpx
 from fastapi import APIRouter, Depends
@@ -47,7 +48,7 @@ class AboutResponse(BaseModel):
 
 
 @router.get("/about", response_model=AboutResponse)
-async def get_about(settings: Settings = Depends(get_settings)) -> dict:
+async def get_about(settings: Settings = Depends(get_settings)) -> dict[str, Any]:
     """
     Return application metadata and check GitHub for a newer release.
 

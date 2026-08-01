@@ -16,6 +16,7 @@ import json
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any, cast
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, field_validator
@@ -91,23 +92,23 @@ class AddMemberRequest(BaseModel):
 # ── Storage helpers ───────────────────────────────────────────────────────────
 
 
-def _load_groups() -> list[dict]:
+def _load_groups() -> list[dict[str, Any]]:
     """Load groups from disk. Returns empty list if file is missing."""
     try:
         if _GROUPS_FILE.exists():
-            return json.loads(_GROUPS_FILE.read_text())
+            return cast(list[dict[str, Any]], json.loads(_GROUPS_FILE.read_text()))
     except Exception:
         pass
     return []
 
 
-def _save_groups(groups: list[dict]) -> None:
+def _save_groups(groups: list[dict[str, Any]]) -> None:
     """Persist groups list to disk."""
     _GROUPS_FILE.parent.mkdir(parents=True, exist_ok=True)
     _GROUPS_FILE.write_text(json.dumps(groups, indent=2))
 
 
-def _dict_to_group(d: dict) -> Group:
+def _dict_to_group(d: dict[str, Any]) -> Group:
     """Convert a raw dict (from JSON) to a Group model."""
     return Group(
         id=d["id"],
@@ -147,7 +148,7 @@ def group_name_for_id(group_id: str) -> str | None:
     """Return the display name of a group id, or None when it no longer exists."""
     for g in _load_groups():
         if g["id"] == group_id:
-            return g["name"]
+            return str(g["name"])
     return None
 
 
@@ -163,7 +164,7 @@ def ensure_group_for_username(username: str) -> str:
             if username not in g.get("members", []):
                 g.setdefault("members", []).append(username)
                 _save_groups(groups)
-            return g["id"]
+            return str(g["id"])
 
     entry = {
         "id": str(uuid.uuid4()),
@@ -174,7 +175,7 @@ def ensure_group_for_username(username: str) -> str:
     }
     groups.append(entry)
     _save_groups(groups)
-    return entry["id"]
+    return str(entry["id"])
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────

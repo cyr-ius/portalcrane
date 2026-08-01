@@ -26,6 +26,7 @@ import json
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any, cast
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, field_validator
@@ -129,23 +130,23 @@ class SetPermissionRequest(BaseModel):
 # ── Storage helpers ───────────────────────────────────────────────────────────
 
 
-def _load_folders() -> list[dict]:
+def _load_folders() -> list[dict[str, Any]]:
     """Load folders from disk. Returns empty list if file is missing."""
     try:
         if _FOLDERS_FILE.exists():
-            return json.loads(_FOLDERS_FILE.read_text())
+            return cast(list[dict[str, Any]], json.loads(_FOLDERS_FILE.read_text()))
     except Exception:
         pass
     return []
 
 
-def _save_folders(folders: list[dict]) -> None:
+def _save_folders(folders: list[dict[str, Any]]) -> None:
     """Persist folders list to disk."""
     _FOLDERS_FILE.parent.mkdir(parents=True, exist_ok=True)
     _FOLDERS_FILE.write_text(json.dumps(folders, indent=2))
 
 
-def _dict_to_folder(d: dict) -> Folder:
+def _dict_to_folder(d: dict[str, Any]) -> Folder:
     """Convert a raw dict (from JSON) to a Folder model."""
     return Folder(
         id=d["id"],
@@ -201,7 +202,7 @@ def migrate_folder_permissions_to_groups() -> None:
     changed = False
 
     for folder in folders:
-        migrated: list[dict] = []
+        migrated: list[dict[str, Any]] = []
         for perm in folder.get("permissions", []):
             if "group_id" in perm:
                 migrated.append(perm)
@@ -228,7 +229,7 @@ def migrate_folder_permissions_to_groups() -> None:
 # ── Public helpers used by registry_proxy and registry routers ────────────────
 
 
-def get_folder_for_path(image_path: str) -> dict | None:
+def get_folder_for_path(image_path: str) -> dict[str, Any] | None:
     """Return the folder dict that governs access to image_path.
 
     Resolution order:
@@ -439,7 +440,7 @@ async def set_permission(
     folders = _load_folders()
     for f in folders:
         if f["id"] == folder_id:
-            perms: list[dict] = f.setdefault("permissions", [])
+            perms: list[dict[str, Any]] = f.setdefault("permissions", [])
             for p in perms:
                 if p.get("group_id") == payload.group_id:
                     p["can_pull"] = payload.can_pull

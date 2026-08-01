@@ -55,7 +55,7 @@ def resolve_provider(
     return V2Provider(**kwargs)
 
 
-def resolve_provider_from_registry(registry: dict) -> BaseRegistryProvider:
+def resolve_provider_from_registry(registry: dict[str, Any]) -> BaseRegistryProvider:
     """Convenience wrapper: resolve provider directly from a registry dict.
 
     Args:

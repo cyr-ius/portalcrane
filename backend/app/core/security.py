@@ -7,6 +7,7 @@ Shared by routers/auth.py (login endpoints) and routers/registry_proxy.py
 
 import json
 from pathlib import Path
+from typing import Any, cast
 
 import bcrypt
 
@@ -22,11 +23,11 @@ _admin_password_hash: str = ""
 # ─── Internal helpers ─────────────────────────────────────────────────────────
 
 
-def _load_users() -> list[dict]:
+def _load_users() -> list[dict[str, Any]]:
     """Load local users from disk. Returns empty list when the file is absent."""
     try:
         if _USERS_FILE.exists():
-            return json.loads(_USERS_FILE.read_text())
+            return cast(list[dict[str, Any]], json.loads(_USERS_FILE.read_text()))
     except Exception:
         pass
     return []

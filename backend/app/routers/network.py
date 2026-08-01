@@ -16,6 +16,7 @@ POST   /api/network/email/send    → email the audit log now          (admin on
 """
 
 import logging
+from typing import Any
 
 from fastapi import APIRouter, Depends
 
@@ -164,7 +165,7 @@ async def disable_syslog(
 @router.post("/syslog/test")
 async def test_syslog(
     _: UserInfo = Depends(require_admin),
-) -> dict:
+) -> dict[str, Any]:
     """
     Emit a test log message through the active syslog handler.
 
@@ -223,7 +224,7 @@ async def disable_email(
 async def test_email(
     settings: Settings = Depends(get_settings),
     _: UserInfo = Depends(require_admin),
-) -> dict:
+) -> dict[str, Any]:
     """Send a test email to verify SMTP connectivity."""
     success, message = send_test_email(resolve_email_settings(settings))
     return {"success": success, "message": message}
@@ -233,7 +234,7 @@ async def test_email(
 async def send_email(
     settings: Settings = Depends(get_settings),
     _: UserInfo = Depends(require_admin),
-) -> dict:
+) -> dict[str, Any]:
     """Email the recent audit log to the configured recipients now."""
     success, message = send_audit_log_email(resolve_email_settings(settings))
     return {"success": success, "message": message}

@@ -10,6 +10,8 @@ Endpoints:
   DELETE /api/trivy/override       — Remove admin override, revert to env vars (admin only)
 """
 
+from typing import Any
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
@@ -63,7 +65,7 @@ class VulnOverridePayload(BaseModel):
 async def trivy_db_status(
     settings: Settings = Depends(get_settings),
     _: UserInfo = Depends(require_admin),
-):
+) -> dict[str, Any]:
     """Returns Trivy vulnerability database info and freshness status."""
     if not settings.trivy_enabled:
         return {"trivy_enabled": False}
@@ -74,7 +76,7 @@ async def trivy_db_status(
 async def force_trivy_update(
     settings: Settings = Depends(get_settings),
     _: UserInfo = Depends(require_admin),
-):
+) -> dict[str, Any]:
     """Forces an immediate Trivy DB update."""
     if not settings.trivy_enabled:
         raise HTTPException(status_code=503, detail="Trivy is disabled")
@@ -94,7 +96,7 @@ async def scan(
     ignore_unfixed: bool = Query(default=False),
     settings: Settings = Depends(get_settings),
     _: UserInfo = Depends(get_current_user),
-):
+) -> dict[str, Any]:
     """
     Scans a specific image from the local registry with Trivy.
     Returns grouped vulnerabilities with CVSS scores.
@@ -124,7 +126,7 @@ async def scan(
 async def get_public_config(
     settings: Settings = Depends(get_settings),
     _: UserInfo = Depends(get_current_user),
-):
+) -> VulnConfig:
     """
     Return the effective vuln configuration.
 
@@ -144,7 +146,7 @@ async def set_vuln_override(
     payload: VulnOverridePayload,
     settings: Settings = Depends(get_settings),
     _: UserInfo = Depends(require_admin),
-):
+) -> VulnConfig:
     """
     Persist a global vuln scan override that applies to ALL users.
 
@@ -166,7 +168,7 @@ async def set_vuln_override(
 async def delete_vuln_override(
     settings: Settings = Depends(get_settings),
     _: UserInfo = Depends(require_admin),
-):
+) -> VulnConfig:
     """
     Remove the persisted vuln override.  All users will revert to the
     environment-variable defaults on their next GET /state call.

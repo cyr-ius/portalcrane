@@ -48,7 +48,7 @@ audit_logger = logging.getLogger("portalcrane.audit")
 
 # Fire-and-forget email notification tasks. A module-level set keeps a strong
 # reference so the event loop does not garbage-collect the pending task.
-_email_notify_tasks: set[asyncio.Task] = set()
+_email_notify_tasks: set[asyncio.Task[None]] = set()
 
 _audit_max_events = 100
 _recent_audit_events: deque[dict[str, Any]] = deque(maxlen=_audit_max_events)

@@ -14,6 +14,7 @@ import json
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, field_validator
@@ -124,17 +125,17 @@ class DockerHubAccountSettings(BaseModel):
 # ─── Local users helpers ──────────────────────────────────────────────────────
 
 
-def _load_users() -> list[dict]:
+def _load_users() -> list[dict[str, Any]]:
     """Load local users from disk. Returns empty list when file is absent."""
     try:
         if _USERS_FILE.exists():
-            return json.loads(_USERS_FILE.read_text())
+            return cast(list[dict[str, Any]], json.loads(_USERS_FILE.read_text()))
     except Exception:
         pass
     return []
 
 
-def _save_users(users: list[dict]) -> None:
+def _save_users(users: list[dict[str, Any]]) -> None:
     """Persist local users list to disk."""
     _USERS_FILE.parent.mkdir(parents=True, exist_ok=True)
     _USERS_FILE.write_text(json.dumps(users, indent=2))
@@ -178,7 +179,7 @@ def is_oidc_revoked(username: str) -> bool:
     return username in _load_revoked()
 
 
-def _active_admin_exists(users: list[dict], settings: Settings) -> bool:
+def _active_admin_exists(users: list[dict[str, Any]], settings: Settings) -> bool:
     """Return True when at least one administrator can still authenticate.
 
     The built-in env-admin always counts as an active admin unless OIDC-only mode
@@ -190,7 +191,7 @@ def _active_admin_exists(users: list[dict], settings: Settings) -> bool:
     return any(u.get("is_admin") and not u.get("disabled") for u in users)
 
 
-def _user_to_public(u: dict) -> LocalUserPublic:
+def _user_to_public(u: dict[str, Any]) -> LocalUserPublic:
     """Convert a raw user dict to LocalUserPublic, preserving auth_source."""
     return LocalUserPublic(
         id=u["id"],
@@ -224,7 +225,7 @@ async def login(
     request: Request,
     response: Response,
     settings: Settings = Depends(get_settings),
-):
+) -> Token:
     """JSON login endpoint used by the Angular frontend.
 
     On success the session JWT is stored in an HttpOnly cookie (browser session)

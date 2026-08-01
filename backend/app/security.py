@@ -6,9 +6,10 @@ from functools import lru_cache
 from threading import Lock
 from time import perf_counter
 
-from fastapi import Request
+from fastapi import Request, Response
 from fastapi.responses import JSONResponse
-from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
+from starlette.types import ASGIApp
 
 from .config import app_settings
 from .services.audit_service import log_web_ui_action
@@ -144,7 +145,9 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     ]
     _CSP: str = "; ".join(_CSP_DIRECTIVES) + ";"
 
-    async def dispatch(self, request: Request, call_next):
+    async def dispatch(
+        self, request: Request, call_next: RequestResponseEndpoint
+    ) -> Response:
         response = await call_next(request)
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
@@ -233,11 +236,13 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
     _EXEMPT_PATHS: frozenset[str] = frozenset({"/api/health"})
 
-    def __init__(self, app) -> None:
+    def __init__(self, app: ASGIApp) -> None:
         super().__init__(app)
         self._limiter = _SlidingWindowLimiter()
 
-    async def dispatch(self, request: Request, call_next):
+    async def dispatch(
+        self, request: Request, call_next: RequestResponseEndpoint
+    ) -> Response:
         settings = app_settings
         path = request.url.path
         if (
@@ -286,7 +291,9 @@ class AuditMiddleware(BaseHTTPMiddleware):
     who can flood the buffer with noise.
     """
 
-    async def dispatch(self, request: Request, call_next):
+    async def dispatch(
+        self, request: Request, call_next: RequestResponseEndpoint
+    ) -> Response:
         start = perf_counter()
         response = await call_next(request)
         elapsed = perf_counter() - start

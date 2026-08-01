@@ -4,6 +4,7 @@ import os
 import shutil
 from enum import StrEnum
 from pathlib import Path
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
@@ -19,7 +20,7 @@ from ..services.trivy_service import (
 
 _logger = logging.getLogger(__name__)
 
-jobs_list: dict[str, dict] = {}
+jobs_list: dict[str, dict[str, Any]] = {}
 
 
 class JobStatus(StrEnum):
@@ -44,7 +45,7 @@ class StagingJob(BaseModel):
     progress: int = 0
     message: str = ""
     scan_result: str | None = None
-    vuln_result: dict | None = None
+    vuln_result: dict[str, Any] | None = None
     target_image: str | None = None
     target_tag: str | None = None
     folder: str | None = None  # optional folder prefix used during push

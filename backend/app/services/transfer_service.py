@@ -23,6 +23,7 @@ import uuid
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -39,7 +40,7 @@ logger = logging.getLogger(__name__)
 
 # ── In-memory transfer job store ──────────────────────────────────────────────
 
-_transfer_jobs: dict[str, dict] = {}
+_transfer_jobs: dict[str, dict[str, Any]] = {}
 
 
 class TransferStatus(StrEnum):
@@ -144,14 +145,14 @@ def _get_registry_info(registry_id: str | None) -> tuple[str, str, str, bool]:
     )
 
 
-def get_all_transfer_jobs() -> list[dict]:
+def get_all_transfer_jobs() -> list[dict[str, Any]]:
     """Return all transfer jobs sorted newest first."""
     jobs = list(_transfer_jobs.values())
     jobs.sort(key=lambda j: j.get("created_at", ""), reverse=True)
     return jobs
 
 
-def get_transfer_job(job_id: str) -> dict | None:
+def get_transfer_job(job_id: str) -> dict[str, Any] | None:
     """Return a single transfer job by ID."""
     return _transfer_jobs.get(job_id)
 

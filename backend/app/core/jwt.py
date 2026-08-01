@@ -9,6 +9,7 @@ All access control is now handled exclusively by folder rules in registry_proxy.
 import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import (
@@ -60,11 +61,12 @@ class UserInfo(BaseModel):
 # ─── Internal helpers ─────────────────────────────────────────────────────────
 
 
-def _load_users() -> list[dict]:
+def _load_users() -> list[dict[str, Any]]:
     """Load local users from disk. Returns empty list when the file is absent."""
     try:
         if _USERS_FILE.exists():
-            return json.loads(_USERS_FILE.read_text())
+            result: list[dict[str, Any]] = json.loads(_USERS_FILE.read_text())
+            return result
     except Exception:
         pass
     return []
@@ -76,7 +78,7 @@ def is_admin_user(username: str, settings: Settings) -> bool:
         return True
     for user in _load_users():
         if user["username"] == username:
-            return user.get("is_admin", False)
+            return bool(user.get("is_admin", False))
     return False
 
 
@@ -98,12 +100,12 @@ def is_user_disabled(username: str, settings: Settings) -> bool:
 # ─── Public API ───────────────────────────────────────────────────────────────
 
 
-def create_access_token(data: dict, settings: Settings) -> str:
+def create_access_token(data: dict[str, Any], settings: Settings) -> str:
     """Sign and return a JWT access token containing *data* as claims."""
     to_encode = data.copy()
     expire = datetime.now(UTC) + timedelta(minutes=settings.access_token_expire_minutes)
     to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, settings.secret_key, algorithm=ALGORITHM)
+    return str(jwt.encode(to_encode, settings.secret_key, algorithm=ALGORITHM))
 
 
 async def get_current_user(
@@ -166,8 +168,11 @@ async def get_current_user(
     # Session JWT path.
     if payload is None:
         raise credentials_exception
-    username = payload.get("sub")
-    if username is None or is_user_disabled(username, settings):
+    sub = payload.get("sub")
+    if sub is None:
+        raise credentials_exception
+    username = str(sub)
+    if is_user_disabled(username, settings):
         raise credentials_exception
 
     return UserInfo(

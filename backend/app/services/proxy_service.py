@@ -21,6 +21,7 @@ import logging.handlers
 import os
 import ssl
 from pathlib import Path
+from typing import Any, cast
 from urllib.parse import urlparse, urlunparse
 
 from pydantic import BaseModel
@@ -119,17 +120,17 @@ class NetworkConfig(BaseModel):
 # ── Persistence helpers ───────────────────────────────────────────────────────
 
 
-def load_proxy_config() -> dict:
+def load_proxy_config() -> dict[str, Any]:
     """Load the persisted network config from disk. Returns {} when absent."""
     try:
         if _PROXY_CONFIG_FILE.exists():
-            return json.loads(_PROXY_CONFIG_FILE.read_text())
+            return cast("dict[str, Any]", json.loads(_PROXY_CONFIG_FILE.read_text()))
     except Exception:
         pass
     return {}
 
 
-def save_proxy_config(data: dict) -> None:
+def save_proxy_config(data: dict[str, Any]) -> None:
     """Persist the network configuration override to disk."""
     _PROXY_CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
     _PROXY_CONFIG_FILE.write_text(json.dumps(data, indent=2))
@@ -346,7 +347,7 @@ class _TlsSysLogHandler(logging.handlers.SysLogHandler):
         # Pass socktype=SOCK_STREAM so the parent opens a TCP connection.
         super().__init__(address=address, socktype=__import__("socket").SOCK_STREAM)
 
-    def makeSocket(self, timeout: float = 1) -> ssl.SSLSocket:  # type: ignore[override]  # noqa: N802
+    def makeSocket(self, timeout: float = 1) -> ssl.SSLSocket:  # noqa: N802
         """Return a TLS-wrapped TCP socket connected to the syslog server."""
         import socket as _socket
 

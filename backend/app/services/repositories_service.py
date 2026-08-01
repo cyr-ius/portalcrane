@@ -6,6 +6,7 @@ import os
 import shutil
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 from ..config import Settings
 from .providers import resolve_provider_from_registry
@@ -14,7 +15,7 @@ from .registries_service import REGISTRY_REPOS_DIR, get_registry_by_id
 logger = logging.getLogger(__name__)
 
 
-async def purge_registry(registry_id: str) -> tuple[list[str], list[dict]]:
+async def purge_registry(registry_id: str) -> tuple[list[str], list[dict[str, Any]]]:
     """Purge ghost repositories directly from the local filesystem.
 
     Returns a tuple (purged, errors)
@@ -24,7 +25,7 @@ async def purge_registry(registry_id: str) -> tuple[list[str], list[dict]]:
         raise ValueError(f"Registry {registry_id} not found")
 
     purged: list[str] = []
-    errors: list[dict] = []
+    errors: list[dict[str, Any]] = []
 
     empty = await empty_tags(registry_id=registry_id)
 
@@ -58,7 +59,7 @@ async def browse_images(
     page: int = 1,
     page_size: int = 20,
     repo_filter: Callable[[str], bool] | None = None,
-) -> dict:
+) -> dict[str, Any]:
     """List repositories available in an external registry.
 
     Routing:
@@ -84,7 +85,7 @@ async def browse_images(
     )
 
 
-async def browse_tags(registry_id: str, repository: str) -> dict:
+async def browse_tags(registry_id: str, repository: str) -> dict[str, Any]:
     """List tags for a repository in an external registry.
 
     Routing:
@@ -105,7 +106,7 @@ async def browse_tags(registry_id: str, repository: str) -> dict:
     return {"repository": repository, "tags": tags}
 
 
-async def remove_image(registry_id: str, repository: str) -> dict:
+async def remove_image(registry_id: str, repository: str) -> dict[str, Any]:
     """Delete all tags for a repository in an external registry.
 
     The local system registry (__local__) is protected — deletion is delegated
@@ -131,7 +132,9 @@ async def remove_image(registry_id: str, repository: str) -> dict:
     }
 
 
-async def metadata_by_tag(registry_id: str, repository: str, tag: str) -> dict:
+async def metadata_by_tag(
+    registry_id: str, repository: str, tag: str
+) -> dict[str, Any]:
     """Return full image metadata for a specific tag in an external V2 registry.
 
     Works for both external registries and the local system registry (__local__).
@@ -155,7 +158,7 @@ async def metadata_by_tag(registry_id: str, repository: str, tag: str) -> dict:
     return await provider.get_tag_detail(repository, tag)
 
 
-async def remove_tag(registry_id: str, repository: str, tag: str) -> dict:
+async def remove_tag(registry_id: str, repository: str, tag: str) -> dict[str, Any]:
     """Delete a single tag from an external V2 registry or the local registry.
 
     Args:
@@ -176,7 +179,7 @@ async def remove_tag(registry_id: str, repository: str, tag: str) -> dict:
 
 async def append_tag(
     registry_id: str, repository: str, source_tag: str, new_tag: str
-) -> dict:
+) -> dict[str, Any]:
     """Create a new tag by copying a manifest in an external V2 registry.
 
     Works for both external registries and the local system registry (__local__).

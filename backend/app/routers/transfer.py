@@ -15,6 +15,7 @@ external→external) under a single API with integrated Trivy scanning.
 """
 
 import logging
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
@@ -68,7 +69,7 @@ async def start_transfer(
     request: TransferRequest,
     settings: Settings = Depends(get_settings),
     current_user: UserInfo = Depends(require_push_access),
-) -> dict:
+) -> dict[str, Any]:
     """
     Start one or more image transfer jobs.
 
@@ -176,7 +177,7 @@ async def start_transfer(
 @router.get("/jobs")
 async def list_transfer_jobs(
     current_user: UserInfo = Depends(get_current_user),
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """
     Return all transfer jobs visible to the current user.
 
@@ -193,7 +194,7 @@ async def list_transfer_jobs(
 async def get_transfer_job_status(
     job_id: str,
     current_user: UserInfo = Depends(get_current_user),
-) -> dict:
+) -> dict[str, Any]:
     """Return the status of a specific transfer job."""
     job = get_transfer_job(job_id)
     if not job:

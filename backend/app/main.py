@@ -10,12 +10,13 @@ maintenance operations: GC, ghost repos, copy, ping).
 
 import asyncio
 import logging
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.openapi.docs import get_swagger_ui_html
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from .config import DATA_DIR, STAGING_DIR, app_settings
@@ -60,7 +61,7 @@ logging.basicConfig(
 
 # ── Lifespan ──────────────────────────────────────────────────────────────────
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Application startup and shutdown handler."""
     Path(DATA_DIR).mkdir(parents=True, exist_ok=True)
     Path(STAGING_DIR).mkdir(parents=True, exist_ok=True)
@@ -98,7 +99,7 @@ app = FastAPI(
 
 # ── Middleware ───────────────────────────────────────────────────────────────
 app.add_middleware(SecurityHeadersMiddleware)
-app.middleware(AuditMiddleware)
+app.add_middleware(AuditMiddleware)
 app.add_middleware(RateLimitMiddleware)
 
 
@@ -131,7 +132,7 @@ app.mount("/api/static", StaticFiles(directory=static_dir), name="static")
 
 
 @app.get("/api/docs", include_in_schema=False)
-async def swagger_ui():
+async def swagger_ui() -> HTMLResponse:
     if not app_settings.swagger_enabled:
         raise HTTPException(status_code=404, detail="Not Found")
     return get_swagger_ui_html(
@@ -144,7 +145,7 @@ async def swagger_ui():
 
 
 @app.get("/api/health")
-async def health_check():
+async def health_check() -> dict[str, str]:
     """Health check endpoint."""
     return {"status": "healthy", "app": app.title, "version": app.version}
 

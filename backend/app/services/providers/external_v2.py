@@ -24,7 +24,7 @@ Architecture decisions:
 import asyncio
 import json as _json
 import logging
-from typing import Any
+from typing import Any, cast
 
 import httpx
 
@@ -310,7 +310,7 @@ class V2Provider(BaseRegistryProvider):
                 if resp.status_code == 404:
                     return {}
                 resp.raise_for_status()
-                manifest = resp.json()
+                manifest: dict[str, Any] = resp.json()
                 manifest["_digest"] = resp.headers.get("Docker-Content-Digest", "")
                 manifest["_content_length"] = int(resp.headers.get("Content-Length", 0))
                 manifest["_content_type"] = resp.headers.get(
@@ -392,7 +392,7 @@ class V2Provider(BaseRegistryProvider):
                 if resp.status_code == 404:
                     return {}
                 resp.raise_for_status()
-                return resp.json()
+                return cast("dict[str, Any]", resp.json())
         except _REGISTRY_CONNECT_ERRORS as exc:
             logger.warning(
                 "get_image_config: registry unreachable host=%s repo=%s digest=%s: %s",
