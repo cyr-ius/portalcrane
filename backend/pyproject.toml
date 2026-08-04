@@ -20,7 +20,7 @@ packages = ["backend"]
 
 [dependency-groups]
 dev = [
-    "mypy>=1.19.1",
+    "mypy>=2.3.0",
     "prek>=0.4.11",
     "ruff>=0.15.8",
 ]
