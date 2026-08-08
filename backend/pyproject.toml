@@ -8,7 +8,7 @@ dependencies = [
     "bcrypt>=5.0.0",
     "cryptography>=50.0.0",
     "fastapi[standard]>=0.141.1",
-    "packaging>=26.0",
+    "packaging>=26.3",
     "passlib[bcrypt]==1.7.4",
     "pydantic-settings==2.14.2",
     "python-jose[cryptography]==3.5.0",
