@@ -213,9 +213,9 @@ class BaseRegistryProvider(ABC):
             dict[str, Any]: Paginated repository list.
         """
         try:
-            repositories = await self.list_repositories(
-                page_size=page_size, include_empty=True
-            )
+            # Fetch the full catalog (not the UI page_size) since pagination
+            # below is applied in-memory over the complete repository list.
+            repositories = await self.list_repositories(include_empty=True)
         except HTTPStatusError as exc:
             logger.warning("HTTP %s for host=%s", exc.response.status_code, self.host)
             return {
