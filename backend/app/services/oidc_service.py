@@ -557,17 +557,23 @@ def _collect_groups(source: dict[str, Any], merged: OidcAdminSettings) -> list[s
 async def exchange_code_for_identity(
     code: str,
     settings: Settings,
+    code_verifier: str,
 ) -> OidcIdentity:
     """Exchange an authorization code for an OIDC identity (username + groups).
 
     Steps:
     1. Fetch the discovery document to get token_endpoint and userinfo_endpoint.
-    2. POST the code to token_endpoint (client_credentials in Basic Auth).
+    2. POST the code (plus the PKCE code_verifier) to token_endpoint
+       (client_credentials in Basic Auth).
     3. Call userinfo_endpoint with the returned access_token.
     4. Fall back to id_token claims when userinfo is unavailable.
 
     The username and the configured admin group claim are merged from both the
     userinfo response and the id_token claims (userinfo wins for the username).
+
+    code_verifier is the PKCE (RFC 7636) proof matching the code_challenge sent
+    to the authorization endpoint; the provider rejects the exchange if it does
+    not match, protecting against authorization-code interception.
 
     Raises on any HTTP failure so the calling route can wrap it in an
     appropriate HTTPException.
@@ -595,6 +601,7 @@ async def exchange_code_for_identity(
                 "grant_type": "authorization_code",
                 "code": code,
                 "redirect_uri": merged.redirect_uri,
+                "code_verifier": code_verifier,
             },
             auth=(merged.client_id, merged.client_secret),
             timeout=DEFAULT_TIMEOUT,
