@@ -460,7 +460,9 @@ async def get_dockerhub_tags(
         async with httpx.AsyncClient(
             timeout=DEFAULT_TIMEOUT, follow_redirects=True
         ) as client:
-            resp = await client.get(url, params={"page_size": 50})
+            resp = await client.get(
+                url, params={"page_size": 50, "ordering": "-last_updated"}
+            )
             resp.raise_for_status()
             data = resp.json()
     except Exception as exc:
@@ -469,7 +471,14 @@ async def get_dockerhub_tags(
             detail=f"Docker Hub tags fetch failed: {exc}",
         )
 
-    tags = [r["name"] for r in data.get("results", []) if r.get("name")]
+    # Sort defensively by last_updated (most recent first) in case the
+    # upstream API ignores the ordering param.
+    results = sorted(
+        data.get("results", []),
+        key=lambda r: r.get("last_updated") or "",
+        reverse=True,
+    )
+    tags = [r["name"] for r in results if r.get("name")]
     return {"image": image, "tags": tags}
 
 
