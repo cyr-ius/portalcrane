@@ -115,6 +115,11 @@ hidden `__local__` system entry, or an ad-hoc host resolving to
 deciding which permission applies, so that path can't be used to bypass
 local folder checks.
 
+If the scan surfaces a **blocking severity**, the job stops at
+`scan_vulnerable` without pushing, unless the job's owner holds
+`can_bypass_vuln_block` (or `is_admin`) — see
+[Vulnerability-block bypass](users-groups-permissions.md#vulnerability-block-bypass).
+
 ### Tracking transfer jobs
 
 ```bash

@@ -65,6 +65,7 @@ export class AccountsConfigPanel implements OnInit {
     username: "",
     password: "",
     isAdmin: false,
+    canBypassVuln: false,
   });
   createModelOrig = structuredClone(this.createModel());
   createForm = form(this.createModel, (p) => {
@@ -79,6 +80,7 @@ export class AccountsConfigPanel implements OnInit {
   updateModel = signal({
     password: "",
     isAdmin: false,
+    canBypassVuln: false,
   });
   updateModelOrig = structuredClone(this.updateModel());
   updateForm = form(this.updateModel, (p) => {
@@ -167,6 +169,7 @@ export class AccountsConfigPanel implements OnInit {
             formData.username.trim(),
             formData.password,
             formData.isAdmin,
+            formData.canBypassVuln,
           ),
         );
         this.users.update((list) => [...list, user]);
@@ -186,6 +189,7 @@ export class AccountsConfigPanel implements OnInit {
     this.updateModel.set({
       password: "",
       isAdmin: user.is_admin,
+      canBypassVuln: user.can_bypass_vuln_block,
     });
     this.editingId.set(user.id);
     this.showEditPassword.set(false);
@@ -220,6 +224,7 @@ export class AccountsConfigPanel implements OnInit {
       // Only send password when the field was actually filled in
       const body: UpdateUser = {
         is_admin: formData.isAdmin,
+        can_bypass_vuln_block: formData.canBypassVuln,
       };
       if (formData.password) {
         body["password"] = formData.password;

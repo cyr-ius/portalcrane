@@ -28,6 +28,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from ..config import REGISTRY_HOST, REGISTRY_URL, Settings, staging_root
+from ..core.jwt import can_bypass_vuln_block
 from ..services.providers import resolve_provider_from_registry
 from ..services.registries_service import get_registry_by_id
 from ..services.trivy_service import (
@@ -187,6 +188,7 @@ async def _run_transfer_pipeline(
     dest_tag: str,
     vuln_scan_enabled_override: bool | None,
     vuln_severities_override: str | None,
+    owner: str,
 ) -> None:
     """
     Background task: pull → optional Trivy scan → push.
@@ -276,13 +278,19 @@ async def _run_transfer_pipeline(
             _transfer_jobs[job_id]["vuln_result"] = vuln_result
 
             if vuln_result["blocked"]:
-                # Vulnerabilities found — stop here, do NOT push
+                if not can_bypass_vuln_block(owner, settings):
+                    # Vulnerabilities found — stop here, do NOT push
+                    _update(
+                        TransferStatus.SCAN_VULNERABLE,
+                        "⚠️ Vulnerabilities detected — transfer blocked.",
+                        100,
+                    )
+                    return
                 _update(
-                    TransferStatus.SCAN_VULNERABLE,
-                    "⚠️ Vulnerabilities detected — transfer blocked.",
-                    100,
+                    TransferStatus.SCAN_CLEAN,
+                    "⚠️ Vulnerabilities detected — pushing anyway (bypass granted).",
+                    70,
                 )
-                return
             else:
                 _update(TransferStatus.SCAN_CLEAN, "Scan clean. Pushing...", 70)
         else:
@@ -437,6 +445,7 @@ async def start_transfer_jobs(
                 dest_tag=dest_tag,
                 vuln_scan_enabled_override=request.vuln_scan_enabled_override,
                 vuln_severities_override=request.vuln_severities_override,
+                owner=owner,
             )
         )
 

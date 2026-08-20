@@ -119,10 +119,20 @@
     </div>
   }
 
-  <!-- Push panel — only when scan passed or was skipped -->
-  <!-- scan_vulnerable intentionally excluded -->
-  @if (job()!.status === "scan_clean" || job()!.status === "scan_skipped") {
+  <!-- Push panel — shown when scan passed/was skipped, or when the current
+       user holds the CVE-block bypass right despite blocking vulnerabilities -->
+  @if (
+    job()!.status === "scan_clean" ||
+    job()!.status === "scan_skipped" ||
+    (job()!.status === "scan_vulnerable" && canBypassVuln())
+  ) {
     <div class="mt-2 pt-2 border-top">
+      @if (job()!.status === "scan_vulnerable") {
+        <div class="alert alert-warning py-1 px-2 small mb-2">
+          <i class="bi bi-exclamation-triangle me-1"></i>{{ "STAGING.VULN_PUSH_BYPASS_WARNING" | translate }}
+        </div>
+      }
+
       <!-- Push mode toggle -->
       <div class="d-flex align-items-center gap-2 mb-2">
         <span class="small text-muted">{{ "STAGING.PUSH_TO" | translate }}</span>

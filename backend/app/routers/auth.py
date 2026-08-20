@@ -70,6 +70,7 @@ class LocalUserPublic(BaseModel):
     created_at: str
     auth_source: str = AUTH_SOURCE_LOCAL
     disabled: bool = False
+    can_bypass_vuln_block: bool = False
 
 
 class CreateUserRequest(BaseModel):
@@ -82,6 +83,7 @@ class CreateUserRequest(BaseModel):
     username: str
     password: str
     is_admin: bool = False
+    can_bypass_vuln_block: bool = False
 
     @field_validator("username")
     @classmethod
@@ -113,6 +115,7 @@ class UpdateUserRequest(BaseModel):
     password: str | None = None
     is_admin: bool | None = None
     disabled: bool | None = None
+    can_bypass_vuln_block: bool | None = None
 
 
 class DockerHubAccountSettings(BaseModel):
@@ -200,6 +203,7 @@ def _user_to_public(u: dict[str, Any]) -> LocalUserPublic:
         created_at=u.get("created_at", ""),
         auth_source=u.get("auth_source", AUTH_SOURCE_LOCAL),
         disabled=u.get("disabled", False),
+        can_bypass_vuln_block=u.get("can_bypass_vuln_block", False),
     )
 
 
@@ -381,6 +385,7 @@ async def list_local_users(
             is_admin=True,
             created_at="",
             auth_source=AUTH_SOURCE_LOCAL,
+            can_bypass_vuln_block=True,
         )
     ]
     for u in users:
@@ -416,6 +421,7 @@ async def create_local_user(
         "username": payload.username,
         "password_hash": hash_password(payload.password),
         "is_admin": payload.is_admin,
+        "can_bypass_vuln_block": payload.can_bypass_vuln_block,
         "auth_source": AUTH_SOURCE_LOCAL,
         "created_at": datetime.now(UTC).isoformat(),
     }
@@ -463,6 +469,7 @@ async def update_local_user(
             is_admin=True,
             created_at="",
             auth_source=AUTH_SOURCE_LOCAL,
+            can_bypass_vuln_block=True,
         )
 
     users = _load_users()
@@ -488,6 +495,8 @@ async def update_local_user(
                 user["is_admin"] = payload.is_admin
             if payload.disabled is not None:
                 user["disabled"] = payload.disabled
+            if payload.can_bypass_vuln_block is not None:
+                user["can_bypass_vuln_block"] = payload.can_bypass_vuln_block
             # Guard: demoting or disabling must never remove the last active admin.
             if not _active_admin_exists(users, settings):
                 raise HTTPException(

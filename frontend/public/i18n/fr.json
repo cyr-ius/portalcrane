@@ -277,6 +277,7 @@
     "NO_JOBS": "Aucune tâche de staging. Sélectionnez une source et récupérez une image pour commencer.",
     "DELETE_JOB": "Supprimer la tâche",
     "VULN_PUSH_BLOCKED": "Vulnérabilités détectées — push bloqué",
+    "VULN_PUSH_BYPASS_WARNING": "Vous poussez cette image malgré des vulnérabilités de sévérité bloquante détectées.",
     "PUSH_TO": "Pousser vers :",
     "LOCAL": "Local",
     "EXTERNAL": "Externe",
@@ -586,6 +587,9 @@
     "NEW_PASSWORD": "Nouveau mot de passe",
     "LEAVE_EMPTY": "Laisser vide pour conserver l'actuel",
     "ADMIN_RIGHTS": "Droits d'administration",
+    "VULN_BYPASS": "Dérogation CVE",
+    "VULN_BYPASS_HINT": "Autorise ce compte à pousser une image même si le scan Trivy détecte des vulnérabilités de sévérité bloquante.",
+    "VULN_BYPASS_ADMIN_HINT": "Les administrateurs bénéficient toujours de cette dérogation, quel que soit ce réglage.",
     "LEGEND": "Le compte administrateur intégré (badge ENV) a un mot de passe généré automatiquement au premier lancement et affiché une seule fois dans les journaux du serveur — vous pouvez le changer ici, mais le compte est toujours administrateur et ne peut pas être supprimé. Les comptes OIDC sont provisionnés automatiquement lors de la première connexion SSO — en supprimer un révoque l'accès futur."
   },
   "NETWORK": {

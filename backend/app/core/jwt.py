@@ -56,6 +56,7 @@ class UserInfo(BaseModel):
 
     username: str
     is_admin: bool = False
+    can_bypass_vuln_block: bool = False
 
 
 # ─── Internal helpers ─────────────────────────────────────────────────────────
@@ -79,6 +80,19 @@ def is_admin_user(username: str, settings: Settings) -> bool:
     for user in _load_users():
         if user["username"] == username:
             return bool(user.get("is_admin", False))
+    return False
+
+
+def can_bypass_vuln_block(username: str, settings: Settings) -> bool:
+    """Return True when the user may push despite blocking CVE severities.
+
+    Admins always bypass; other users need the explicit per-account flag.
+    """
+    if is_admin_user(username, settings):
+        return True
+    for user in _load_users():
+        if user["username"] == username:
+            return bool(user.get("can_bypass_vuln_block", False))
     return False
 
 
@@ -163,7 +177,11 @@ async def get_current_user(
         username = verify_personal_token(raw, settings, expected_scope=SCOPE_API)
         if not username or is_user_disabled(username, settings):
             raise credentials_exception
-        return UserInfo(username=username, is_admin=is_admin_user(username, settings))
+        return UserInfo(
+            username=username,
+            is_admin=is_admin_user(username, settings),
+            can_bypass_vuln_block=can_bypass_vuln_block(username, settings),
+        )
 
     # Session JWT path.
     if payload is None:
@@ -178,6 +196,7 @@ async def get_current_user(
     return UserInfo(
         username=username,
         is_admin=is_admin_user(username, settings),
+        can_bypass_vuln_block=can_bypass_vuln_block(username, settings),
     )
 
 

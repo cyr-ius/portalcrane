@@ -17,6 +17,8 @@ export interface LoginResponse {
 export interface UserInfo {
   username: string;
   is_admin: boolean;
+  /** Whether this account may push despite blocking CVE severities. */
+  can_bypass_vuln_block: boolean;
   /** Whether the Personal Access Token feature is enabled (API_KEYS_ENABLED). */
   api_keys_enabled?: boolean;
   /** Whether this account has a local password it can change (false for OIDC). */

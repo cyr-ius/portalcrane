@@ -98,6 +98,26 @@
               </label>
             </div>
           </div>
+
+          <!-- Vulnerability-block bypass toggle -->
+          <div class="col-md-3 d-flex align-items-end">
+            <div class="form-check form-switch mb-2">
+              <input
+                class="form-check-input"
+                type="checkbox"
+                id="newCanBypassVuln"
+                role="switch"
+                [formField]="createForm.canBypassVuln"
+              />
+              <label
+                class="form-check-label small"
+                for="newCanBypassVuln"
+                [title]="'ACCOUNTS.VULN_BYPASS_HINT' | translate"
+              >
+                {{ "ACCOUNTS.VULN_BYPASS" | translate }}
+              </label>
+            </div>
+          </div>
         </div>
 
         <!-- Info: permissions via folders -->
@@ -209,6 +229,18 @@
               } @if (user.disabled) {
               <span class="badge bg-danger-subtle text-danger ms-1">
                 <i class="bi bi-slash-circle me-1"></i>{{ "ACCOUNTS.DISABLED" | translate }}
+              </span>
+              } @if ((!user.is_admin && user.can_bypass_vuln_block) || isEnvAdmin(user)) {
+              <span
+                class="badge bg-info-subtle text-info ms-1"
+                [title]="
+                  (isEnvAdmin(user)
+                    ? 'ACCOUNTS.VULN_BYPASS_ADMIN_HINT'
+                    : 'ACCOUNTS.VULN_BYPASS_HINT'
+                  ) | translate
+                "
+              >
+                <i class="bi bi-shield-exclamation me-1"></i>{{ "ACCOUNTS.VULN_BYPASS" | translate }}
               </span>
               }
             </td>
@@ -355,6 +387,26 @@
                       />
                       <label class="form-check-label small" [for]="'editAdmin_' + user.id">
                         {{ "ACCOUNTS.ADMIN_RIGHTS" | translate }}
+                      </label>
+                    </div>
+                  </div>
+
+                  <!-- Vulnerability-block bypass toggle -->
+                  <div class="col-md-3">
+                    <div class="form-check form-switch">
+                      <input
+                        class="form-check-input"
+                        type="checkbox"
+                        [id]="'editVulnBypass_' + user.id"
+                        role="switch"
+                        [formField]="updateForm.canBypassVuln"
+                      />
+                      <label
+                        class="form-check-label small"
+                        [for]="'editVulnBypass_' + user.id"
+                        [title]="'ACCOUNTS.VULN_BYPASS_HINT' | translate"
+                      >
+                        {{ "ACCOUNTS.VULN_BYPASS" | translate }}
                       </label>
                     </div>
                   </div>

@@ -28,7 +28,10 @@ Two kinds of accounts exist:
   - an `is_admin` flag (full access to everything, bypassing folder
     checks entirely),
   - a `disabled` flag (blocks login without deleting the account or its
-    group memberships).
+    group memberships),
+  - a `can_bypass_vuln_block` flag (lets the account push an image even
+    when Trivy flagged a blocking-severity CVE — see
+    [below](#vulnerability-block-bypass)).
 
 OIDC-provisioned accounts (see [Authentication & OIDC](../configuration/authentication.md))
 show up in the same list with `auth_source: "oidc"` — they have no local
@@ -45,6 +48,38 @@ curl -X POST http://<host>:8000/api/auth/users \
     An account with `is_admin: true` has unconditional pull/push access to
     every folder and every external registry. Folder permissions only
     matter for non-admin accounts.
+
+## Vulnerability-block bypass
+
+Independently of folder permissions, the [Staging Pipeline](staging-pipeline.md)
+and [Transfers](external-registries.md#transfers) refuse to push an image
+whose Trivy scan flagged a **blocking severity** (`VULN_SCAN_SEVERITIES`,
+see [Vulnerability Scanning](../configuration/vulnerability-scanning.md)) —
+the API rejects the push with `403 Forbidden` and the UI hides the push
+controls for that job.
+
+An admin can grant an individual account a standing exception to this
+block by setting `can_bypass_vuln_block: true` on the account, from
+**Settings → Accounts** (edit the user, toggle **CVE bypass**) or via the
+API:
+
+```bash
+curl -X PATCH http://<host>:8000/api/auth/users/<user_id> \
+  -H "Authorization: Bearer <admin-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"can_bypass_vuln_block": true}'
+```
+
+When the flag is set, a staging job stuck at `scan_vulnerable` shows its
+push panel again (with a warning banner), and a transfer whose scan is
+blocked proceeds to push instead of stopping at `scan_vulnerable`.
+
+!!! note "Admins always bypass this too"
+    An account with `is_admin: true` never needs the flag explicitly — it
+    already pushes past a blocking scan unconditionally, the same way it
+    bypasses folder checks. `can_bypass_vuln_block` only matters for
+    non-admin accounts you want to trust with this specific exception
+    without making them a full admin.
 
 ## Groups
 

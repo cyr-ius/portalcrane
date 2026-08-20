@@ -277,6 +277,7 @@
     "NO_JOBS": "Aún no hay tareas de staging. Seleccione un origen y extraiga una imagen para empezar.",
     "DELETE_JOB": "Eliminar tarea",
     "VULN_PUSH_BLOCKED": "Vulnerabilidades detectadas — push bloqueado",
+    "VULN_PUSH_BYPASS_WARNING": "Está enviando esta imagen a pesar de las vulnerabilidades de severidad bloqueante detectadas.",
     "PUSH_TO": "Enviar a:",
     "LOCAL": "Local",
     "EXTERNAL": "Externo",
@@ -586,6 +587,9 @@
     "NEW_PASSWORD": "Nueva contraseña",
     "LEAVE_EMPTY": "Dejar vacío para mantener la actual",
     "ADMIN_RIGHTS": "Derechos de administración",
+    "VULN_BYPASS": "Excepción CVE",
+    "VULN_BYPASS_HINT": "Permite a esta cuenta enviar una imagen aunque el escaneo Trivy detecte vulnerabilidades de severidad bloqueante.",
+    "VULN_BYPASS_ADMIN_HINT": "Los administradores siempre tienen esta excepción, sea cual sea este ajuste.",
     "LEGEND": "La cuenta de administrador integrada (insignia ENV) tiene una contraseña que se genera automáticamente en el primer arranque y se muestra una vez en los registros del servidor — puede cambiarla aquí, pero la cuenta siempre es administradora y no se puede eliminar. Las cuentas OIDC se aprovisionan automáticamente en el primer inicio de sesión SSO — eliminar una revoca el acceso futuro."
   },
   "NETWORK": {

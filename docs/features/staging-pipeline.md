@@ -125,6 +125,10 @@ repository names to an account/organization.
   `can_push_external`.
 - Non-admin users can only push (or delete) jobs they **own** — job
   ownership is recorded at pull time.
+- If the scan flagged a **blocking severity**, the push is refused
+  (`403 Forbidden`) unless the account holds `can_bypass_vuln_block` (or
+  `is_admin`) — see
+  [Vulnerability-block bypass](users-groups-permissions.md#vulnerability-block-bypass).
 
 !!! warning "External push can't become a backdoor to the local registry"
     If an "external" destination actually resolves to Portalcrane's own

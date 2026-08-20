@@ -277,6 +277,7 @@
     "NO_JOBS": "No staging jobs yet. Select a source and pull an image to get started.",
     "DELETE_JOB": "Delete job",
     "VULN_PUSH_BLOCKED": "Vulnerabilities detected — push blocked",
+    "VULN_PUSH_BYPASS_WARNING": "You are pushing this image despite detected blocking-severity vulnerabilities.",
     "PUSH_TO": "Push to:",
     "LOCAL": "Local",
     "EXTERNAL": "External",
@@ -586,6 +587,9 @@
     "NEW_PASSWORD": "New Password",
     "LEAVE_EMPTY": "Leave empty to keep current",
     "ADMIN_RIGHTS": "Admin rights",
+    "VULN_BYPASS": "CVE bypass",
+    "VULN_BYPASS_HINT": "Allows this account to push an image even when the Trivy scan detects blocking-severity vulnerabilities.",
+    "VULN_BYPASS_ADMIN_HINT": "Administrators always have this bypass, regardless of this setting.",
     "LEGEND": "The built-in admin account (badge ENV) has a password that is auto-generated on first launch and shown once in the server logs — you can change it here, but the account is always an administrator and cannot be deleted. OIDC accounts are provisioned automatically on first SSO login — deleting one revokes future access."
   },
   "NETWORK": {

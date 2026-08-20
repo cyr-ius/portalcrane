@@ -265,6 +265,17 @@ async def push_image(
             status_code=status.HTTP_403_FORBIDDEN, detail="Access denied"
         )
 
+    vuln_result = job.get("vuln_result")
+    if (
+        vuln_result
+        and vuln_result.get("blocked")
+        and not current_user.can_bypass_vuln_block
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Push denied: blocking vulnerabilities detected",
+        )
+
     try:
         oci_dir = safe_job_path(request.job_id)
     except ValueError as exc:

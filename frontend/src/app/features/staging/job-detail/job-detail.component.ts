@@ -1,9 +1,17 @@
 import { Component, computed, inject, input, signal } from "@angular/core";
 import { TranslatePipe } from "@ngx-translate/core";
 import { AuthService } from "../../../core/services/auth.service";
-import { ExternalRegistry, ExternalRegistryService } from "../../../core/services/external-registry.service";
+import {
+  ExternalRegistry,
+  ExternalRegistryService,
+} from "../../../core/services/external-registry.service";
 import { FolderService } from "../../../core/services/folder.service";
-import { ACTIVE_STATUSES, JobService, StagingJob, TERMINATE_STATUSES } from "../../../core/services/job.service";
+import {
+  ACTIVE_STATUSES,
+  JobService,
+  StagingJob,
+  TERMINATE_STATUSES,
+} from "../../../core/services/job.service";
 
 export type PushMode = "local" | "external";
 
@@ -30,21 +38,31 @@ export class JobDetailComponent {
   pushModes = signal<Record<string, PushMode>>({});
   pushExtRegistryId = signal<Record<string, string>>({});
 
-  readonly externalRegistries = computed<ExternalRegistry[]>(() => this.extRegistrySvc.externalRegistries());
+  readonly externalRegistries = computed<ExternalRegistry[]>(() =>
+    this.extRegistrySvc.externalRegistries(),
+  );
   // Push destinations for the "External" mode. The local embedded registry is a
   // hidden system entry with its own dedicated "Local" push button, so it must be
   // excluded here to avoid offering it twice.
   readonly pushableRegistries = computed<ExternalRegistry[]>(() =>
     this.externalRegistries().filter((r) => !r.system),
   );
-  readonly isAdmin = computed(() => this.authService.currentUser()?.is_admin ?? false);
-  readonly pushFolderOptions = computed(() => this.folderSvc.allowedPushFolders());
+  readonly isAdmin = computed(
+    () => this.authService.currentUser()?.is_admin ?? false,
+  );
+  readonly canBypassVuln = computed(
+    () => this.authService.currentUser()?.can_bypass_vuln_block ?? false,
+  );
+  readonly pushFolderOptions = computed(() =>
+    this.folderSvc.allowedPushFolders(),
+  );
 
   // Coarse gate for the "External" push destination. Admins always qualify;
   // otherwise the user must hold can_push_external on at least one folder. The
   // backend enforces the precise per-folder rule at push time.
   readonly canExternalPush = computed(
-    () => this.isAdmin() || this.folderSvc.allowedExternalPushFolders().length > 0,
+    () =>
+      this.isAdmin() || this.folderSvc.allowedExternalPushFolders().length > 0,
   );
 
   /**

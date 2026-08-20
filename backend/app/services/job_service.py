@@ -9,7 +9,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict
 
 from ..config import REGISTRY_HOST, REGISTRY_URL, Settings, staging_root
-from ..core.jwt import UserInfo, is_admin_user
+from ..core.jwt import UserInfo, can_bypass_vuln_block, is_admin_user
 from ..routers.folders import check_folder_access
 from ..services.trivy_service import (
     effective_severities,
@@ -295,6 +295,18 @@ async def run_push_pipeline(
             jobs_list[job_id]["error"] = "authorization"
             jobs_list[job_id]["progress"] = 100
             return
+
+    vuln_result = jobs_list[job_id].get("vuln_result")
+    if (
+        vuln_result
+        and vuln_result.get("blocked")
+        and not can_bypass_vuln_block(jobs_list[job_id].get("owner", ""), settings)
+    ):
+        jobs_list[job_id]["status"] = JobStatus.FAILED
+        jobs_list[job_id]["message"] = "Push denied: blocking vulnerabilities detected"
+        jobs_list[job_id]["error"] = "vulnerability_blocked"
+        jobs_list[job_id]["progress"] = 100
+        return
 
     jobs_list[job_id]["status"] = JobStatus.PUSHING
     jobs_list[job_id]["message"] = (
