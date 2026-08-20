@@ -17,13 +17,17 @@ import httpx
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
-from ..config import TRIVY_SERVER_LOCAL, Settings, get_settings
+from ..config import Settings, get_settings
 from ..core.jwt import UserInfo, get_current_user
 from ..helpers import bytes_to_human
 from ..routers.auth import _load_users
 from ..services.providers import local_provider
 from ..services.providers.external_v2 import V2Provider
-from ..services.trivy_service import get_trivy_db_info, get_trivy_version
+from ..services.trivy_service import (
+    get_trivy_db_info,
+    get_trivy_version,
+    is_trivy_server_local,
+)
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -194,7 +198,7 @@ async def get_dashboard_stats(
     # TRIVY_SERVER_URL manages its own DB, invisible to this container's cache.
     if settings.trivy_enabled:
         trivy_version = await get_trivy_version()
-        trivy_db = await get_trivy_db_info() if TRIVY_SERVER_LOCAL else {}
+        trivy_db = await get_trivy_db_info() if is_trivy_server_local() else {}
     else:
         trivy_version = None
         trivy_db = {}

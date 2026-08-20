@@ -65,6 +65,7 @@ export interface VulnConfig {
   vuln_scan_severities: string;
   vuln_ignore_unfixed: boolean;
   vuln_scan_timeout: string;
+  trivy_url: string;
 }
 
 /** Body sent to PUT /api/trivy/override. */
@@ -73,6 +74,7 @@ interface VulnOverridePayload {
   vuln_scan_severities: string;
   vuln_ignore_unfixed: boolean;
   vuln_scan_timeout: string;
+  trivy_url: string;
 }
 
 // ── Legacy localStorage cleanup ───────────────────────────────────────────────
@@ -108,6 +110,9 @@ export class TrivyService {
 
   private _vulnTimeout = signal<string>("5m");
   readonly vulnTimeout = this._vulnTimeout.asReadonly();
+
+  private _vulnUrl = signal<string>("");
+  readonly vulnUrl = this._vulnUrl.asReadonly();
 
   private _vulnSeverities = signal<TrivySeverity[]>(["CRITICAL", "HIGH"]);
   readonly vulnSeverities = this._vulnSeverities.asReadonly();
@@ -184,6 +189,13 @@ export class TrivyService {
     }
   }
 
+  setVulnUrl(value: string): void {
+    this._vulnUrl.set(value);
+    if (this._vulnOverride()) {
+      this._saveOverride();
+    }
+  }
+
   toggleVulnSeverity(sev: TrivySeverity): void {
     const current = this._vulnSeverities();
     const next = current.includes(sev)
@@ -205,6 +217,7 @@ export class TrivyService {
     this._vulnEnabled.set(cfg.vuln_scan_enabled);
     this._vulnIgnoreUnfixed.set(cfg.vuln_ignore_unfixed);
     this._vulnTimeout.set(cfg.vuln_scan_timeout);
+    this._vulnUrl.set(cfg.trivy_url);
     this._vulnSeverities.set(
       cfg.vuln_scan_severities
         .split(",")
@@ -222,6 +235,7 @@ export class TrivyService {
       vuln_scan_severities: this._vulnSeverities().join(","),
       vuln_ignore_unfixed: this._vulnIgnoreUnfixed(),
       vuln_scan_timeout: this._vulnTimeout(),
+      trivy_url: this._vulnUrl(),
     };
   }
 

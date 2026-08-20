@@ -498,7 +498,11 @@
     "ENV_DEFAULTS": "Valores predeterminados del entorno —",
     "IGNORE_UNFIXED_SHORT": "ignorar-sin-corregir",
     "TIMEOUT_SHORT": "tiempo de espera",
-    "OVERRIDDEN": "anulado"
+    "OVERRIDDEN": "anulado",
+    "TRIVY_URL": "URL del servidor Trivy",
+    "TRIVY_URL_PLACEHOLDER": "http://localhost:4954",
+    "TRIVY_URL_DESC": "Dirección del servidor Trivy utilizado para los escaneos. Déjelo vacío para volver a la variable de entorno TRIVY_SERVER_URL.",
+    "TRIVY_URL_SHORT": "servidor Trivy"
   },
   "OIDC": {
     "ERR_LOAD": "Error al cargar la configuración OIDC",
