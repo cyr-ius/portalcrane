@@ -498,7 +498,11 @@
     "ENV_DEFAULTS": "Valeurs par défaut de l'env —",
     "IGNORE_UNFIXED_SHORT": "ignorer-non-corrigées",
     "TIMEOUT_SHORT": "délai",
-    "OVERRIDDEN": "surchargé"
+    "OVERRIDDEN": "surchargé",
+    "TRIVY_URL": "URL du serveur Trivy",
+    "TRIVY_URL_PLACEHOLDER": "http://localhost:4954",
+    "TRIVY_URL_DESC": "Adresse du serveur Trivy utilisé pour les scans. Laisser vide pour revenir à la valeur définie par la variable d'environnement TRIVY_SERVER_URL.",
+    "TRIVY_URL_SHORT": "serveur Trivy"
   },
   "OIDC": {
     "ERR_LOAD": "Échec du chargement de la configuration OIDC",

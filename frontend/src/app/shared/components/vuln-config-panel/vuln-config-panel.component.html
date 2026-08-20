@@ -390,6 +390,25 @@
             }
           </div>
         </div>
+
+        <!-- Trivy server URL -->
+        <div class="mb-3">
+          <label class="form-label small fw-semibold" for="vulnTrivyUrl">
+            {{ "VULN.TRIVY_URL" | translate }}
+          </label>
+          <input
+            type="text"
+            class="form-control form-control-sm"
+            id="vulnTrivyUrl"
+            [value]="trivySvc.vulnUrl()"
+            [disabled]="trivySvc.saving()"
+            [placeholder]="'VULN.TRIVY_URL_PLACEHOLDER' | translate"
+            (change)="trivySvc.setVulnUrl($any($event.target).value)"
+          />
+          <div class="text-muted mt-1" style="font-size: 0.72rem">
+            {{ "VULN.TRIVY_URL_DESC" | translate }}
+          </div>
+        </div>
       }
     }
 
@@ -403,7 +422,8 @@
           ·
           {{ cfg.vuln_scan_severities }} · {{ "VULN.IGNORE_UNFIXED_SHORT" | translate }}:
           {{ (cfg.vuln_ignore_unfixed ? "COMMON.YES" : "COMMON.NO") | translate }}
-          · {{ "VULN.TIMEOUT_SHORT" | translate }}: {{ cfg.vuln_scan_timeout }}
+          · {{ "VULN.TIMEOUT_SHORT" | translate }}: {{ cfg.vuln_scan_timeout }} ·
+          {{ "VULN.TRIVY_URL_SHORT" | translate }}: {{ cfg.trivy_url }}
         </span>
         @if (cfg.vuln_scan_override) {
           <span class="badge bg-warning-subtle text-warning ms-2" style="font-size: 0.65rem">

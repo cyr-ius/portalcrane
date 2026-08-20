@@ -15,12 +15,13 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
-from ..config import TRIVY_SERVER_LOCAL, Settings, get_settings
+from ..config import Settings, get_settings
 from ..core.jwt import UserInfo, get_current_user, require_admin
 from ..services.trivy_service import (
     clear_vuln_override,
     get_trivy_db_info,
     has_explicit_tag_or_digest,
+    is_trivy_server_local,
     resolve_vuln_config,
     save_vuln_override,
     scan_image,
@@ -47,6 +48,7 @@ class VulnConfig(BaseModel):
     vuln_scan_severities: str
     vuln_ignore_unfixed: bool
     vuln_scan_timeout: str
+    trivy_url: str
 
 
 class VulnOverridePayload(BaseModel):
@@ -56,6 +58,7 @@ class VulnOverridePayload(BaseModel):
     vuln_scan_severities: str
     vuln_ignore_unfixed: bool
     vuln_scan_timeout: str
+    trivy_url: str = ""
 
 
 # ── Trivy DB ──────────────────────────────────────────────────────────────────
@@ -74,7 +77,7 @@ async def trivy_db_status(
     """
     if not settings.trivy_enabled:
         return {"trivy_enabled": False}
-    if not TRIVY_SERVER_LOCAL:
+    if not is_trivy_server_local():
         return {"trivy_enabled": True, "managed_remotely": True}
     return await get_trivy_db_info()
 
@@ -87,7 +90,7 @@ async def force_trivy_update(
     """Forces an immediate Trivy DB update."""
     if not settings.trivy_enabled:
         raise HTTPException(status_code=503, detail="Trivy is disabled")
-    if not TRIVY_SERVER_LOCAL:
+    if not is_trivy_server_local():
         raise HTTPException(
             status_code=400,
             detail="Trivy DB is managed by the remote server, not this container",
@@ -171,6 +174,7 @@ async def set_vuln_override(
             "vuln_scan_severities": payload.vuln_scan_severities,
             "vuln_ignore_unfixed": payload.vuln_ignore_unfixed,
             "vuln_scan_timeout": payload.vuln_scan_timeout,
+            "trivy_url": payload.trivy_url.strip(),
         }
     )
     return VulnConfig(**resolve_vuln_config(settings))
