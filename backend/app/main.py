@@ -19,7 +19,7 @@ from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
-from .config import DATA_DIR, STAGING_DIR, app_settings
+from .config import DATA_DIR, STAGING_DIR, TRIVY_SERVER_LOCAL, app_settings
 from .core.bootstrap import ensure_admin_credentials, ensure_secret_key
 from .helpers import resolve_safe_path
 from .routers import (
@@ -72,10 +72,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     apply_syslog_config(resolve_syslog_settings(app_settings))
     ensure_root_folder_exists()
     migrate_folder_permissions_to_groups()
-    # Only run the Trivy DB updater when Trivy is enabled; otherwise the embedded
-    # server is not started (see docker/entrypoint.sh) and DB downloads are moot.
+    # Only run the local Trivy DB updater when Trivy is enabled AND the client
+    # targets the embedded server; a remote TRIVY_SERVER_URL manages its own DB
+    # (see docker/entrypoint.sh, which likewise skips autostarting the embedded
+    # server in that case), so downloading a DB nobody reads would be moot.
     db_task = (
-        asyncio.create_task(db_updater_loop()) if app_settings.trivy_enabled else None
+        asyncio.create_task(db_updater_loop())
+        if (app_settings.trivy_enabled and TRIVY_SERVER_LOCAL)
+        else None
     )
     yield
     if db_task is not None:

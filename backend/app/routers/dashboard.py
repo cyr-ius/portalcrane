@@ -17,7 +17,7 @@ import httpx
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
-from ..config import Settings, get_settings
+from ..config import TRIVY_SERVER_LOCAL, Settings, get_settings
 from ..core.jwt import UserInfo, get_current_user
 from ..helpers import bytes_to_human
 from ..routers.auth import _load_users
@@ -189,10 +189,12 @@ async def get_dashboard_stats(
     total_admins = 1 + sum(1 for u in local_users if u.get("is_admin", False))
 
     # Trivy binary version + vulnerability DB freshness.
-    # Skip the subprocess/file lookups entirely when Trivy is disabled.
+    # Skip the subprocess/file lookups entirely when Trivy is disabled. The DB
+    # freshness lookup is only meaningful for the embedded server — a remote
+    # TRIVY_SERVER_URL manages its own DB, invisible to this container's cache.
     if settings.trivy_enabled:
         trivy_version = await get_trivy_version()
-        trivy_db = await get_trivy_db_info()
+        trivy_db = await get_trivy_db_info() if TRIVY_SERVER_LOCAL else {}
     else:
         trivy_version = None
         trivy_db = {}

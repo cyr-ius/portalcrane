@@ -19,7 +19,18 @@ DATA_DIR = os.getenv("DATA_DIR", "/var/lib/portalcrane")
 STAGING_DIR = f"{DATA_DIR}/cache/staging"
 FRONTEND_DIR = Path("/app/ui").resolve()
 INDEX_HTML = FRONTEND_DIR / "index.html"
-TRIVY_SERVER_URL: str = "http://localhost:4954"
+# Where the Trivy client connects. Defaults to the embedded server started by
+# supervisord (see docker/supervisord.conf.tpl); point it at a remote Trivy
+# server (e.g. "http://trivy:4954") to scan against a container-external
+# instance instead. TRIVY_ENABLED remains the master on/off switch for
+# scanning in either mode — see docker/entrypoint.sh for the autostart logic
+# that skips the embedded server when this points elsewhere.
+TRIVY_SERVER_URL: str = os.getenv("TRIVY_SERVER_URL", "http://localhost:4954")
+TRIVY_SERVER_LOCAL: bool = urlparse(TRIVY_SERVER_URL).hostname in (
+    "localhost",
+    "127.0.0.1",
+    "::1",
+)
 REGISTRY_URL: str = "http://localhost:5000"
 REGISTRY_HOST: str = urlparse(REGISTRY_URL).netloc
 DEFAULT_TIMEOUT: float = 10.0

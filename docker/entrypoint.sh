@@ -38,18 +38,39 @@ PUBLIC_KEY=${PUBLIC_KEY}
 export PUBLIC_KEY
 
 # ── Trivy toggle ────────────────────────────────────────────────────────────────
-# Set TRIVY_ENABLED=false to disarm the embedded Trivy server (no autostart).
-# Any value other than "false" (case-insensitive) keeps Trivy enabled.
+# TRIVY_ENABLED is the master switch for vulnerability scanning, local or remote.
+# Set it to false to disarm scanning entirely. TRIVY_SERVER_URL picks where the
+# backend's Trivy client connects: leave it at the default (localhost:4954) to
+# use the embedded server started below, or point it at a remote Trivy server
+# (e.g. http://trivy:4954) to use one running in another container. The embedded
+# trivy-server only autostarts when TRIVY_ENABLED is true AND TRIVY_SERVER_URL
+# still targets localhost — pointing it elsewhere skips the redundant local
+# server (and its DB download) since the remote instance manages its own DB.
 TRIVY_ENABLED=${TRIVY_ENABLED:-true}
 export TRIVY_ENABLED
+TRIVY_SERVER_URL=${TRIVY_SERVER_URL:-"http://localhost:4954"}
+export TRIVY_SERVER_URL
+
+case "${TRIVY_SERVER_URL}" in
+    http://localhost:*|http://127.0.0.1:*) TRIVY_SERVER_LOCAL=true ;;
+    *)                                     TRIVY_SERVER_LOCAL=false ;;
+esac
+
 case "$(echo "${TRIVY_ENABLED}" | tr '[:upper:]' '[:lower:]')" in
-    false|0|no|off) TRIVY_AUTOSTART=false ;;
-    *)              TRIVY_AUTOSTART=true ;;
+    false|0|no|off)
+        TRIVY_AUTOSTART=false
+        echo "[entrypoint] Trivy disabled (TRIVY_ENABLED=${TRIVY_ENABLED})"
+        ;;
+    *)
+        if [ "${TRIVY_SERVER_LOCAL}" = "true" ]; then
+            TRIVY_AUTOSTART=true
+        else
+            TRIVY_AUTOSTART=false
+            echo "[entrypoint] Trivy enabled with remote server ${TRIVY_SERVER_URL}; embedded trivy-server not started"
+        fi
+        ;;
 esac
 export TRIVY_AUTOSTART
-if [ "${TRIVY_AUTOSTART}" = "false" ]; then
-    echo "[entrypoint] Trivy server disabled (TRIVY_ENABLED=${TRIVY_ENABLED})"
-fi
 
 # ── Ensure required directories exist ──────────────────────────────────────────
 mkdir -p ${DATA_DIR}/registry ${DATA_DIR}/cache/trivy ${DATA_DIR}/cache/staging

@@ -15,7 +15,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
-from ..config import Settings, get_settings
+from ..config import TRIVY_SERVER_LOCAL, Settings, get_settings
 from ..core.jwt import UserInfo, get_current_user, require_admin
 from ..services.trivy_service import (
     clear_vuln_override,
@@ -66,9 +66,16 @@ async def trivy_db_status(
     settings: Settings = Depends(get_settings),
     _: UserInfo = Depends(require_admin),
 ) -> dict[str, Any]:
-    """Returns Trivy vulnerability database info and freshness status."""
+    """Returns Trivy vulnerability database info and freshness status.
+
+    Only meaningful for the embedded server — a remote TRIVY_SERVER_URL
+    manages its own DB, which this container's local cache knows nothing
+    about.
+    """
     if not settings.trivy_enabled:
         return {"trivy_enabled": False}
+    if not TRIVY_SERVER_LOCAL:
+        return {"trivy_enabled": True, "managed_remotely": True}
     return await get_trivy_db_info()
 
 
@@ -80,6 +87,11 @@ async def force_trivy_update(
     """Forces an immediate Trivy DB update."""
     if not settings.trivy_enabled:
         raise HTTPException(status_code=503, detail="Trivy is disabled")
+    if not TRIVY_SERVER_LOCAL:
+        raise HTTPException(
+            status_code=400,
+            detail="Trivy DB is managed by the remote server, not this container",
+        )
     result = await update_trivy_db()
     if not result["success"]:
         raise HTTPException(status_code=500, detail=result["output"])
