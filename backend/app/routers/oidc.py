@@ -192,6 +192,7 @@ async def get_oidc_public_config(
 @router.post("/callback", response_model=Token)
 async def oidc_callback(
     code: str,
+    code_verifier: str,
     request: Request,
     response: Response,
     settings: Settings = Depends(get_settings),
@@ -199,14 +200,15 @@ async def oidc_callback(
     """Exchange an OIDC authorization code for a Portalcrane JWT.
 
     Flow:
-    1. Exchange the authorization code for an identity (username + groups).
+    1. Exchange the authorization code (with its PKCE code_verifier) for an
+       identity (username + groups).
     2. Provision (or verify) the user in local_users.json (just-in-time).
        Raises 403 when the account has been revoked, collides with a local
        account, or matches the env-admin username (anti-usurpation).
     3. Issue a local Portalcrane JWT and store it in the HttpOnly auth cookie.
     """
     try:
-        identity = await exchange_code_for_identity(code, settings)
+        identity = await exchange_code_for_identity(code, settings, code_verifier)
     except HTTPException:
         raise
     except Exception as exc:

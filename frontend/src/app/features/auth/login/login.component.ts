@@ -95,14 +95,14 @@ export class LoginComponent implements OnInit {
   }
 
   /** Delegate the OIDC authorization redirect to OidcService. */
-  loginWithOidc(): void {
+  async loginWithOidc(): Promise<void> {
     this.error.set("");
     const config = this.oidcConfig();
     if (!config) {
       return;
     }
 
-    const redirected = this.oidc.redirectToProvider(config);
+    const redirected = await this.oidc.redirectToProvider(config);
     if (!redirected) {
       this.error.set(this.translate.instant("AUTH.OIDC_ENDPOINT_UNAVAILABLE"));
     }

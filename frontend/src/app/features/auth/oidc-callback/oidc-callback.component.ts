@@ -10,7 +10,10 @@ import { Component, inject, OnInit, signal } from "@angular/core";
 import { ActivatedRoute, Router } from "@angular/router";
 import { TranslatePipe, TranslateService } from "@ngx-translate/core";
 
-import { OIDC_STATE_KEY } from "../../../core/constants/oidc.constants";
+import {
+  OIDC_STATE_KEY,
+  OIDC_VERIFIER_KEY,
+} from "../../../core/constants/oidc.constants";
 import { AuthService } from "../../../core/services/auth.service";
 import { OidcService } from "../../../core/services/oidc.service";
 
@@ -35,6 +38,7 @@ export class OidcCallbackComponent implements OnInit {
     const errorDesc = params.get("error_description");
     const state = params.get("state");
     const expectedState = sessionStorage.getItem(OIDC_STATE_KEY);
+    const codeVerifier = sessionStorage.getItem(OIDC_VERIFIER_KEY);
 
     // Provider returned an error
     if (errorParam) {
@@ -52,13 +56,21 @@ export class OidcCallbackComponent implements OnInit {
     if (!state || !expectedState || state !== expectedState) {
       this.error.set(this.translate.instant("AUTH.CB_INVALID_STATE"));
       sessionStorage.removeItem(OIDC_STATE_KEY);
+      sessionStorage.removeItem(OIDC_VERIFIER_KEY);
       return;
     }
 
     sessionStorage.removeItem(OIDC_STATE_KEY);
+    sessionStorage.removeItem(OIDC_VERIFIER_KEY);
+
+    // Missing PKCE verifier (e.g. flow started in another tab/session)
+    if (!codeVerifier) {
+      this.error.set(this.translate.instant("AUTH.CB_INVALID_STATE"));
+      return;
+    }
 
     // Exchange the code for a session — the backend sets the HttpOnly cookie.
-    this.oidc.exchangeCode(code, state).subscribe({
+    this.oidc.exchangeCode(code, state, codeVerifier).subscribe({
       next: async () => {
         // Load the user profile (relies on the freshly set cookie) then enter.
         await this.auth.loadUserInfo();
