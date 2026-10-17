@@ -6,3 +6,6 @@
 
 /** sessionStorage key used to store the CSRF state parameter during the OIDC flow. */
 export const OIDC_STATE_KEY = "pc_oidc_state";
+
+/** sessionStorage key used to store the PKCE code_verifier during the OIDC flow. */
+export const OIDC_VERIFIER_KEY = "pc_oidc_verifier";
