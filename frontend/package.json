@@ -20,7 +20,7 @@
     "bootstrap": "^5.3.8",
     "bootstrap-icons": "^1.13.2",
     "rxjs": "~7.8.2",
-    "swagger-ui-dist": "^5.34.0",
+    "swagger-ui-dist": "^5.34.1",
     "tslib": "^2.9.1"
   },
   "devDependencies": {
