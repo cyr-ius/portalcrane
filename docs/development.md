@@ -99,31 +99,24 @@ entirely.
 │       └── static/        # Self-hosted Swagger UI assets
 ├── frontend/         # Angular 22 frontend (Signals, Zoneless, standalone components)
 ├── docker/           # supervisord.conf template, registry config template, entrypoint.sh
-├── scripts/          # release.sh and other automation
 └── docs/             # This documentation site (MkDocs)
 ```
 
 ## Cutting a release
 
-Releases are produced by a helper script, not a manual tag push:
+Releases are automated by [Release Please](https://github.com/googleapis/release-please),
+from [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`...):
 
-```bash
-scripts/release.sh patch     # or minor / major / an explicit X.Y.Z
-```
+1. Development happens on `dev`; merge `dev` into `main`.
+2. Release Please opens (or updates) a release pull request on `main`, which bumps the
+   versions of `backend/pyproject.toml`, `backend/uv.lock` and `frontend/package.json` and
+   updates `CHANGELOG.md`.
+3. Merging it creates the `X.Y.Z` tag and runs `publish.yml`: CI, a check that the tag
+   matches the declared versions, the image (`linux/amd64`) on **Docker Hub**
+   (`cyrius44/portalcrane`) and **GHCR** (`ghcr.io/cyr-ius/portalcrane`), the Docker Hub
+   description from the README, then the GitHub release.
 
-It bumps the frontend's version, commits that bump, tags **that** commit,
-and pushes — so the version embedded in a release always matches its git
-tag. Use `--no-push` to prepare the commit and tag locally without pushing
-immediately.
-
-Pushing the resulting `X.Y.Z` tag triggers the GitHub Actions release and
-image-build workflow, which:
-
-1. Builds the image (`linux/amd64`, `linux/arm64`) for that tag and for
-   `main` pushes.
-2. Publishes to **Docker Hub** (`cyrius44/portalcrane`) and **GHCR**
-   (`ghcr.io/cyr-ius/portalcrane`).
-3. Updates the Docker Hub description from the repository's README.
+Do not push version tags by hand.
 
 ## Serving this documentation locally
 

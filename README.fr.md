@@ -7,7 +7,7 @@
 [![docker::pulls]][docker::hub]
 [![documentation::badge]][documentation::web]
 
-[ci::status]: https://img.shields.io/github/actions/workflow/status/cyr-ius/portalcrane/docker-publish.yml?color=blue&logo=github
+[ci::status]: https://img.shields.io/github/actions/workflow/status/cyr-ius/portalcrane/ci.yml?color=blue&logo=github
 [ci::github]: https://github.com/cyr-ius/portalcrane/actions
 [docker::pulls]: https://img.shields.io/docker/pulls/cyrius44/portalcrane.svg?logo=docker
 [docker::hub]: https://hub.docker.com/r/cyrius44/portalcrane
