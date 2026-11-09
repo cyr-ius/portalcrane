@@ -42,7 +42,8 @@ repos:
         exclude_types: [csv, json, html]
         # codespell only knows English: the translated READMEs are excluded,
         # otherwise every French/Spanish word is reported as a misspelling.
-        exclude: .devcontainer|.agents|swagger|README\.(fr|es)\.md
+        # CHANGELOG.md is written by Release Please: its pull request must pass as generated
+        exclude: .devcontainer|.agents|swagger|README\.(fr|es)\.md|^CHANGELOG\.md$
 
   # ── TypeScript / Angular: Prettier ───────────────────────────────────────
   - repo: https://github.com/pre-commit/mirrors-prettier
@@ -56,4 +57,5 @@ repos:
         # to python-markdown but not to CommonMark — prettier's markdown
         # formatter doesn't know the extension and strips that indentation,
         # silently breaking the callout boxes on every run.
-        exclude: node_modules|.agents|swagger|^docs/
+        # CHANGELOG.md is written by Release Please: its pull request must pass as generated
+        exclude: node_modules|.agents|swagger|^docs/|^CHANGELOG\.md$
