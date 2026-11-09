@@ -184,11 +184,11 @@ If a command fails:
 
 ## Deployment
 
-Production releases must use:
-
-```bash
-scripts/release.sh
-```
+Development happens on `dev`. Releases go through Release Please with Conventional Commits
+(`feat:`, `fix:`...): merge `dev` into `main`, then merge the release pull request; the
+`X.Y.Z` tag runs `publish.yml` (checks, version check, Docker image on GHCR and Docker Hub,
+GitHub release). Do not push version tags by hand and do not edit the versions of
+`pyproject.toml` or `package.json`: Release Please updates them.
 
 ## References
 
