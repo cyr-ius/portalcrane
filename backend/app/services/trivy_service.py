@@ -73,6 +73,33 @@ def resolve_trivy_server_url() -> str:
     return TRIVY_SERVER_URL
 
 
+def normalize_trivy_server_url(url: str) -> str:
+    """
+    Validate an admin-provided Trivy server URL and return it normalized
+    (stripped, without trailing slash). An empty value means "use the
+    TRIVY_SERVER_URL environment variable" and is returned as is.
+
+    Raises ValueError for anything but an http(s) URL with a host and without
+    embedded credentials: the URL is returned to every authenticated user by
+    GET /api/trivy/state.
+    """
+    url = url.strip()
+    if not url:
+        return ""
+    try:
+        parsed = urlparse(url)
+        parsed.port  # noqa: B018 - raises ValueError on an invalid port
+    except ValueError as exc:
+        raise ValueError("Invalid Trivy server URL") from exc
+    if parsed.scheme not in ("http", "https") or not parsed.hostname:
+        raise ValueError("The Trivy server URL must be an http(s) URL with a host")
+    if parsed.username or parsed.password:
+        raise ValueError("The Trivy server URL must not contain credentials")
+    if parsed.query or parsed.fragment:
+        raise ValueError("The Trivy server URL must not contain a query or fragment")
+    return url.rstrip("/")
+
+
 def is_trivy_server_local(url: str | None = None) -> bool:
     """Return True when the given (or currently effective) Trivy server URL
     points at this container — i.e. the embedded server, whose DB this
