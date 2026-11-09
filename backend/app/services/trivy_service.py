@@ -15,6 +15,7 @@ import re
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 from ..config import DATA_DIR, TRIVY_SERVER_URL, Settings, get_settings
 
@@ -59,6 +60,54 @@ def clear_vuln_override() -> None:
         pass
 
 
+def resolve_trivy_server_url() -> str:
+    """
+    Return the effective Trivy server URL: persisted admin override (if any
+    non-empty value was saved) wins over the TRIVY_SERVER_URL env var.
+    """
+    override = load_vuln_override()
+    if override:
+        url = (override.get("trivy_url") or "").strip()
+        if url:
+            return url
+    return TRIVY_SERVER_URL
+
+
+def normalize_trivy_server_url(url: str) -> str:
+    """
+    Validate an admin-provided Trivy server URL and return it normalized
+    (stripped, without trailing slash). An empty value means "use the
+    TRIVY_SERVER_URL environment variable" and is returned as is.
+
+    Raises ValueError for anything but an http(s) URL with a host and without
+    embedded credentials: the URL is returned to every authenticated user by
+    GET /api/trivy/state.
+    """
+    url = url.strip()
+    if not url:
+        return ""
+    try:
+        parsed = urlparse(url)
+        parsed.port  # noqa: B018 - raises ValueError on an invalid port
+    except ValueError as exc:
+        raise ValueError("Invalid Trivy server URL") from exc
+    if parsed.scheme not in ("http", "https") or not parsed.hostname:
+        raise ValueError("The Trivy server URL must be an http(s) URL with a host")
+    if parsed.username or parsed.password:
+        raise ValueError("The Trivy server URL must not contain credentials")
+    if parsed.query or parsed.fragment:
+        raise ValueError("The Trivy server URL must not contain a query or fragment")
+    return url.rstrip("/")
+
+
+def is_trivy_server_local(url: str | None = None) -> bool:
+    """Return True when the given (or currently effective) Trivy server URL
+    points at this container — i.e. the embedded server, whose DB this
+    container's cache directory manages."""
+    target = url if url is not None else resolve_trivy_server_url()
+    return urlparse(target).hostname in ("localhost", "127.0.0.1", "::1")
+
+
 def resolve_vuln_config(settings: Settings) -> dict[str, Any]:
     """
     Return the effective vuln configuration dict.
@@ -67,6 +116,8 @@ def resolve_vuln_config(settings: Settings) -> dict[str, Any]:
     The returned dict always includes a 'vuln_scan_override' flag so
     the frontend knows whether a custom override is active.
     """
+    trivy_url = resolve_trivy_server_url()
+
     # Master kill-switch wins over everything: when Trivy is disabled at the
     # container level, scanning is impossible regardless of any override.
     if not settings.trivy_enabled:
@@ -77,6 +128,7 @@ def resolve_vuln_config(settings: Settings) -> dict[str, Any]:
             "vuln_scan_severities": settings.vuln_scan_severities,
             "vuln_ignore_unfixed": settings.vuln_ignore_unfixed,
             "vuln_scan_timeout": settings.vuln_scan_timeout,
+            "trivy_url": trivy_url,
         }
 
     override = load_vuln_override()
@@ -96,6 +148,7 @@ def resolve_vuln_config(settings: Settings) -> dict[str, Any]:
             "vuln_scan_timeout": override.get(
                 "vuln_scan_timeout", settings.vuln_scan_timeout
             ),
+            "trivy_url": trivy_url,
         }
     return {
         "trivy_enabled": True,
@@ -104,6 +157,7 @@ def resolve_vuln_config(settings: Settings) -> dict[str, Any]:
         "vuln_scan_severities": settings.vuln_scan_severities,
         "vuln_ignore_unfixed": settings.vuln_ignore_unfixed,
         "vuln_scan_timeout": settings.vuln_scan_timeout,
+        "trivy_url": trivy_url,
     }
 
 
@@ -309,6 +363,7 @@ async def trivy_raw_scan(
     containerd / podman runtimes, which are not available in this container.
     """
     skopeo_env = {**os.environ, **settings.env_proxy}
+    server_url = resolve_trivy_server_url()
 
     if severity is None:
         severity = ["HIGH", "CRITICAL"]
@@ -342,7 +397,7 @@ async def trivy_raw_scan(
             _TRIVY_BINARY,
             "image",
             "--server",
-            TRIVY_SERVER_URL,
+            server_url,
             "--cache-dir",
             str(_TRIVY_CACHE_DIR),
             "--format",
@@ -360,7 +415,7 @@ async def trivy_raw_scan(
             _TRIVY_BINARY,
             "image",
             "--server",
-            TRIVY_SERVER_URL,
+            server_url,
             "--cache-dir",
             str(_TRIVY_CACHE_DIR),
             "--format",
